@@ -990,7 +990,7 @@ class CombatCalc
 		return Math.max(0, (int) (effectiveLevel * (equipmentBonus + 64) * gearMultiplier));
 	}
 
-	private static double hitChanceFrom(int attRoll, int defRoll)
+	static double hitChanceFrom(int attRoll, int defRoll)
 	{
 		if (attRoll > defRoll)
 		{

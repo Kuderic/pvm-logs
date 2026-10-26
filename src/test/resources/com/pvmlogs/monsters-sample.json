@@ -1,0 +1,1423 @@
+[
+ {
+  "id": 13668,
+  "name": "Araxxor",
+  "version": "",
+  "level": 890,
+  "speed": 6,
+  "style": [
+   "Crush",
+   "\u007f\u007f Magic",
+   "Ranged"
+  ],
+  "size": 7,
+  "max_hit": "38 (melee) <br/> 21 (magic) <br/> 34 (ranged)",
+  "skills": {
+   "atk": 320,
+   "def": 135,
+   "hp": 1020,
+   "magic": 190,
+   "ranged": 210,
+   "str": 320
+  },
+  "offensive": {
+   "atk": 218,
+   "magic": 260,
+   "magic_str": 5,
+   "ranged": 283,
+   "ranged_str": 35,
+   "str": 10
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 15,
+   "magic": 237,
+   "heavy": 218,
+   "standard": 218,
+   "light": 218,
+   "slash": 75,
+   "stab": 160
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": {
+   "element": "fire",
+   "severity": 50
+  }
+ },
+ {
+  "id": 15547,
+  "name": "Big Evil Chicken",
+  "version": "Annihilation",
+  "level": 1047,
+  "speed": 3,
+  "style": [
+   "Magic"
+  ],
+  "size": 3,
+  "max_hit": "26",
+  "skills": {
+   "atk": 255,
+   "def": 25,
+   "hp": 3500,
+   "magic": 300,
+   "ranged": 0,
+   "str": 255
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 25,
+   "magic": 255,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 25,
+   "stab": 25
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 15547,
+  "name": "Big Evil Chicken",
+  "version": "Permanent",
+  "level": 422,
+  "speed": 3,
+  "style": [
+   "Magic"
+  ],
+  "size": 3,
+  "max_hit": "26",
+  "skills": {
+   "atk": 255,
+   "def": 25,
+   "hp": 1000,
+   "magic": 300,
+   "ranged": 0,
+   "str": 255
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 25,
+   "magic": 255,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 25,
+   "stab": 25
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 8367,
+  "name": "Blood spawn",
+  "version": "Entry",
+  "level": 55,
+  "speed": -1,
+  "style": [
+   "None"
+  ],
+  "size": 1,
+  "max_hit": "1 (does not attack)",
+  "skills": {
+   "atk": 1,
+   "def": 0,
+   "hp": 7,
+   "magic": 0,
+   "ranged": 1,
+   "str": 1
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 0,
+   "magic": 0,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 0,
+   "stab": 0
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "earth",
+   "severity": 50
+  }
+ },
+ {
+  "id": 8367,
+  "name": "Blood spawn",
+  "version": "Normal",
+  "level": 55,
+  "speed": -1,
+  "style": [
+   "None"
+  ],
+  "size": 1,
+  "max_hit": "1 (does not attack)",
+  "skills": {
+   "atk": 1,
+   "def": 0,
+   "hp": 120,
+   "magic": 0,
+   "ranged": 1,
+   "str": 1
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 0,
+   "magic": 0,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 0,
+   "stab": 0
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "earth",
+   "severity": 50
+  }
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Deep Delve",
+  "level": 908,
+  "speed": 4,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "65 <br/>99 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 625,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Delve 1",
+  "level": 558,
+  "speed": 6,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "47 <br/> 60 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 525,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Delve 2",
+  "level": 608,
+  "speed": 6,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "50 <br/>60 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 550,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Delve 3",
+  "level": 658,
+  "speed": 5,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "50 <br/>80 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 575,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Delve 4",
+  "level": 708,
+  "speed": 5,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "80 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 600,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Delve 5",
+  "level": 758,
+  "speed": 5,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "53 <br/> 80 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 625,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Delve 6",
+  "level": 808,
+  "speed": 5,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "99 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 650,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Delve 7",
+  "level": 858,
+  "speed": 4,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "57 <br/>99 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 650,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14707,
+  "name": "Doom of Mokhaiotl",
+  "version": "Delve 8",
+  "level": 908,
+  "speed": 4,
+  "style": [
+   "Melee",
+   "Magic",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": "65 <br/>99 (charge)",
+  "skills": {
+   "atk": 300,
+   "def": 90,
+   "hp": 675,
+   "magic": 275,
+   "ranged": 110,
+   "str": 190
+  },
+  "offensive": {
+   "atk": 210,
+   "magic": 125,
+   "magic_str": 30,
+   "ranged": 120,
+   "ranged_str": 50,
+   "str": 45
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 60,
+   "magic": 160,
+   "heavy": 160,
+   "standard": 160,
+   "light": 160,
+   "slash": 300,
+   "stab": 300
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 12191,
+  "name": "Duke Sucellus",
+  "version": "Awakened, Awake",
+  "level": 1099,
+  "speed": 5,
+  "style": [
+   "Magic",
+   "Crush"
+  ],
+  "size": 7,
+  "max_hit": "81 (Melee)",
+  "skills": {
+   "atk": 435,
+   "def": 316,
+   "hp": 1697,
+   "magic": 465,
+   "ranged": 0,
+   "str": 500
+  },
+  "offensive": {
+   "atk": 200,
+   "magic": 150,
+   "magic_str": 32,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 38
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 190,
+   "magic": 440,
+   "heavy": 320,
+   "standard": 320,
+   "light": 320,
+   "slash": 65,
+   "stab": 255
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 12191,
+  "name": "Duke Sucellus",
+  "version": "Post-quest, Awake",
+  "level": 758,
+  "speed": 5,
+  "style": [
+   "Magic",
+   "Crush"
+  ],
+  "size": 7,
+  "max_hit": "56 (Melee)",
+  "skills": {
+   "atk": 300,
+   "def": 275,
+   "hp": 485,
+   "magic": 310,
+   "ranged": 0,
+   "str": 345
+  },
+  "offensive": {
+   "atk": 200,
+   "magic": 150,
+   "magic_str": 32,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 38
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 190,
+   "magic": 440,
+   "heavy": 320,
+   "standard": 320,
+   "light": 320,
+   "slash": 45,
+   "stab": 255
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ },
+ {
+  "id": 12195,
+  "name": "Duke Sucellus",
+  "version": "Quest, Awake",
+  "level": 538,
+  "speed": 6,
+  "style": [
+   "Magic",
+   "Crush"
+  ],
+  "size": 7,
+  "max_hit": "36 (Melee)",
+  "skills": {
+   "atk": 250,
+   "def": 215,
+   "hp": 330,
+   "magic": 230,
+   "ranged": 0,
+   "str": 280
+  },
+  "offensive": {
+   "atk": 200,
+   "magic": 150,
+   "magic_str": 10,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 16
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 160,
+   "magic": 400,
+   "heavy": 300,
+   "standard": 300,
+   "light": 300,
+   "slash": 30,
+   "stab": 210
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ },
+ {
+  "id": 11761,
+  "name": "Elidinis' Warden",
+  "version": "Damaged",
+  "level": 544,
+  "speed": 7,
+  "style": [
+   "Melee",
+   "Ranged",
+   "Magic"
+  ],
+  "size": 5,
+  "max_hit": "26",
+  "skills": {
+   "atk": 150,
+   "def": 150,
+   "hp": 880,
+   "magic": 150,
+   "ranged": 150,
+   "str": 150
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 230,
+   "magic_str": 40,
+   "ranged": 300,
+   "ranged_str": 40,
+   "str": 40
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 20,
+   "magic": 20,
+   "heavy": 20,
+   "standard": 20,
+   "light": 20,
+   "slash": 40,
+   "stab": 40
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "earth",
+   "severity": 50
+  }
+ },
+ {
+  "id": 11761,
+  "name": "Elidinis' Warden",
+  "version": "Enraged",
+  "level": 544,
+  "speed": 7,
+  "style": [
+   "Melee",
+   "Ranged",
+   "Magic"
+  ],
+  "size": 5,
+  "max_hit": "26",
+  "skills": {
+   "atk": 150,
+   "def": 180,
+   "hp": 880,
+   "magic": 150,
+   "ranged": 150,
+   "str": 150
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 230,
+   "magic_str": 40,
+   "ranged": 300,
+   "ranged_str": 40,
+   "str": 40
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 20,
+   "magic": 20,
+   "heavy": 20,
+   "standard": 20,
+   "light": 20,
+   "slash": 40,
+   "stab": 40
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "earth",
+   "severity": 50
+  }
+ },
+ {
+  "id": 12214,
+  "name": "The Leviathan",
+  "version": "Awakened",
+  "level": 1157,
+  "speed": 0,
+  "style": [
+   "Melee",
+   "Ranged",
+   "Magic"
+  ],
+  "size": 7,
+  "max_hit": "86 (Melee orb & Bite)",
+  "skills": {
+   "atk": 525,
+   "def": 287,
+   "hp": 2700,
+   "magic": 280,
+   "ranged": 280,
+   "str": 630
+  },
+  "offensive": {
+   "atk": 200,
+   "magic": 160,
+   "magic_str": 58,
+   "ranged": 300,
+   "ranged_str": 26,
+   "str": 22
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 230,
+   "magic": 280,
+   "heavy": 25,
+   "standard": 50,
+   "light": 50,
+   "slash": 190,
+   "stab": 260
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 12214,
+  "name": "The Leviathan",
+  "version": "Post-quest",
+  "level": 798,
+  "speed": 0,
+  "style": [
+   "Melee",
+   "Ranged",
+   "Magic"
+  ],
+  "size": 7,
+  "max_hit": "50 (Melee orb & Bite)",
+  "skills": {
+   "atk": 300,
+   "def": 250,
+   "hp": 900,
+   "magic": 160,
+   "ranged": 160,
+   "str": 360
+  },
+  "offensive": {
+   "atk": 200,
+   "magic": 160,
+   "magic_str": 58,
+   "ranged": 300,
+   "ranged_str": 26,
+   "str": 22
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 230,
+   "magic": 280,
+   "heavy": 25,
+   "standard": 50,
+   "light": 50,
+   "slash": 190,
+   "stab": 260
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ },
+ {
+  "id": 12215,
+  "name": "The Leviathan",
+  "version": "Quest",
+  "level": 593,
+  "speed": 0,
+  "style": [
+   "Melee",
+   "Ranged",
+   "Magic"
+  ],
+  "size": 7,
+  "max_hit": "34 (Melee orb & Bite)",
+  "skills": {
+   "atk": 250,
+   "def": 200,
+   "hp": 720,
+   "magic": 130,
+   "ranged": 130,
+   "str": 270
+  },
+  "offensive": {
+   "atk": 170,
+   "magic": 130,
+   "magic_str": 36,
+   "ranged": 230,
+   "ranged_str": 10,
+   "str": 14
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 180,
+   "magic": 220,
+   "heavy": 25,
+   "standard": 50,
+   "light": 50,
+   "slash": 150,
+   "stab": 200
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ },
+ {
+  "id": 9435,
+  "name": "Totem (Phosani's Nightmare)",
+  "version": "",
+  "level": 0,
+  "speed": 0,
+  "style": [
+   "None"
+  ],
+  "size": 3,
+  "max_hit": 0,
+  "skills": {
+   "atk": 1,
+   "def": 0,
+   "hp": 200,
+   "magic": 1,
+   "ranged": 1,
+   "str": 1
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 0,
+   "magic": 0,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 0,
+   "stab": 0
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "fire",
+   "severity": 70
+  }
+ },
+ {
+  "id": 9435,
+  "name": "Totem (The Nightmare)",
+  "version": "",
+  "level": 0,
+  "speed": 0,
+  "style": [
+   "None"
+  ],
+  "size": 3,
+  "max_hit": 0,
+  "skills": {
+   "atk": 1,
+   "def": 0,
+   "hp": 300,
+   "magic": 1,
+   "ranged": 1,
+   "str": 1
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 0,
+   "magic": 0,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 0,
+   "stab": 0
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "fire",
+   "severity": 70
+  }
+ },
+ {
+  "id": 12223,
+  "name": "Vardorvis",
+  "version": "Awakened",
+  "level": 1136,
+  "speed": 5,
+  "style": [
+   "Slash"
+  ],
+  "size": 2,
+  "max_hit": "46-61 (Melee)\u007f\u007f",
+  "skills": {
+   "atk": 420,
+   "def": 0,
+   "hp": 1400,
+   "magic": 215,
+   "ranged": 0,
+   "str": 0
+  },
+  "offensive": {
+   "atk": 190,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 10
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 85,
+   "magic": 580,
+   "heavy": 580,
+   "standard": 580,
+   "light": 580,
+   "slash": 65,
+   "stab": 215
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "fire",
+   "severity": 35
+  }
+ },
+ {
+  "id": 12223,
+  "name": "Vardorvis",
+  "version": "Post-quest",
+  "level": 784,
+  "speed": 5,
+  "style": [
+   "Slash"
+  ],
+  "size": 2,
+  "max_hit": "32-43 (Melee)\u007f\u007f",
+  "skills": {
+   "atk": 280,
+   "def": 0,
+   "hp": 700,
+   "magic": 215,
+   "ranged": 0,
+   "str": 0
+  },
+  "offensive": {
+   "atk": 190,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 10
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 85,
+   "magic": 580,
+   "heavy": 580,
+   "standard": 580,
+   "light": 580,
+   "slash": 65,
+   "stab": 215
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": {
+   "element": "fire",
+   "severity": 35
+  }
+ },
+ {
+  "id": 12224,
+  "name": "Vardorvis",
+  "version": "Quest",
+  "level": 572,
+  "speed": 5,
+  "style": [
+   "Slash"
+  ],
+  "size": 2,
+  "max_hit": "30-37 (Melee)\u007f\u007f",
+  "skills": {
+   "atk": 260,
+   "def": 0,
+   "hp": 500,
+   "magic": 180,
+   "ranged": 0,
+   "str": 0
+  },
+  "offensive": {
+   "atk": 185,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 50,
+   "magic": 560,
+   "heavy": 560,
+   "standard": 560,
+   "light": 560,
+   "slash": 25,
+   "stab": 150
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": {
+   "element": "fire",
+   "severity": 35
+  }
+ },
+ {
+  "id": 14176,
+  "name": "Yama",
+  "version": "Normal",
+  "level": 1238,
+  "speed": 8,
+  "style": [
+   "Melee (Slash)",
+   "Ranged",
+   "Magic"
+  ],
+  "size": 5,
+  "max_hit": "46 (auto-attacks)",
+  "skills": {
+   "atk": 320,
+   "def": 225,
+   "hp": 2500,
+   "magic": 250,
+   "ranged": 210,
+   "str": 350
+  },
+  "offensive": {
+   "atk": 50,
+   "magic": 100,
+   "magic_str": 65,
+   "ranged": 100,
+   "ranged_str": 80,
+   "str": 15
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 333,
+   "magic": 0,
+   "heavy": 333,
+   "standard": 220,
+   "light": 333,
+   "slash": 80,
+   "stab": 100
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "water",
+   "severity": 50
+  }
+ },
+ {
+  "id": 14176,
+  "name": "Yama",
+  "version": "Phase 3",
+  "level": 1238,
+  "speed": 7,
+  "style": [
+   "Melee (Slash)",
+   "Ranged",
+   "Magic"
+  ],
+  "size": 5,
+  "max_hit": "46 (auto-attacks)",
+  "skills": {
+   "atk": 320,
+   "def": 225,
+   "hp": 2500,
+   "magic": 250,
+   "ranged": 210,
+   "str": 350
+  },
+  "offensive": {
+   "atk": 50,
+   "magic": 100,
+   "magic_str": 65,
+   "ranged": 100,
+   "ranged_str": 80,
+   "str": 15
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 449,
+   "magic": 81,
+   "heavy": 449,
+   "standard": 297,
+   "light": 449,
+   "slash": 108,
+   "stab": 135
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "water",
+   "severity": 50
+  }
+ },
+ {
+  "id": 3046,
+  "name": "Goblin",
+  "version": "Level 13",
+  "level": 13,
+  "speed": 4,
+  "style": [
+   "Crush"
+  ],
+  "size": 1,
+  "max_hit": "2",
+  "skills": {
+   "atk": 12,
+   "def": 7,
+   "hp": 16,
+   "magic": 1,
+   "ranged": 1,
+   "str": 13
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 8,
+   "magic": 4,
+   "heavy": 4,
+   "standard": 4,
+   "light": 4,
+   "slash": 6,
+   "stab": 4
+  },
+  "attributes": [],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ }
+]
