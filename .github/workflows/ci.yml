@@ -1,0 +1,42 @@
+# Builds the plugin and runs the test suite on every push and pull request.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run moot.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      # Java 11: what the plugin targets and what Eric's dev client runs on.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "11"
+          cache: gradle
+
+      # gradlew is checked in without its executable bit, so run it through bash.
+      - name: Test
+        run: bash ./gradlew test --no-daemon
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests/test/
+            build/test-results/test/
+          retention-days: 14
