@@ -34,6 +34,24 @@ tasks.withType(JavaCompile).configureEach {
 	options.release.set(11)
 }
 
+tasks.named('test', Test) {
+	// Print each failure in full, and the totals at the end of every run, so a CI log says what ran.
+	testLogging {
+		events 'failed', 'skipped'
+		exceptionFormat 'full'
+		showExceptions true
+		showCauses true
+		showStackTraces true
+	}
+	afterSuite { suite, result ->
+		if (suite.parent == null)
+		{
+			println "Tests: ${result.testCount} run, ${result.successfulTestCount} passed, " +
+				"${result.failedTestCount} failed, ${result.skippedTestCount} skipped (${result.resultType})"
+		}
+	}
+}
+
 tasks.register('run', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = pluginMainClass

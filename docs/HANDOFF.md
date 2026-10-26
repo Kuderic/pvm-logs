@@ -52,7 +52,7 @@ A thrall splat opens no fight, books nothing, counts no hit and drains nothing. 
 - **`47344b5`, the projectile decides.**
   - 223/223 thrall projectiles were first seen on their splat's tick, and no thrall splat came without one. 214/223 had attack animation 11101 one tick earlier.
   - The thrall reads "interacting nothing", and **its projectiles name no source**. This contradicts `fbadb56`'s `getSourceActor` = thrall. It is now matched by "names our thrall, or names none and leaves within 2 tiles of it".
-  - The predicted landing tick (`getEndCycle`) was a tick late on 4 of 9 projectiles in the first log. The splat always came on the first-seen tick, so the prediction is no longer used.
+  - The predicted landing tick (`getEndCycle`) was a tick late on 3 of 9 projectiles in the first log (ticks 215, 219, 223). The splat always came on the first-seen tick, so the prediction is no longer used.
   - Burning claws' third splat lands a tick late.
   - The player is never booked twice inside a weapon's cooldown.
   - An unclaimed projectile re-judges a same-tick small splat.
