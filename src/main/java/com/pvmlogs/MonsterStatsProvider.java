@@ -56,27 +56,15 @@ class MonsterStatsProvider
 	// RuneLite's own hitpoints table, as a hint between versions before the boss health bar has been read.
 	private final NPCManager npcManager;
 
-	// Loaded before the monster data, since the XP bonus and the warnings are worked out from both. See BossRules.
-	private volatile BossRules rules = BossRules.empty();
+	// The rules as last loaded, waiting for the monster data they are applied to. Loaded first, since the XP bonus and the
+	// warnings are worked out from both; only ever read through a snapshot. See BossRules.
+	private volatile BossRules loadedRules = BossRules.empty();
 
-	// npcId -> every version the data lists under it, in the data's order. One id can be several bosses: every DT2 boss
-	// lists its Awakened form first under the same id as the ordinary one, so "first wins" read Vardorvis at 1400
-	// hitpoints and the Leviathan and the Whisperer at 2700 instead of 900. See chooseVersion.
-	private volatile Map<Integer, List<MonsterStats>> versionsById = Collections.emptyMap();
-	// Scaled copies of entries whose stats move with hitpoints, keyed by id and the scaled defence, so the per-tick lookups
-	// do not allocate.
-	private final Map<Long, MonsterStats> scaledCache = new java.util.concurrent.ConcurrentHashMap<>();
-	// (id, observed full hitpoints) pairs whose choice of version has been logged, so it is said once per reading.
-	private final Set<Long> versionLogged = java.util.concurrent.ConcurrentHashMap.newKeySet();
-	// name -> stats, for the ids the data does not carry. A monster wears several ids as it idles, walks and fights and
-	// the source lists one: Tekton appears in game as 7542 as well as the 7540 and 7543 listed. Every miss meant no
-	// accuracy, no expected damage and no drain, reading as whole stretches of a raid being ignored.
-	// Every version of a name, in the data's order, so the same choice is made between them as between an id's.
-	private volatile Map<String, List<MonsterStats>> byName = Collections.emptyMap();
-	private final Map<Integer, List<MonsterStats>> dynamicCache = new java.util.concurrent.ConcurrentHashMap<>();
-
-	// Ids already reported to the debug log, so an unknown monster says so once rather than on every attack.
-	private final Set<Integer> logged = java.util.concurrent.ConcurrentHashMap.newKeySet();
+	// The monster data, the rules it was read with, and every cache built from the two, published as one. A lookup reads
+	// this once and works from that snapshot to the end, so nothing it caches can outlive a reload: a scaled copy made from
+	// the old data lands in the old snapshot's cache and is dropped with it. With separate fields, a lookup that read the
+	// old map and then cached after the reload's clear left old stats in force until the next reload. See Parsed.
+	private volatile Parsed data = Parsed.EMPTY;
 
 	@Inject
 	MonsterStatsProvider(OkHttpClient httpClient, Gson gson, ScheduledExecutorService executor,
@@ -94,7 +82,7 @@ class MonsterStatsProvider
 	/** The rules in force, for the debug header. */
 	BossRules rules()
 	{
-		return rules;
+		return data.rules;
 	}
 
 	void startUp()
@@ -238,8 +226,9 @@ class MonsterStatsProvider
 	 */
 	MonsterStats get(int npcId)
 	{
-		final Choice choice = resolve(npcId);
-		return choice == null ? null : applyRules(npcId, choice.stats);
+		final Parsed d = data;
+		final Choice choice = resolve(d, npcId);
+		return choice == null ? null : applyRules(d, npcId, choice.stats);
 	}
 
 	/**
@@ -249,42 +238,43 @@ class MonsterStatsProvider
 	 */
 	String describe(int npcId)
 	{
-		final Choice choice = resolve(npcId);
+		final Parsed d = data;
+		final Choice choice = resolve(d, npcId);
 		if (choice == null)
 		{
-			return String.format("Monster data: nothing for npc %d (rules %s)", npcId, rules.provenance());
+			return String.format("Monster data: nothing for npc %d (rules %s)", npcId, d.rules.provenance());
 		}
-		final MonsterStats now = applyRules(npcId, choice.stats);
+		final MonsterStats now = applyRules(d, npcId, choice.stats);
 		final int tick = client.getTickCount();
 		final int left = health.remainingForId(npcId, tick);
 		return String.format("Monster data: '%s'%s, %d hp, defence %d now (%s), xp bonus x%.3f%s; rules %s",
 			now.getName(), now.getVersion().isEmpty() ? "" : " (" + now.getVersion() + ")", now.getHitpoints(),
 			now.getDefenceLevel(), left < 0 ? "hitpoints not known yet" : left + " hp left", now.getXpMultiplier(),
 			" - " + choice.reason + (now.getWarning() == null ? "" : "; WARNING: " + now.getWarning()),
-			rules.provenance());
+			d.rules.provenance());
 	}
 
-	private Choice resolve(int npcId)
+	private Choice resolve(Parsed d, int npcId)
 	{
-		final List<MonsterStats> exact = versionsById.get(npcId);
+		final List<MonsterStats> exact = d.versionsById.get(npcId);
 		if (exact != null && !exact.isEmpty())
 		{
-			return pickVersion(npcId, exact);
+			return pickVersion(d, npcId, exact);
 		}
 		final Integer alias = ALIASES.get(npcId);
 		if (alias != null)
 		{
-			final List<MonsterStats> aliased = versionsById.get(alias);
+			final List<MonsterStats> aliased = d.versionsById.get(alias);
 			if (aliased != null && !aliased.isEmpty())
 			{
-				return pickVersion(npcId, aliased);
+				return pickVersion(d, npcId, aliased);
 			}
 		}
-		if (npcId < 0 || byName.isEmpty())
+		if (npcId < 0 || d.byName.isEmpty())
 		{
 			return null;
 		}
-		List<MonsterStats> named = dynamicCache.get(npcId);
+		List<MonsterStats> named = d.byUnknownId.get(npcId);
 		if (named == null)
 		{
 			// The id is unknown, so ask the game its name and look that up. Every version of that name is a candidate and
@@ -292,12 +282,12 @@ class MonsterStatsProvider
 			// Awakened form.
 			final NPCComposition composition = client.getNpcDefinition(npcId);
 			final String name = composition == null ? null : composition.getName();
-			named = composition == null ? null : byName.get(normalise(name));
+			named = composition == null ? null : d.byName.get(normalise(name));
 			if (named != null)
 			{
-				dynamicCache.put(npcId, named);
+				d.byUnknownId.put(npcId, named);
 			}
-			if (debug.isOn() && logged.add(npcId))
+			if (debug.isOn() && d.logged.add(npcId))
 			{
 				// Both halves are worth a line. A miss means no accuracy and no expected damage against this target at all; a
 				// name match means the figures came from an entry recorded under another id, which is right for a monster that
@@ -309,7 +299,7 @@ class MonsterStatsProvider
 					npcId, name);
 			}
 		}
-		return named == null || named.isEmpty() ? null : pickVersion(npcId, named);
+		return named == null || named.isEmpty() ? null : pickVersion(d, npcId, named);
 	}
 
 	/** Which version is in use, and in a few words why. */
@@ -326,7 +316,7 @@ class MonsterStatsProvider
 	}
 
 	/** One of the versions listed under an id, by the evidence the plugin has right now. Logged once per reading. */
-	private Choice pickVersion(int npcId, List<MonsterStats> versions)
+	private Choice pickVersion(Parsed d, int npcId, List<MonsterStats> versions)
 	{
 		final int observed = health.observedMaxForId(npcId);
 		int hint = -1;
@@ -335,8 +325,8 @@ class MonsterStatsProvider
 			final Integer known = npcManager.getHealth(npcId);
 			hint = known == null ? -1 : known;
 		}
-		final Choice choice = choose(versions, rules.forNpc(npcId), observed, hint);
-		if (versions.size() > 1 && versionLogged.add(((long) npcId << 32) | Math.max(0, observed)))
+		final Choice choice = choose(versions, d.rules.forNpc(npcId), observed, hint);
+		if (versions.size() > 1 && d.versionLogged.add(((long) npcId << 32) | Math.max(0, observed)))
 		{
 			debug.log("monster stats for npc %d: %d versions under this id, using '%s' (%d hp) - %s", npcId,
 				versions.size(), choice.stats.getVersion(), choice.stats.getHitpoints(), choice.reason);
@@ -451,10 +441,14 @@ class MonsterStatsProvider
 			&& a.getDefRanged() == b.getDefRanged();
 	}
 
-	/** Stats that move with the boss's hitpoints, moved to where they stand now. Cached per id and defence. */
-	private MonsterStats applyRules(int npcId, MonsterStats base)
+	/**
+	 * Stats that move with the boss's hitpoints, moved to where they stand now.
+	 * Cached per id and defence in the snapshot the base came from, never in a
+	 * newer one.
+	 */
+	MonsterStats applyRules(Parsed d, int npcId, MonsterStats base)
 	{
-		final BossRules.Boss boss = rules.forNpc(npcId);
+		final BossRules.Boss boss = d.rules.forNpc(npcId);
 		final BossRules.Variant variant = scalingVariant(boss, base, health.observedMaxForId(npcId));
 		if (variant == null)
 		{
@@ -468,7 +462,7 @@ class MonsterStatsProvider
 			return base;
 		}
 		final long key = ((long) npcId << 32) | ((long) (max & 0xFFFF) << 16) | (defence & 0xFFFF);
-		return scaledCache.computeIfAbsent(key, k -> base.scaled(defence, max));
+		return d.scaled.computeIfAbsent(key, k -> base.scaled(defence, max));
 	}
 
 	/** The rule variant whose hitpoints scaling applies to this entry, or null when none does. */
@@ -523,8 +517,8 @@ class MonsterStatsProvider
 
 	private void loadOrFetch()
 	{
-		rules = BossRules.load(gson, rulesOverrideFile());
-		log.debug("PvM Logs: {} boss rule ids from {}", rules.size(), rules.provenance());
+		loadedRules = BossRules.load(gson, rulesOverrideFile());
+		log.debug("PvM Logs: {} boss rule ids from {}", loadedRules.size(), loadedRules.provenance());
 		final Path cache = cacheFile();
 		try
 		{
@@ -588,34 +582,55 @@ class MonsterStatsProvider
 		final Parsed parsed;
 		try (Reader r = reader)
 		{
-			parsed = parse(gson, r, rules);
+			parsed = parse(gson, r, loadedRules);
 		}
 		if (parsed == null)
 		{
 			return;
 		}
-		versionsById = parsed.versionsById;
-		scaledCache.clear();
-		versionLogged.clear();
-		byName = parsed.byName;
-		dynamicCache.clear();
-		logged.clear();
+		publish(parsed);
 		log.debug("PvM Logs: loaded {} monster ids, {} with several versions", parsed.versionsById.size(),
 			parsed.versionsById.values().stream().filter(v -> v.size() > 1).count());
 	}
 
-	/** The monster data, indexed. */
+	/** Makes a parsed data set the one every lookup reads, caches and all, in one write. */
+	void publish(Parsed parsed)
+	{
+		data = parsed;
+	}
+
+	/**
+	 * The monster data, indexed, with the rules it was read with and every cache
+	 * built from them. Immutable apart from the caches, which belong to this
+	 * snapshot alone and go with it.
+	 */
 	static final class Parsed
 	{
+		static final Parsed EMPTY = new Parsed(Collections.emptyMap(), Collections.emptyMap(), BossRules.empty());
+
 		/** npcId -> every version listed under it, in the data's order. */
 		final Map<Integer, List<MonsterStats>> versionsById;
 		/** Normalised name -> every version of that name, in the data's order. */
 		final Map<String, List<MonsterStats>> byName;
+		/** The boss rules applied when this was read. */
+		final BossRules rules;
+		/** Scaled copies of entries whose stats move with hitpoints, keyed by id, full hitpoints and defence. */
+		final Map<Long, MonsterStats> scaled = new java.util.concurrent.ConcurrentHashMap<>();
+		/**
+		 * Ids the data does not carry, resolved by the game's name for them. A monster wears several ids as it idles,
+		 * walks and fights and the source lists one: Tekton appears in game as 7542 as well as the 7540 and 7543 listed.
+		 */
+		final Map<Integer, List<MonsterStats>> byUnknownId = new java.util.concurrent.ConcurrentHashMap<>();
+		/** (id, observed full hitpoints) pairs whose choice of version has been logged, so it is said once per reading. */
+		final Set<Long> versionLogged = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		/** Ids already reported to the debug log, so an unknown monster says so once rather than on every attack. */
+		final Set<Integer> logged = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-		Parsed(Map<Integer, List<MonsterStats>> versionsById, Map<String, List<MonsterStats>> byName)
+		Parsed(Map<Integer, List<MonsterStats>> versionsById, Map<String, List<MonsterStats>> byName, BossRules rules)
 		{
 			this.versionsById = versionsById;
 			this.byName = byName;
+			this.rules = rules;
 		}
 	}
 
@@ -657,7 +672,7 @@ class MonsterStatsProvider
 			versions.computeIfAbsent(m.id, k -> new ArrayList<>()).add(stats);
 			names.computeIfAbsent(normalise(stats.getName()), k -> new ArrayList<>()).add(stats);
 		}
-		return new Parsed(versions, names);
+		return new Parsed(versions, names, rules);
 	}
 
 	@Getter
