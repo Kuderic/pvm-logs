@@ -1,0 +1,557 @@
+=== PvM Logs, the last 540 lines before this was saved. Plugin dev ===
+  melee boost Super combat, ranged boost Ranging potion, magic boost None
+  prayers: melee Piety, ranged Rigour, magic Augury; slayer helm off task false
+  fight timeout 100 ticks, file logging false
+  Abyssal tentacle (or) - Whip, SLASH ACCURATE, 4 tick
+  Target: Vardorvis (npc 12223), defence 215 (base 215), magic 215, toa raid level 0
+  Monster data: 'Vardorvis' (Post-quest), 700 hp, defence 215 now (hitpoints not known yet), xp bonus x1.550 - boss rule default, health bar not read yet; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+  Max hit 25, accuracy 28.2% (lands 28.2%), avg hit 3.53, dps 1.47
+  Melee: str bonus +86, level 99, attack bonus +90
+    str from: WEAPON Abyssal tentacle (or) +86
+  Prayers up: none (goal Piety, NOT met)
+  Efficiency goal: Piety, STRENGTH at 118 (+19)
+  (raid: cox indungeon 0, cox timer 0, tob progress 30, tob wave 0/0, tob party 0, toa level 0, toa partystatus 0)
+  (toa path 0, toa level frozen 0)
+  (instanced false, toa raid level varbit 0, stale unless instanced)
+  (category varbit 20, com mode 0, cox tier 3, cox timer 0, salts 0)
+=== log ===
+[995] fight START Vardorvis (npc 12223, index 42791, maxHp 700) group=null room=Vardorvis raid=null
+[995] tick LOST: overdue since -2147483648 + lag 1, NOT COUNTED - no attack made in this fight yet
+[996] xp drop STRENGTH +173
+[996] xp drop HITPOINTS +58
+[996] health bar: npc varp 12223, hp 700 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[996] xp award tick 996: 28-28 (left 28-28, x1.550) against npc 12223
+[996] tick LOST: overdue since -2147483648 + lag 1, NOT COUNTED - no attack made in this fight yet
+[997] hitsplat 1 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[997] hitsplat 1 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[997] splat 1 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 700 left (bar)
+[997] health bar: npc varp 12223, hp 697 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[997]   scored as a SPECIAL: max 61, chances 0.76, avg 28.87
+[997] ATTACK on Vardorvis (npc 12223) thrown tick 996, booked +1, speed 4, next due 1000, prayed=true potted=true switched=true projectile=false, scored=true, expected avg 6.80, ideal 6.80
+[998] hitsplat 26 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[998] health bar: npc varp 12223, hp 671 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[998] tick SPENT: on cooldown, due 1000 + lag 1, attacking=true
+[999] tick SPENT: on cooldown, due 1000 + lag 1, attacking=true
+[1000] xp drop STRENGTH +273
+[1000] xp drop HITPOINTS +90
+[1000] xp award tick 1000: 44-44 (left 44-44, x1.550) against npc 12223
+[1000] tick SPENT: on cooldown, due 1000 + lag 1, attacking=true
+[1001] hitsplat 11 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1001] hitsplat 11 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1001] splat 2 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 671 left (bar)
+[1001] health bar: npc varp 12223, hp 647 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1001]   scored as a SPECIAL: max 61, chances 0.76, avg 29.12
+[1001] ATTACK on Vardorvis (npc 12223) thrown tick 1000, booked +1, speed 4, next due 1004, prayed=true potted=true switched=true projectile=false, scored=true, expected avg 6.96, ideal 6.96
+[1002] hitsplat 22 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1002] health bar: npc varp 12223, hp 625 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1002] tick SPENT: on cooldown, due 1004 + lag 1, attacking=true
+[1003] tick SPENT: on cooldown, due 1004 + lag 1, attacking=true
+[1004] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 625 left (bar)
+[1004] xp drop STRENGTH +335
+[1004] xp drop HITPOINTS +112
+[1004] health bar: npc varp 12223, hp 627 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1004] xp award tick 1004: 54-54 (left 54-54, x1.550) against npc 12223
+[1004] tick SPENT: on cooldown, due 1004 + lag 1, attacking=true
+[1005] hitsplat 26 type 43 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1005] hitsplat 26 type 43 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1005] splat 3 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 627 left (bar)
+[1005] health bar: npc varp 12223, hp 572 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1005]   scored as a SPECIAL: max 60, chances 0.78, avg 29.01
+[1005] ATTACK on Vardorvis (npc 12223) thrown tick 1004, booked +1, speed 4, next due 1008, prayed=true potted=true switched=true projectile=false, scored=true, expected avg 12.12, ideal 13.75
+[1006] hitsplat 2 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1006] health bar: npc varp 12223, hp 570 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1006] tick SPENT: on cooldown, due 1008 + lag 1, attacking=true
+[1007] tick SPENT: on cooldown, due 1008 + lag 1, attacking=true
+[1008] xp drop ATTACK +304
+[1008] xp drop HITPOINTS +101
+[1008] xp award tick 1008: 49-49 (left 49-49, x1.550) against npc 12223
+[1008] tick SPENT: on cooldown, due 1008 + lag 1, attacking=true
+[1009] hitsplat 49 type 43 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1009] splat 4 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 570 left (bar)
+[1009] health bar: npc varp 12223, hp 517 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1009]   scored as an ordinary attack: max 49, chances 0.55, avg 13.49
+[1009] ATTACK on Vardorvis (npc 12223) thrown tick 1008, booked +1, speed 4, next due 1012, prayed=true potted=true switched=false projectile=false, scored=true, expected avg 13.80, ideal 14.06
+[1010] tick SPENT: on cooldown, due 1012 + lag 1, attacking=true
+[1011] tick SPENT: on cooldown, due 1012 + lag 1, attacking=true
+[1012] tick SPENT: on cooldown, due 1012 + lag 1, attacking=true
+[1013] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1013] splat 4 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 517 left (bar)
+[1013] health bar: npc varp 12223, hp 513 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1013]   scored as an ordinary attack: max 49, chances 0.56, avg 13.80
+[1013] ATTACK on Vardorvis (npc 12223) thrown tick 1012, booked +1, speed 4, next due 1016, prayed=true potted=true switched=false projectile=false, scored=true, expected avg 13.80, ideal 14.06
+[1014] tick SPENT: on cooldown, due 1016 + lag 1, attacking=true
+[1015] tick SPENT: on cooldown, due 1016 + lag 1, attacking=true
+[1016] tick SPENT: on cooldown, due 1016 + lag 1, attacking=true
+[1017] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1017] splat 4 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 513 left (bar)
+[1017] health bar: npc varp 12223, hp 509 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1017] xp multiplier for npc 12223 calibrated to x1.550 (175 damage seen)
+[1017]   scored as an ordinary attack: max 49, chances 0.56, avg 13.80
+[1017] ATTACK on Vardorvis (npc 12223) thrown tick 1016, booked +1, speed 4, next due 1020, prayed=true potted=true switched=false projectile=false, scored=true, expected avg 13.85, ideal 14.11
+[1018] tick SPENT: on cooldown, due 1020 + lag 1, attacking=true
+[1019] tick SPENT: on cooldown, due 1020 + lag 1, attacking=true
+[1020] tick SPENT: on cooldown, due 1020 + lag 1, attacking=true
+[1021] splat 4 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 509 left (bar)
+[1021] health bar: npc varp 12223, hp 505 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1021] tick LOST: overdue since 1020 + lag 1
+[1022] tick LOST: overdue since 1020 + lag 1
+[1023] xp drop ATTACK +223
+[1023] xp drop HITPOINTS +75
+[1023] xp award tick 1023: 36-36 (left 36-36, x1.550) against npc 12223
+[1023] tick LOST: overdue since 1020 + lag 1
+[1024] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 505 left (bar)
+[1024] hitsplat 36 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1024] health bar: npc varp 12223, hp 472 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1024]   scored as an ordinary attack: max 49, chances 0.56, avg 13.78
+[1024] ATTACK on Vardorvis (npc 12223) thrown tick 1023, booked +1, speed 4, next due 1027, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 13.94, ideal 14.26
+[1025] splat 4 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 472 left (bar)
+[1025] health bar: npc varp 12223, hp 468 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1025] tick SPENT: on cooldown, due 1027 + lag 1, attacking=true
+[1026] tick SPENT: on cooldown, due 1027 + lag 1, attacking=true
+[1027] tick SPENT: on cooldown, due 1027 + lag 1, attacking=true
+[1028] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1028]   scored as an ordinary attack: max 49, chances 0.57, avg 13.99
+[1028] ATTACK on Vardorvis (npc 12223) thrown tick 1027, booked +1, speed 4, next due 1031, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 13.99, ideal 14.31
+[1029] splat 4 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 468 left (bar)
+[1029] health bar: npc varp 12223, hp 464 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1029] tick SPENT: on cooldown, due 1031 + lag 1, attacking=true
+[1030] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 464 left (bar)
+[1030] health bar: npc varp 12223, hp 467 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1030] tick SPENT: on cooldown, due 1031 + lag 1, attacking=true
+[1031] tick SPENT: on cooldown, due 1031 + lag 1, attacking=true
+[1032] xp drop ATTACK +198
+[1032] xp drop HITPOINTS +66
+[1032] xp award tick 1032: 32-32 (left 32-32, x1.550) against npc 12223
+[1032] tick LOST: overdue since 1031 + lag 1
+[1033] hitsplat 32 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1033] splat 4 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 467 left (bar)
+[1033] health bar: npc varp 12223, hp 431 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1033]   scored as an ordinary attack: max 49, chances 0.57, avg 13.99
+[1033] ATTACK on Vardorvis (npc 12223) thrown tick 1032, booked +1, speed 4, next due 1036, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.15, ideal 14.46
+[1034] tick SPENT: on cooldown, due 1036 + lag 1, attacking=true
+[1035] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 431 left (bar)
+[1035] health bar: npc varp 12223, hp 432 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1035] tick SPENT: on cooldown, due 1036 + lag 1, attacking=true
+[1036] xp drop ATTACK +68
+[1036] xp drop HITPOINTS +22
+[1036] xp award tick 1036: 11-11 (left 11-11, x1.550) against npc 12223
+[1036] tick SPENT: on cooldown, due 1036 + lag 1, attacking=true
+[1037] hitsplat 11 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1037] splat 3 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 432 left (bar)
+[1037] health bar: npc varp 12223, hp 418 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1037]   scored as an ordinary attack: max 49, chances 0.58, avg 14.15
+[1037] ATTACK on Vardorvis (npc 12223) thrown tick 1036, booked +1, speed 4, next due 1040, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.25, ideal 14.56
+[1038] tick SPENT: on cooldown, due 1040 + lag 1, attacking=true
+[1039] tick SPENT: on cooldown, due 1040 + lag 1, attacking=true
+[1040] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 418 left (bar)
+[1040] health bar: npc varp 12223, hp 421 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1040] tick SPENT: on cooldown, due 1040 + lag 1, attacking=true
+[1041] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1041] splat 2 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 421 left (bar)
+[1041] health bar: npc varp 12223, hp 419 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1041]   scored as an ordinary attack: max 49, chances 0.58, avg 14.20
+[1041] ATTACK on Vardorvis (npc 12223) thrown tick 1040, booked +1, speed 4, next due 1044, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.25, ideal 14.56
+[1042] tick SPENT: on cooldown, due 1044 + lag 1, attacking=true
+[1043] tick SPENT: on cooldown, due 1044 + lag 1, attacking=true
+[1044] tick SPENT: on cooldown, due 1044 + lag 1, attacking=true
+[1045] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1045] splat 1 burn (type 74, no owner) on Vardorvis (npc 12223, index 42791): DAMAGE_OVER_TIME, target has 419 left (bar)
+[1045] health bar: npc varp 12223, hp 418 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1045]   scored as an ordinary attack: max 49, chances 0.58, avg 14.25
+[1045] ATTACK on Vardorvis (npc 12223) thrown tick 1044, booked +1, speed 4, next due 1048, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.25, ideal 14.56
+[1046] tick SPENT: on cooldown, due 1048 + lag 1, attacking=true
+[1047] tick SPENT: on cooldown, due 1048 + lag 1, attacking=true
+[1048] tick SPENT: on cooldown, due 1048 + lag 1, attacking=true
+[1049] tick LOST: overdue since 1048 + lag 1
+[1050] tick LOST: overdue since 1048 + lag 1
+[1051] xp drop ATTACK +193
+[1051] xp drop HITPOINTS +64
+[1051] xp award tick 1051: 31-31 (left 31-31, x1.550) against npc 12223
+[1051] tick LOST: overdue since 1048 + lag 1
+[1052] hitsplat 31 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1052] health bar: npc varp 12223, hp 387 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1052]   scored as an ordinary attack: max 49, chances 0.58, avg 14.25
+[1052] ATTACK on Vardorvis (npc 12223) thrown tick 1051, booked +1, speed 4, next due 1055, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.41, ideal 14.72
+[1053] tick SPENT: on cooldown, due 1055 + lag 1, attacking=true
+[1054] tick SPENT: on cooldown, due 1055 + lag 1, attacking=true
+[1055] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 387 left (bar)
+[1055] xp drop ATTACK +31
+[1055] xp drop HITPOINTS +11
+[1055] health bar: npc varp 12223, hp 388 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1055] xp award tick 1055: 5-5 (left 5-5, x1.550) against npc 12223
+[1055] tick SPENT: on cooldown, due 1055 + lag 1, attacking=true
+[1056] hitsplat 5 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1056] health bar: npc varp 12223, hp 383 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1056]   scored as an ordinary attack: max 49, chances 0.59, avg 14.41
+[1056] ATTACK on Vardorvis (npc 12223) thrown tick 1055, booked +1, speed 4, next due 1059, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.41, ideal 14.72
+[1057] tick SPENT: on cooldown, due 1059 + lag 1, attacking=true
+[1058] tick SPENT: on cooldown, due 1059 + lag 1, attacking=true
+[1059] tick SPENT: on cooldown, due 1059 + lag 1, attacking=true
+[1060] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 383 left (bar)
+[1060] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1060] health bar: npc varp 12223, hp 386 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1060]   scored as an ordinary attack: max 49, chances 0.59, avg 14.41
+[1060] ATTACK on Vardorvis (npc 12223) thrown tick 1059, booked +1, speed 4, next due 1063, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.41, ideal 14.72
+[1061] tick SPENT: on cooldown, due 1063 + lag 1, attacking=true
+[1062] tick SPENT: on cooldown, due 1063 + lag 1, attacking=true
+[1063] tick SPENT: on cooldown, due 1063 + lag 1, attacking=true
+[1064] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1064]   scored as an ordinary attack: max 49, chances 0.59, avg 14.41
+[1064] ATTACK on Vardorvis (npc 12223) thrown tick 1063, booked +1, speed 4, next due 1067, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.41, ideal 14.72
+[1065] tick SPENT: on cooldown, due 1067 + lag 1, attacking=true
+[1066] tick SPENT: on cooldown, due 1067 + lag 1, attacking=true
+[1067] tick SPENT: on cooldown, due 1067 + lag 1, attacking=true
+[1068] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1068]   scored as an ordinary attack: max 49, chances 0.59, avg 14.41
+[1068] ATTACK on Vardorvis (npc 12223) thrown tick 1067, booked +1, speed 4, next due 1071, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.41, ideal 14.72
+[1069] tick SPENT: on cooldown, due 1071 + lag 1, attacking=true
+[1070] tick SPENT: on cooldown, due 1071 + lag 1, attacking=true
+[1071] xp drop ATTACK +105
+[1071] xp drop HITPOINTS +35
+[1071] xp award tick 1071: 17-17 (left 17-17, x1.550) against npc 12223
+[1071] tick SPENT: on cooldown, due 1071 + lag 1, attacking=true
+[1072] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 386 left (bar)
+[1072] hitsplat 17 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1072] health bar: npc varp 12223, hp 371 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1072]   scored as an ordinary attack: max 49, chances 0.59, avg 14.41
+[1072] ATTACK on Vardorvis (npc 12223) thrown tick 1071, booked +1, speed 4, next due 1075, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.46, ideal 14.77
+[1073] tick SPENT: on cooldown, due 1075 + lag 1, attacking=true
+[1074] tick SPENT: on cooldown, due 1075 + lag 1, attacking=true
+[1075] xp drop ATTACK +248
+[1075] xp drop HITPOINTS +82
+[1075] xp award tick 1075: 40-40 (left 40-40, x1.550) against npc 12223
+[1075] tick SPENT: on cooldown, due 1075 + lag 1, attacking=true
+[1076] hitsplat 40 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1076] health bar: npc varp 12223, hp 331 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1076]   scored as an ordinary attack: max 49, chances 0.59, avg 14.46
+[1076] ATTACK on Vardorvis (npc 12223) thrown tick 1075, booked +1, speed 4, next due 1079, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.67, ideal 14.97
+[1077] tick SPENT: on cooldown, due 1079 + lag 1, attacking=true
+[1078] tick SPENT: on cooldown, due 1079 + lag 1, attacking=true
+[1079] xp drop ATTACK +260
+[1079] xp drop HITPOINTS +87
+[1079] xp award tick 1079: 42-42 (left 42-42, x1.550) against npc 12223
+[1079] tick SPENT: on cooldown, due 1079 + lag 1, attacking=true
+[1080] hitsplat 42 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1080] health bar: npc varp 12223, hp 289 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1080]   scored as an ordinary attack: max 49, chances 0.60, avg 14.67
+[1080] ATTACK on Vardorvis (npc 12223) thrown tick 1079, booked +1, speed 4, next due 1083, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.94, ideal 15.23
+[1081] tick SPENT: on cooldown, due 1083 + lag 1, attacking=true
+[1082] tick SPENT: on cooldown, due 1083 + lag 1, attacking=true
+[1083] tick SPENT: on cooldown, due 1083 + lag 1, attacking=true
+[1084] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1084]   scored as an ordinary attack: max 49, chances 0.61, avg 14.94
+[1084] ATTACK on Vardorvis (npc 12223) thrown tick 1083, booked +1, speed 4, next due 1087, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 14.94, ideal 15.23
+[1085] tick SPENT: on cooldown, due 1087 + lag 1, attacking=true
+[1086] tick SPENT: on cooldown, due 1087 + lag 1, attacking=true
+[1087] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 289 left (bar)
+[1087] xp drop ATTACK +211
+[1087] xp drop HITPOINTS +70
+[1087] health bar: npc varp 12223, hp 293 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1087] xp award tick 1087: 34-34 (left 34-34, x1.550) against npc 12223
+[1087] tick SPENT: on cooldown, due 1087 + lag 1, attacking=true
+[1088] hitsplat 34 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1088] health bar: npc varp 12223, hp 259 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1088]   scored as an ordinary attack: max 49, chances 0.61, avg 14.88
+[1088] ATTACK on Vardorvis (npc 12223) thrown tick 1087, booked +1, speed 4, next due 1091, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.09, ideal 15.38
+[1089] tick SPENT: on cooldown, due 1091 + lag 1, attacking=true
+[1090] tick SPENT: on cooldown, due 1091 + lag 1, attacking=true
+[1091] xp drop ATTACK +6
+[1091] xp drop HITPOINTS +2
+[1091] xp award tick 1091: 1-1 (left 1-1, x1.550) against npc 12223
+[1091] tick SPENT: on cooldown, due 1091 + lag 1, attacking=true
+[1092] hitsplat 1 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1092] health bar: npc varp 12223, hp 258 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1092]   scored as an ordinary attack: max 49, chances 0.62, avg 15.09
+[1092] ATTACK on Vardorvis (npc 12223) thrown tick 1091, booked +1, speed 4, next due 1095, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.09, ideal 15.38
+[1093] tick SPENT: on cooldown, due 1095 + lag 1, attacking=true
+[1094] tick SPENT: on cooldown, due 1095 + lag 1, attacking=true
+[1095] tick SPENT: on cooldown, due 1095 + lag 1, attacking=true
+[1096] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1096]   scored as an ordinary attack: max 49, chances 0.62, avg 15.09
+[1096] ATTACK on Vardorvis (npc 12223) thrown tick 1095, booked +1, speed 4, next due 1099, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.09, ideal 15.38
+[1097] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 258 left (bar)
+[1097] health bar: npc varp 12223, hp 259 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1097] tick SPENT: on cooldown, due 1099 + lag 1, attacking=true
+[1098] tick SPENT: on cooldown, due 1099 + lag 1, attacking=true
+[1099] xp drop ATTACK +75
+[1099] xp drop HITPOINTS +25
+[1099] xp award tick 1099: 12-12 (left 12-12, x1.550) against npc 12223
+[1099] tick SPENT: on cooldown, due 1099 + lag 1, attacking=true
+[1100] hitsplat 12 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1100] health bar: npc varp 12223, hp 247 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1100]   scored as an ordinary attack: max 49, chances 0.62, avg 15.09
+[1100] ATTACK on Vardorvis (npc 12223) thrown tick 1099, booked +1, speed 4, next due 1103, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.15, ideal 15.43
+[1101] tick SPENT: on cooldown, due 1103 + lag 1, attacking=true
+[1102] tick SPENT: on cooldown, due 1103 + lag 1, attacking=true
+[1103] tick SPENT: on cooldown, due 1103 + lag 1, attacking=true
+[1104] tick LOST: overdue since 1103 + lag 1
+[1105] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 247 left (bar)
+[1105] health bar: npc varp 12223, hp 249 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1105] tick LOST: overdue since 1103 + lag 1
+[1106] tick LOST: overdue since 1103 + lag 1
+[1107] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1107]   scored as an ordinary attack: max 49, chances 0.62, avg 15.15
+[1107] ATTACK on Vardorvis (npc 12223) thrown tick 1106, booked +1, speed 4, next due 1110, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.15, ideal 15.43
+[1108] tick SPENT: on cooldown, due 1110 + lag 1, attacking=true
+[1109] tick SPENT: on cooldown, due 1110 + lag 1, attacking=true
+[1110] tick SPENT: on cooldown, due 1110 + lag 1, attacking=true
+[1111] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1111] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1111]   scored as a SPECIAL: max 61, chances 0.85, avg 32.93
+[1111] ATTACK on Vardorvis (npc 12223) thrown tick 1110, booked +1, speed 4, next due 1114, prayed=true potted=false switched=true projectile=false, scored=true, expected avg 8.46, ideal 8.52
+[1112] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1112] tick SPENT: on cooldown, due 1114 + lag 1, attacking=true
+[1113] tick SPENT: on cooldown, due 1114 + lag 1, attacking=true
+[1114] tick SPENT: on cooldown, due 1114 + lag 1, attacking=true
+[1115] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 249 left (bar)
+[1115] health bar: npc varp 12223, hp 253 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1115] tick LOST (eating): overdue since 1114 + lag 1
+[1116] tick LOST (eating): overdue since 1114 + lag 1
+[1117] tick LOST (eating): overdue since 1114 + lag 1
+[1118] tick LOST: overdue since 1114 + lag 1
+[1119] xp drop ATTACK +142
+[1119] xp drop HITPOINTS +48
+[1119] xp award tick 1119: 23-23 (left 23-23, x1.550) against npc 12223
+[1119] tick LOST: overdue since 1114 + lag 1
+[1120] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 253 left (bar)
+[1120] hitsplat 23 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1120] health bar: npc varp 12223, hp 234 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1120]   scored as an ordinary attack: max 28, chances 0.31, avg 4.38
+[1120] ATTACK on Vardorvis (npc 12223) thrown tick 1119, booked +1, speed 4, next due 1123, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.14, ideal 15.48
+[1121] tick SPENT: on cooldown, due 1123 + lag 1, attacking=true
+[1122] tick SPENT: on cooldown, due 1123 + lag 1, attacking=true
+[1123] tick SPENT: on cooldown, due 1123 + lag 1, attacking=true
+[1124] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1124]   scored as an ordinary attack: max 49, chances 0.62, avg 15.14
+[1124] ATTACK on Vardorvis (npc 12223) thrown tick 1123, booked +1, speed 4, next due 1127, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.14, ideal 15.48
+[1125] tick SPENT: on cooldown, due 1127 + lag 1, attacking=true
+[1126] tick SPENT: on cooldown, due 1127 + lag 1, attacking=true
+[1127] tick SPENT: on cooldown, due 1127 + lag 1, attacking=true
+[1128] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1128]   scored as an ordinary attack: max 49, chances 0.62, avg 15.14
+[1128] ATTACK on Vardorvis (npc 12223) thrown tick 1127, booked +1, speed 4, next due 1131, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.14, ideal 15.48
+[1129] tick SPENT: on cooldown, due 1131 + lag 1, attacking=true
+[1130] tick SPENT: on cooldown, due 1131 + lag 1, attacking=true
+[1131] xp drop ATTACK +224
+[1131] xp drop HITPOINTS +74
+[1131] xp award tick 1131: 36-36 (left 36-36, x1.550) against npc 12223
+[1131] tick SPENT: on cooldown, due 1131 + lag 1, attacking=true
+[1132] hitsplat 36 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1132] health bar: npc varp 12223, hp 198 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1132]   scored as an ordinary attack: max 49, chances 0.62, avg 15.14
+[1132] ATTACK on Vardorvis (npc 12223) thrown tick 1131, booked +1, speed 4, next due 1135, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.35, ideal 15.69
+[1133] tick SPENT: on cooldown, due 1135 + lag 1, attacking=true
+[1134] tick SPENT: on cooldown, due 1135 + lag 1, attacking=true
+[1135] tick SPENT: on cooldown, due 1135 + lag 1, attacking=true
+[1136] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1136]   scored as an ordinary attack: max 49, chances 0.63, avg 15.35
+[1136] ATTACK on Vardorvis (npc 12223) thrown tick 1135, booked +1, speed 4, next due 1139, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.35, ideal 15.69
+[1137] tick SPENT: on cooldown, due 1139 + lag 1, attacking=true
+[1138] tick SPENT: on cooldown, due 1139 + lag 1, attacking=true
+[1139] xp drop ATTACK +297
+[1139] xp drop HITPOINTS +99
+[1139] xp award tick 1139: 48-48 (left 48-48, x1.550) against npc 12223
+[1139] tick SPENT: on cooldown, due 1139 + lag 1, attacking=true
+[1140] hitsplat 48 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1140] health bar: npc varp 12223, hp 150 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1140]   scored as an ordinary attack: max 49, chances 0.63, avg 15.35
+[1140] ATTACK on Vardorvis (npc 12223) thrown tick 1139, booked +1, speed 4, next due 1143, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.56, ideal 15.89
+[1141] tick SPENT: on cooldown, due 1143 + lag 1, attacking=true
+[1142] tick SPENT: on cooldown, due 1143 + lag 1, attacking=true
+[1143] tick SPENT: on cooldown, due 1143 + lag 1, attacking=true
+[1144] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1144]   scored as an ordinary attack: max 49, chances 0.64, avg 15.56
+[1144] ATTACK on Vardorvis (npc 12223) thrown tick 1143, booked +1, speed 4, next due 1147, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.56, ideal 15.89
+[1145] tick SPENT: on cooldown, due 1147 + lag 1, attacking=true
+[1146] tick SPENT: on cooldown, due 1147 + lag 1, attacking=true
+[1147] tick SPENT: on cooldown, due 1147 + lag 1, attacking=true
+[1148] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1148]   scored as an ordinary attack: max 49, chances 0.64, avg 15.56
+[1148] ATTACK on Vardorvis (npc 12223) thrown tick 1147, booked +1, speed 4, next due 1151, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.56, ideal 15.89
+[1149] tick SPENT: on cooldown, due 1151 + lag 1, attacking=true
+[1150] tick SPENT: on cooldown, due 1151 + lag 1, attacking=true
+[1151] tick SPENT: on cooldown, due 1151 + lag 1, attacking=true
+[1152] tick LOST: overdue since 1151 + lag 1
+[1153] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1153]   scored as an ordinary attack: max 49, chances 0.64, avg 15.56
+[1153] ATTACK on Vardorvis (npc 12223) thrown tick 1152, booked +1, speed 4, next due 1156, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.56, ideal 15.89
+[1154] tick SPENT: on cooldown, due 1156 + lag 1, attacking=true
+[1155] tick SPENT: on cooldown, due 1156 + lag 1, attacking=true
+[1156] tick SPENT: on cooldown, due 1156 + lag 1, attacking=true
+[1157] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 150 left (bar)
+[1157] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1157] health bar: npc varp 12223, hp 153 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1157]   scored as an ordinary attack: max 49, chances 0.64, avg 15.56
+[1157] ATTACK on Vardorvis (npc 12223) thrown tick 1156, booked +1, speed 4, next due 1160, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.56, ideal 15.89
+[1158] tick SPENT: on cooldown, due 1160 + lag 1, attacking=true
+[1159] tick SPENT: on cooldown, due 1160 + lag 1, attacking=true
+[1160] xp drop ATTACK +56
+[1160] xp drop HITPOINTS +19
+[1160] xp award tick 1160: 9-9 (left 9-9, x1.550) against npc 12223
+[1160] tick SPENT: on cooldown, due 1160 + lag 1, attacking=true
+[1161] hitsplat 9 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1161] health bar: npc varp 12223, hp 144 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1161]   scored as an ordinary attack: max 49, chances 0.64, avg 15.56
+[1161] ATTACK on Vardorvis (npc 12223) thrown tick 1160, booked +1, speed 4, next due 1164, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.61, ideal 15.94
+[1162] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 144 left (bar)
+[1162] health bar: npc varp 12223, hp 146 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1162] tick SPENT: on cooldown, due 1164 + lag 1, attacking=true
+[1163] tick SPENT: on cooldown, due 1164 + lag 1, attacking=true
+[1164] tick SPENT: on cooldown, due 1164 + lag 1, attacking=true
+[1165] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1165]   scored as an ordinary attack: max 49, chances 0.64, avg 15.61
+[1165] ATTACK on Vardorvis (npc 12223) thrown tick 1164, booked +1, speed 4, next due 1168, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.61, ideal 15.94
+[1166] tick SPENT: on cooldown, due 1168 + lag 1, attacking=true
+[1167] tick SPENT: on cooldown, due 1168 + lag 1, attacking=true
+[1168] tick SPENT: on cooldown, due 1168 + lag 1, attacking=true
+[1169] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 146 left (bar)
+[1169] health bar: npc varp 12223, hp 148 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1169] tick LOST: overdue since 1168 + lag 1
+[1170] tick LOST: overdue since 1168 + lag 1
+[1171] tick LOST: overdue since 1168 + lag 1
+[1172] xp drop ATTACK +62
+[1172] xp drop HITPOINTS +20
+[1172] xp award tick 1172: 10-10 (left 10-10, x1.550) against npc 12223
+[1172] tick LOST: overdue since 1168 + lag 1
+[1173] hitsplat 10 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1173] health bar: npc varp 12223, hp 138 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1173]   scored as an ordinary attack: max 49, chances 0.64, avg 15.61
+[1173] ATTACK on Vardorvis (npc 12223) thrown tick 1172, booked +1, speed 4, next due 1176, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.66, ideal 15.99
+[1174] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 138 left (bar)
+[1174] health bar: npc varp 12223, hp 139 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1174] tick SPENT: on cooldown, due 1176 + lag 1, attacking=true
+[1175] tick SPENT: on cooldown, due 1176 + lag 1, attacking=true
+[1176] xp drop ATTACK +93
+[1176] xp drop HITPOINTS +31
+[1176] xp award tick 1176: 15-15 (left 15-15, x1.550) against npc 12223
+[1176] tick SPENT: on cooldown, due 1176 + lag 1, attacking=true
+[1177] hitsplat 15 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1177] health bar: npc varp 12223, hp 124 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1177]   scored as an ordinary attack: max 49, chances 0.64, avg 15.66
+[1177] ATTACK on Vardorvis (npc 12223) thrown tick 1176, booked +1, speed 4, next due 1180, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.72, ideal 16.04
+[1178] tick SPENT: on cooldown, due 1180 + lag 1, attacking=true
+[1179] tick SPENT: on cooldown, due 1180 + lag 1, attacking=true
+[1180] tick SPENT: on cooldown, due 1180 + lag 1, attacking=true
+[1181] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1181]   scored as an ordinary attack: max 49, chances 0.64, avg 15.72
+[1181] ATTACK on Vardorvis (npc 12223) thrown tick 1180, booked +1, speed 4, next due 1184, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.72, ideal 16.04
+[1182] tick SPENT: on cooldown, due 1184 + lag 1, attacking=true
+[1183] tick SPENT: on cooldown, due 1184 + lag 1, attacking=true
+[1184] xp drop ATTACK +211
+[1184] xp drop HITPOINTS +71
+[1184] xp award tick 1184: 34-34 (left 34-34, x1.550) against npc 12223
+[1184] tick SPENT: on cooldown, due 1184 + lag 1, attacking=true
+[1185] hitsplat 34 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1185] health bar: npc varp 12223, hp 90 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1185]   scored as an ordinary attack: max 49, chances 0.64, avg 15.72
+[1185] ATTACK on Vardorvis (npc 12223) thrown tick 1184, booked +1, speed 4, next due 1188, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.88, ideal 16.19
+[1186] tick SPENT: on cooldown, due 1188 + lag 1, attacking=true
+[1187] tick SPENT: on cooldown, due 1188 + lag 1, attacking=true
+[1188] xp drop ATTACK +56
+[1188] xp drop HITPOINTS +18
+[1188] xp award tick 1188: 9-9 (left 9-9, x1.550) against npc 12223
+[1188] tick SPENT: on cooldown, due 1188 + lag 1, attacking=true
+[1189] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 90 left (bar)
+[1189] hitsplat 9 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1189] health bar: npc varp 12223, hp 82 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1189]   scored as an ordinary attack: max 49, chances 0.65, avg 15.88
+[1189] ATTACK on Vardorvis (npc 12223) thrown tick 1188, booked +1, speed 4, next due 1192, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 15.93, ideal 16.25
+[1190] tick SPENT: on cooldown, due 1192 + lag 1, attacking=true
+[1191] tick SPENT: on cooldown, due 1192 + lag 1, attacking=true
+[1192] xp drop ATTACK +204
+[1192] xp drop HITPOINTS +68
+[1192] xp award tick 1192: 33-33 (left 33-33, x1.550) against npc 12223
+[1192] tick SPENT: on cooldown, due 1192 + lag 1, attacking=true
+[1193] hitsplat 33 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1193] health bar: npc varp 12223, hp 49 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1193]   scored as an ordinary attack: max 49, chances 0.65, avg 15.93
+[1193] ATTACK on Vardorvis (npc 12223) thrown tick 1192, booked +1, speed 4, next due 1196, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 16.14, ideal 16.45
+[1194] tick SPENT: on cooldown, due 1196 + lag 1, attacking=true
+[1195] tick SPENT: on cooldown, due 1196 + lag 1, attacking=true
+[1196] tick SPENT: on cooldown, due 1196 + lag 1, attacking=true
+[1197] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1197]   scored as an ordinary attack: max 49, chances 0.66, avg 16.14
+[1197] ATTACK on Vardorvis (npc 12223) thrown tick 1196, booked +1, speed 4, next due 1200, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 16.14, ideal 16.45
+[1198] tick SPENT: on cooldown, due 1200 + lag 1, attacking=true
+[1199] tick SPENT: on cooldown, due 1200 + lag 1, attacking=true
+[1200] tick SPENT: on cooldown, due 1200 + lag 1, attacking=true
+[1201] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1201]   scored as an ordinary attack: max 49, chances 0.66, avg 16.14
+[1201] ATTACK on Vardorvis (npc 12223) thrown tick 1200, booked +1, speed 4, next due 1204, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 16.14, ideal 16.45
+[1202] tick SPENT: on cooldown, due 1204 + lag 1, attacking=true
+[1203] tick SPENT: on cooldown, due 1204 + lag 1, attacking=true
+[1204] tick SPENT: on cooldown, due 1204 + lag 1, attacking=true
+[1205] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1205]   scored as an ordinary attack: max 49, chances 0.66, avg 16.14
+[1205] ATTACK on Vardorvis (npc 12223) thrown tick 1204, booked +1, speed 4, next due 1208, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 16.14, ideal 16.45
+[1206] tick SPENT: on cooldown, due 1208 + lag 1, attacking=true
+[1207] tick SPENT: on cooldown, due 1208 + lag 1, attacking=true
+[1208] xp drop ATTACK +230
+[1208] xp drop HITPOINTS +77
+[1208] xp award tick 1208: 37-37 (left 37-37, x1.550) against npc 12223
+[1208] tick SPENT: on cooldown, due 1208 + lag 1, attacking=true
+[1209] hitsplat 37 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1209] health bar: npc varp 12223, hp 12 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1209]   scored as an ordinary attack: max 49, chances 0.66, avg 16.14
+[1209] ATTACK on Vardorvis (npc 12223) thrown tick 1208, booked +1, speed 4, next due 1212, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 6.95, ideal 7.07
+[1210] tick SPENT: on cooldown, due 1212 + lag 1, attacking=true
+[1211] tick SPENT: on cooldown, due 1212 + lag 1, attacking=true
+[1212] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 12 left (bar)
+[1212] health bar: npc varp 12223, hp 15 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1212] tick SPENT: on cooldown, due 1212 + lag 1, attacking=true
+[1213] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1213]   scored as an ordinary attack: max 49, chances 0.67, avg 8.38
+[1213] ATTACK on Vardorvis (npc 12223) thrown tick 1212, booked +1, speed 4, next due 1216, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 8.38, ideal 8.54
+[1214] tick SPENT: on cooldown, due 1216 + lag 1, attacking=true
+[1215] tick SPENT: on cooldown, due 1216 + lag 1, attacking=true
+[1216] tick SPENT: on cooldown, due 1216 + lag 1, attacking=true
+[1217] splat 5 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 15 left (bar)
+[1217] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1217] health bar: npc varp 12223, hp 20 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1217]   scored as an ordinary attack: max 49, chances 0.67, avg 8.38
+[1217] ATTACK on Vardorvis (npc 12223) thrown tick 1216, booked +1, speed 4, next due 1220, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 10.48, ideal 10.67
+[1218] tick SPENT: on cooldown, due 1220 + lag 1, attacking=true
+[1219] tick SPENT: on cooldown, due 1220 + lag 1, attacking=true
+[1220] tick SPENT: on cooldown, due 1220 + lag 1, attacking=true
+[1221] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1221]   scored as an ordinary attack: max 49, chances 0.66, avg 10.44
+[1221] ATTACK on Vardorvis (npc 12223) thrown tick 1220, booked +1, speed 4, next due 1224, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 10.44, ideal 10.67
+[1222] tick SPENT: on cooldown, due 1224 + lag 1, attacking=true
+[1223] tick SPENT: on cooldown, due 1224 + lag 1, attacking=true
+[1224] tick SPENT: on cooldown, due 1224 + lag 1, attacking=true
+[1225] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1225]   scored as an ordinary attack: max 49, chances 0.66, avg 10.44
+[1225] ATTACK on Vardorvis (npc 12223) thrown tick 1224, booked +1, speed 4, next due 1228, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 10.44, ideal 10.67
+[1226] tick SPENT: on cooldown, due 1228 + lag 1, attacking=true
+[1227] tick SPENT: on cooldown, due 1228 + lag 1, attacking=true
+[1228] tick SPENT: on cooldown, due 1228 + lag 1, attacking=true
+[1229] tick LOST: overdue since 1228 + lag 1
+[1230] tick LOST: overdue since 1228 + lag 1
+[1231] tick LOST: overdue since 1228 + lag 1
+[1232] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42791), landedAttack=false, fromFlight=false
+[1232]   scored as an ordinary attack: max 49, chances 0.66, avg 10.44
+[1232] ATTACK on Vardorvis (npc 12223) thrown tick 1231, booked +1, speed 4, next due 1235, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 10.44, ideal 10.67
+[1233] tick SPENT: on cooldown, due 1235 + lag 1, attacking=true
+[1234] tick SPENT: on cooldown, due 1235 + lag 1, attacking=true
+[1235] tick SPENT: on cooldown, due 1235 + lag 1, attacking=true
+[1236] splat 13 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 20 left (bar)
+[1236] health bar: npc varp 12223, hp 33 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1236] tick LOST (eating): overdue since 1235 + lag 1
+[1237] tick LOST (eating): overdue since 1235 + lag 1
+[1238] xp drop ATTACK +192
+[1238] xp drop HITPOINTS +64
+[1238] xp award tick 1238: 31-31 (left 31-31, x1.550) against npc 12223
+[1238] tick LOST: overdue since 1235 + lag 1
+[1239] hitsplat 31 type 16 on Vardorvis (npc 12223, index 42791), landedAttack=true, fromFlight=false
+[1239] health bar: npc varp 12223, hp 2 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1239]   scored as an ordinary attack: max 49, chances 0.66, avg 14.34
+[1239] ATTACK on Vardorvis (npc 12223) thrown tick 1238, booked +1, speed 4, next due 1242, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 1.29, ideal 1.32
+[1240] tick SPENT: on cooldown, due 1242 + lag 1, attacking=true
+[1241] splat 8 heal (type 6, no owner) on Vardorvis (npc 12223, index 42791): HEAL, target has 2 left (bar)
+[1241] health bar: npc varp 12223, hp 10 / 700; target index 42791, id 12223, composition 12223 -> OURS
+[1241] tick SPENT: on cooldown, due 1242 + lag 1, attacking=true
+[1242] tick SPENT: on cooldown, due 1242 + lag 1, attacking=true
+[1243] tick LOST: overdue since 1242 + lag 1
+[1244] tick LOST: overdue since 1242 + lag 1
+[1245] tick LOST: overdue since 1242 + lag 1
+[1246] fight END Vardorvis (npc 12223) target despawned: attempts=55 made=55 damage=721 thrallDamage=0 hits=26 ticksLost=29 combatTicks=249 expDamage=846.5
