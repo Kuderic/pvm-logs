@@ -78,12 +78,80 @@ public class XpLedgerTest
 		ledger.spend(40, 12, true);
 		rangedAttack(ledger, 15, 35, 1.0);
 		ledger.spend(35, 17, true);
+		assertFalse("checked only once each attack has finished landing", ledger.trusted());
+		ledger.expire(30);
 		assertTrue(ledger.trusted());
 		// Big hits nothing paid for - a place that pays no experience.
-		ledger.spend(50, 30, true);
-		ledger.spend(45, 35, true);
-		ledger.spend(44, 40, true);
+		ledger.spend(50, 40, true);
+		ledger.spend(45, 45, true);
+		ledger.spend(44, 50, true);
 		assertFalse(ledger.trusted());
+	}
+
+	@Test
+	public void anAttackWhoseDropsDecodeToNothingFailsItsCheck()
+	{
+		// The Vardorvis case: read at x1.70, drops paid at x1.55 decode to nothing, and that is itself the evidence.
+		final XpLedger ledger = new XpLedger();
+		ledger.add(Skill.STRENGTH, 180);
+		ledger.add(Skill.HITPOINTS, 60);
+		ledger.close(10, NPC, 1.70, null);
+		ledger.spend(29, 12, true);
+		// One attack is too little to calibrate from, so its failure stands.
+		ledger.expire(10 + XpLedger.WINDOW_TICKS + 1);
+		assertEquals("0/1 NOT trusted", ledger.trustSummary());
+	}
+
+	@Test
+	public void aWrongStartingMultiplierIsCorrectedAndTheChecksRerun()
+	{
+		final XpLedger ledger = new XpLedger();
+		// Three claw specials on Vardorvis as logged: 29, 41 and 42 damage, paid at x1.55, read at x1.70.
+		final int[][] specs = {{180, 60, 29}, {254, 84, 41}, {260, 87, 42}};
+		int tick = 180;
+		for (int[] spec : specs)
+		{
+			ledger.add(Skill.STRENGTH, spec[0]);
+			ledger.add(Skill.HITPOINTS, spec[1]);
+			assertFalse("undecodable at the wrong multiplier", ledger.close(tick, NPC, 1.70, null).decoded());
+			ledger.spend(spec[2], tick + 1, true);
+			tick += 4;
+		}
+		ledger.expire(tick + XpLedger.WINDOW_TICKS);
+		assertEquals(1.55, ledger.multiplierFor(NPC, 1.70), 1e-9);
+		assertTrue(ledger.trustSummary(), ledger.trusted());
+	}
+
+	@Test
+	public void aRightStartingMultiplierIsConfirmedNotChanged()
+	{
+		final XpLedger ledger = new XpLedger();
+		final int[][] specs = {{180, 60, 29}, {254, 84, 41}};
+		int tick = 180;
+		for (int[] spec : specs)
+		{
+			ledger.add(Skill.STRENGTH, spec[0]);
+			ledger.add(Skill.HITPOINTS, spec[1]);
+			assertTrue(ledger.close(tick, NPC, 1.55, null).decoded());
+			ledger.spend(spec[2], tick + 1, true);
+			tick += 4;
+		}
+		ledger.expire(tick + XpLedger.WINDOW_TICKS);
+		assertEquals(1.55, ledger.multiplierFor(NPC, 1.0), 1e-9);
+		assertTrue(ledger.trusted());
+	}
+
+	@Test
+	public void splatsThatCouldBeTheThrallsTeachItNothing()
+	{
+		final XpLedger ledger = new XpLedger();
+		rangedAttack(ledger, 10, 40, 1.0);
+		ledger.spend(38, 12, true);
+		ledger.spend(2, 12, false);
+		rangedAttack(ledger, 15, 35, 1.0);
+		ledger.spend(35, 17, true);
+		ledger.expire(30);
+		assertEquals("only the clean attack is checked", "1/1 NOT trusted", ledger.trustSummary());
 	}
 
 	@Test
