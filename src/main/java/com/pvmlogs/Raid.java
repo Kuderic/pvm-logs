@@ -74,6 +74,19 @@ class Raid
 		return total;
 	}
 
+	/** The first reason any room gives not to trust its expected side, or null. */
+	String getStatsWarning()
+	{
+		for (Encounter encounter : encounters)
+		{
+			if (encounter.getStatsWarning() != null)
+			{
+				return encounter.getStatsWarning();
+			}
+		}
+		return null;
+	}
+
 	int getDamageDealt()
 	{
 		int total = 0;

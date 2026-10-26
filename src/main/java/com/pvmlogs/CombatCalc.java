@@ -2324,6 +2324,12 @@ class CombatCalc
 				npc.getName(), npcId, defenceLevel(npc), npc.getDefenceLevel(), npc.getMagicLevel(),
 				// The level actually applied, not the raw varbit, which is not cleared on leaving the Tombs.
 				gearBonuses.tombsRaidLevel()));
+		// Which version of the monster data the target is, why, and any warning against it: the line that would have named
+		// Vardorvis's 0 defence and his Awakened 1400 hitpoints as the cause in the first log.
+		if (npcId >= 0)
+		{
+			lines.add(monsters.describe(npcId));
+		}
 
 		final double accuracy = hitChance(npcId);
 		lines.add(accuracy < 0

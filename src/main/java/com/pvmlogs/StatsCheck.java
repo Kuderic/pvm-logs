@@ -4,11 +4,12 @@ package com.pvmlogs;
  * The fallback for a boss the plugin does not model correctly: notice from the
  * fight itself that the expected figures cannot be right.
  *
- * <p>Each attack lands with the probability the model expected, so the number
- * landed over a fight has mean {@code sum(p)} and variance {@code sum(p(1-p))}. Bad
- * luck moves the count a couple of standard deviations; wrong target stats move it
- * a dozen. The Vardorvis kill that showed this read 26 landed against 41.3 expected
- * over 42 attacks, a z-score near -17, because his defence was read as 0.
+ * <p>Each attack lands a non-zero splat with the probability the model expected
+ * (see {@link Fight#landedChance}), so the number landed over a fight has mean
+ * {@code sum(p)} and variance {@code sum(p(1-p))}. Bad luck moves the count a couple
+ * of standard deviations; wrong target stats move it a dozen. The Vardorvis kill
+ * that showed this landed 26 of 42 attacks against about 40 expected, more than ten
+ * standard deviations short, because his defence was read as 0.
  *
  * <p>When it trips, the fight keeps every number but carries a warning that its
  * expected side is suspect, which the overlay, the CSV and the log all show. It
@@ -37,6 +38,13 @@ final class StatsCheck
 		// fire on a single miss. One attack's worth of doubt keeps it honest.
 		final double variance = Math.max(sumVariance, 0.25);
 		return (landed - sumExpected) / Math.sqrt(variance);
+	}
+
+	/** The verdict on a fight so far: its hits against the landed count its attacks were expected to make. */
+	static String accuracyVerdict(Fight fight)
+	{
+		return accuracyVerdict(fight.getHits(), fight.getSumExpectedLanded(), fight.getSumExpectedLandedVariance(),
+			fight.getExpectedTargetSamples());
 	}
 
 	/** A warning for a fight whose landed attacks are too far from expected to be luck, or null. */

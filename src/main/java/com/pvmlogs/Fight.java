@@ -25,8 +25,10 @@ class Fight
 	private final int raidId;
 	private final int targetId;
 	private final int targetIndex;
-	// The NPC's max HP (from NPCManager), or -1 if unknown; used to classify bosses.
-	private final int maxHp;
+	// The NPC's full hitpoints, or -1 if unknown; used to classify bosses. From the version of the monster data in use when
+	// the fight opened (RuneLite's NPCManager knows nothing of Vardorvis or the Chambers), corrected at the end from the
+	// boss health bar where the game drew one.
+	private int maxHp;
 	private final long startMillis;
 
 	private long lastActivityMillis;
@@ -74,8 +76,12 @@ class Fight
 	private double sumExpectedMaxHit;
 	private int expectedMaxHitSamples;
 	private double sumExpectedAccuracy;
-	// The sum of p(1-p) over the same attacks: the variance of the landed count, which StatsCheck tests against.
-	private double sumExpectedAccuracyVariance;
+	// The chance each attack lands a NON-ZERO splat - its accuracy less the 1 in (max + 1) a successful roll has of
+	// dealing nothing - summed over the same attacks, with the sum of p(1-p) beside it: the mean and variance of the
+	// landed count, which StatsCheck tests the actual hits against. The plain accuracy sum above would read a weak
+	// weapon's rolled zeros as misses, and over a few hundred attacks that alone is four standard deviations.
+	private double sumExpectedLanded;
+	private double sumExpectedLandedVariance;
 	private double sumExpectedAverageHit;
 	// Accuracy and average hit need target data, so they can be missing while the max hit is known, and are counted
 	// separately.
@@ -203,6 +209,27 @@ class Fight
 		unclassifiedDamage += Math.max(0, amount);
 	}
 
+	/**
+	 * The chance an attack puts a non-zero splat on the target: a successful roll
+	 * deals 0 to max uniformly, so one in (max + 1) of them reads as a miss. Taken on
+	 * the attack's whole max hit, which for a multi-hit attack slightly understates
+	 * the zeros - the safe side for a test that flags too few hits.
+	 */
+	static double landedChance(double accuracy, int maxHit)
+	{
+		final double p = Math.max(0, Math.min(1, accuracy));
+		return maxHit > 0 ? p * maxHit / (maxHit + 1.0) : p;
+	}
+
+	/** The full hitpoints the game showed for the target, where that beats the table's. Ignored when not positive. */
+	void noteMaxHp(int hitpoints)
+	{
+		if (hitpoints > 0)
+		{
+			maxHp = hitpoints;
+		}
+	}
+
 	/** Adds a reason not to trust this fight's expected side, once each. */
 	void addStatsWarning(String warning)
 	{
@@ -293,7 +320,9 @@ class Fight
 		if (accuracy >= 0 && averageHit >= 0)
 		{
 			sumExpectedAccuracy += accuracy;
-			sumExpectedAccuracyVariance += Math.min(1, accuracy) * (1 - Math.min(1, accuracy));
+			final double landed = landedChance(accuracy, maxHit);
+			sumExpectedLanded += landed;
+			sumExpectedLandedVariance += landed * (1 - landed);
 			sumExpectedAverageHit += averageHit;
 			expectedTargetSamples++;
 		}

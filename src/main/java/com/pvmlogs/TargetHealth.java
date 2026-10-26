@@ -1,7 +1,9 @@
 package com.pvmlogs;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import javax.inject.Singleton;
 
 /**
@@ -10,10 +12,11 @@ import javax.inject.Singleton;
  * <ol>
  * <li><b>The boss health bar the game draws.</b> Varbits {@code HPBAR_HUD_HP} and
  * {@code HPBAR_HUD_BASEHP} carry the exact current and full hitpoints of the NPC
- * the bar is showing, and varp {@code HPBAR_HUD_NPC} says which NPC that is. It is
- * the only source that sees heals and other players' damage as the game counts
- * them, and the only one that knows a boss's full hitpoints without a table - which
- * is how the right version of a boss is told apart (Vardorvis: 700, Awakened 1400).
+ * the bar is showing, and varp {@code HPBAR_HUD_NPC} names it by its composition
+ * id - which is how RuneLite's own opponent info reads the same three. It is the
+ * only source that sees heals and other players' damage as the game counts them,
+ * and the only one that knows a boss's full hitpoints without a table, which is
+ * how the right version of a boss is told apart (Vardorvis: 700, Awakened 1400).
  * Trusted only while the bar names this target, and only while fresh.</li>
  * <li><b>Counted.</b> Full hitpoints from the tables, less every damage splat on it
  * (the player's, the thrall's, burn, poison, other players'), plus every heal
@@ -21,8 +24,14 @@ import javax.inject.Singleton;
  * "more left", which is the safe side for an overkill cap.</li>
  * </ol>
  *
+ * <p>Keyed by npc index. A boss that transforms keeps its index and changes its id,
+ * and keeps the damage it has taken, so an id change does not reset anything; every
+ * id the index has worn is remembered so a lookup by either finds it. The server
+ * reuses an index only after the npc has despawned, which the plugin reports with
+ * {@link #forget}.
+ *
  * <p>Pure bookkeeping with no client access, so it can be tested on its own; the
- * plugin feeds it splats and bar readings.
+ * plugin feeds it splats and bar readings, all on the client thread.
  */
 @Singleton
 class TargetHealth
@@ -33,6 +42,7 @@ class TargetHealth
 	static final class Entry
 	{
 		int npcId;
+		final Set<Integer> ids = new HashSet<>();
 		int tableMaxHp = -1;
 		int damage;
 		int healed;
@@ -47,20 +57,8 @@ class TargetHealth
 	private Entry entry(int index, int npcId, int tick)
 	{
 		final Entry e = byIndex.computeIfAbsent(index, i -> new Entry());
-		if (e.npcId != npcId)
-		{
-			// The server reuses indices: a different npc on this index is a different target.
-			if (e.npcId != 0)
-			{
-				e.tableMaxHp = -1;
-				e.damage = 0;
-				e.healed = 0;
-				e.hudHp = -1;
-				e.hudMax = -1;
-				e.hudTick = Integer.MIN_VALUE;
-			}
-			e.npcId = npcId;
-		}
+		e.npcId = npcId;
+		e.ids.add(npcId);
 		e.lastTouchedTick = Math.max(e.lastTouchedTick, tick);
 		return e;
 	}
@@ -90,7 +88,7 @@ class TargetHealth
 		}
 	}
 
-	/** A bar reading the game has said belongs to this npc. */
+	/** A bar reading the game has said belongs to this npc. Refused when it cannot be a reading. */
 	void hud(int index, int npcId, int hp, int base, int tick)
 	{
 		if (base <= 0 || hp < 0 || hp > base)
@@ -108,15 +106,16 @@ class TargetHealth
 		return e.hudMax > 0 && tick - e.hudTick <= HUD_FRESH_TICKS;
 	}
 
+	private static int fullHp(Entry e)
+	{
+		return e.hudMax > 0 ? e.hudMax : e.tableMaxHp;
+	}
+
 	/** Full hitpoints: the bar's if it has ever been read for this npc, otherwise the table's, otherwise -1. */
 	int maxHp(int index)
 	{
 		final Entry e = byIndex.get(index);
-		if (e == null)
-		{
-			return -1;
-		}
-		return e.hudMax > 0 ? e.hudMax : e.tableMaxHp;
+		return e == null ? -1 : fullHp(e);
 	}
 
 	/** What is left, or -1 when nothing knows. Never below zero. */
@@ -131,7 +130,7 @@ class TargetHealth
 		{
 			return e.hudHp;
 		}
-		final int max = e.hudMax > 0 ? e.hudMax : e.tableMaxHp;
+		final int max = fullHp(e);
 		if (max <= 0)
 		{
 			return -1;
@@ -151,10 +150,21 @@ class TargetHealth
 		{
 			return "bar";
 		}
-		return (e.hudMax > 0 ? e.hudMax : e.tableMaxHp) > 0 ? "counted" : "unknown";
+		return fullHp(e) > 0 ? "counted" : "unknown";
 	}
 
-	/** The index of the most recently touched target wearing this id, or -1. Bosses are alone in their instance. */
+	/** Which source {@link #maxHp} answered from: "bar", "table" or "unknown". */
+	String maxSource(int index)
+	{
+		final Entry e = byIndex.get(index);
+		if (e == null)
+		{
+			return "unknown";
+		}
+		return e.hudMax > 0 ? "bar" : e.tableMaxHp > 0 ? "table" : "unknown";
+	}
+
+	/** The index of the most recently touched target that has worn this id, or -1. Bosses are alone in their instance. */
 	private int latestIndexFor(int npcId)
 	{
 		int best = -1;
@@ -162,7 +172,7 @@ class TargetHealth
 		for (Map.Entry<Integer, Entry> m : byIndex.entrySet())
 		{
 			final Entry e = m.getValue();
-			if (e.npcId == npcId && (best < 0 || e.lastTouchedTick > bestTick))
+			if (e.ids.contains(npcId) && (best < 0 || e.lastTouchedTick > bestTick))
 			{
 				best = m.getKey();
 				bestTick = e.lastTouchedTick;
@@ -171,14 +181,14 @@ class TargetHealth
 		return best;
 	}
 
-	/** Full hitpoints the bar has shown for an npc with this id, or -1. Picks between a boss's versions. */
+	/** Full hitpoints the bar has shown for an npc wearing this id, or -1. Picks between a boss's versions. */
 	int observedMaxForId(int npcId)
 	{
 		final int index = latestIndexFor(npcId);
 		return index < 0 ? -1 : byIndex.get(index).hudMax;
 	}
 
-	/** What the latest target with this id has left, or -1. Drives stats that move with hitpoints. */
+	/** What the latest target wearing this id has left, or -1. Drives stats that move with hitpoints. */
 	int remainingForId(int npcId, int tick)
 	{
 		final int index = latestIndexFor(npcId);
@@ -197,6 +207,14 @@ class TargetHealth
 		return e == null ? 0 : e.healed;
 	}
 
+	/** The last bar reading for this npc, or -1 if the bar has never named it. */
+	int lastHudHp(int index)
+	{
+		final Entry e = byIndex.get(index);
+		return e == null ? -1 : e.hudHp;
+	}
+
+	/** The npc on this index has left the scene; the server may give its index to the next one. */
 	void forget(int index)
 	{
 		byIndex.remove(index);
