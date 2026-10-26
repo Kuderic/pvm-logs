@@ -1,4 +1,8 @@
-# PvM Performance Tracker
+# PvM Logs
+
+Per-kill PvM logs for any boss: actual vs expected damage, split into luck and execution.
+
+PvM Logs is a fork of [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker) by Arodab, and builds on his combat model. It ships as a separate Plugin Hub entry and does not read the old plugin's settings or history.
 
 A RuneLite plugin that tracks your real vs expected combat performance (damage, accuracy, DPS) against any NPC. 
 
@@ -14,6 +18,7 @@ Instead of just telling you how much damage you dealt, this plugin models your e
 - **Exportable Data:** Dumps your session fight data to CSV for further analysis.
 
 ## Credits
+- Arodab, for PvM Performance Tracker, which this is forked from;
 - Special thanks to Kinomoto and zLost for a ton of valuable feedback and ideas for the plugin;
 - Portions of the combat math were ported from the LlemonDuck dps-calculator (BSD-2);
 - Chambers of Xeric scaling math taken from **GearScape**.
