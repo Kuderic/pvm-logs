@@ -7,7 +7,15 @@ import net.runelite.client.config.ConfigItem;
 @ConfigGroup(PvmPerformanceConfig.GROUP)
 public interface PvmPerformanceConfig extends Config
 {
-	String GROUP = "pvmlogs";
+	/**
+	 * Settings group. Arodab's original, so users of his Plugin Hub entry keep their settings on update.
+	 */
+	String GROUP = "pvmperformance";
+	/**
+	 * Folder under {@code ~/.runelite/} that holds history, CSV exports, debug logs and cached data. Arodab's
+	 * original, so users of his entry keep their history. Every file the plugin writes goes under this one name.
+	 */
+	String DATA_DIR = "pvm-performance-tracker";
 
 	@ConfigItem(
 		keyName = "showOverlay",

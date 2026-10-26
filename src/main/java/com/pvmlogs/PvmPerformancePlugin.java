@@ -86,14 +86,13 @@ import net.runelite.client.util.Text;
 
 @Slf4j
 @PluginDescriptor(
-	name = "PvM Logs",
-	description = "Per-kill PvM logs for any boss: actual vs expected damage, split into luck and execution",
-	tags = {"boss", "pvm", "dps", "damage", "luck", "log"}
+	name = "PvM Performance Tracker",
+	description = "Tracks your real vs expected combat performance against any NPC",
+	tags = {"pvm", "dps", "combat", "performance", "damage", "accuracy", "boss", "luck"}
 )
 public class PvmPerformancePlugin extends Plugin
 {
 	private static final int MAX_HISTORY = 500;
-	private static final String EXPORT_DIR = "pvm-logs";
 	// Single-NPC bosses from the RuneLite hiscore list. Raid and minigame entries are on that list too but never match a
 	// combat NPC, so they fall out here and are handled separately.
 	private static final Set<String> BOSS_NAMES = buildBossNames();
@@ -409,7 +408,7 @@ public class PvmPerformancePlugin extends Plugin
 		panel = new PvmPerformancePanel(this);
 		final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/com/pvmlogs/panel_icon.png");
 		navButton = NavigationButton.builder()
-			.tooltip("PvM Logs")
+			.tooltip("PvM Performance Tracker")
 			.icon(icon)
 			.priority(7)
 			.panel(panel)
@@ -781,7 +780,7 @@ public class PvmPerformancePlugin extends Plugin
 		for (String line : combatCalc.describeLoadout(targetId))
 		{
 			log.debug("::loadout {}", line);
-			client.addChatMessage(ChatMessageType.CONSOLE, "PvM Logs", line, null);
+			client.addChatMessage(ChatMessageType.CONSOLE, "PvM Performance", line, null);
 		}
 	}
 
@@ -811,7 +810,7 @@ public class PvmPerformancePlugin extends Plugin
 			executor.execute(() ->
 			{
 				final java.nio.file.Path written = debug.saveRecent(header);
-				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.CONSOLE, "PvM Logs",
+				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.CONSOLE, "PvM Performance",
 					written == null ? "Nothing to save yet - fight something first."
 						: "Saved the recent debug log to " + written.getFileName(), null));
 			});
@@ -2592,7 +2591,7 @@ public class PvmPerformancePlugin extends Plugin
 
 	private Path historyFile()
 	{
-		return new File(new File(RuneLite.RUNELITE_DIR, EXPORT_DIR), "history.json").toPath();
+		return new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR), "history.json").toPath();
 	}
 
 	private void loadHistory()
@@ -2879,7 +2878,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			try
 			{
-				final File dir = new File(RuneLite.RUNELITE_DIR, EXPORT_DIR);
+				final File dir = new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR);
 				Files.createDirectories(dir.toPath());
 				final File out = new File(dir, "pvm-" + label + "-" + FILE_TS.format(LocalDateTime.now()) + ".csv");
 				try (Writer writer = new BufferedWriter(new java.io.OutputStreamWriter(
@@ -2891,7 +2890,7 @@ public class PvmPerformancePlugin extends Plugin
 				final String path = out.getAbsolutePath();
 				setStatus("Exported " + fights.size() + " fights → " + path);
 				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "",
-					"PvM Logs: exported " + fights.size() + " fights to " + path, null));
+					"PvM Performance: exported " + fights.size() + " fights to " + path, null));
 			}
 			catch (IOException e)
 			{

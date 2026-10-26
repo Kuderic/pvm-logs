@@ -1,8 +1,8 @@
-# PvM Logs
+# PvM Performance Tracker
 
-Per-kill PvM logs for any boss: actual vs expected damage, split into luck and execution.
+This is a maintained fork of [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker) by Arodab, and builds on his combat model. It fixes the build against current RuneLite and counts thrall hits apart from your own (issue #1), with per-kill logs to follow.
 
-PvM Logs is a fork of [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker) by Arodab, and builds on his combat model. It ships as a separate Plugin Hub entry and does not read the old plugin's settings or history.
+It keeps the original plugin's name, settings group (`pvmperformance`) and data folder (`~/.runelite/pvm-performance-tracker/`), so it can be released as an update to the existing Plugin Hub entry without resetting anyone's settings or fight history.
 
 A RuneLite plugin that tracks your real vs expected combat performance (damage, accuracy, DPS) against any NPC. 
 
