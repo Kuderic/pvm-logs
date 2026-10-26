@@ -129,7 +129,9 @@ class DefenceDrain
 	private void apply(NPC npc, SpecialWeapon weapon, int hit)
 	{
 		final MonsterStatsProvider.MonsterStats stats = monsters.get(npc.getId());
-		if (stats == null)
+		// Vardorvis: the game does not let drains lower his defence (its floor is his current defence), so a warhammer
+		// that landed changed nothing and must not be booked as if it had.
+		if (stats == null || stats.isDrainImmune())
 		{
 			return;
 		}

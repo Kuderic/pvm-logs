@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "portedFrom": {
+    "repo": "weirdgloop/osrs-dps-calc",
+    "paths": ["src/lib/scaling", "src/lib/constants.ts"],
+    "commit": "c446f2e1027a5d0f7ced0d961f3e5ee22fecf2e7",
+    "date": "2026-10-26"
+  },
+  "bosses": [
+    {
+      "name": "Vardorvis",
+      "npcIds": [12223, 12224, 12228, 12425, 12426, 13656],
+      "defenceDrainImmune": true,
+      "variants": [
+        { "version": "Quest", "maxHp": 500, "scaleWithHp": { "strength": [210, 280], "defence": [180, 130] } },
+        { "version": "Post-quest", "maxHp": 700, "default": true, "scaleWithHp": { "strength": [270, 360], "defence": [215, 145] } },
+        { "version": "Awakened", "maxHp": 1400, "scaleWithHp": { "strength": [391, 522], "defence": [268, 181] } }
+      ],
+      "notes": "Strength and defence move linearly from full hitpoints to none (DPS calc scaling/Vardorvis.ts). The stats file stores both as 0. Defence cannot be drained (DPS calc DefenceReduction.ts floor = current defence)."
+    },
+    {
+      "name": "Araxxor",
+      "npcIds": [13668],
+      "unmodelled": "Enraged phase adds 35 defence, 28 magic and 31 ranged levels (DPS calc scaling/Phases.ts). The enrage is not tracked, so expected figures after it read high."
+    },
+    {
+      "name": "Yama",
+      "npcIds": [14176],
+      "unmodelled": "Magic defence bonus is +60 while the tank uses magic and -30 otherwise, outside phase 3 (DPS calc scaling/Phases.ts). The tank's style is not tracked."
+    },
+    {
+      "name": "Bork",
+      "npcIds": [16640],
+      "unmodelled": "Each phase adds magic resistance and flat armour (DPS calc scaling/Phases.ts). Phases are not tracked."
+    }
+  ]
+}

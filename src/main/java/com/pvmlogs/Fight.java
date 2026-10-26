@@ -41,6 +41,20 @@ class Fight
 	// Our thrall's damage on this fight's npcs (issue #1). Real damage, so it takes the target's health down, but none of
 	// it is the player's: it is kept out of damage dealt, the hits and everything they feed.
 	private int thrallDamage;
+	// Damage over time on this fight's target: burn (burning claws), poison, venom, bleed. The splat names no owner, so
+	// solo it is the player's and in a group it may be anyone's; either way it is kept out of damage dealt and the hits,
+	// which are the weapon's, and shown on its own.
+	private int dotDamage;
+	// What the target healed while it was being fought, from its heal splats.
+	private int healed;
+	// Other players' hits on the target, which take its health down and are nobody's business here beyond that.
+	private int othersDamage;
+	// Splats of a type this plugin does not know, counted against the target's health and logged by type so they can be
+	// identified. Never the player's.
+	private int unclassifiedDamage;
+	// Why this fight's expected side should not be trusted, or null: the target's stats carried a warning, or the attacks
+	// that landed were too far from the expected count to be luck. See StatsCheck.
+	private String statsWarning;
 	private int damageTaken;
 	// One attempt per attack thrown, and a hit for each attack that landed anything. accuracy = hits / attempts.
 	private int attempts;
@@ -60,6 +74,8 @@ class Fight
 	private double sumExpectedMaxHit;
 	private int expectedMaxHitSamples;
 	private double sumExpectedAccuracy;
+	// The sum of p(1-p) over the same attacks: the variance of the landed count, which StatsCheck tests against.
+	private double sumExpectedAccuracyVariance;
 	private double sumExpectedAverageHit;
 	// Accuracy and average hit need target data, so they can be missing while the max hit is known, and are counted
 	// separately.
@@ -163,6 +179,40 @@ class Fight
 		thrallDamage += amount;
 	}
 
+	/** A burn, poison, venom or bleed splat on the target. See dotDamage. */
+	void recordDotDamage(int amount)
+	{
+		dotDamage += Math.max(0, amount);
+	}
+
+	/** A heal splat on the target. */
+	void recordHeal(int amount)
+	{
+		healed += Math.max(0, amount);
+	}
+
+	/** Another player's hit on the target. */
+	void recordOthersDamage(int amount)
+	{
+		othersDamage += Math.max(0, amount);
+	}
+
+	/** A splat of a type not known here. See unclassifiedDamage. */
+	void recordUnclassifiedDamage(int amount)
+	{
+		unclassifiedDamage += Math.max(0, amount);
+	}
+
+	/** Adds a reason not to trust this fight's expected side, once each. */
+	void addStatsWarning(String warning)
+	{
+		if (warning == null || warning.isEmpty() || (statsWarning != null && statsWarning.contains(warning)))
+		{
+			return;
+		}
+		statsWarning = statsWarning == null ? warning : statsWarning + "; " + warning;
+	}
+
 	/** A magic splash on the target: an attack that landed nothing. */
 	void recordSplash(long now)
 	{
@@ -243,6 +293,7 @@ class Fight
 		if (accuracy >= 0 && averageHit >= 0)
 		{
 			sumExpectedAccuracy += accuracy;
+			sumExpectedAccuracyVariance += Math.min(1, accuracy) * (1 - Math.min(1, accuracy));
 			sumExpectedAverageHit += averageHit;
 			expectedTargetSamples++;
 		}
