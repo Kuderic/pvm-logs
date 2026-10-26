@@ -1,0 +1,404 @@
+=== PvM Logs, the last 388 lines before this was saved. Plugin dev ===
+  melee boost Super combat, ranged boost Ranging potion, magic boost None
+  prayers: melee Piety, ranged Rigour, magic Augury; slayer helm off task false
+  fight timeout 100 ticks, file logging false
+  Abyssal tentacle (or) - Whip, SLASH ACCURATE, 4 tick
+  Target: Vardorvis (npc 12223), defence 0 (base 0), magic 215, toa raid level 0
+  Max hit 40, accuracy 97.7% (lands 97.7%), avg hit 19.54, dps 8.14
+  Melee: str bonus +140, level 118, attack bonus +142
+    str from: HEAD Neitiznot faceguard +6, CAPE Fire cape +4, AMULET Amulet of blood fury +8, WEAPON Abyssal tentacle (or) +86, BODY Bandos chestplate +4, SHIELD Dragon defender +6, LEGS Bandos tassets +2, GLOVES Barrows gloves +12, BOOTS Avernic treads +4, RING Berserker ring (i) +8
+  Prayers up: none (goal Piety, NOT met)
+  Efficiency goal: Piety, STRENGTH at 118 (+19)
+  (raid: cox indungeon 0, cox timer 0, tob progress 30, tob wave 0/0, tob party 0, toa level 0, toa partystatus 0)
+  (toa path 0, toa level frozen 0)
+  (instanced true, toa raid level varbit 0, stale unless instanced)
+  (category varbit 20, com mode 0, cox tier 3, cox timer 0, salts 0)
+=== log ===
+[52] fight START Vardorvis (npc 12223, index 38517, maxHp -1) group=null room=Vardorvis raid=null
+[52] tick LOST: overdue since -2147483648 + lag 1, NOT COUNTED - no attack made in this fight yet
+[53] tick LOST: overdue since -2147483648 + lag 1, NOT COUNTED - no attack made in this fight yet
+[54] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[54]   scored as an ordinary attack: max 36, chances 0.97, avg 17.52
+[54] ATTACK on Vardorvis (npc 12223) thrown tick 53, booked +1, speed 4, next due 57, prayed=true potted=false switched=true projectile=false, scored=true, expected avg 17.52, ideal 17.52
+[55] tick SPENT: on cooldown, due 57 + lag 1, attacking=true
+[56] tick SPENT: on cooldown, due 57 + lag 1, attacking=true
+[57] tick SPENT: on cooldown, due 57 + lag 1, attacking=true
+[58] xp drop STRENGTH +273
+[58] xp drop HITPOINTS +91
+[58] xp award tick 58: 40-40 (left 40-40, x1.700) against npc 12223
+[58] tick LOST: overdue since 57 + lag 1
+[59] hitsplat 11 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[59] hitsplat 11 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[59]   scored as a SPECIAL: max 61, chances 1.00, avg 42.80
+[59] ATTACK on Vardorvis (npc 12223) thrown tick 58, booked +1, speed 4, next due 62, prayed=true potted=false switched=true projectile=false, scored=true, expected avg 17.52, ideal 17.52
+[60] hitsplat 22 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[60] tick SPENT: on cooldown, due 62 + lag 1, attacking=true
+[61] tick SPENT: on cooldown, due 62 + lag 1, attacking=true
+[62] xp drop STRENGTH +105
+[62] xp drop HITPOINTS +35
+[62] xp award tick 62: undecodable (x1.700) against npc 12223
+[62] tick SPENT: on cooldown, due 62 + lag 1, attacking=true
+[63] hitsplat 1 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[63] hitsplat 1 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[63]   scored as a SPECIAL: max 61, chances 1.00, avg 42.80
+[63] ATTACK on Vardorvis (npc 12223) thrown tick 62, booked +1, speed 4, next due 66, prayed=true potted=false switched=true projectile=false, scored=true, expected avg 17.52, ideal 17.52
+[64] hitsplat 15 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[64] tick SPENT: on cooldown, due 66 + lag 1, attacking=true
+[65] tick SPENT: on cooldown, due 66 + lag 1, attacking=true
+[66] xp drop STRENGTH +323
+[66] xp drop HITPOINTS +107
+[66] xp award tick 66: undecodable (x1.700) against npc 12223
+[66] tick SPENT: on cooldown, due 66 + lag 1, attacking=true
+[67] hitsplat 25 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[67] hitsplat 25 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[67]   scored as a SPECIAL: max 60, chances 1.00, avg 42.27
+[67] ATTACK on Vardorvis (npc 12223) thrown tick 66, booked +1, speed 4, next due 70, prayed=true potted=false switched=true projectile=false, scored=true, expected avg 23.49, ideal 24.04
+[68] hitsplat 2 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[68] tick SPENT: on cooldown, due 70 + lag 1, attacking=true
+[69] xp drop MAGIC +88
+[69] xp award tick 69: 0-0 (left 0-0, x1.700) against npc 12223
+[69] THRALL claimed npc 10886 (index 39539), max hit 3: spawned beside me as the varbit came up
+[69] tick SPENT: on cooldown, due 70 + lag 1, attacking=true
+[70] xp drop ATTACK +174
+[70] xp drop HITPOINTS +58
+[70] xp award tick 70: undecodable (x1.700) against npc 12223
+[70] tick SPENT: on cooldown, due 70 + lag 1, attacking=true
+[71] hitsplat 28 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[71]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[71] ATTACK on Vardorvis (npc 12223) thrown tick 70, booked +1, speed 4, next due 74, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[72] tick SPENT: on cooldown, due 74 + lag 1, attacking=true
+[73] tick SPENT: on cooldown, due 74 + lag 1, attacking=true
+[74] THRALL resurrection active varbit -> 1
+[74] hitsplat 1 on Vardorvis (index 38517): THRALL, thrall p=0.79 [rate 0.150, player MELEE_POSSIBLE, xp UNKNOWN (2/3 NOT trusted), phase -1]
+[74] xp drop ATTACK +198
+[74] xp drop HITPOINTS +66
+[74] xp award tick 74: 29-29 (left 29-29, x1.700) against npc 12223
+[74] tick SPENT: on cooldown, due 74 + lag 1, attacking=true
+[75] hitsplat 32 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[75]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[75] ATTACK on Vardorvis (npc 12223) thrown tick 74, booked +1, speed 4, next due 78, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[76] tick SPENT: on cooldown, due 78 + lag 1, attacking=true
+[77] tick SPENT: on cooldown, due 78 + lag 1, attacking=true
+[78] hitsplat 1 on Vardorvis (index 38517): THRALL, thrall p=0.95 [rate 0.788, player MELEE_POSSIBLE, xp UNKNOWN (2/3 NOT trusted), phase 2]
+[78] tick SPENT: on cooldown, due 78 + lag 1, attacking=true
+[79] tick LOST: overdue since 78 + lag 1
+[80] tick LOST: overdue since 78 + lag 1
+[81] xp drop ATTACK +75
+[81] xp drop HITPOINTS +25
+[81] xp award tick 81: 11-11 (left 11-11, x1.700) against npc 12223
+[81] tick LOST: overdue since 78 + lag 1
+[82] hitsplat 0 on Vardorvis (index 38517): THRALL, thrall p=0.91 [rate 0.833, player MELEE_POSSIBLE, xp NO_INFO (2/3 NOT trusted), phase 2]
+[82] hitsplat 12 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[82]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[82] ATTACK on Vardorvis (npc 12223) thrown tick 81, booked +1, speed 4, next due 85, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[83] tick SPENT: on cooldown, due 85 + lag 1, attacking=true
+[84] tick SPENT: on cooldown, due 85 + lag 1, attacking=true
+[85] tick SPENT: on cooldown, due 85 + lag 1, attacking=true
+[86] hitsplat 3 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.849, player MELEE_POSSIBLE, xp UNCOVERED (2/4 NOT trusted), phase 2]
+[86] hitsplat 0 on Vardorvis (index 38517): player, thrall p=0.02 [rate 0.002, player MELEE_POSSIBLE, xp NO_INFO (2/4 NOT trusted), phase 2]
+[86] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[86]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[86] ATTACK on Vardorvis (npc 12223) thrown tick 85, booked +1, speed 4, next due 89, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[87] tick SPENT: on cooldown, due 89 + lag 1, attacking=true
+[88] tick SPENT: on cooldown, due 89 + lag 1, attacking=true
+[89] xp drop ATTACK +155
+[89] xp drop HITPOINTS +52
+[89] xp award tick 89: undecodable (x1.700) against npc 12223
+[89] tick SPENT: on cooldown, due 89 + lag 1, attacking=true
+[90] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.857, player MELEE_POSSIBLE, xp UNKNOWN (2/4 NOT trusted), phase 2]
+[90] hitsplat 25 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[90]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[90] ATTACK on Vardorvis (npc 12223) thrown tick 89, booked +1, speed 4, next due 93, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[91] tick SPENT: on cooldown, due 93 + lag 1, attacking=true
+[92] tick SPENT: on cooldown, due 93 + lag 1, attacking=true
+[93] xp drop ATTACK +136
+[93] xp drop HITPOINTS +45
+[93] xp award tick 93: 20-20 (left 20-20, x1.700) against npc 12223
+[93] tick SPENT: on cooldown, due 93 + lag 1, attacking=true
+[94] hitsplat 3 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.862, player MELEE_POSSIBLE, xp UNKNOWN (2/4 NOT trusted), phase 2]
+[94] hitsplat 22 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[94]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[94] ATTACK on Vardorvis (npc 12223) thrown tick 93, booked +1, speed 4, next due 97, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[95] tick SPENT: on cooldown, due 97 + lag 1, attacking=true
+[96] tick SPENT: on cooldown, due 97 + lag 1, attacking=true
+[97] xp drop ATTACK +124
+[97] xp drop HITPOINTS +41
+[97] xp award tick 97: undecodable (x1.700) against npc 12223
+[97] tick SPENT: on cooldown, due 97 + lag 1, attacking=true
+[98] hitsplat 20 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[98]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[98] ATTACK on Vardorvis (npc 12223) thrown tick 97, booked +1, speed 4, next due 101, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[99] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.88 [rate 0.030, player UNEXPLAINED, xp UNKNOWN (2/4 NOT trusted), phase 2]
+[99] tick SPENT: on cooldown, due 101 + lag 1, attacking=true
+[100] tick SPENT: on cooldown, due 101 + lag 1, attacking=true
+[101] xp drop ATTACK +279
+[101] xp drop HITPOINTS +93
+[101] xp award tick 101: 41-41 (left 41-41, x1.700) against npc 12223
+[101] tick SPENT: on cooldown, due 101 + lag 1, attacking=true
+[102] hitsplat 45 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[102]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[102] ATTACK on Vardorvis (npc 12223) thrown tick 101, booked +1, speed 4, next due 105, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[103] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.98 [rate 0.228, player UNEXPLAINED, xp UNKNOWN (2/4 NOT trusted), phase 2]
+[103] tick SPENT: on cooldown, due 105 + lag 1, attacking=true
+[104] tick SPENT: on cooldown, due 105 + lag 1, attacking=true
+[105] tick SPENT: on cooldown, due 105 + lag 1, attacking=true
+[106] tick LOST: overdue since 105 + lag 1
+[107] hitsplat 0 on Vardorvis (index 38517): THRALL, thrall p=0.83 [rate 0.382, player MELEE_POSSIBLE, xp NO_INFO (2/4 NOT trusted), phase 2]
+[107] tick LOST: overdue since 105 + lag 1
+[108] xp drop ATTACK +279
+[108] xp drop HITPOINTS +93
+[108] xp award tick 108: 41-41 (left 41-41, x1.700) against npc 12223
+[108] tick LOST: overdue since 105 + lag 1
+[109] hitsplat 45 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[109]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[109] ATTACK on Vardorvis (npc 12223) thrown tick 108, booked +1, speed 4, next due 112, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[110] tick SPENT: on cooldown, due 112 + lag 1, attacking=true
+[111] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.99 [rate 0.495, player UNEXPLAINED, xp UNCOVERED (2/5 NOT trusted), phase 3]
+[111] tick SPENT: on cooldown, due 112 + lag 1, attacking=true
+[112] tick SPENT: on cooldown, due 112 + lag 1, attacking=true
+[113] hitsplat 0 on Vardorvis (index 38517): player, thrall p=0.02 [rate 0.002, player MELEE_POSSIBLE, xp NO_INFO (2/5 NOT trusted), phase 3]
+[113] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[113]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[113] ATTACK on Vardorvis (npc 12223) thrown tick 112, booked +1, speed 4, next due 116, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[114] tick SPENT: on cooldown, due 116 + lag 1, attacking=true
+[115] hitsplat 1 on Vardorvis (index 38517): THRALL, thrall p=0.99 [rate 0.579, player UNEXPLAINED, xp UNCOVERED (2/5 NOT trusted), phase 3]
+[115] tick SPENT: on cooldown, due 116 + lag 1, attacking=true
+[116] xp drop ATTACK +62
+[116] xp drop HITPOINTS +21
+[116] xp award tick 116: 9-9 (left 9-9, x1.700) against npc 12223
+[116] tick SPENT: on cooldown, due 116 + lag 1, attacking=true
+[117] hitsplat 10 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[117] xp multiplier for npc 12223 calibrated to x1.700 (171 damage seen)
+[117]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[117] ATTACK on Vardorvis (npc 12223) thrown tick 116, booked +1, speed 4, next due 120, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[118] tick SPENT: on cooldown, due 120 + lag 1, attacking=true
+[119] hitsplat 0 on Vardorvis (index 38517): THRALL, thrall p=0.99 [rate 0.644, player UNEXPLAINED, xp NO_INFO (2/6 NOT trusted), phase 3]
+[119] tick SPENT: on cooldown, due 120 + lag 1, attacking=true
+[120] xp drop ATTACK +106
+[120] xp drop HITPOINTS +35
+[120] xp award tick 120: undecodable (x1.700) against npc 12223
+[120] tick SPENT: on cooldown, due 120 + lag 1, attacking=true
+[121] hitsplat 17 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[121]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[121] ATTACK on Vardorvis (npc 12223) thrown tick 120, booked +1, speed 4, next due 124, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[122] tick SPENT: on cooldown, due 124 + lag 1, attacking=true
+[123] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.99 [rate 0.693, player UNEXPLAINED, xp UNKNOWN (2/6 NOT trusted), phase 3]
+[123] tick SPENT: on cooldown, due 124 + lag 1, attacking=true
+[124] xp drop ATTACK +86
+[124] xp drop HITPOINTS +29
+[124] xp award tick 124: undecodable (x1.700) against npc 12223
+[124] tick SPENT: on cooldown, due 124 + lag 1, attacking=true
+[125] hitsplat 14 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[125]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[125] ATTACK on Vardorvis (npc 12223) thrown tick 124, booked +1, speed 4, next due 128, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[126] tick SPENT: on cooldown, due 128 + lag 1, attacking=true
+[127] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.99 [rate 0.731, player UNEXPLAINED, xp UNKNOWN (2/6 NOT trusted), phase 3]
+[127] tick SPENT: on cooldown, due 128 + lag 1, attacking=true
+[128] tick SPENT: on cooldown, due 128 + lag 1, attacking=true
+[129] tick LOST: overdue since 128 + lag 1
+[130] tick LOST: overdue since 128 + lag 1
+[131] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.95 [rate 0.761, player MELEE_POSSIBLE, xp UNKNOWN (2/6 NOT trusted), phase 3]
+[131] tick LOST: overdue since 128 + lag 1
+[132] hitsplat 0 on Vardorvis (index 38517): player, thrall p=0.02 [rate 0.002, player MELEE_POSSIBLE, xp NO_INFO (2/6 NOT trusted), phase 3]
+[132] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[132]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[132] ATTACK on Vardorvis (npc 12223) thrown tick 131, booked +1, speed 4, next due 135, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[133] tick SPENT: on cooldown, due 135 + lag 1, attacking=true
+[134] tick SPENT: on cooldown, due 135 + lag 1, attacking=true
+[135] hitsplat 0 on Vardorvis (index 38517): THRALL, thrall p=0.91 [rate 0.784, player MELEE_POSSIBLE, xp NO_INFO (2/6 NOT trusted), phase 3]
+[135] xp drop ATTACK +242
+[135] xp drop HITPOINTS +81
+[135] xp award tick 135: undecodable (x1.700) against npc 12223
+[135] tick SPENT: on cooldown, due 135 + lag 1, attacking=true
+[136] hitsplat 39 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[136]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[136] ATTACK on Vardorvis (npc 12223) thrown tick 135, booked +1, speed 4, next due 139, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[137] tick SPENT: on cooldown, due 139 + lag 1, attacking=true
+[138] tick SPENT: on cooldown, due 139 + lag 1, attacking=true
+[139] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.95 [rate 0.803, player MELEE_POSSIBLE, xp UNKNOWN (2/6 NOT trusted), phase 3]
+[139] xp drop ATTACK +279
+[139] xp drop HITPOINTS +93
+[139] xp award tick 139: 41-41 (left 41-41, x1.700) against npc 12223
+[139] tick SPENT: on cooldown, due 139 + lag 1, attacking=true
+[140] hitsplat 45 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[140]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[140] ATTACK on Vardorvis (npc 12223) thrown tick 139, booked +1, speed 4, next due 143, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[141] tick SPENT: on cooldown, due 143 + lag 1, attacking=true
+[142] tick SPENT: on cooldown, due 143 + lag 1, attacking=true
+[143] hitsplat 3 on Vardorvis (index 38517): THRALL, thrall p=0.95 [rate 0.817, player MELEE_POSSIBLE, xp UNKNOWN (2/6 NOT trusted), phase 3]
+[143] tick SPENT: on cooldown, due 143 + lag 1, attacking=true
+[144] hitsplat 0 on Vardorvis (index 38517): player, thrall p=0.02 [rate 0.002, player MELEE_POSSIBLE, xp NO_INFO (2/6 NOT trusted), phase 3]
+[144] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[144]   scored as an ordinary attack: max 49, chances 0.98, avg 24.03
+[144] ATTACK on Vardorvis (npc 12223) thrown tick 143, booked +1, speed 4, next due 147, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.03, ideal 24.04
+[145] tick SPENT: on cooldown, due 147 + lag 1, attacking=true
+[146] tick SPENT: on cooldown, due 147 + lag 1, attacking=true
+[147] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.95 [rate 0.829, player MELEE_POSSIBLE, xp UNCOVERED (2/6 NOT trusted), phase 3]
+[147] tick SPENT: on cooldown, due 147 + lag 1, attacking=true
+[148] hitsplat 0 on Vardorvis (index 38517): player, thrall p=0.02 [rate 0.002, player MELEE_POSSIBLE, xp NO_INFO (2/6 NOT trusted), phase 3]
+[148] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[148]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[148] ATTACK on Vardorvis (npc 12223) thrown tick 147, booked +1, speed 4, next due 151, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[149] tick SPENT: on cooldown, due 151 + lag 1, attacking=true
+[150] tick SPENT: on cooldown, due 151 + lag 1, attacking=true
+[151] hitsplat 3 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.838, player MELEE_POSSIBLE, xp UNCOVERED (2/6 NOT trusted), phase 3]
+[151] xp drop ATTACK +37
+[151] xp drop HITPOINTS +12
+[151] xp award tick 151: undecodable (x1.700) against npc 12223
+[151] tick SPENT: on cooldown, due 151 + lag 1, attacking=true
+[152] hitsplat 6 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[152]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[152] ATTACK on Vardorvis (npc 12223) thrown tick 151, booked +1, speed 4, next due 155, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[153] tick SPENT: on cooldown, due 155 + lag 1, attacking=true
+[154] tick SPENT: on cooldown, due 155 + lag 1, attacking=true
+[155] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.845, player MELEE_POSSIBLE, xp UNKNOWN (2/6 NOT trusted), phase 3]
+[155] xp drop ATTACK +56
+[155] xp drop HITPOINTS +19
+[155] xp award tick 155: undecodable (x1.700) against npc 12223
+[155] tick SPENT: on cooldown, due 155 + lag 1, attacking=true
+[156] hitsplat 9 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[156]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[156] ATTACK on Vardorvis (npc 12223) thrown tick 155, booked +1, speed 4, next due 159, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[157] tick SPENT: on cooldown, due 159 + lag 1, attacking=true
+[158] tick SPENT: on cooldown, due 159 + lag 1, attacking=true
+[159] hitsplat 1 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.851, player MELEE_POSSIBLE, xp UNKNOWN (2/6 NOT trusted), phase 3]
+[159] tick SPENT: on cooldown, due 159 + lag 1, attacking=true
+[160] hitsplat 0 on Vardorvis (index 38517): player, thrall p=0.02 [rate 0.002, player MELEE_POSSIBLE, xp NO_INFO (2/6 NOT trusted), phase 3]
+[160] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[160]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[160] ATTACK on Vardorvis (npc 12223) thrown tick 159, booked +1, speed 4, next due 163, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[161] tick SPENT: on cooldown, due 163 + lag 1, attacking=true
+[162] tick SPENT: on cooldown, due 163 + lag 1, attacking=true
+[163] hitsplat 3 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.856, player MELEE_POSSIBLE, xp UNKNOWN (2/6 NOT trusted), phase 3]
+[163] tick SPENT: on cooldown, due 163 + lag 1, attacking=true
+[164] xp drop ATTACK +285
+[164] xp drop HITPOINTS +95
+[164] xp award tick 164: 42-42 (left 42-42, x1.700) against npc 12223
+[164] tick LOST: overdue since 163 + lag 1
+[165] hitsplat 46 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[165]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[165] ATTACK on Vardorvis (npc 12223) thrown tick 164, booked +1, speed 4, next due 168, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[166] tick SPENT: on cooldown, due 168 + lag 1, attacking=true
+[167] hitsplat 1 on Vardorvis (index 38517): THRALL, thrall p=1.00 [rate 0.859, player UNEXPLAINED, xp UNCOVERED (2/7 NOT trusted), phase 3]
+[167] tick SPENT: on cooldown, due 168 + lag 1, attacking=true
+[168] tick SPENT: on cooldown, due 168 + lag 1, attacking=true
+[169] tick LOST: overdue since 168 + lag 1
+[170] hitsplat 0 on Vardorvis (index 38517): player, thrall p=0.27 [rate 0.030, player MELEE_POSSIBLE, xp NO_INFO (2/7 NOT trusted), phase 3]
+[170] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[170]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[170] ATTACK on Vardorvis (npc 12223) thrown tick 169, booked +1, speed 4, next due 173, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[171] hitsplat 0 on Vardorvis (index 38517): THRALL, thrall p=0.99 [rate 0.862, player UNEXPLAINED, xp NO_INFO (2/7 NOT trusted), phase 3]
+[171] THRALL released npc 10886 (index 39539): despawned
+[171] tick SPENT: on cooldown, due 173 + lag 1, attacking=true
+[172] THRALL resurrection active varbit -> 0
+[172] tick SPENT: on cooldown, due 173 + lag 1, attacking=true
+[173] xp drop ATTACK +87
+[173] xp drop HITPOINTS +29
+[173] xp award tick 173: undecodable (x1.700) against npc 12223
+[173] tick SPENT: on cooldown, due 173 + lag 1, attacking=true
+[174] hitsplat 14 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[174]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[174] ATTACK on Vardorvis (npc 12223) thrown tick 173, booked +1, speed 4, next due 177, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[175] tick SPENT: on cooldown, due 177 + lag 1, attacking=true
+[176] tick SPENT: on cooldown, due 177 + lag 1, attacking=true
+[177] tick SPENT: on cooldown, due 177 + lag 1, attacking=true
+[178] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[178]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[178] ATTACK on Vardorvis (npc 12223) thrown tick 177, booked +1, speed 4, next due 181, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[179] tick SPENT: on cooldown, due 181 + lag 1, attacking=true
+[180] tick SPENT: on cooldown, due 181 + lag 1, attacking=true
+[181] xp drop ATTACK +137
+[181] xp drop HITPOINTS +45
+[181] xp award tick 181: 20-20 (left 20-20, x1.700) against npc 12223
+[181] tick SPENT: on cooldown, due 181 + lag 1, attacking=true
+[182] hitsplat 22 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[182]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[182] ATTACK on Vardorvis (npc 12223) thrown tick 181, booked +1, speed 4, next due 185, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[183] tick SPENT: on cooldown, due 185 + lag 1, attacking=true
+[184] tick SPENT: on cooldown, due 185 + lag 1, attacking=true
+[185] tick SPENT: on cooldown, due 185 + lag 1, attacking=true
+[186] hitsplat 0 type 12 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[186]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[186] ATTACK on Vardorvis (npc 12223) thrown tick 185, booked +1, speed 4, next due 189, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[187] tick SPENT: on cooldown, due 189 + lag 1, attacking=true
+[188] tick SPENT: on cooldown, due 189 + lag 1, attacking=true
+[189] xp drop ATTACK +6
+[189] xp drop HITPOINTS +2
+[189] xp drop MAGIC +88
+[189] xp award tick 189: 1-1 (left 1-1, x1.700) against npc 12223
+[189] tick SPENT: on cooldown, due 189 + lag 1, attacking=true
+[190] hitsplat 1 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[190] xp drop MAGIC +90
+[190] xp award tick 190: 0-0 (left 0-0, x1.700) against npc 12223
+[190]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[190] ATTACK on Vardorvis (npc 12223) thrown tick 189, booked +1, speed 4, next due 193, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[191] tick SPENT: on cooldown, due 193 + lag 1, attacking=true
+[192] tick SPENT: on cooldown, due 193 + lag 1, attacking=true
+[193] xp drop ATTACK +25
+[193] xp drop HITPOINTS +8
+[193] xp award tick 193: undecodable (x1.700) against npc 12223
+[193] tick SPENT: on cooldown, due 193 + lag 1, attacking=true
+[194] THRALL projectile 1907 from no source at npc 12223 (index 38517), lands tick 194
+[194] THRALL resurrection active varbit -> 1
+[194] hitsplat 1 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[194] hitsplat 4 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=false, fromFlight=false
+[194] THRALL claimed npc 10880 (index 42298), max hit 3: the only thrall in view while mine was active
+[194]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[194] ATTACK on Vardorvis (npc 12223) thrown tick 193, booked +1, speed 4, next due 197, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[195] tick SPENT: on cooldown, due 197 + lag 1, attacking=true
+[196] tick SPENT: on cooldown, due 197 + lag 1, attacking=true
+[197] xp drop ATTACK +24
+[197] xp drop HITPOINTS +8
+[197] xp award tick 197: undecodable (x1.700) against npc 12223
+[197] tick SPENT: on cooldown, due 197 + lag 1, attacking=true
+[198] THRALL projectile 1907 from no source at npc 12223 (index 38517), lands tick 198
+[198] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.79 [rate 0.150, player MELEE_POSSIBLE, xp UNKNOWN (3/9 NOT trusted), phase -1]
+[198] hitsplat 4 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[198]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[198] ATTACK on Vardorvis (npc 12223) thrown tick 197, booked +1, speed 4, next due 201, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[199] tick SPENT: on cooldown, due 201 + lag 1, attacking=true
+[200] tick SPENT: on cooldown, due 201 + lag 1, attacking=true
+[201] xp drop ATTACK +255
+[201] xp drop HITPOINTS +85
+[201] xp award tick 201: undecodable (x1.700) against npc 12223
+[201] tick SPENT: on cooldown, due 201 + lag 1, attacking=true
+[202] THRALL projectile 1907 from no source at npc 12223 (index 38517), lands tick 202
+[202] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.95 [rate 0.788, player MELEE_POSSIBLE, xp UNKNOWN (3/9 NOT trusted), phase 2]
+[202] hitsplat 41 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[202]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[202] ATTACK on Vardorvis (npc 12223) thrown tick 201, booked +1, speed 4, next due 205, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[203] tick SPENT: on cooldown, due 205 + lag 1, attacking=true
+[204] tick SPENT: on cooldown, due 205 + lag 1, attacking=true
+[205] xp drop ATTACK +266
+[205] xp drop HITPOINTS +89
+[205] xp award tick 205: 39-39 (left 39-39, x1.700) against npc 12223
+[205] tick SPENT: on cooldown, due 205 + lag 1, attacking=true
+[206] THRALL projectile 1907 from no source at npc 12223 (index 38517), lands tick 206
+[206] hitsplat 3 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.833, player MELEE_POSSIBLE, xp UNKNOWN (3/9 NOT trusted), phase 2]
+[206] hitsplat 43 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[206]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[206] ATTACK on Vardorvis (npc 12223) thrown tick 205, booked +1, speed 4, next due 209, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[207] tick SPENT: on cooldown, due 209 + lag 1, attacking=true
+[208] tick SPENT: on cooldown, due 209 + lag 1, attacking=true
+[209] tick SPENT: on cooldown, due 209 + lag 1, attacking=true
+[210] THRALL projectile 1907 from no source at npc 12223 (index 38517), lands tick 210
+[210] hitsplat 2 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.849, player MELEE_POSSIBLE, xp UNCOVERED (3/9 NOT trusted), phase 2]
+[210] tick LOST (eating): overdue since 209 + lag 1
+[211] tick LOST (eating): overdue since 209 + lag 1
+[212] tick LOST (eating): overdue since 209 + lag 1
+[213] xp drop ATTACK +81
+[213] xp drop HITPOINTS +27
+[213] xp award tick 213: 12-12 (left 12-12, x1.700) against npc 12223
+[213] tick LOST: overdue since 209 + lag 1
+[214] THRALL projectile 1907 from no source at npc 12223 (index 38517), lands tick 214
+[214] hitsplat 3 on Vardorvis (index 38517): THRALL, thrall p=0.96 [rate 0.857, player MELEE_POSSIBLE, xp PARTIAL (3/9 NOT trusted), phase 2]
+[214] hitsplat 10 type 16 on Vardorvis (npc 12223, index 38517), landedAttack=true, fromFlight=false
+[214]   scored as an ordinary attack: max 49, chances 0.98, avg 24.02
+[214] ATTACK on Vardorvis (npc 12223) thrown tick 213, booked +1, speed 4, next due 217, prayed=true potted=false switched=false projectile=false, scored=true, expected avg 24.02, ideal 24.04
+[215] tick UNCOUNTED: target 12223 is dead but still standing
+[216] tick UNCOUNTED: target 12223 is dead but still standing
+[217] tick UNCOUNTED: target 12223 is dead but still standing
+[218] tick UNCOUNTED: target 12223 is dead but still standing
+[219] tick UNCOUNTED: target 12223 is dead but still standing
+[220] fight END Vardorvis (npc 12223) target died: attempts=37 made=37 damage=668 thrallDamage=52 hits=27 ticksLost=16 combatTicks=161 expDamage=938.2
+[220] KILL Vardorvis (npc 12223): dealt 720 to it, tables say it has -1 hitpoints

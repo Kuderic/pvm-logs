@@ -10,13 +10,21 @@ public class ThrallTrackerTest
 {
 	private static final int THRALL = 77;
 	private static final int BOSS = 5;
-	private static final int GREATER = NpcID.ARCEUUS_THRALL_GHOST_GREATER;
+	// A zombie by default: it fires nothing, so its animation and its cycle are all there is to go on. The ghost, which
+	// is judged by its projectiles, has tests of its own below.
+	private static final int GREATER = NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER;
+	private static final int GHOST = NpcID.ARCEUUS_THRALL_GHOST_GREATER;
 
 	private static ThrallTracker summoned(int tick)
 	{
+		return summoned(tick, GREATER);
+	}
+
+	private static ThrallTracker summoned(int tick, int id)
+	{
 		final ThrallTracker t = new ThrallTracker();
 		t.onResurrectionVarbit(true, tick);
-		t.onThrallSpawned(THRALL, GREATER, 1, tick);
+		t.onThrallSpawned(THRALL, id, 1, tick);
 		return t;
 	}
 
@@ -122,13 +130,125 @@ public class ThrallTrackerTest
 	}
 
 	@Test
-	public void aProjectileNarrowsTheWindowToItsLanding()
+	public void aProjectileMakesItsSplatDueOnTheTickItIsFirstSeen()
 	{
-		final ThrallTracker t = summoned(10);
-		t.onThrallAttackAnimation(THRALL, BOSS, 20);
-		t.onThrallProjectile(THRALL, BOSS, 24, 20);
-		assertEquals(ThrallTracker.RATE_THRALL_DUE, t.thrallRate(BOSS, 24), 0);
-		assertTrue(t.thrallRate(BOSS, 21) < ThrallTracker.RATE_THRALL_DUE);
+		// Vardorvis: animation on 202, projectile first seen on 203, splat on 203. The predicted landing is not used.
+		final ThrallTracker t = summoned(190, GHOST);
+		t.onThrallAttackAnimation(THRALL, -1, 202);
+		t.onThrallProjectile(THRALL, BOSS, 203);
+		assertEquals(ThrallTracker.RATE_THRALL_PROJECTILE, t.thrallRate(BOSS, 203), 0);
+		assertEquals("one attack, one window", 1, t.dueAttacks().size());
+		assertEquals(ThrallTracker.RATE_THRALL_PROJECTILE, t.thrallRate(BOSS, 204), 0);
+		assertTrue(t.thrallRate(BOSS, 205) < ThrallTracker.RATE_THRALL_DUE);
+	}
+
+	@Test
+	public void aProjectileIsOursOnlyIfItCameFromOurThrall()
+	{
+		final ThrallTracker t = summoned(190, GHOST);
+		t.onThrallProjectile(-1, BOSS, 203);
+		assertTrue("no thrall it can be pinned on", t.dueAttacks().isEmpty());
+		t.onThrallProjectile(THRALL + 9, BOSS, 207);
+		assertTrue("someone else's", t.dueAttacks().isEmpty());
+		t.onThrallProjectile(THRALL, BOSS, 211);
+		assertEquals("ours", 1, t.dueAttacks().size());
+	}
+
+	@Test
+	public void theVarbitMayComeUpTicksAfterTheSpawn()
+	{
+		// 16:08 log: the ghost spawned around 190 and the varbit only came up on 194, as it finished rising.
+		final ThrallTracker t = new ThrallTracker();
+		t.onThrallSpawned(THRALL, GHOST, 1, 190);
+		t.tick(190);
+		t.tick(193);
+		t.onResurrectionVarbit(true, 194);
+		assertTrue(t.hasThrall());
+		assertEquals(THRALL, t.ownedIndex());
+	}
+
+	@Test
+	public void aProjectileSeenBeforeItsThrallIsClaimedStillBringsItsSplat()
+	{
+		// 16:08 log, tick 194: the ghost's first projectile came ahead of the varbit, and its 1 went to the player.
+		final ThrallTracker t = new ThrallTracker();
+		t.onThrallSpawned(THRALL, GHOST, 1, 190);
+		t.onThrallProjectile(THRALL, BOSS, 194);
+		t.onResurrectionVarbit(true, 194);
+		assertEquals(ThrallTracker.RATE_THRALL_PROJECTILE, t.thrallRate(BOSS, 194), 0);
+		assertTrue(t.probability(splat(1, 194, ThrallTracker.PlayerSplat.ON_CADENCE)) > 0.9);
+	}
+
+	@Test
+	public void aRecastsProjectileFiredBeforeItsClaimIsHeldForIt()
+	{
+		final ThrallTracker t = summoned(10, GHOST);
+		t.onThrallSpawned(THRALL + 1, GHOST, 1, 100);
+		t.onThrallProjectile(THRALL + 1, BOSS, 101);
+		assertTrue("not ours yet", t.dueAttacks().isEmpty());
+		t.onSummonCast(101);
+		assertEquals(THRALL + 1, t.ownedIndex());
+		assertEquals(1, t.dueAttacks().size());
+	}
+
+	@Test
+	public void aGhostsSplatWithNoProjectileIsNotItsOwn()
+	{
+		// 197 in the Vardorvis log: a player's miss, before the ghost had fired at all.
+		final ThrallTracker t = summoned(194, GHOST);
+		assertTrue(t.probability(splat(0, 197, ThrallTracker.PlayerSplat.ON_CADENCE)) < 0.5);
+		// And once its projectiles are being seen, a splat without one is all but impossible.
+		t.onThrallProjectile(THRALL, BOSS, 199);
+		t.noteThrallSplat(BOSS, 199);
+		assertEquals(ThrallTracker.RATE_THRALL_NO_PROJECTILE, t.thrallRate(BOSS, 202), 0);
+		assertTrue(t.probability(splat(3, 202, ThrallTracker.PlayerSplat.UNEXPLAINED)) < 0.5);
+	}
+
+	@Test
+	public void aGhostsProjectileOutweighsThePlayersCadenceForASmallSplat()
+	{
+		final ThrallTracker t = summoned(194, GHOST);
+		t.onThrallProjectile(THRALL, BOSS, 199);
+		assertTrue(t.probability(splat(3, 199, ThrallTracker.PlayerSplat.ON_CADENCE)) > 0.9);
+	}
+
+	@Test
+	public void theWeaponsCooldownDecidesWhatTheBlowCouldBe()
+	{
+		// A 4-tick weapon thrown on 196 is next due on 200; its blow lands the tick after it is thrown.
+		final int due = 200;
+		assertEquals(ThrallTracker.PlayerSplat.IN_COOLDOWN,
+			ThrallTracker.classifyPlayer(false, false, false, true, 199, due, false));
+		assertEquals(ThrallTracker.PlayerSplat.IN_COOLDOWN,
+			ThrallTracker.classifyPlayer(false, false, false, true, 200, due, false));
+		assertEquals(ThrallTracker.PlayerSplat.ON_CADENCE,
+			ThrallTracker.classifyPlayer(false, false, false, true, 201, due, false));
+		assertEquals(ThrallTracker.PlayerSplat.LATE,
+			ThrallTracker.classifyPlayer(false, false, false, true, 205, due, false));
+		assertEquals(ThrallTracker.PlayerSplat.LATE,
+			ThrallTracker.classifyPlayer(false, false, false, true, 202, due, false));
+		// A projectile's own tick is a tick less exact.
+		assertEquals(ThrallTracker.PlayerSplat.ON_CADENCE,
+			ThrallTracker.classifyPlayer(false, false, false, true, 201, due, true));
+		assertEquals(ThrallTracker.PlayerSplat.ON_CADENCE,
+			ThrallTracker.classifyPlayer(false, false, false, true, 200, due, true));
+		// What the player has in flight, or already landing, comes first.
+		assertEquals(ThrallTracker.PlayerSplat.SAME_TICK_BURST,
+			ThrallTracker.classifyPlayer(true, false, true, true, 199, due, false));
+		assertEquals(ThrallTracker.PlayerSplat.PROJECTILE_DUE,
+			ThrallTracker.classifyPlayer(false, false, true, true, 199, due, false));
+		assertEquals(ThrallTracker.PlayerSplat.UNEXPLAINED,
+			ThrallTracker.classifyPlayer(false, false, false, false, 205, due, false));
+		assertEquals(ThrallTracker.PlayerSplat.MELEE_POSSIBLE,
+			ThrallTracker.classifyPlayer(false, false, false, true, 205, Integer.MIN_VALUE, false));
+	}
+
+	@Test
+	public void aSplatInsideTheWeaponsCooldownGoesToTheThrallEvenUnseen()
+	{
+		// 199 and 203 in the Vardorvis log were booked as blows inside the tentacle's cooldown.
+		final ThrallTracker t = summoned(190);
+		assertTrue(t.probability(splat(0, 203, ThrallTracker.PlayerSplat.IN_COOLDOWN)) > 0.5);
 	}
 
 	@Test

@@ -107,6 +107,16 @@ class SessionTotals
 		noteActivity(now);
 	}
 
+	/** Takes back a splat recordAttempt counted, judged within its tick to be the thrall's instead. */
+	void revokeAttempt(int damage, boolean landedAttack)
+	{
+		damageDealt = Math.max(0, damageDealt - damage);
+		if (landedAttack && hits > 0)
+		{
+			hits--;
+		}
+	}
+
 	/**
 	 * Adds what this attack was expected to do. The max hit is not accumulated:
 	 * it is a property of the loadout rather than something that adds up.

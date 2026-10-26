@@ -144,6 +144,19 @@ class Fight
 		lastActivityMillis = now;
 	}
 
+	/**
+	 * Takes back a splat counted as the player's that turned out to be the
+	 * thrall's, within the tick it landed (see the plugin's same-tick re-judging).
+	 */
+	void revokeDamageDealt(int amount, boolean hit)
+	{
+		damageDealt = Math.max(0, damageDealt - amount);
+		if (hit && hits > 0)
+		{
+			hits--;
+		}
+	}
+
 	/** A splat our thrall landed. Counted on its own and nowhere else - see thrallDamage. */
 	void recordThrallDamage(int amount)
 	{

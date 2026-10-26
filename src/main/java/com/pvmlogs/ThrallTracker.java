@@ -13,10 +13,15 @@ import java.util.List;
  *
  * <ul>
  * <li><b>The thrall's own attacks.</b> Ours is found when it spawns beside the
- * player as the resurrection varbit comes up. Its attack animation, and the
- * projectile a ghost or skeleton fires, are seen at least a tick before the
- * splat - wiki (Hit delay): thrall damage processes a tick late - so each one
- * opens a window in which one splat of 0 to its max is due.</li>
+ * player as the resurrection varbit comes up. A ghost or skeleton attacks with a
+ * projectile, and its splat lands on the tick that projectile is first seen:
+ * 223 of 223 across eight Vardorvis kills, the projectile always seen first
+ * within the tick, and never a splat of its own without one. So a projectile
+ * makes one splat of 0 to its max due on that tick, and for those thralls a
+ * splat with no projectile is not theirs. The animation, a tick ahead of the
+ * projectile, is what a zombie's melee blow has instead. Neither event names the
+ * thrall's target: it reads "interacting nothing" throughout, and its
+ * projectiles name no source, so they are matched by where they leave from.</li>
  * <li><b>The cycle.</b> It attacks every four ticks while it has a target, so
  * the splats it has landed fix a phase, and a splat on that phase is likelier
  * its own. Nor can it land two within three ticks.</li>
@@ -44,8 +49,23 @@ class ThrallTracker
 		PROJECTILE_DUE(0.9),
 		/** The player's own burst already landed on this npc this tick: a scythe, a claw special. */
 		SAME_TICK_BURST(0.9),
-		/** Melee in hand and the weapon was off cooldown, so this could be a new blow. */
+		/**
+		 * A special's burst landed on this npc last tick and may still be landing: a burning claws special puts its third
+		 * splat a tick after the first two (Vardorvis 2300, 2392, 2730, 4487). Only a special: an ordinary blow is one
+		 * splat, and the tick after it is inside its cooldown (16:08 log, 171).
+		 */
+		BURST_CONTINUING(0.6),
+		/** Melee in hand, and this is the first tick a blow thrown the moment the weapon came off cooldown lands. */
+		ON_CADENCE(0.9),
+		/**
+		 * Melee in hand, but later than the weapon allowed: the player paused, so a blow now is less likely than one on
+		 * cadence (16:08 log, 82 and 107: the zombie's zeros, a tick or more after the player's due blow).
+		 */
+		LATE(0.3),
+		/** Melee in hand with no blow booked yet, so nothing says when one is due. */
 		MELEE_POSSIBLE(0.5),
+		/** The weapon was still on cooldown when this blow would have been thrown: it cannot be a new attack. */
+		IN_COOLDOWN(0.003),
 		/** Nothing the player did explains a splat here now. */
 		UNEXPLAINED(0.05);
 
@@ -60,19 +80,31 @@ class ThrallTracker
 	// How far from the player a thrall may appear and still be the one just cast. It spawns on an adjacent tile.
 	static final int SPAWN_RADIUS = 2;
 	// How far apart the varbit coming up and the spawn may be seen.
-	static final int SUMMON_WINDOW_TICKS = 2;
-	// An animation says an attack went out but not when it lands: a zombie's blow is seen a tick or two later, and a
-	// projectile, once seen, narrows this to its own landing.
+	// Four ticks apart in the 16:08 log: the ghost spawned around 190 and the varbit only came up on 194, as it finished
+	// rising. In the earlier logs the two came on one tick.
+	static final int SUMMON_WINDOW_TICKS = 5;
+	// An animation says an attack went out, a tick ahead of its splat. For a ghost the projectile follows on the splat's
+	// own tick and replaces this; for a zombie it is all there is.
 	static final int ANIMATION_EARLIEST = 1;
-	static final int ANIMATION_LATEST = 3;
-	static final int PROJECTILE_SLACK = 1;
+	static final int ANIMATION_LATEST = 2;
+	// A projectile's splat lands on the tick it is first seen. Its predicted landing tick is not used: it was a tick late
+	// on 3 of 223, and the splat never was. A tick of slack after, none before.
+	static final int PROJECTILE_LATE = 1;
+	// How close to our thrall a projectile naming no source must leave from to be its own.
+	static final int PROJECTILE_SOURCE_RADIUS = 2;
 	// The cycle forgets old evidence so a thrall that re-paths or changes target re-locks onto its new phase.
-	private static final double PHASE_DECAY = 0.8;
+	// Fast enough to re-lock within two splats of a one-tick re-path (the zombie's 94 to 99 in the 16:08 log).
+	private static final double PHASE_DECAY = 0.6;
 	// How recently the thrall must have shown an attack for its silence to mean it is not attacking now.
 	private static final int OBSERVATION_FRESH_TICKS = 12;
 
 	// Evidence weights, as rates of a splat arriving: the thrall's side.
-	static final double RATE_THRALL_DUE = 0.95;
+	static final double RATE_THRALL_PROJECTILE = 0.98;
+	static final double RATE_THRALL_DUE = 0.9;
+	// A thrall that only attacks with projectiles, and none on this tick: once its projectiles have been seen, very
+	// nearly impossible; before the first, merely unlikely, since that one could have been missed.
+	static final double RATE_THRALL_NO_PROJECTILE = 0.0005;
+	static final double RATE_THRALL_NO_PROJECTILE_YET = 0.03;
 	static final double RATE_THRALL_SILENT = 0.03;
 	static final double RATE_THRALL_TOO_SOON = 0.002;
 	static final double RATE_THRALL_UNKNOWN_PHASE = 0.15;
@@ -90,6 +122,10 @@ class ThrallTracker
 	private final double[] phase = new double[ATTACK_SPEED_TICKS];
 	private int lastSplatTick = Integer.MIN_VALUE;
 	private int lastObservedTick = Integer.MIN_VALUE;
+	private boolean firesProjectile;
+	private int lastProjectileTick = Integer.MIN_VALUE;
+	// Thrall projectiles seen while no thrall was ours yet: {thrall index, target index, tick}.
+	private final List<int[]> unownedProjectiles = new ArrayList<>();
 	private final List<String> notes = new ArrayList<>();
 
 	/** One attack of the thrall's, and the ticks its splat may land on. */
@@ -167,7 +203,7 @@ class ThrallTracker
 		}
 		if (best != null)
 		{
-			claim(best[0], best[1], why);
+			claim(best[0], best[1], why, tick);
 		}
 	}
 
@@ -190,12 +226,12 @@ class ThrallTracker
 		}
 		if (tick - summonTick <= SUMMON_WINDOW_TICKS && tick >= summonTick)
 		{
-			claim(index, id, "spawned beside me as the varbit came up");
+			claim(index, id, "spawned beside me as the varbit came up", tick);
 		}
 		else if (varbitActive && !hasThrall())
 		{
 			// Ours, still active, coming back into view: a new scene loads every npc afresh.
-			claim(index, id, "spawned beside me while mine was active and unseen");
+			claim(index, id, "spawned beside me while mine was active and unseen", tick);
 		}
 	}
 
@@ -204,11 +240,11 @@ class ThrallTracker
 	 * while the varbit says one of ours is active and the plugin can see exactly
 	 * one candidate.
 	 */
-	void onOnlyCandidate(int index, int id)
+	void onOnlyCandidate(int index, int id, int tick)
 	{
 		if (varbitActive && !hasThrall())
 		{
-			claim(index, id, "the only thrall in view while mine was active");
+			claim(index, id, "the only thrall in view while mine was active", tick);
 		}
 	}
 
@@ -236,7 +272,7 @@ class ThrallTracker
 		varbitActive = active;
 	}
 
-	private void claim(int index, int id, String why)
+	private void claim(int index, int id, String why, int tick)
 	{
 		if (index == ownedIndex)
 		{
@@ -245,11 +281,23 @@ class ThrallTracker
 		ownedIndex = index;
 		ownedId = id;
 		maxHit = Thralls.maxHit(id);
+		firesProjectile = Thralls.firesProjectile(id);
 		due.clear();
 		java.util.Arrays.fill(phase, 0);
 		lastSplatTick = Integer.MIN_VALUE;
 		lastObservedTick = Integer.MIN_VALUE;
+		lastProjectileTick = Integer.MIN_VALUE;
 		notes.add(String.format("THRALL claimed npc %d (index %d), max hit %d: %s", id, index, maxHit, why));
+		// Its projectiles seen before it was known to be ours still bring their splats: 194 in the 16:08 log fired a tick
+		// before its claim and its splat went to the player.
+		for (int[] p : unownedProjectiles)
+		{
+			if (p[0] == index && tick - p[2] <= PROJECTILE_LATE)
+			{
+				addProjectileDue(p[1], p[2]);
+			}
+		}
+		unownedProjectiles.clear();
 	}
 
 	private void release(String why)
@@ -266,10 +314,14 @@ class ThrallTracker
 
 	// --- its attacks ---
 
-	/** Our thrall started an animation while aimed at an npc: an attack went out. */
+	/**
+	 * Our thrall started an attack animation. {@code targetIndex} is -1 when it
+	 * names no target, which is what a thrall does, and then the window opens on
+	 * whatever it hits.
+	 */
 	void onThrallAttackAnimation(int thrallIndex, int targetIndex, int tick)
 	{
-		if (thrallIndex != ownedIndex || targetIndex < 0)
+		if (thrallIndex != ownedIndex || thrallIndex < 0)
 		{
 			return;
 		}
@@ -285,25 +337,46 @@ class ThrallTracker
 		lastObservedTick = tick;
 	}
 
-	/** A projectile from our thrall, which says exactly when its splat lands. */
-	void onThrallProjectile(int thrallIndex, int targetIndex, int landingTick, int tick)
+	/**
+	 * A thrall projectile, first seen on this tick. {@code fromThrallIndex} is
+	 * the thrall it came from: the one it names as its source, or, as ours do in
+	 * practice, naming none, the thrall it set off from beside. It is ours when
+	 * that is our thrall, and its splat lands on this tick or, at a stretch, the
+	 * next. One from a thrall not ours is held for a tick, in case that thrall is
+	 * claimed before its splat lands.
+	 *
+	 * @param fromThrallIndex the npc index of the thrall it came from, or -1 if none can be named
+	 */
+	void onThrallProjectile(int fromThrallIndex, int targetIndex, int tick)
 	{
-		if (thrallIndex != ownedIndex || targetIndex < 0)
+		if (targetIndex < 0 || fromThrallIndex < 0)
 		{
 			return;
 		}
+		if (fromThrallIndex != ownedIndex)
+		{
+			// Not ours, or not ours yet: a first thrall, or a recast's, can fire before it is claimed.
+			unownedProjectiles.removeIf(p -> tick - p[2] > PROJECTILE_LATE);
+			unownedProjectiles.add(new int[]{fromThrallIndex, targetIndex, tick});
+			return;
+		}
+		addProjectileDue(targetIndex, tick);
+	}
+
+	private void addProjectileDue(int targetIndex, int tick)
+	{
 		lastObservedTick = tick;
+		lastProjectileTick = tick;
+		// The animation that went before it is the same attack: narrow its window rather than open a second.
 		for (Due d : due)
 		{
-			if (Math.abs(d.attackTick - tick) <= 1 && !d.fromProjectile)
+			if (!d.fromProjectile && tick - d.attackTick >= 0 && tick - d.attackTick <= ANIMATION_LATEST)
 			{
-				d.earliest = landingTick - PROJECTILE_SLACK;
-				d.latest = landingTick + PROJECTILE_SLACK;
-				d.fromProjectile = true;
-				return;
+				due.remove(d);
+				break;
 			}
 		}
-		final Due d = new Due(targetIndex, tick, landingTick - PROJECTILE_SLACK, landingTick + PROJECTILE_SLACK);
+		final Due d = new Due(targetIndex, tick, tick, tick + PROJECTILE_LATE);
 		d.fromProjectile = true;
 		due.add(d);
 	}
@@ -312,7 +385,7 @@ class ThrallTracker
 	{
 		for (Due d : due)
 		{
-			if (d.targetIndex == targetIndex && tick >= d.earliest && tick <= d.latest)
+			if ((d.targetIndex == targetIndex || d.targetIndex < 0) && tick >= d.earliest && tick <= d.latest)
 			{
 				return d;
 			}
@@ -357,14 +430,22 @@ class ThrallTracker
 	/** How readily the thrall lands a splat on this npc now, before the amount is looked at. */
 	double thrallRate(int targetIndex, int tick)
 	{
-		if (dueOn(targetIndex, tick) != null)
+		final Due d = dueOn(targetIndex, tick);
+		if (d != null)
 		{
-			return RATE_THRALL_DUE;
+			return d.fromProjectile ? RATE_THRALL_PROJECTILE : RATE_THRALL_DUE;
 		}
 		// Four ticks between attacks: one landed a tick or two ago means this cannot be its next.
 		if (lastSplatTick != Integer.MIN_VALUE && tick - lastSplatTick < ATTACK_SPEED_TICKS - 1)
 		{
 			return RATE_THRALL_TOO_SOON;
+		}
+		// A ghost or skeleton attacks with nothing but projectiles, and none is due here. Before its first has been seen
+		// that is weaker evidence, since that first could have gone unseen; the cycle cannot speak for it yet either.
+		if (firesProjectile)
+		{
+			return lastProjectileTick != Integer.MIN_VALUE && tick - lastProjectileTick <= OBSERVATION_FRESH_TICKS
+				? RATE_THRALL_NO_PROJECTILE : RATE_THRALL_NO_PROJECTILE_YET;
 		}
 		final double share = cycleShare(tick);
 		// Its attacks are being seen and none is due, so it is probably not attacking this npc now - unless the splat
@@ -406,6 +487,25 @@ class ThrallTracker
 		lastSplatTick = tick;
 	}
 
+	/**
+	 * The npcs our thrall's projectiles first seen on this tick were aimed at,
+	 * whose splats nothing has yet been judged to be. A projectile always brings
+	 * its splat on that tick, so at the end of it each one names a splat that
+	 * went to the player by mistake - see the plugin's same-tick re-judging.
+	 */
+	List<Integer> unclaimedProjectileTargets(int tick)
+	{
+		final List<Integer> out = new ArrayList<>();
+		for (Due d : due)
+		{
+			if (d.fromProjectile && d.attackTick == tick)
+			{
+				out.add(d.targetIndex);
+			}
+		}
+		return out;
+	}
+
 	/** The phase the cycle has locked onto, or -1 before it has any. */
 	int lockedPhase()
 	{
@@ -429,10 +529,61 @@ class ThrallTracker
 			final Due d = it.next();
 			if (tick > d.latest)
 			{
+				// A projectile of ours always brings its splat. One that found none means its splat went to the player.
+				if (d.fromProjectile)
+				{
+					notes.add(String.format("THRALL projectile seen on %d found no splat it was judged to own", d.attackTick));
+				}
 				it.remove();
 			}
 		}
 		recentSpawns.removeIf(s -> tick - s[2] > SUMMON_WINDOW_TICKS);
+		unownedProjectiles.removeIf(p -> tick - p[2] > PROJECTILE_LATE);
+	}
+
+	/**
+	 * What the player could have done to put a splat on this npc now. Pure, so
+	 * the plugin and the replay tests judge the player's side identically.
+	 *
+	 * @param burstLastTick   whether the player's special landed a burst on this
+	 *                        npc last tick, so its last splat may still come
+	 * @param attackDueTick   the tick the weapon came off cooldown after the last
+	 *                        attack booked, or {@code Integer.MIN_VALUE} for none
+	 * @param lastFromProjectile whether that attack was booked from a projectile,
+	 *                        whose own tick is known a tick less exactly
+	 */
+	static PlayerSplat classifyPlayer(boolean sameTickBurst, boolean burstLastTick, boolean projectileDue,
+		boolean melee, int tick, int attackDueTick, boolean lastFromProjectile)
+	{
+		if (sameTickBurst)
+		{
+			return PlayerSplat.SAME_TICK_BURST;
+		}
+		if (projectileDue)
+		{
+			return PlayerSplat.PROJECTILE_DUE;
+		}
+		// Inside the cooldown by definition, so asked before it.
+		if (burstLastTick)
+		{
+			return PlayerSplat.BURST_CONTINUING;
+		}
+		if (!melee)
+		{
+			return PlayerSplat.UNEXPLAINED;
+		}
+		if (attackDueTick == Integer.MIN_VALUE)
+		{
+			return PlayerSplat.MELEE_POSSIBLE;
+		}
+		// A blow lands the tick after it is thrown, and the earliest it can be thrown is the due tick. A projectile's own
+		// tick is known a tick less exactly, so after one the window opens a tick early.
+		final int earliest = attackDueTick + 1 - (lastFromProjectile ? 1 : 0);
+		if (tick < earliest)
+		{
+			return PlayerSplat.IN_COOLDOWN;
+		}
+		return tick <= attackDueTick + 1 ? PlayerSplat.ON_CADENCE : PlayerSplat.LATE;
 	}
 
 	/** Lines for the debug log since the last call. */
@@ -452,6 +603,7 @@ class ThrallTracker
 	{
 		release("reset");
 		recentSpawns.clear();
+		unownedProjectiles.clear();
 		summonTick = Integer.MIN_VALUE;
 		varbitActive = false;
 		notes.clear();

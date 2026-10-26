@@ -19,11 +19,21 @@ import net.runelite.api.Skill;
  * with damage on it and nothing left to spend is not the player's: a thrall's,
  * which pays nothing, or a recoil's.
  *
- * <p>It checks itself. Every hitsplat that can only be the player's - too big
- * for a thrall, or no thrall out - is tested against the awards, and while too
- * many fail the ledger is reported untrusted and its evidence ignored. That
- * covers places that pay no experience, a multiplier it has wrong, and drops
- * arriving on a tick it does not expect.
+ * <p>It checks itself, one attack at a time. Once an attack's damage has all
+ * landed, the splats it got are compared with what its drops decode to - but
+ * only when every one of them could only have been the player's (too big for a
+ * thrall, or no thrall out). An attack whose drops decode to nothing at all
+ * fails too: that is the commonest sign of a wrong multiplier. While too many
+ * fail, the ledger is reported untrusted and its evidence ignored.
+ *
+ * <p>And it calibrates itself from the same clean attacks. The game's PvM bonus
+ * is a fortieth step, so experience over damage, pooled until rounding can no
+ * longer move it half a step, says the multiplier outright. A changed
+ * multiplier re-decodes the attacks still landing and re-runs the checks, so a
+ * wrong starting figure costs a few attacks rather than the fight. The
+ * Vardorvis log (claude/status/vardorvis-log-review.md, bug 3) started at
+ * x1.700 against a true x1.55 and never left it: drops that decode to nothing
+ * were never spent, so nothing reached the calibration and no check ever ran.
  */
 class XpLedger
 {
@@ -56,50 +66,76 @@ class XpLedger
 	// The rolling self-check.
 	private static final int TRUST_SAMPLES = 12;
 	private static final int TRUST_MIN_SAMPLES = 2;
-	// Calibrating a multiplier needs enough damage that a point of rounding cannot move it a step.
-	private static final int CALIBRATION_MIN_DAMAGE = 150;
-	private static final int CALIBRATION_MIN_AWARD = 20;
+	// An attack is used for calibrating once it dealt this much: below it, a point of rounding is a large share.
+	static final int CALIBRATION_MIN_DAMAGE = 10;
+	// A drop reads up to 1.1 under or 1 over its exact value. Pooled, that error over the damage must stay under half the
+	// game's fortieth step, or the snap could land on the neighbouring one.
+	private static final double DROP_ERROR = 1.1;
+	private static final double HALF_STEP = 0.5 / 40;
+	// The clean attacks kept so a changed multiplier can re-run their checks.
+	private static final int SETTLED_KEPT = 12;
 
 	private final int[] open = new int[SKILLS.length];
 	private final boolean[] reported = new boolean[SKILLS.length];
 	private final Deque<Award> awards = new ArrayDeque<>();
+	private final Deque<Award> settled = new ArrayDeque<>();
 	private final Deque<Boolean> checks = new ArrayDeque<>();
 	// Per target id: the multiplier the drops say, once they have said it clearly.
 	private final Map<Integer, Double> calibrated = new HashMap<>();
+	// Per target id: experience over rate, damage, the error bound on the first, and how many attacks went in.
 	private final Map<Integer, double[]> calibrationSums = new HashMap<>();
 
 	static final class Award
 	{
 		final int tick;
 		final int targetId;
-		final double multiplier;
-		// -1 when the drops decoded to nothing.
-		final int lowest;
-		final int highest;
+		// Each skill's gain, or XpDecoder.UNKNOWN for one that could not report.
+		final int[] gains;
+		double multiplier;
+		// -1 when the drops decode to nothing at this multiplier.
+		int lowest = -1;
+		int highest = -1;
 		int remainingLow;
 		int remainingHigh;
-		int spent;
+		// What landed against this attack, and whether every splat of it could only have been the player's.
+		int landed;
+		int splats;
 		boolean allCertain = true;
 		// The cleanest single constraint, kept for calibrating the multiplier.
 		final int calibrationGain;
 		final double calibrationRate;
 
-		Award(int tick, int targetId, double multiplier, int[] range, int calibrationGain, double calibrationRate)
+		Award(int tick, int targetId, int[] gains, double multiplier, int calibrationGain, double calibrationRate)
 		{
 			this.tick = tick;
 			this.targetId = targetId;
-			this.multiplier = multiplier;
-			this.lowest = range == null ? -1 : range[0];
-			this.highest = range == null ? -1 : range[1];
-			this.remainingLow = Math.max(0, lowest);
-			this.remainingHigh = Math.max(0, highest);
+			this.gains = gains;
 			this.calibrationGain = calibrationGain;
 			this.calibrationRate = calibrationRate;
+			decode(multiplier);
+		}
+
+		/** Reads the drops at this multiplier, keeping whatever has already landed against them. */
+		void decode(double m)
+		{
+			multiplier = m;
+			final int[] range = XpDecoder.damageRange(gains[ATTACK], gains[STRENGTH], gains[DEFENCE], gains[RANGED],
+				gains[MAGIC], gains[HITPOINTS], m);
+			lowest = range == null ? -1 : range[0];
+			highest = range == null ? -1 : range[1];
+			remainingLow = Math.max(0, lowest - landed);
+			remainingHigh = Math.max(0, highest - landed);
 		}
 
 		boolean decoded()
 		{
 			return lowest >= 0;
+		}
+
+		/** Whether what landed is what the drops say, at the current multiplier. */
+		boolean matches()
+		{
+			return decoded() && landed >= lowest && landed <= highest;
 		}
 
 		@Override
@@ -146,9 +182,6 @@ class XpLedger
 			{
 				g[i] = reported[i] ? open[i] : cannotReport != null && cannotReport[i] ? XpDecoder.UNKNOWN : 0;
 			}
-			final double m = multiplierFor(targetId, formulaMultiplier);
-			final int[] range = XpDecoder.damageRange(g[ATTACK], g[STRENGTH], g[DEFENCE], g[RANGED], g[MAGIC],
-				g[HITPOINTS], m);
 			// For calibration: a single combat skill at four a point is the sharpest, hitpoints the fallback.
 			int calGain = -1;
 			double calRate = 0;
@@ -168,7 +201,7 @@ class XpLedger
 				calGain = g[HITPOINTS];
 				calRate = 4.0 / 3.0;
 			}
-			award = new Award(tick, targetId, m, range, calGain, calRate);
+			award = new Award(tick, targetId, g, multiplierFor(targetId, formulaMultiplier), calGain, calRate);
 			awards.addLast(award);
 		}
 		java.util.Arrays.fill(open, 0);
@@ -176,30 +209,97 @@ class XpLedger
 		return award;
 	}
 
-	/** Drops awards whose damage can no longer be arriving, checking and calibrating from them on the way out. */
+	/** Settles awards whose damage can no longer be arriving: checks them, and calibrates from the clean ones. */
 	List<String> expire(int tick)
 	{
 		final List<String> notes = new ArrayList<>();
 		while (!awards.isEmpty() && tick - awards.peekFirst().tick > WINDOW_TICKS)
 		{
-			final Award a = awards.pollFirst();
-			// Decoded to more than ever arrived, from attacks that were plainly the player's: the multiplier is too low or
-			// the drops are not what this expects. One failed check, the same as a hit that nothing paid for.
-			if (a.decoded() && a.allCertain && a.remainingLow > 3)
-			{
-				noteCheck(false);
-				notes.add("xp award " + a + " never fully arrived");
-			}
-			if (a.allCertain && a.spent >= CALIBRATION_MIN_AWARD && a.calibrationGain > 0)
-			{
-				final String note = calibrate(a.targetId, a.calibrationGain / a.calibrationRate, a.spent);
-				if (note != null)
-				{
-					notes.add(note);
-				}
-			}
+			settle(awards.pollFirst(), notes);
 		}
 		return notes;
+	}
+
+	private void settle(Award a, List<String> notes)
+	{
+		// Nothing landed (a splash, a target that died first), or something that landed could have been the thrall's:
+		// either way this attack proves nothing about the experience.
+		if (a.splats == 0 || !a.allCertain)
+		{
+			return;
+		}
+		final boolean ok = a.matches();
+		noteCheck(ok);
+		if (!ok)
+		{
+			notes.add(String.format("xp check FAILED: award %s, but %d landed", a, a.landed));
+		}
+		if (a.landed < CALIBRATION_MIN_DAMAGE || a.calibrationGain <= 0)
+		{
+			return;
+		}
+		settled.addLast(a);
+		while (settled.size() > SETTLED_KEPT)
+		{
+			settled.pollFirst();
+		}
+		final String note = calibrate(a);
+		if (note != null)
+		{
+			notes.add(note);
+		}
+	}
+
+	/**
+	 * Learns a target's multiplier from damage that was certainly the player's,
+	 * pooled until the drops' rounding cannot reach half a step. Once it moves,
+	 * the attacks still landing are re-read and the checks re-run under it.
+	 */
+	private String calibrate(Award a)
+	{
+		final double[] s = calibrationSums.computeIfAbsent(a.targetId, k -> new double[4]);
+		s[0] += a.calibrationGain / a.calibrationRate;
+		s[1] += a.landed;
+		s[2] += DROP_ERROR / a.calibrationRate;
+		s[3] += 1;
+		if (s[3] < 2 || s[2] / s[1] >= HALF_STEP)
+		{
+			return null;
+		}
+		final double estimate = s[0] / s[1];
+		final double snapped = 1.0 + Math.max(0, Math.round((estimate - 1.0) * 40)) / 40.0;
+		final Double was = calibrated.get(a.targetId);
+		final double inUse = was != null ? was : a.multiplier;
+		calibrated.put(a.targetId, snapped);
+		if (Math.abs(snapped - inUse) < 1e-9)
+		{
+			// Confirmed rather than corrected: nothing to re-read.
+			return null;
+		}
+		// Everything still landing for this target is re-read at the new figure, and the checks start again from the
+		// clean attacks kept: failures that were only the old figure's fault go with it.
+		for (Award open : awards)
+		{
+			if (open.targetId == a.targetId)
+			{
+				open.decode(snapped);
+			}
+		}
+		checks.clear();
+		int passed = 0;
+		for (Award past : settled)
+		{
+			if (past.targetId == a.targetId)
+			{
+				past.decode(snapped);
+			}
+			final boolean ok = past.matches();
+			passed += ok ? 1 : 0;
+			noteCheck(ok);
+		}
+		return String.format("xp multiplier for npc %d calibrated to x%.3f (was x%.3f) from %d attacks, %.0f damage; "
+				+ "re-checked %d of %d clean attacks", a.targetId, snapped, inUse, (int) s[3], s[1], passed,
+			settled.size());
 	}
 
 	/** Whether this splat fits what the player's recent attacks have left to land. */
@@ -233,19 +333,11 @@ class XpLedger
 
 	/**
 	 * Spends a splat the player is taken to have dealt. {@code certain} says it
-	 * could only have been theirs, which is what the self-check and the
-	 * calibration may learn from.
+	 * could only have been theirs, which is what the checks and the calibration
+	 * may learn from. A zero carries no damage and pays nothing, so it is left out.
 	 */
 	void spend(int amount, int tick, boolean certain)
 	{
-		if (certain && amount > 0)
-		{
-			final Coverage c = coverage(amount, tick);
-			if (c != Coverage.UNKNOWN)
-			{
-				noteCheck(c != Coverage.UNCOVERED);
-			}
-		}
 		if (amount <= 0)
 		{
 			return;
@@ -261,9 +353,11 @@ class XpLedger
 			}
 		}
 		int left = amount;
+		Award taker = null;
 		if (target != null)
 		{
 			left = take(target, left, certain);
+			taker = target;
 		}
 		for (Award a : awards)
 		{
@@ -273,8 +367,46 @@ class XpLedger
 			}
 			if (eligible(a, tick) && a.decoded() && a != target)
 			{
+				final int before = left;
 				left = take(a, left, certain);
+				if (left < before)
+				{
+					taker = a;
+				}
 			}
+		}
+		if (left <= 0)
+		{
+			return;
+		}
+		// More landed than the attacks' drops decode to. The rest stays with the attack that took the first of it, so its
+		// check sees the whole splat; failing that it goes to the latest attack whose drops could not be read at all,
+		// which is every attack while the multiplier is wrong. Never to one that decoded to nothing - a resurrection
+		// cast paying magic alone - which is how a claw special's last splat was charged to the cast beside it.
+		Award home = taker;
+		if (home == null)
+		{
+			for (Award a : awards)
+			{
+				if (a.tick < tick && tick - a.tick <= WINDOW_TICKS && !a.decoded())
+				{
+					home = a;
+				}
+			}
+		}
+		if (home != null)
+		{
+			home.landed += left;
+			home.splats += home == taker ? 0 : 1;
+			home.allCertain &= certain;
+			home.remainingHigh = Math.max(0, home.remainingHigh - left);
+			home.remainingLow = Math.max(0, home.remainingLow - left);
+		}
+		else if (certain)
+		{
+			// Damage that could only be the player's, and no drop at all to have paid for it: a place that pays no
+			// experience, or drops that stopped arriving. Fails at once, so trust earned elsewhere does not linger.
+			noteCheck(false);
 		}
 	}
 
@@ -287,7 +419,8 @@ class XpLedger
 		}
 		a.remainingHigh -= taken;
 		a.remainingLow = Math.max(0, a.remainingLow - taken);
-		a.spent += taken;
+		a.landed += taken;
+		a.splats++;
 		a.allCertain &= certain;
 		return amount - taken;
 	}
@@ -298,7 +431,7 @@ class XpLedger
 		return a.tick < tick && tick - a.tick <= WINDOW_TICKS && (!a.decoded() || a.remainingHigh > 0);
 	}
 
-	/** Whether recent hits that could only be the player's have matched what the experience said. */
+	/** Whether recent attacks that could only be the player's have matched what the experience said. */
 	boolean trusted()
 	{
 		if (checks.size() < TRUST_MIN_SAMPLES)
@@ -342,36 +475,15 @@ class XpLedger
 		return formulaMultiplier > 0 ? formulaMultiplier : 1.0;
 	}
 
-	/**
-	 * Learns a target's multiplier from damage that was certainly the player's.
-	 * The game's bonus is always a fortieth step, so the estimate is snapped to
-	 * one; it only overrides the formula once enough damage has been seen.
-	 */
-	private String calibrate(int targetId, double unscaledXp, int damage)
-	{
-		final double[] sums = calibrationSums.computeIfAbsent(targetId, k -> new double[2]);
-		sums[0] += unscaledXp;
-		sums[1] += damage;
-		if (sums[1] < CALIBRATION_MIN_DAMAGE)
-		{
-			return null;
-		}
-		final double estimate = sums[0] / sums[1];
-		final double snapped = 1.0 + Math.max(0, Math.round((estimate - 1.0) * 40)) / 40.0;
-		final Double was = calibrated.put(targetId, snapped);
-		if (was == null || Math.abs(was - snapped) > 1e-9)
-		{
-			return String.format("xp multiplier for npc %d calibrated to x%.3f (%.0f damage seen)", targetId, snapped,
-				sums[1]);
-		}
-		return null;
-	}
-
 	List<Award> openAwards()
 	{
 		return new ArrayList<>(awards);
 	}
 
+	/**
+	 * Forgets the attacks in flight. What it has learnt about each target's
+	 * multiplier stays: that is the monster's, not the session's.
+	 */
 	void clear()
 	{
 		awards.clear();
