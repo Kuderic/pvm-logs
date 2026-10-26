@@ -66,6 +66,7 @@ import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
@@ -677,6 +678,14 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return; // this projectile was already counted on an earlier frame
 		}
+		final Actor source = projectile.getSourceActor();
+		if ((source instanceof NPC && Thralls.isThrall(((NPC) source).getId()))
+			|| (source == null && Thralls.PROJECTILES.contains(projectile.getId())))
+		{
+			debug.log("THRALL projectile %d from %s at npc %d (index %d), lands tick %d",
+				projectile.getId(), source == null ? "no source" : "index " + ((NPC) source).getIndex(),
+				((NPC) target).getId(), ((NPC) target).getIndex(), landingTick(projectile));
+		}
 		if (!isProjectileMine(projectile, me, target))
 		{
 			return;
@@ -871,6 +880,9 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		if (event.getSkill() == Skill.HITPOINTS && event.getXp() > 0)
 		{
+			// XP TRACE (issue #1): with the hitsplat lines around it, this says whether a thrall's damage pays any
+			// experience, and on which tick a drop lands relative to the hitsplat it pays for.
+			debug.log("xp drop hitpoints +%d (fake, 200m)", event.getXp());
 			noteDamageDealt();
 		}
 	}
@@ -888,6 +900,7 @@ public class PvmPerformancePlugin extends Plugin
 		hitpointsXp = event.getXp();
 		if (was > 0 && hitpointsXp > was)
 		{
+			debug.log("xp drop hitpoints +%d", hitpointsXp - was);
 			noteDamageDealt();
 		}
 	}
@@ -1345,12 +1358,37 @@ public class PvmPerformancePlugin extends Plugin
 	public void onNpcSpawned(NpcSpawned event)
 	{
 		final NPC npc = event.getNpc();
+		if (Thralls.isThrall(npc.getId()))
+		{
+			traceThrall("spawned", npc);
+		}
 		final OlmPhase phase = OlmPhase.forNpc(npc.getId());
 		if (phase != null)
 		{
 			// The flame wall is an NPC rather than an object, so it arrives here.
 			olmPhase = phase;
 		}
+	}
+
+	/**
+	 * THRALL TRACE (issue #1). Every thrall in view, so a log can show which one
+	 * is ours, how far its attack runs ahead of its hitsplat, and - with the xp
+	 * lines - whether its damage pays any experience.
+	 */
+	private void traceThrall(String what, NPC thrall)
+	{
+		if (!debug.isOn())
+		{
+			return;
+		}
+		final Player me = client.getLocalPlayer();
+		final Actor at = thrall.getInteracting();
+		final int distance = me == null || me.getWorldLocation() == null || thrall.getWorldLocation() == null ? -1
+			: me.getWorldLocation().distanceTo2D(thrall.getWorldLocation());
+		debug.log("THRALL %s: npc %d (index %d), %d tiles from me, interacting %s, active varbit %d",
+			what, thrall.getId(), thrall.getIndex(), distance,
+			at == null ? "nothing" : at == me ? "ME" : at instanceof NPC ? "npc index " + ((NPC) at).getIndex() : "a player",
+			client.getVarbitValue(VarbitID.ARCEUUS_RESURRECTION_ACTIVE));
 	}
 
 	/**
@@ -1404,6 +1442,11 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onAnimationChanged(AnimationChanged event)
 	{
+		if (event.getActor() instanceof NPC && Thralls.isThrall(((NPC) event.getActor()).getId()))
+		{
+			traceThrall("animation " + event.getActor().getAnimation(), (NPC) event.getActor());
+			return;
+		}
 		final Player me = client.getLocalPlayer();
 		if (event.getActor() != me || me.getAnimation() == IDLE_ANIMATION)
 		{
@@ -1837,6 +1880,10 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
+		if (event.getVarbitId() == VarbitID.ARCEUUS_RESURRECTION_ACTIVE)
+		{
+			debug.log("THRALL resurrection active varbit -> %d", event.getValue());
+		}
 		// Watched here because the energy falling is what says a special went out, and the player's own specials are not
 		// carried by the party message.
 		drain.onEnergyChanged();
