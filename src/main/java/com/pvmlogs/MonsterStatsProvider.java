@@ -353,7 +353,8 @@ class MonsterStatsProvider
 					m.weakness == null ? 0 : m.weakness.severity,
 					m.attributes == null
 						? Collections.emptySet()
-						: new HashSet<>(Arrays.asList(m.attributes))));
+						: new HashSet<>(Arrays.asList(m.attributes)),
+					xpMultiplier(m)));
 			}
 			byId = map;
 			final Map<String, MonsterStats> names = new HashMap<>(map.size() * 2);
@@ -404,8 +405,9 @@ class MonsterStatsProvider
 
 		MonsterStats(String name, int size, int hitpoints, int defenceLevel, int magicLevel, int offensiveMagic,
 			int defStab, int defSlash, int defCrush, int defMagic, int defRanged, String weaknessElement,
-			int weaknessSeverity, Set<String> attributes)
+			int weaknessSeverity, Set<String> attributes, double xpMultiplier)
 		{
+			this.xpMultiplier = xpMultiplier;
 			this.hitpoints = hitpoints;
 			this.weaknessElement = weaknessElement;
 			this.weaknessSeverity = weaknessSeverity;
@@ -422,10 +424,31 @@ class MonsterStatsProvider
 			this.attributes = attributes;
 		}
 
+		/**
+		 * The PvM experience bonus this monster pays, 1.0 for none. Used to read
+		 * how much damage an attack dealt from the experience it paid, and checked
+		 * against the drops as they arrive - see XpLedger.
+		 */
+		private final double xpMultiplier;
+
 		boolean hasAttribute(String attribute)
 		{
 			return attributes.contains(attribute);
 		}
+	}
+
+	/** The bonus by the wiki's formula, or the value the game sets by hand where it does. */
+	private static double xpMultiplier(MonsterJson m)
+	{
+		final double fixed = XpDecoder.overrideFor(m.name);
+		if (fixed > 0)
+		{
+			return fixed;
+		}
+		final MonsterJson.Offensive o = m.offensive;
+		return XpDecoder.bonusMultiplier(m.skills.attack, m.skills.strength, m.skills.defence, m.skills.hitpoints,
+			m.defensive.stab, m.defensive.slash, m.defensive.crush,
+			o == null ? 0 : o.attack, o == null ? 0 : o.strength);
 	}
 
 	private static class MonsterJson
@@ -452,11 +475,19 @@ class MonsterStatsProvider
 			int magic;
 			@SerializedName("hp")
 			int hitpoints;
+			@SerializedName("atk")
+			int attack;
+			@SerializedName("str")
+			int strength;
 		}
 
 		static class Offensive
 		{
 			int magic;
+			@SerializedName("atk")
+			int attack;
+			@SerializedName("str")
+			int strength;
 		}
 
 		static class Defensive

@@ -44,6 +44,16 @@ class Raid
 		endMillis = now;
 	}
 
+	int getThrallDamage()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getThrallDamage();
+		}
+		return total;
+	}
+
 	int getDamageDealt()
 	{
 		int total = 0;

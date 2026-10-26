@@ -107,6 +107,17 @@ class Encounter
 		return false;
 	}
 
+	/** Our thrall's damage across the room's fights, which damage dealt leaves out. */
+	int getThrallDamage()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getThrallDamage();
+		}
+		return total;
+	}
+
 	int getDamageDealt()
 	{
 		int total = 0;

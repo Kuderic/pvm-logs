@@ -174,7 +174,7 @@ public class PvmPerformancePlugin extends Plugin
 		+ "started,npc,npcId,maxHp,killed,damageDealt,damageTaken,attempts,targets,hits,"
 		+ "accuracyPct,durationSec,dps,avgHit,expMaxHit,expAccuracyPct,expAvgHit,"
 		+ "ticksLost,ticksLostPct,ticksLostEating,"
-		+ "attacksMade,attacksPrayed,attacksPotted,attacksSwitched,efficiencyPct\n";
+		+ "attacksMade,attacksPrayed,attacksPotted,attacksSwitched,efficiencyPct,thrallDamage\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -338,6 +338,22 @@ public class PvmPerformancePlugin extends Plugin
 	private int lastConsumeTick;
 	private int consumeDelay;
 
+	// Issue #1: the player's damage counted from the experience it paid, and our thrall, so the thrall's hitsplats can
+	// be told from the player's. See XpLedger and ThrallTracker.
+	private final XpLedger xpLedger = new XpLedger();
+	private final ThrallTracker thralls = new ThrallTracker();
+	// Each combat skill's experience as last seen, so a StatChanged can be read as a gain.
+	private final int[] lastSkillXp = new int[XpLedger.SKILLS.length];
+	private static final int MAX_XP = 200_000_000;
+	// Splats at or above this probability of being the thrall's are taken as its own.
+	private static final double THRALL_THRESHOLD = 0.5;
+	// How close the only thrall in view must be to be taken for ours when its summon was never seen.
+	private static final int THRALL_FALLBACK_RADIUS = 3;
+	// Animations a thrall plays that are not attacks.
+	private static final Set<Integer> THRALL_NON_ATTACK_ANIMATIONS = Collections.unmodifiableSet(new HashSet<>(
+		java.util.Arrays.asList(AnimationID.GHOST_UPDATE_THRALL_SPAWN, AnimationID.SKELETON_UPDATE_THRALL_SPAWN,
+			AnimationID.GHOST_UPDATE_TENDRILL_DEATH_THRALL, AnimationID.SKELETON_UPDATE_CHAMPION_DEATH_THRALL)));
+
 	// Running totals for the trip, shown instead of the current fight when the overlay is set to whole-trip mode.
 	private final SessionTotals session = new SessionTotals(System.currentTimeMillis());
 
@@ -429,6 +445,9 @@ public class PvmPerformancePlugin extends Plugin
 		burstLanded.clear();
 		pendingMineHits.clear();
 		drain.clear();
+		thralls.clear();
+		xpLedger.clear();
+		java.util.Arrays.fill(lastSkillXp, 0);
 		nightmareBoss = null;
 		targetNpc = null;
 		debug.stop();
@@ -461,6 +480,22 @@ public class PvmPerformancePlugin extends Plugin
 		if (actor instanceof NPC && hitsplat.isMine() && !EncounterGroup.isIgnored(((NPC) actor).getId()))
 		{
 			final NPC npc = (NPC) actor;
+			// Issue #1. isMine() passes our thrall's splats too, and nothing on the splat says whose it is, so with a thrall
+			// out each small one is weighed before anything else hears of it. A thrall's splat opens no fight, books no
+			// attack and counts no hit; it still takes the target's health down.
+			if (thralls.hasThrall() && hitsplat.getAmount() <= thralls.maxHit())
+			{
+				if (judgedThralls(npc, hitsplat.getAmount(), now))
+				{
+					return;
+				}
+				xpLedger.spend(hitsplat.getAmount(), client.getTickCount(), false);
+			}
+			else
+			{
+				// Too big for a thrall, or none out: certainly the player's, so it is what the ledger checks itself on.
+				xpLedger.spend(hitsplat.getAmount(), client.getTickCount(), true);
+			}
 			final int previousMineTick = lastMineHitsplatTick;
 			lastMineHitsplatTick = client.getTickCount();
 			if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
@@ -573,6 +608,157 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/**
+	 * Weighs one small splat while our thrall is out, and takes it as the
+	 * thrall's if that is likelier than not. Every judgement is logged with the
+	 * evidence behind it.
+	 *
+	 * @return whether the splat was the thrall's and has been dealt with
+	 */
+	private boolean judgedThralls(NPC npc, int amount, long now)
+	{
+		final int tick = client.getTickCount();
+		final ThrallTracker.Evidence e = new ThrallTracker.Evidence();
+		e.amount = amount;
+		e.tick = tick;
+		e.targetIndex = npc.getIndex();
+		e.player = playerSplatFor(npc, tick);
+		e.xp = xpLedger.coverage(amount, tick);
+		e.xpTrusted = xpLedger.trusted();
+		if (expectedForNpcId == npc.getId())
+		{
+			e.playerAccuracy = expectedAccuracy;
+			e.playerMaxHit = expectedMaxHit;
+		}
+		final double p = thralls.probability(e);
+		final boolean isThralls = p >= THRALL_THRESHOLD;
+		debug.log("hitsplat %d on %s (index %d): %s, thrall p=%.2f [rate %.3f, player %s, xp %s (%s), phase %d]",
+			amount, npc.getName(), npc.getIndex(), isThralls ? "THRALL" : "player", p,
+			thralls.thrallRate(npc.getIndex(), tick), e.player, e.xp, xpLedger.trustSummary(), thralls.lockedPhase());
+		if (!isThralls)
+		{
+			return false;
+		}
+		thralls.noteThrallSplat(npc.getIndex(), tick);
+		if (current != null && !current.isEnded())
+		{
+			// Real damage, so it counts towards what the target has left - but none of it is the player's.
+			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
+			current.recordThrallDamage(amount);
+		}
+		return true;
+	}
+
+	/** What the player could have done to put a splat on this npc now. */
+	private ThrallTracker.PlayerSplat playerSplatFor(NPC npc, int tick)
+	{
+		final int index = npc.getIndex();
+		// Their own multi-hit attack already landing here this tick: a scythe's second and third, a claw special.
+		final Integer seen = lastHitsplatTick.get(index);
+		if (seen != null && seen == tick && burstBooked.contains(index))
+		{
+			return ThrallTracker.PlayerSplat.SAME_TICK_BURST;
+		}
+		final List<Integer> landing = pendingMineHits.get(index);
+		if (landing != null)
+		{
+			for (int due : landing)
+			{
+				if (Math.abs(due - tick) <= FLIGHT_SLACK_TICKS)
+				{
+					return ThrallTracker.PlayerSplat.PROJECTILE_DUE;
+				}
+			}
+		}
+		for (PendingCast cast : castsAwaiting)
+		{
+			if (cast.npcIndex == index && Math.abs(cast.resolveTick - tick) <= FLIGHT_SLACK_TICKS)
+			{
+				return ThrallTracker.PlayerSplat.PROJECTILE_DUE;
+			}
+		}
+		final boolean melee = combatCalc.isMeleeEquipped() || tick - lastMeleeTick <= MELEE_SWAP_GRACE_TICKS;
+		// A melee blow is stamped on the tick its splat lands, so two of them are exactly one weapon speed apart. A tick of
+		// slack, as the projectile guard allows.
+		if (melee && (lastAttackSeenTick == Integer.MIN_VALUE
+			|| tick - lastAttackSeenTick >= fastestSpeedSeen() - 1))
+		{
+			return ThrallTracker.PlayerSplat.MELEE_POSSIBLE;
+		}
+		return ThrallTracker.PlayerSplat.UNEXPLAINED;
+	}
+
+	/** Closes the tick's experience into an award and keeps the thrall's state moving. Run first in the tick. */
+	private void trackThrallAndXp()
+	{
+		final int tick = client.getTickCount();
+		final boolean[] cannotReport = new boolean[XpLedger.SKILLS.length];
+		for (int i = 0; i < cannotReport.length; i++)
+		{
+			cannotReport[i] = client.getSkillExperience(XpLedger.SKILLS[i]) >= MAX_XP;
+		}
+		// The fight's target, or what the player is aimed at: a melee blow pays its drop the tick before its splat opens
+		// the fight, and read against no target its bonus would be missing.
+		int targetId = current != null && !current.isEnded() ? targetLiveId : -1;
+		final Player me = client.getLocalPlayer();
+		if (targetId < 0 && me != null && me.getInteracting() instanceof NPC)
+		{
+			targetId = ((NPC) me.getInteracting()).getId();
+		}
+		final MonsterStatsProvider.MonsterStats stats = targetId < 0 ? null : monsterStats.get(targetId);
+		final XpLedger.Award award = xpLedger.close(tick, targetId, stats == null ? 1.0 : stats.getXpMultiplier(),
+			cannotReport);
+		if (award != null)
+		{
+			debug.log("xp award %s against npc %d", award, targetId);
+		}
+		for (String note : xpLedger.expire(tick))
+		{
+			debug.log(note);
+		}
+
+		// The varbit, polled as well as watched, so a thrall already out when tracking began is known to be active.
+		final boolean active = client.getVarbitValue(VarbitID.ARCEUUS_RESURRECTION_ACTIVE) == 1;
+		if (active != thralls.varbitActive())
+		{
+			thralls.onResurrectionVarbit(active, tick);
+		}
+		thralls.tick(tick);
+		if (active && !thralls.hasThrall() && client.getTopLevelWorldView() != null)
+		{
+			NPC only = null;
+			int seen = 0;
+			for (NPC npc : client.getTopLevelWorldView().npcs())
+			{
+				if (npc != null && Thralls.isThrall(npc.getId()))
+				{
+					only = npc;
+					seen++;
+				}
+			}
+			// Only one in view, and beside the player, where ours follows them: a teammate's thrall is never claimed for
+			// want of seeing our own.
+			if (seen == 1 && distanceFromMe(only) <= THRALL_FALLBACK_RADIUS)
+			{
+				thralls.onOnlyCandidate(only.getIndex(), only.getId());
+			}
+		}
+		for (String note : thralls.drainNotes())
+		{
+			debug.log(note);
+		}
+	}
+
+	private int distanceFromMe(Actor actor)
+	{
+		final Player me = client.getLocalPlayer();
+		if (me == null || me.getWorldLocation() == null || actor.getWorldLocation() == null)
+		{
+			return Integer.MAX_VALUE;
+		}
+		return me.getWorldLocation().distanceTo2D(actor.getWorldLocation());
+	}
+
+	/**
 	 * Prints how the loadout was resolved, so a player hitting a wrong figure
 	 * can report why it is wrong rather than only that it is. Also logs the
 	 * game's own combat option data, which is what identifies a category this
@@ -682,9 +868,17 @@ public class PvmPerformancePlugin extends Plugin
 		if ((source instanceof NPC && Thralls.isThrall(((NPC) source).getId()))
 			|| (source == null && Thralls.PROJECTILES.contains(projectile.getId())))
 		{
+			final int lands = landingTick(projectile);
 			debug.log("THRALL projectile %d from %s at npc %d (index %d), lands tick %d",
 				projectile.getId(), source == null ? "no source" : "index " + ((NPC) source).getIndex(),
-				((NPC) target).getId(), ((NPC) target).getIndex(), landingTick(projectile));
+				((NPC) target).getId(), ((NPC) target).getIndex(), lands);
+			// One that names no source cannot be pinned on ours, but it is still nobody's attack of mine.
+			if (source != null)
+			{
+				thralls.onThrallProjectile(((NPC) source).getIndex(), ((NPC) target).getIndex(), lands,
+					client.getTickCount());
+			}
+			return;
 		}
 		if (!isProjectileMine(projectile, me, target))
 		{
@@ -878,11 +1072,15 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onFakeXpDrop(FakeXpDrop event)
 	{
-		if (event.getSkill() == Skill.HITPOINTS && event.getXp() > 0)
+		if (XpLedger.indexOf(event.getSkill()) >= 0 && event.getXp() > 0)
 		{
 			// XP TRACE (issue #1): with the hitsplat lines around it, this says whether a thrall's damage pays any
 			// experience, and on which tick a drop lands relative to the hitsplat it pays for.
-			debug.log("xp drop hitpoints +%d (fake, 200m)", event.getXp());
+			debug.log("xp drop %s +%d (fake, 200m)", event.getSkill(), event.getXp());
+			xpLedger.add(event.getSkill(), event.getXp());
+		}
+		if (event.getSkill() == Skill.HITPOINTS && event.getXp() > 0)
+		{
 			noteDamageDealt();
 		}
 	}
@@ -890,6 +1088,18 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onStatChanged(StatChanged event)
 	{
+		final int skill = XpLedger.indexOf(event.getSkill());
+		if (skill >= 0)
+		{
+			final int before = lastSkillXp[skill];
+			lastSkillXp[skill] = event.getXp();
+			// Only a rise, and only once a first reading exists: a level change fires this too.
+			if (before > 0 && event.getXp() > before && event.getSkill() != Skill.HITPOINTS)
+			{
+				debug.log("xp drop %s +%d", event.getSkill(), event.getXp() - before);
+				xpLedger.add(event.getSkill(), event.getXp() - before);
+			}
+		}
 		if (event.getSkill() != Skill.HITPOINTS)
 		{
 			return;
@@ -900,7 +1110,8 @@ public class PvmPerformancePlugin extends Plugin
 		hitpointsXp = event.getXp();
 		if (was > 0 && hitpointsXp > was)
 		{
-			debug.log("xp drop hitpoints +%d", hitpointsXp - was);
+			debug.log("xp drop HITPOINTS +%d", hitpointsXp - was);
+			xpLedger.add(Skill.HITPOINTS, hitpointsXp - was);
 			noteDamageDealt();
 		}
 	}
@@ -1361,6 +1572,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (Thralls.isThrall(npc.getId()))
 		{
 			traceThrall("spawned", npc);
+			thralls.onThrallSpawned(npc.getIndex(), npc.getId(), distanceFromMe(npc), client.getTickCount());
 		}
 		final OlmPhase phase = OlmPhase.forNpc(npc.getId());
 		if (phase != null)
@@ -1444,10 +1656,22 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		if (event.getActor() instanceof NPC && Thralls.isThrall(((NPC) event.getActor()).getId()))
 		{
-			traceThrall("animation " + event.getActor().getAnimation(), (NPC) event.getActor());
+			final NPC thrall = (NPC) event.getActor();
+			traceThrall("animation " + thrall.getAnimation(), thrall);
+			final Actor at = thrall.getInteracting();
+			if (thrall.getAnimation() != IDLE_ANIMATION && at instanceof NPC
+				&& !THRALL_NON_ATTACK_ANIMATIONS.contains(thrall.getAnimation()))
+			{
+				thralls.onThrallAttackAnimation(thrall.getIndex(), ((NPC) at).getIndex(), client.getTickCount());
+			}
 			return;
 		}
 		final Player me = client.getLocalPlayer();
+		if (event.getActor() == me && me.getAnimation() == AnimationID.HUMAN_SPELLCAST_RESURRECT)
+		{
+			// A recast replaces the thrall without the varbit ever dropping, so the cast itself marks the summon.
+			thralls.onSummonCast(client.getTickCount());
+		}
 		if (event.getActor() != me || me.getAnimation() == IDLE_ANIMATION)
 		{
 			return;
@@ -1566,6 +1790,10 @@ public class PvmPerformancePlugin extends Plugin
 	public void onNpcDespawned(NpcDespawned event)
 	{
 		final NPC npc = event.getNpc();
+		if (Thralls.isThrall(npc.getId()))
+		{
+			thralls.onThrallDespawned(npc.getIndex(), client.getTickCount());
+		}
 		// The drain dies with the NPC, as its stats do.
 		drain.forget(npc.getIndex());
 		if (current == null || current.isEnded())
@@ -1883,6 +2111,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (event.getVarbitId() == VarbitID.ARCEUUS_RESURRECTION_ACTIVE)
 		{
 			debug.log("THRALL resurrection active varbit -> %d", event.getValue());
+			thralls.onResurrectionVarbit(event.getValue() == 1, client.getTickCount());
 		}
 		// Watched here because the energy falling is what says a special went out, and the player's own specials are not
 		// carried by the party message.
@@ -1913,6 +2142,8 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick tick)
 	{
+		// First: the tick's experience has all arrived by now, and none of the splats it pays for can have.
+		trackThrallAndXp();
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
 		trackRaid(System.currentTimeMillis());
 		startFightOnTarget();
@@ -2022,6 +2253,13 @@ public class PvmPerformancePlugin extends Plugin
 			pendingMineHits.clear();
 			damageByIndex.clear();
 			drain.clear();
+			thralls.clear();
+			xpLedger.clear();
+			if (state == GameState.LOGIN_SCREEN)
+			{
+				// Possibly another account next: its experience is not a gain on this one's.
+				java.util.Arrays.fill(lastSkillXp, 0);
+			}
 			nightmareBoss = null;
 			targetNpc = null;
 		}
@@ -2303,10 +2541,11 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void finalizeFight(boolean died, long now, String reason)
 	{
-		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d hits=%d ticksLost=%d combatTicks=%d expDamage=%.1f",
+		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
+				+ "combatTicks=%d expDamage=%.1f",
 			current.getTargetName(), current.getTargetId(), reason, current.getAttempts(), current.getAttacksMade(),
-			current.getDamageDealt(), current.getHits(), current.getTicksLost(), current.getCombatTicks(),
-			current.getSumExpectedAverageHit());
+			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
+			current.getCombatTicks(), current.getSumExpectedAverageHit());
 		if (died)
 		{
 			// The killing blow is capped by what was left, so the damage put on a target that started full IS its
@@ -2737,7 +2976,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Expected accuracy is per npc reached and expected damage per throw, which is what each side is accumulated over.
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
-			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s%n",
+			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -2758,7 +2997,8 @@ public class PvmPerformancePlugin extends Plugin
 				room.getAttacksPrayed(),
 				room.getAttacksPotted(),
 				room.getAttacksSwitched(),
-				csvExpected(room.efficiency() * 100, 1));
+				csvExpected(room.efficiency() * 100, 1),
+				room.getThrallDamage());
 	}
 
 	static String csvRaidRow(String raidName, int raidRun, List<Encounter> rooms)
@@ -2774,7 +3014,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int attempts = raid.getAttempts();
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
-			+ String.format("%s,,,,,%d,,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s%n",
+			+ String.format("%s,,,,,%d,,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d%n",
 				started,
 				raid.getDamageDealt(),
 				attempts,
@@ -2793,7 +3033,8 @@ public class PvmPerformancePlugin extends Plugin
 				raid.getAttacksPrayed(),
 				raid.getAttacksPotted(),
 				raid.getAttacksSwitched(),
-				csvExpected(raid.efficiency() * 100, 1));
+				csvExpected(raid.efficiency() * 100, 1),
+				raid.getThrallDamage());
 	}
 
 	private static String csvFightRow(String raidName, int raidRun, Fight fight)
@@ -2807,7 +3048,7 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
-		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s%n",
+		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -2832,7 +3073,8 @@ public class PvmPerformancePlugin extends Plugin
 			fight.getAttacksPrayed(),
 			fight.getAttacksPotted(),
 			fight.getAttacksSwitched(),
-			csvExpected(fight.efficiency() * 100, 1));
+			csvExpected(fight.efficiency() * 100, 1),
+			fight.getThrallDamage());
 	}
 
 	/**

@@ -38,6 +38,9 @@ class Fight
 	 */
 	private int startTick;
 	private int damageDealt;
+	// Our thrall's damage on this fight's npcs (issue #1). Real damage, so it takes the target's health down, but none of
+	// it is the player's: it is kept out of damage dealt, the hits and everything they feed.
+	private int thrallDamage;
 	private int damageTaken;
 	// One attempt per attack thrown, and a hit for each attack that landed anything. accuracy = hits / attempts.
 	private int attempts;
@@ -139,6 +142,12 @@ class Fight
 			hits++;
 		}
 		lastActivityMillis = now;
+	}
+
+	/** A splat our thrall landed. Counted on its own and nowhere else - see thrallDamage. */
+	void recordThrallDamage(int amount)
+	{
+		thrallDamage += amount;
 	}
 
 	/** A magic splash on the target: an attack that landed nothing. */
