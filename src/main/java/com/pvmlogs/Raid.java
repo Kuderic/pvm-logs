@@ -54,6 +54,39 @@ class Raid
 		return total;
 	}
 
+	int getDotDamage()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getDotDamage();
+		}
+		return total;
+	}
+
+	int getHealed()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getHealed();
+		}
+		return total;
+	}
+
+	/** The first reason any room gives not to trust its expected side, or null. */
+	String getStatsWarning()
+	{
+		for (Encounter encounter : encounters)
+		{
+			if (encounter.getStatsWarning() != null)
+			{
+				return encounter.getStatsWarning();
+			}
+		}
+		return null;
+	}
+
 	int getDamageDealt()
 	{
 		int total = 0;

@@ -166,6 +166,8 @@ public class PvmPerformancePlugin extends Plugin
 	// How long the player must be looking away before a fight they opened by targeting, and have not yet attacked, is
 	// closed.
 	private static final int LOOK_AWAY_TICKS = 5;
+	// How far a target's defence has to move before the expected figures are logged again.
+	private static final int EXPECTED_LOG_DEFENCE_STEP = 5;
 	private static final DateTimeFormatter FILE_TS = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 	/** The column names, kept beside the row builders so the two cannot drift. */
 	static final String CSV_HEADER =
@@ -173,7 +175,8 @@ public class PvmPerformancePlugin extends Plugin
 		+ "started,npc,npcId,maxHp,killed,damageDealt,damageTaken,attempts,targets,hits,"
 		+ "accuracyPct,durationSec,dps,avgHit,expMaxHit,expAccuracyPct,expAvgHit,"
 		+ "ticksLost,ticksLostPct,ticksLostEating,"
-		+ "attacksMade,attacksPrayed,attacksPotted,attacksSwitched,efficiencyPct,thrallDamage\n";
+		+ "attacksMade,attacksPrayed,attacksPotted,attacksSwitched,efficiencyPct,thrallDamage,"
+		+ "dotDamage,healed,statsWarning\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -218,6 +221,18 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Inject
 	private DebugLog debug;
+
+	// What the target has left, from the boss health bar or from every splat on it. Shared with CombatCalc's overkill cap
+	// and MonsterStatsProvider's choice of version and hitpoints-scaled defence. See TargetHealth.
+	@Inject
+	private TargetHealth health;
+
+	// The boss health bar as last read, so a change is logged once rather than every tick.
+	private long lastHealthBarReading = Long.MIN_VALUE;
+	// The version and defence the expected figures were last logged at, so a boss whose defence moves with its hitpoints
+	// (Vardorvis) logs a line as it moves rather than once per target.
+	private String debuggedExpectedVersion;
+	private int debuggedExpectedDefence = Integer.MIN_VALUE;
 
 	private PvmPerformancePanel panel;
 	private NavigationButton navButton;
@@ -481,6 +496,7 @@ public class PvmPerformancePlugin extends Plugin
 		burstLanded.clear();
 		pendingMineHits.clear();
 		drain.clear();
+		health.clear();
 		thralls.clear();
 		xpLedger.clear();
 		java.util.Arrays.fill(lastSkillXp, 0);
@@ -614,6 +630,7 @@ public class PvmPerformancePlugin extends Plugin
 				hitsplat.getAmount(), hitsplat.getHitsplatType(), current.getTargetName(), npc.getId(), npc.getIndex(),
 				landedAttack, arrivedFromFlight);
 			damageByIndex.merge(npc.getIndex(), hitsplat.getAmount(), Integer::sum);
+			health.damage(npc.getIndex(), npc.getId(), hitsplat.getAmount(), tick);
 			current.recordDamageDealt(hitsplat.getAmount(), now, landedAttack);
 			if (current.isScored())
 			{
@@ -653,11 +670,65 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			splatInFlight = null;
 		}
+		else if (actor instanceof NPC && !hitsplat.isMine())
+		{
+			onNotMineSplat((NPC) actor, hitsplat);
+		}
 		else if (actor == client.getLocalPlayer() && current != null && !current.isEnded())
 		{
 			// Damage on us during an active fight is attributed to it.
 			current.recordDamageTaken(hitsplat.getAmount(), now);
 		}
+	}
+
+	/**
+	 * A splat on the fight's target that {@code isMine()} does not claim: burn,
+	 * poison, venom, bleed, a heal, another player's hit, or a type not known here.
+	 * Each is counted against the target's health where it changes it, kept on the
+	 * fight under its own heading, and logged with its type number - never as the
+	 * player's damage, hits or attacks. Splats on anything else are not this
+	 * fight's business.
+	 */
+	private void onNotMineSplat(NPC npc, Hitsplat hitsplat)
+	{
+		if (current == null || current.isEnded() || npc.getIndex() != current.getTargetIndex())
+		{
+			return;
+		}
+		final int index = npc.getIndex();
+		final int amount = hitsplat.getAmount();
+		final int type = hitsplat.getHitsplatType();
+		final int tick = client.getTickCount();
+		final HitsplatKind kind = HitsplatKind.of(false, hitsplat.isOthers(), type);
+		switch (kind)
+		{
+			case DAMAGE_OVER_TIME:
+				// Damage over time is the target's health going down with no attack behind it: no activity, no hit, no attempt.
+				current.recordDotDamage(amount);
+				break;
+			case HEAL:
+				current.recordHeal(amount);
+				health.heal(index, npc.getId(), amount, tick);
+				damageByIndex.compute(index, (i, v) -> Math.max(0, (v == null ? 0 : v) - Math.max(0, amount)));
+				break;
+			case OTHER_PLAYER:
+				current.recordOthersDamage(amount);
+				break;
+			case UNCLASSIFIED:
+				current.recordUnclassifiedDamage(amount);
+				break;
+			default:
+				break;
+		}
+		if (kind.damagesTarget())
+		{
+			health.damage(index, npc.getId(), amount, tick);
+			damageByIndex.merge(index, Math.max(0, amount), Integer::sum);
+		}
+		debug.log("splat %d %s (type %d, %s) on %s (npc %d, index %d): %s, target has %d left (%s)",
+			amount, HitsplatKind.typeName(type), type, hitsplat.isOthers() ? "others'" : "no owner",
+			current.getTargetName(), npc.getId(), index, kind, health.remaining(index, tick),
+			health.source(index, tick));
 	}
 
 	/**
@@ -696,6 +767,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// Real damage, so it counts towards what the target has left - but none of it is the player's.
 			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
+			health.damage(npc.getIndex(), npc.getId(), amount, tick);
 			current.recordThrallDamage(amount);
 		}
 		return p;
@@ -1456,14 +1528,28 @@ public class PvmPerformancePlugin extends Plugin
 			row[EXP_SPEC_AVERAGE] = expectedSpecAverageHit;
 			expectedByTick.put(client.getTickCount(), row);
 			expectedByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
-			if (debug.isOn() && expectedForNpcId != debuggedExpectedId)
+			// Once per target, and again whenever the version in use changes or the defence has moved (Vardorvis's follows his
+			// hitpoints), so a log shows the figures the attacks were judged by as they changed. Not gated on the debug
+			// setting: the panel's saved window keeps every line whether or not the file is being written.
+			final MonsterStatsProvider.MonsterStats judgedBy = monsterStats.get(expectedForNpcId);
+			final String version = judgedBy == null ? null : judgedBy.getVersion();
+			final int defence = judgedBy == null ? Integer.MIN_VALUE : judgedBy.getDefenceLevel();
+			if (expectedForNpcId != debuggedExpectedId
+				|| !java.util.Objects.equals(version, debuggedExpectedVersion)
+				|| Math.abs(defence - debuggedExpectedDefence) >= EXPECTED_LOG_DEFENCE_STEP)
 			{
 				debuggedExpectedId = expectedForNpcId;
+				debuggedExpectedVersion = version;
+				debuggedExpectedDefence = defence;
 				// An accuracy of -1 means the monster data had nothing for this id: without the target's defence there is no
 				// hit chance, and without a hit chance there is no expected damage and no expected dps. That is what an
 				// overlay showing a max hit and nothing under it is saying.
-				debug.log("expected vs %s (npc %d): max %d, acc %.3f, avg %.2f, dps %.2f%s%s",
-					shown.getTargetName(), expectedForNpcId, expectedMaxHit, expectedAccuracy, expectedAverageHit,
+				debug.log("expected vs %s (npc %d%s): max %d, acc %.3f, avg %.2f, dps %.2f%s%s",
+					shown.getTargetName(), expectedForNpcId,
+					judgedBy == null ? "" : String.format(", '%s' def %d, %d hp left (%s)", version, defence,
+						health.remaining(shown.getTargetIndex(), client.getTickCount()),
+						health.source(shown.getTargetIndex(), client.getTickCount())),
+					expectedMaxHit, expectedAccuracy, expectedAverageHit,
 					expectedDps, expectedAccuracy < 0 ? "  <- NO MONSTER STATS FOR THIS ID" : "",
 					// A guardian reads zero for everything unless a pickaxe is in hand, which is the mechanic and not a fault.
 					EncounterGroup.isGuardian(expectedForNpcId)
@@ -1978,6 +2064,12 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		// The drain dies with the NPC, as its stats do.
 		drain.forget(npc.getIndex());
+		// So does what it had left - the server can hand its index to the next spawn. The fight's own target is kept until
+		// the fight is closed below, which reconciles against it.
+		if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
+		{
+			health.forget(npc.getIndex());
+		}
 		if (current == null || current.isEnded())
 		{
 			return;
@@ -2324,6 +2416,9 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick tick)
 	{
+		// Before anything asks for the target's stats: the bar decides which version of a boss this is, and what it has left
+		// moves Vardorvis's defence.
+		readHealthBar();
 		// First: the tick's experience has all arrived by now, and none of the splats it pays for can have.
 		trackThrallAndXp();
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
@@ -2434,6 +2529,8 @@ public class PvmPerformancePlugin extends Plugin
 			burstLanded.clear();
 			pendingMineHits.clear();
 			damageByIndex.clear();
+			health.clear();
+			lastHealthBarReading = Long.MIN_VALUE;
 			drain.clear();
 			thralls.clear();
 			xpLedger.clear();
@@ -2453,14 +2550,23 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			finalizeFight(false, now, "a different target was attacked");
 		}
-		// getHealth is nullable, and the fight takes an int.
-		final Integer maxHp = npcManager.getHealth(npc.getId());
+		// Full hitpoints from the version of the monster data in use, which knows the Chambers and Vardorvis where
+		// RuneLite's table does not; RuneLite's (nullable) as the fallback. The boss health bar, once read, beats both.
+		final MonsterStatsProvider.MonsterStats stats = monsterStats.get(npc.getId());
+		final Integer known = npcManager.getHealth(npc.getId());
+		final int maxHp = stats != null && stats.getHitpoints() > 0 ? stats.getHitpoints() : known == null ? -1 : known;
+		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount());
 		// Tags stripped: some names carry colour markup and it was reaching the CSV verbatim, "<col=00ffff>Rubble</col>" and
 		// all.
 		current = new Fight(Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(),
-			maxHp == null ? -1 : maxHp, now,
+			maxHp, now,
 			raidType, raidCounter);
 		current.noteStartTick(client.getTickCount());
+		// A boss the monster data cannot describe says so from the first tick, not only once the fight's numbers show it.
+		if (stats != null)
+		{
+			current.addStatsWarning(stats.getWarning());
+		}
 		targetLiveId = npc.getId();
 		targetNpc = npc;
 		combatCalc.setTarget(npc);
@@ -2468,8 +2574,9 @@ public class PvmPerformancePlugin extends Plugin
 		labelNightmareTotem(current, npc.getId());
 		openEncounterFor(current, now);
 		debug.log("fight START %s (npc %d, index %d, maxHp %d) group=%s room=%s raid=%s",
-			current.getTargetName(), npc.getId(), npc.getIndex(), maxHp == null ? -1 : maxHp,
+			current.getTargetName(), npc.getId(), npc.getIndex(), maxHp,
 			current.getGroupName(), current.encounterName(), raidType);
+		debug.log("  %s", monsterStats.describe(npc.getId()));
 	}
 
 	// Opens a fight as soon as the player targets something attackable, so the overlay is up while the first attack is
@@ -2602,6 +2709,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final boolean landed = damage > 0 && burstLanded.add(npc.getIndex());
 		damageByIndex.merge(npc.getIndex(), damage, Integer::sum);
+		health.damage(npc.getIndex(), npc.getId(), damage, tick);
 		current.recordExtraTarget(damage, now, newTarget, landed);
 		if (current.isScored())
 		{
@@ -2721,6 +2829,126 @@ public class PvmPerformancePlugin extends Plugin
 		}
 	}
 
+	/**
+	 * The end-of-fight checks on the target: its full hitpoints corrected from the
+	 * boss health bar, the reconciliation of every splat counted on it against
+	 * them, and the verdict on whether its expected side can be believed.
+	 *
+	 * <p>The killing blow is capped by what was left, so on a kill of a target that
+	 * started full, everything that hit it less everything it healed IS its full
+	 * hitpoints. A gap means a splat went uncounted or was counted twice, or the
+	 * table is wrong - the cheapest check there is, and logged on every kill.
+	 */
+	private void closeTargetHealth(boolean died)
+	{
+		final int index = current.getTargetIndex();
+		final int tick = client.getTickCount();
+		final int full = health.maxHp(index);
+		final String fullFrom = health.maxSource(index);
+		if (full > 0 && ("bar".equals(fullFrom) || current.getMaxHp() <= 0))
+		{
+			current.noteMaxHp(full);
+		}
+		final MonsterStatsProvider.MonsterStats stats = monsterStats.get(targetLiveId >= 0 ? targetLiveId
+			: current.getTargetId());
+		if (stats != null)
+		{
+			current.addStatsWarning(stats.getWarning());
+		}
+		final String verdict = StatsCheck.accuracyVerdict(current);
+		current.addStatsWarning(verdict);
+		// Logged whether or not the debug setting is on: the panel's saved window keeps every line, and these two are the
+		// ones a fight is checked by.
+		final int counted = health.damageCounted(index);
+		final int healed = health.healed(index);
+		final int net = counted - healed;
+		debug.log("RECONCILE %s (npc %d)%s: weapon %d + thrall %d + dot %d + others %d + unclassified %d, healed %d; on the "
+				+ "target %d - %d = %d against %d full hp (%s)%s; bar last read %d, now %d left (%s)",
+			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
+			current.getDamageDealt(), current.getThrallDamage(), current.getDotDamage(), current.getOthersDamage(),
+			current.getUnclassifiedDamage(), current.getHealed(), counted, healed, net, full, fullFrom,
+			died && full > 0 ? String.format(", diff %+d (%.1f%%)", net - full, 100.0 * (net - full) / full) : "",
+			health.lastHudHp(index), health.remaining(index, tick), health.source(index, tick));
+		debug.log("STATS CHECK %s: landed %d of %d against %.1f expected (variance %.2f): %s",
+			current.getTargetName(), current.getHits(), current.getExpectedTargetSamples(),
+			current.getSumExpectedLanded(), current.getSumExpectedLandedVariance(),
+			verdict == null ? "consistent with luck" : "TRIPPED");
+	}
+
+	/**
+	 * Reads the boss health bar the game draws, and hands it to TargetHealth when
+	 * it names the fight's target. Varp {@code HPBAR_HUD_NPC} holds the npc's
+	 * composition id, the varbits its exact current and full hitpoints; RuneLite's
+	 * opponent info reads the same three and gives up when the player has turned the
+	 * boss bar off, as this does. Logged whenever the reading changes, raw values and
+	 * all, so a log can settle what the game actually sends.
+	 */
+	private void readHealthBar()
+	{
+		if (current == null || current.isEnded())
+		{
+			return;
+		}
+		final int barNpc = client.getVarpValue(VarPlayerID.HPBAR_HUD_NPC);
+		final int hp = client.getVarbitValue(VarbitID.HPBAR_HUD_HP);
+		final int base = client.getVarbitValue(VarbitID.HPBAR_HUD_BASEHP);
+		final boolean disabled = client.getVarbitValue(VarbitID.HPBAR_HUD_BOSS_DISABLED) != 0;
+		final NPC target = targetNpc;
+		final int index = current.getTargetIndex();
+		final int liveId = target == null ? -1 : target.getId();
+		final NPCComposition composition = target == null ? null : target.getComposition();
+		final int compositionId = composition == null ? -1 : composition.getId();
+		final boolean ours = !disabled && target != null && target.getIndex() == index
+			&& healthBarNames(barNpc, compositionId, liveId);
+		final long reading = ((long) (barNpc & 0xFFFFF) << 40) | ((long) (hp & 0xFFFFF) << 20) | (base & 0xFFFFF)
+			| (disabled ? 1L << 62 : 0) | (ours ? 1L << 61 : 0);
+		if (reading != lastHealthBarReading)
+		{
+			lastHealthBarReading = reading;
+			debug.log("health bar: npc varp %d, hp %d / %d%s; target index %d, id %d, composition %d -> %s",
+				barNpc, hp, base, disabled ? ", boss bar turned off" : "", index, liveId, compositionId,
+				ours ? "OURS" : "not ours");
+		}
+		if (ours)
+		{
+			health.hud(index, liveId, hp, base, client.getTickCount());
+		}
+	}
+
+	/** Whether the bar's npc varp names this npc. -1 is no bar at all. */
+	static boolean healthBarNames(int barNpc, int compositionId, int liveId)
+	{
+		return barNpc >= 0 && (barNpc == compositionId || barNpc == liveId);
+	}
+
+	/**
+	 * Why the expected figures on screen should not be believed, or null: the
+	 * target's monster data carries a warning, or the attacks landed so far are too
+	 * far from expected to be luck.
+	 */
+	String getStatsWarning(Fight fight)
+	{
+		if (fight == null)
+		{
+			return null;
+		}
+		if (fight.getStatsWarning() != null)
+		{
+			return fight.getStatsWarning();
+		}
+		if (fight.isEnded())
+		{
+			return null;
+		}
+		final MonsterStatsProvider.MonsterStats stats = monsterStats.get(targetLiveId >= 0 ? targetLiveId
+			: fight.getTargetId());
+		if (stats != null && stats.getWarning() != null)
+		{
+			return stats.getWarning();
+		}
+		return StatsCheck.accuracyVerdict(fight);
+	}
+
 	private void finalizeFight(boolean died, long now, String reason)
 	{
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
@@ -2728,15 +2956,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.getTargetName(), current.getTargetId(), reason, current.getAttempts(), current.getAttacksMade(),
 			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
 			current.getCombatTicks(), current.getSumExpectedAverageHit());
-		if (died)
-		{
-			// The killing blow is capped by what was left, so the damage put on a target that started full IS its
-			// hitpoints. Logged rather than believed: it is the cheapest check there is on a table being wrong, and the
-			// expected damage now divides by that table.
-			debug.log("KILL %s (npc %d): dealt %d to it, tables say it has %d hitpoints",
-				current.getTargetName(), current.getTargetId(),
-				damageByIndex.getOrDefault(current.getTargetIndex(), 0), current.getMaxHp());
-		}
+		closeTargetHealth(died);
 		current.end(died, now);
 		// Anything still in the air never landed. Counting what it was expected to deal against the nought it dealt made a
 		// group kill read as underperformance.
@@ -2747,6 +2967,7 @@ public class PvmPerformancePlugin extends Plugin
 		combatCalc.forgetConflictionCharge();
 		pendingMineHits.clear();
 		damageByIndex.clear();
+		health.clear();
 		// Nothing is being fought, so no drain should be read against anything.
 		combatCalc.setTarget(null);
 		targetNpc = null;
@@ -3158,7 +3379,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Expected accuracy is per npc reached and expected damage per throw, which is what each side is accumulated over.
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
-			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d%n",
+			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d,%d,%d,%s%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -3180,7 +3401,10 @@ public class PvmPerformancePlugin extends Plugin
 				room.getAttacksPotted(),
 				room.getAttacksSwitched(),
 				csvExpected(room.efficiency() * 100, 1),
-				room.getThrallDamage());
+				room.getThrallDamage(),
+				room.getDotDamage(),
+				room.getHealed(),
+				csvText(room.getStatsWarning()));
 	}
 
 	static String csvRaidRow(String raidName, int raidRun, List<Encounter> rooms)
@@ -3196,7 +3420,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int attempts = raid.getAttempts();
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
-			+ String.format("%s,,,,,%d,,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d%n",
+			+ String.format("%s,,,,,%d,,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d,%d,%d,%s%n",
 				started,
 				raid.getDamageDealt(),
 				attempts,
@@ -3216,7 +3440,10 @@ public class PvmPerformancePlugin extends Plugin
 				raid.getAttacksPotted(),
 				raid.getAttacksSwitched(),
 				csvExpected(raid.efficiency() * 100, 1),
-				raid.getThrallDamage());
+				raid.getThrallDamage(),
+				raid.getDotDamage(),
+				raid.getHealed(),
+				csvText(raid.getStatsWarning()));
 	}
 
 	private static String csvFightRow(String raidName, int raidRun, Fight fight)
@@ -3230,7 +3457,7 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
-		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d%n",
+		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d,%d,%d,%s%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -3256,7 +3483,10 @@ public class PvmPerformancePlugin extends Plugin
 			fight.getAttacksPotted(),
 			fight.getAttacksSwitched(),
 			csvExpected(fight.efficiency() * 100, 1),
-			fight.getThrallDamage());
+			fight.getThrallDamage(),
+			fight.getDotDamage(),
+			fight.getHealed(),
+			csvText(fight.getStatsWarning()));
 	}
 
 	/**
@@ -3266,6 +3496,16 @@ public class PvmPerformancePlugin extends Plugin
 	private static String csvExpected(double value, int decimals)
 	{
 		return value < 0 ? "" : String.format("%." + decimals + "f", value);
+	}
+
+	/**
+	 * A free-text column: quoted, empty when there is nothing to say. Commas become
+	 * semicolons and quotes apostrophes, so a reader that splits on commas - as some
+	 * spreadsheet imports and this plugin's own tests do - still sees one column.
+	 */
+	static String csvText(String text)
+	{
+		return text == null || text.isEmpty() ? "" : "\"" + text.replace(',', ';').replace('"', '\'') + "\"";
 	}
 
 	private static String sanitize(String name)

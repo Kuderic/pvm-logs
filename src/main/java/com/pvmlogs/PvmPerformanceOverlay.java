@@ -1,5 +1,6 @@
 package com.pvmlogs;
 
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
@@ -24,6 +25,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 	private static final int MAX_WIDTH = 400;
 	/** The panel's own border, plus the gap that keeps the two columns apart. */
 	private static final int PADDING = 14;
+	private static final Color WARNING = new Color(255, 200, 0);
 
 	private final PvmPerformancePlugin plugin;
 	private final PvmPerformanceConfig config;
@@ -88,6 +90,13 @@ class PvmPerformanceOverlay extends OverlayPanel
 			.text(heading)
 			.build());
 
+		// Before any expected figure: a boss the model cannot describe, or a fight whose hits are too far from expected to
+		// be luck, makes every one of them suspect. The reason is in the debug log and the CSV; the overlay only says so.
+		if (plugin.getStatsWarning(fight) != null)
+		{
+			line("Expected", "unreliable", WARNING);
+		}
+
 		final SpecialAttack spec = plugin.getSpecialAttack();
 		final int specMaxHit = plugin.getExpectedSpecMaxHit();
 		final boolean hasSpec = spec != null && specMaxHit > 0;
@@ -141,6 +150,25 @@ class PvmPerformanceOverlay extends OverlayPanel
 			: raid != null ? raid.sumExpectedAverageHit() : room.sumExpectedAverageHit();
 		line("Damage",
 			expDamage > 0 ? String.format("%s / %.0f", QuantityFormatter.formatNumber(damage), expDamage) : QuantityFormatter.formatNumber(damage));
+
+		// The rest of the target's health that was not the player's weapon, for the room or fight on show. Damage above is the
+		// weapon's alone, which is what the expected side describes; these say where the rest went. All the player's own
+		// output except the heal, which is the boss's doing and so only shown once the fight is over.
+		if (room != null)
+		{
+			if (room.getThrallDamage() > 0)
+			{
+				line("  thrall", QuantityFormatter.formatNumber(room.getThrallDamage()));
+			}
+			if (room.getDotDamage() > 0)
+			{
+				line("  burn/poison", QuantityFormatter.formatNumber(room.getDotDamage()));
+			}
+			if (fight.isEnded() && room.getHealed() > 0)
+			{
+				line("Boss healed", QuantityFormatter.formatNumber(room.getHealed()));
+			}
+		}
 
 		final int hits = session != null ? session.getHits()
 			: raid != null ? raid.getHits() : room.getHits();
@@ -213,11 +241,17 @@ class PvmPerformanceOverlay extends OverlayPanel
 	 */
 	private void line(String left, String right)
 	{
+		line(left, right, Color.WHITE);
+	}
+
+	private void line(String left, String right, Color rightColor)
+	{
 		contentWidth = Math.max(contentWidth,
 			metrics.stringWidth(left == null ? "" : left) + metrics.stringWidth(right == null ? "" : right));
 		panelComponent.getChildren().add(LineComponent.builder()
 			.left(left)
 			.right(right)
+			.rightColor(rightColor)
 			.build());
 	}
 

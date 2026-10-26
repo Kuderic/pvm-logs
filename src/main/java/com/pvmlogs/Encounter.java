@@ -118,6 +118,41 @@ class Encounter
 		return total;
 	}
 
+	/** Burn, poison, venom and bleed across the room's fights, which damage dealt leaves out. */
+	int getDotDamage()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getDotDamage();
+		}
+		return total;
+	}
+
+	/** What the room's targets healed while being fought. */
+	int getHealed()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getHealed();
+		}
+		return total;
+	}
+
+	/** The first reason any of the room's fights gives not to trust its expected side, or null. */
+	String getStatsWarning()
+	{
+		for (Fight fight : fights)
+		{
+			if (fight.getStatsWarning() != null)
+			{
+				return fight.getStatsWarning();
+			}
+		}
+		return null;
+	}
+
 	int getDamageDealt()
 	{
 		int total = 0;

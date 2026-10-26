@@ -31,7 +31,7 @@ public class CsvRowTest
 	public void theHeaderNamesEveryColumnOnce()
 	{
 		// attempts and targets are both there now: one throw of chinchompas is one attempt and several targets.
-		assertEquals(30, COLUMNS);
+		assertEquals(33, COLUMNS);
 	}
 
 	@Test
@@ -69,5 +69,29 @@ public class CsvRowTest
 	public void quotesInAnNpcNameDoNotSplitTheRow()
 	{
 		assertEquals(COLUMNS, columns("fight,,,\"\"," + PvmPerformancePlugin.csvRow(fight())));
+	}
+
+	/** A stats warning is a sentence with commas in it, and still one column. */
+	@Test
+	public void aWarningWithCommasIsOneColumn()
+	{
+		final Fight f = fight();
+		f.addStatsWarning("landed 26 of 42 attacks against 40.1 expected (z = -13.0): this boss's stats look wrong, "
+			+ "so its \"expected\" damage and luck are not reliable");
+		f.recordDotDamage(12);
+		f.recordHeal(30);
+		final String row = PvmPerformancePlugin.csvRow(f);
+		assertEquals(COLUMNS, columns("fight,x,1,\"room\"," + row));
+		final String[] cells = row.trim().split(",", -1);
+		assertEquals("12", cells[cells.length - 3]);
+		assertEquals("30", cells[cells.length - 2]);
+		org.junit.Assert.assertTrue(cells[cells.length - 1].startsWith("\"landed 26 of 42"));
+	}
+
+	@Test
+	public void noWarningIsAnEmptyColumn()
+	{
+		assertEquals("", PvmPerformancePlugin.csvText(null));
+		assertEquals("", PvmPerformancePlugin.csvText(""));
 	}
 }
