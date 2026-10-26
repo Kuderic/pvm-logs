@@ -5,12 +5,11 @@
 ## Build and test
 | | Linux / macOS | Windows (PowerShell) |
 |---|---|---|
-| Tests | `bash ./gradlew test` | `.\gradlew.bat test` |
-| One test class | `bash ./gradlew test --tests com.pvmlogs.OriginalNamesTest` | `.\gradlew.bat test --tests com.pvmlogs.OriginalNamesTest` |
-| Dev client | `bash ./gradlew run` | `.\gradlew.bat run` |
+| Tests | `./gradlew test` | `.\gradlew.bat test` |
+| One test class | `./gradlew test --tests com.pvmlogs.OriginalNamesTest` | `.\gradlew.bat test --tests com.pvmlogs.OriginalNamesTest` |
+| Dev client | `./gradlew run` | `.\gradlew.bat run` |
 
 - Java 11 target; CI runs the tests on Temurin 11 on every push and PR (`.github/workflows/ci.yml`). Newer JDKs build it too.
-- `gradlew` is checked in without its executable bit, so call it through `bash` (or `chmod +x gradlew` locally).
 - The dev client needs a display and a Jagex login, so only Eric can run it. See README "Developing".
 - DPS-calc watcher: `python3 scripts/dps-calc-watch/test_watch.py`, and `python3 scripts/dps-calc-watch/watch.py --dry-run`.
 

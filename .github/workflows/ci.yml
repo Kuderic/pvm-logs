@@ -27,9 +27,8 @@ jobs:
           java-version: "11"
           cache: gradle
 
-      # gradlew is checked in without its executable bit, so run it through bash.
       - name: Test
-        run: bash ./gradlew test --no-daemon
+        run: ./gradlew test --no-daemon
 
       - name: Upload test reports
         if: failure()
