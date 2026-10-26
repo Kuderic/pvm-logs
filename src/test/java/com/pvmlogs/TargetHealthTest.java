@@ -158,4 +158,24 @@ public class TargetHealthTest
 		assertEquals(14, TargetHealth.barTolerance(700));
 		assertEquals(2, TargetHealth.barTolerance(50));
 	}
+
+	/**
+	 * A phase with a new pool, seen by the bar: its full hitpoints change mid-fight.
+	 * The bar is followed; the count still carries the old pool's damage, which is
+	 * what the plugin now logs (T-011 item 6) and does not yet correct.
+	 */
+	@Test
+	public void aNewPoolOnTheBarIsFollowedButNotYetByTheCount()
+	{
+		final TargetHealth h = new TargetHealth();
+		h.setTableMaxHp(INDEX, 8370, 2000, 0);
+		h.hud(INDEX, 8370, 2000, 2000, 0);
+		h.damage(INDEX, 8370, 2000, 50);
+		h.hud(INDEX, 8372, 0, 2000, 50);
+		assertEquals(2000, h.lastHudMax(INDEX));
+		h.hud(INDEX, 8372, 3250, 3250, 60);
+		assertEquals(3250, h.lastHudMax(INDEX));
+		assertEquals(3250, h.remaining(INDEX, 60));
+		assertEquals(1250, h.countedRemaining(INDEX));
+	}
 }

@@ -240,6 +240,13 @@ class TargetHealth
 		return e == null ? 0 : e.healed;
 	}
 
+	/** The full hitpoints the bar last showed for this npc, or -1 if it has never named it. */
+	int lastHudMax(int index)
+	{
+		final Entry e = byIndex.get(index);
+		return e == null ? -1 : e.hudMax;
+	}
+
 	/** The last bar reading for this npc, or -1 if the bar has never named it. */
 	int lastHudHp(int index)
 	{

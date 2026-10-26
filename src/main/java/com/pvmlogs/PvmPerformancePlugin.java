@@ -2919,6 +2919,16 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		if (ours)
 		{
+			// A new full hitpoints on the bar mid-fight is a phase with its own pool (or a different version than the one
+			// guessed). The bar copes, but the count does not: it carries the old pool's damage into the new one. Logged so a
+			// real fight can say which bosses do this before anything is built for it (T-011 item 6).
+			final int previousFull = health.lastHudMax(index);
+			if (previousFull > 0 && previousFull != base)
+			{
+				debug.log("health bar: FULL HITPOINTS CHANGED %d -> %d mid-fight on %s (npc %d, index %d); counted would "
+						+ "read %d left, the bar says %d",
+					previousFull, base, current.getTargetName(), liveId, index, health.countedRemaining(index), hp);
+			}
 			health.hud(index, liveId, hp, base, client.getTickCount());
 		}
 	}
