@@ -1,0 +1,55 @@
+# Weekly check of weirdgloop/osrs-dps-calc for boss mechanics our boss-rules.json may need to follow.
+# Opens, or updates, one issue titled "DPS calc changed: boss rules may need porting". See
+# scripts/dps-calc-watch/watch.py for what it looks at and how to clear it.
+name: DPS calc watch
+
+on:
+  schedule:
+    # Mondays, 14:23 UTC (morning in Chicago). Scheduled runs use the workflow on master.
+    - cron: "23 14 * * 1"
+  workflow_dispatch:
+    inputs:
+      ignore_baseline:
+        description: "Treat every placeholder and multi-version monster as new (tests the issue path)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Only print the report; don't open or edit the issue"
+        type: boolean
+        default: false
+  # A change to the watcher itself gets a dry run against today's calc.
+  pull_request:
+    paths:
+      - ".github/workflows/dps-calc-watch.yml"
+      - "scripts/dps-calc-watch/**"
+
+permissions:
+  contents: read
+  issues: write
+
+# Two runs at once could both find no issue and both open one.
+concurrency:
+  group: dps-calc-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Test the watcher
+        run: python3 scripts/dps-calc-watch/test_watch.py
+
+      - name: Check the DPS calculator
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          IGNORE_BASELINE: ${{ inputs.ignore_baseline }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ "$EVENT" = "pull_request" ] || [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ "$IGNORE_BASELINE" = "true" ]; then args+=(--ignore-baseline); fi
+          python3 -u scripts/dps-calc-watch/watch.py "${args[@]}"

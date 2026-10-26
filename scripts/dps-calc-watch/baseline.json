@@ -1,0 +1,36 @@
+{
+ "about": "Monsters the DPS calc watcher already knows about, so it reports only new ones. Regenerate with: python3 scripts/dps-calc-watch/watch.py --write-baseline",
+ "calcCommit": "c446f2e1027a5d0f7ced0d961f3e5ee22fecf2e7",
+ "calcDate": "2026-10-26",
+ "statFields": ["size", "skills", "offensive", "defensive", "attributes", "weakness", "immunities"],
+ "placeholder": [
+  {"id": 12223, "name": "Vardorvis", "version": "Awakened", "hp": 1400, "atk": 420},
+  {"id": 12223, "name": "Vardorvis", "version": "Post-quest", "hp": 700, "atk": 280},
+  {"id": 12224, "name": "Vardorvis", "version": "Quest", "hp": 500, "atk": 260}
+ ],
+ "multiVersion": [
+  {"id": 8367, "name": "Blood spawn", "versions": ["Entry", "Normal"]},
+  {"id": 9435, "name": "Totem (Phosani's Nightmare)", "versions": [""]},
+  {"id": 9436, "name": "Totem (Phosani's Nightmare)", "versions": [""]},
+  {"id": 11761, "name": "Elidinis' Warden", "versions": ["Damaged", "Enraged"]},
+  {"id": 11762, "name": "Tumeken's Warden", "versions": ["Damaged", "Enraged"]},
+  {"id": 12191, "name": "Duke Sucellus", "versions": ["Awakened, Awake", "Post-quest, Awake"]},
+  {"id": 12204, "name": "The Whisperer", "versions": ["Awakened", "Post-quest"]},
+  {"id": 12214, "name": "The Leviathan", "versions": ["Awakened", "Post-quest"]},
+  {"id": 12223, "name": "Vardorvis", "versions": ["Awakened", "Post-quest"]},
+  {"id": 12353, "name": "Jhallan", "versions": [""]},
+  {"id": 12452, "name": "Giant goblin", "versions": ["Annihilation", "Apocalypse", "Armageddon", "Permanent"]},
+  {"id": 13012, "name": "Eclipse Moon", "versions": ["Clone", "Regular"]},
+  {"id": 13663, "name": "Magic Mark", "versions": ["Annihilation", "Armageddon", "Permanent"]},
+  {"id": 13664, "name": "Ranging Ro", "versions": ["Annihilation", "Armageddon", "Permanent"]},
+  {"id": 14176, "name": "Yama", "versions": ["Normal", "Phase 3"]},
+  {"id": 14420, "name": "Earthen Nagua", "versions": ["Normal", "Weakened"]},
+  {"id": 14707, "name": "Doom of Mokhaiotl", "versions": ["Deep Delve", "Delve 1", "Delve 2", "Delve 3", "Delve 4", "Delve 5", "Delve 6", "Delve 7", "Delve 8"]},
+  {"id": 15025, "name": "Black Eye Bethel", "versions": ["Dragon scimitar", "Rune scimitar", "Steel scimitar"]},
+  {"id": 15547, "name": "Big Evil Chicken", "versions": ["Annihilation", "Permanent"]},
+  {"id": 15553, "name": "I DSCIM YOU", "versions": ["Annihilation", "Permanent"]},
+  {"id": 15742, "name": "Maggot King", "versions": ["Far", "Nearby", "Roaring"]},
+  {"id": 16659, "name": "Archive Guardian", "versions": ["Flying", "Grounded"]},
+  {"id": 100001, "name": "Yama", "versions": ["Glyphic Attenuation", "Glyphic Attenuation, Phase 3"]}
+ ]
+}
