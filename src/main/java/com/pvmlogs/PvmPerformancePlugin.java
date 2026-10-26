@@ -1529,13 +1529,14 @@ public class PvmPerformancePlugin extends Plugin
 			expectedByTick.put(client.getTickCount(), row);
 			expectedByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
 			// Once per target, and again whenever the version in use changes or the defence has moved (Vardorvis's follows his
-			// hitpoints), so a log shows the figures the attacks were judged by as they changed.
-			final MonsterStatsProvider.MonsterStats judgedBy = debug.isOn() ? monsterStats.get(expectedForNpcId) : null;
+			// hitpoints), so a log shows the figures the attacks were judged by as they changed. Not gated on the debug
+			// setting: the panel's saved window keeps every line whether or not the file is being written.
+			final MonsterStatsProvider.MonsterStats judgedBy = monsterStats.get(expectedForNpcId);
 			final String version = judgedBy == null ? null : judgedBy.getVersion();
 			final int defence = judgedBy == null ? Integer.MIN_VALUE : judgedBy.getDefenceLevel();
-			if (debug.isOn() && (expectedForNpcId != debuggedExpectedId
+			if (expectedForNpcId != debuggedExpectedId
 				|| !java.util.Objects.equals(version, debuggedExpectedVersion)
-				|| Math.abs(defence - debuggedExpectedDefence) >= EXPECTED_LOG_DEFENCE_STEP))
+				|| Math.abs(defence - debuggedExpectedDefence) >= EXPECTED_LOG_DEFENCE_STEP)
 			{
 				debuggedExpectedId = expectedForNpcId;
 				debuggedExpectedVersion = version;
@@ -2575,10 +2576,7 @@ public class PvmPerformancePlugin extends Plugin
 		debug.log("fight START %s (npc %d, index %d, maxHp %d) group=%s room=%s raid=%s",
 			current.getTargetName(), npc.getId(), npc.getIndex(), maxHp,
 			current.getGroupName(), current.encounterName(), raidType);
-		if (debug.isOn())
-		{
-			debug.log("  %s", monsterStats.describe(npc.getId()));
-		}
+		debug.log("  %s", monsterStats.describe(npc.getId()));
 	}
 
 	// Opens a fight as soon as the player targets something attackable, so the overlay is up while the first attack is
@@ -2859,10 +2857,8 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final String verdict = StatsCheck.accuracyVerdict(current);
 		current.addStatsWarning(verdict);
-		if (!debug.isOn())
-		{
-			return;
-		}
+		// Logged whether or not the debug setting is on: the panel's saved window keeps every line, and these two are the
+		// ones a fight is checked by.
 		final int counted = health.damageCounted(index);
 		final int healed = health.healed(index);
 		final int net = counted - healed;

@@ -336,7 +336,7 @@ class MonsterStatsProvider
 			hint = known == null ? -1 : known;
 		}
 		final Choice choice = choose(versions, rules.forNpc(npcId), observed, hint);
-		if (versions.size() > 1 && debug.isOn() && versionLogged.add(((long) npcId << 32) | Math.max(0, observed)))
+		if (versions.size() > 1 && versionLogged.add(((long) npcId << 32) | Math.max(0, observed)))
 		{
 			debug.log("monster stats for npc %d: %d versions under this id, using '%s' (%d hp) - %s", npcId,
 				versions.size(), choice.stats.getVersion(), choice.stats.getHitpoints(), choice.reason);
