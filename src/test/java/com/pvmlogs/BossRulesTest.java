@@ -145,4 +145,13 @@ public class BossRulesTest
 		Files.write(file, "{ not json".getBytes(StandardCharsets.UTF_8));
 		assertNotNull(BossRules.load(GSON, file).forNpc(12223));
 	}
+
+	/** The hotfix file lives in the plugin's one data folder (T-004), whatever that is called. */
+	@Test
+	public void theOverrideSitsInTheDataFolder()
+	{
+		final Path file = MonsterStatsProvider.rulesOverrideFile();
+		assertEquals("boss-rules.json", file.getFileName().toString());
+		assertEquals(PvmPerformanceConfig.DATA_DIR, file.getParent().getFileName().toString());
+	}
 }

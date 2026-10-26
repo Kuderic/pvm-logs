@@ -514,12 +514,11 @@ class MonsterStatsProvider
 
 	/**
 	 * Where a user can drop a boss-rules.json that overrides the bundled one, boss by
-	 * boss: beside the cached monster data, so it moves with the plugin's data folder
-	 * whatever that folder is called.
+	 * boss: the plugin's data folder, beside the cached monster data.
 	 */
-	private Path rulesOverrideFile()
+	static Path rulesOverrideFile()
 	{
-		return cacheFile().resolveSibling("boss-rules.json");
+		return new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR), "boss-rules.json").toPath();
 	}
 
 	private void loadOrFetch()

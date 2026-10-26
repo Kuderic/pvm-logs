@@ -30,8 +30,9 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Three layers, later ones winning by boss name:
  * <ol>
  * <li>{@code boss-rules.json} bundled with the plugin;</li>
- * <li>{@code ~/.runelite/pvm-logs/boss-rules.json}, if present - a fix can be tried
- * without waiting for a release;</li>
+ * <li>{@code boss-rules.json} in the plugin's data folder
+ * ({@code ~/.runelite/<PvmPerformanceConfig.DATA_DIR>/}), if present - a fix can be
+ * tried without waiting for a release;</li>
  * <li>nothing else. A boss with no rule falls back to the monster data and to the
  * checks in MonsterStatsProvider and StatsCheck, which flag rather than guess.</li>
  * </ol>
