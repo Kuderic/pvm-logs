@@ -749,37 +749,42 @@ class CombatCalc
 	 * The target's health now, which the ruby bolt effect is a share of. Falls
 	 * back to full health whenever it cannot be read for THIS target.
 	 *
-	 * <p>The health bar has to be confirmed to belong to the npc being asked
-	 * about. It is read off whoever the player is interacting with, which is not
-	 * always the fight this figure describes - a room with several NPCs, a
-	 * target switched mid-fight, the opening attack recomputed against the
-	 * fight's target, and every candidate the gear search evaluates all reach
-	 * here. Taking the bar unchecked scaled one NPC's max health by another
-	 * one's bar, which is not a rounding error but a different number
-	 * altogether. Both the id and the index must agree: the id alone cannot
-	 * separate two of the same NPC standing together.
+	 * <p>The figure has to be confirmed to belong to the npc being asked about.
+	 * The fight's target is not always what this is asked for - a room with
+	 * several NPCs, a target switched mid-fight, the opening attack recomputed
+	 * against the fight's target, and every candidate the gear search evaluates
+	 * all reach here. Taking a figure unchecked scaled one NPC's max health by
+	 * another one's bar. Both the id and the index must agree: the id alone
+	 * cannot separate two of the same NPC standing together.
 	 *
-	 * <p>What comes back is the health BAR, quantised to its own scale rather
-	 * than exact hitpoints, so this is the right bucket and not the right
-	 * number. Exact NPC health is not readable, and ruby's share of it inherits
-	 * the granularity - a point or two on a high-health boss.
+	 * <p>Exact hitpoints from {@link TargetHealth} - the boss health bar's, or every
+	 * splat counted - where it has them. Otherwise the overhead health bar, which is
+	 * quantised to its own scale of about thirty: the right bucket and not the
+	 * right number, a point or two of ruby damage on a high-health boss.
 	 */
 	private int targetCurrentHp(int npcId)
 	{
-		// Was RuneLite's table alone, which knows nothing about any Chambers monster - so a ruby bolt in a raid read its
-		// target at no health and paid out nothing. The wiki data covers those.
-		final int maxHp = targetMaxHitpoints(npcId);
+		final NPC npc = targetNpc;
+		final boolean ours = npc != null && healthBarBelongsTo(npc.getId(), npc.getIndex(), npcId, targetIndex);
+		return currentHp(ours ? health.remaining(targetIndex, client.getTickCount()) : -1,
+			targetMaxHitpoints(npcId), ours ? npc.getHealthRatio() : -1, ours ? npc.getHealthScale() : -1);
+	}
+
+	/**
+	 * Hitpoints left from the best there is: exact ({@code known}, -1 when not
+	 * known), then the overhead bar's ratio of full, then full. 0 when even full
+	 * is not known. Static so it stays under test without a Client.
+	 */
+	static int currentHp(int known, int maxHp, int ratio, int scale)
+	{
 		if (maxHp <= 0)
 		{
-			return 0;
+			return known >= 0 ? known : 0;
 		}
-		final NPC npc = targetNpc;
-		if (npc == null || !healthBarBelongsTo(npc.getId(), npc.getIndex(), npcId, targetIndex))
+		if (known >= 0)
 		{
-			return maxHp;
+			return Math.min(known, maxHp);
 		}
-		final int ratio = npc.getHealthRatio();
-		final int scale = npc.getHealthScale();
 		if (ratio < 0 || scale <= 0)
 		{
 			return maxHp;
