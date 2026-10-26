@@ -97,16 +97,6 @@ class SessionTotals
 	}
 
 	/** Damage from one hitsplat; see {@code Fight.recordDamageDealt}. */
-	/** Takes back a splat recordAttempt counted, judged within its tick to be the thrall's instead. */
-	void revokeAttempt(int damage, boolean landedAttack)
-	{
-		damageDealt = Math.max(0, damageDealt - damage);
-		if (landedAttack && hits > 0)
-		{
-			hits--;
-		}
-	}
-
 	void recordAttempt(int damage, boolean landedAttack, long now)
 	{
 		damageDealt += damage;
@@ -115,6 +105,16 @@ class SessionTotals
 			hits++;
 		}
 		noteActivity(now);
+	}
+
+	/** Takes back a splat recordAttempt counted, judged within its tick to be the thrall's instead. */
+	void revokeAttempt(int damage, boolean landedAttack)
+	{
+		damageDealt = Math.max(0, damageDealt - damage);
+		if (landedAttack && hits > 0)
+		{
+			hits--;
+		}
 	}
 
 	/**
