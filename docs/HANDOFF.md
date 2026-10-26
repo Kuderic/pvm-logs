@@ -96,17 +96,30 @@ A thrall splat opens no fight, books nothing, counts no hit and drains nothing. 
 
 ## Lessons from the first real-fight log (Vardorvis, 2026-10-26, master `66da36d`)
 Source: `claude/status/vardorvis-log-review.md`. The log is on Eric's PC in `~/.runelite/pvm-logs/`, written before the data folder went back to `pvm-performance-tracker`.
-1. **Defence read as 0.** The DPS calc's `monsters.json` stores Vardorvis with `def 0, str 0` as placeholders; the calc computes them from current HP (`src/lib/scaling/Vardorvis.ts`). Expected accuracy showed ~98% against a real ~62% (26/42). → T-001 boss rules; T-002's watcher flags new placeholder-stat bosses.
-2. **Wrong version.** Id 12223 is both "Awakened" (1400 HP) and "Post-quest" (700 HP), and the plugin took the first. The XP multiplier gave it away: ×1.70 is the formula on Awakened stats, while every clean hit paid ×1.55, the formula on post-quest stats.
+1. **Defence read as 0.** The DPS calc's `monsters.json` stores Vardorvis with `def 0, str 0` as placeholders; the calc computes them from current HP (`src/lib/scaling/Vardorvis.ts`). Expected accuracy showed ~98% against a real ~62% (26/42). **Fixed by T-001** (PR #7, `c88f7c3`): `boss-rules.json` scales his strength and defence with HP. T-002's watcher flags new placeholder-stat bosses.
+2. **Wrong version.** Id 12223 is both "Awakened" (1400 HP) and "Post-quest" (700 HP), and the plugin took the first. The XP multiplier gave it away: ×1.70 is the formula on Awakened stats, while every clean hit paid ×1.55, the formula on post-quest stats. **Fixed by T-001:** the version is picked from the health bar's full HP. In the 17:15 confirmation fight the log header showed the post-quest version: 700 HP, defence 215, XP bonus ×1.550.
 3. **XP evidence never switched on:** the calibration loop, fixed in `0a0a093` (above).
 4. **Misattribution before the thrall's cycle locked** (ticks 197–203): the player's misses and the thrall's zeros were swapped, and 3 thrall damage went to the player. Fixed by the projectile rule in `9f191e7` (above).
-5. **Burn was invisible.** Burning claws applied burn, but the log has zero `BURN` (74) splats, because only `isMine()` splats were handled or logged. Types seen: 12, 16, 43.
-6. **Totals don't reconcile:** 678 player + 52 thrall = 730 against a 700-HP boss, cause unknown (heals weren't logged).
+5. **Burn was invisible.** Burning claws applied burn, but the log has zero `BURN` (74) splats, because only `isMine()` splats were handled or logged. Types seen: 12, 16, 43. **Fixed by T-001:** every splat on the target is now classified and logged (below).
+6. **Totals don't reconcile:** 678 player + 52 thrall = 730 against a 700-HP boss, cause then unknown. **Cause: Vardorvis heals.** The 17:15 confirmation fight had 20 heal splats (type 6, 71 HP), which the old build never saw.
 
-**The general lesson:** log every hitsplat on the target unfiltered (type, amount, `isMine()`), plus heals. On a kill, Σdamage − Σheals should equal max HP; make that a standing check.
+**The general lesson:** log every hitsplat on the target unfiltered (type, amount, `isMine()`), plus heals. On a kill, Σdamage − Σheals should equal max HP. T-001 made that a standing check: the `RECONCILE` line, below.
 
 ## Other damage with no attack behind it
-Not attributed on `master` yet. T-001 ("Boss stats & damage sources") is wiring it.
-- **Hitsplat types** (RuneLite API 1.13.4, decompiled; T-001 brief): `isMine()` is true only for 12, 16, 18, 20, 22, 24, 43–47, 53, 55. BURN 74, POISON 65, VENOM 5, BLEED 67, DISEASE 4 and HEAL 6 are **not** mine, so today's plugin drops them.
-- **Burn from burning claws** is left out of expected damage on purpose (`CombatCalc.burningClawsAverage`): 10 over 40 ticks per inflicting splat, stacking to five, so 0 to 29 extra per spec.
-- **Still to check against a real log:** recoil (ring of recoil/suffering), vengeance, item procs, multi-hit weapons and AoE.
+On `master` since T-001 ([PR #7](https://github.com/Kuderic/pvm-logs/pull/7), merged as `c88f7c3`): `29ed308`, `3def1a9`, `5c68141`, `3c13329`, `dc4457f`, `c3d73dd`. Numbers below come from `claude/status/08-boss-stats.md` and Eric's 17:15 confirmation fight, kept as `src/test/resources/com/pvmlogs/replay/vardorvis-burn-heals-bar-20261026-1715.log`.
+- **Hitsplat types** (RuneLite API 1.13.4, decompiled; checked against the real API in `HitsplatKindTest`): `isMine()` is true only for 12, 16, 18, 20, 22, 24, 43–47, 53, 55. BURN 74, POISON 65, VENOM 5, BLEED 67, DISEASE 4 and HEAL 6 are **not** mine.
+- **`HitsplatKind`** sorts every splat on the target into `PLAYER`, `DAMAGE_OVER_TIME` (burn, poison, venom, bleed), `HEAL`, `OTHER_PLAYER`, `NO_HEALTH_EFFECT` (disease, charge, poise, prayer drain, sanity: logged, not counted against HP) or `UNCLASSIFIED`.
+- **`onNotMineSplat`** books the non-mine ones:
+  - DoT goes to `dotDamage` and doesn't extend the fight;
+  - a heal goes to `healed` and comes off the damage counted on the target;
+  - other players' splats and unclassified ones go to their own tallies;
+  - every one is logged with its type number.
+- **Measured:** 14 burn splats (type 74, 40 damage) were counted as DoT, never as the player's. Vardorvis healed 71 HP over 20 heal splats.
+- **Health bar:** varp `HPBAR_HUD_NPC` (1683) holds the NPC's **composition id**, not its index. Varbits 6099/6100 are exact current and base HP, and they change on the splat's own tick. The varp read 12223 in game; that matches RuneLite's own `OpponentInfoOverlay`.
+- **`RECONCILE`**, logged at every fight's end: weapon + thrall + DoT + others + unclassified − healed, against full HP.
+  - In the saved 17:15 fight (not a kill), all 54 health-bar changes were matched by the splats counted. `HealthBarReplayTest` replays that log and matches the bar at all 55 readings.
+  - On the kill after it (from `history.json`): weapon 665 + thrall 51 + burn 10 − healed 26 = 700, **diff 0**.
+- **Burn from burning claws** is still left out of *expected* damage on purpose (`CombatCalc.burningClawsAverage`): 10 over 40 ticks per inflicting splat, stacking to five, so 0 to 29 extra per spec. It's counted as DoT once it lands.
+- **Still open:**
+  - The coloured "mine" types 18/20/22/24/53/55 are still booked as the player's weapon damage. Per the wiki some colours are shield, armour or poise damage, not HP (Verzik P1's shield, Kephri, the wardens' poise).
+  - Recoil (ring of recoil/suffering), vengeance, item procs, multi-hit weapons and AoE are not yet checked against a real log.
