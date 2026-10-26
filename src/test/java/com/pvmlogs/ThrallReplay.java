@@ -30,6 +30,7 @@ final class ThrallReplay
 	private static final Pattern LINE = Pattern.compile("^\\[(\\d+)\\] (.*)$");
 	private static final Pattern XP = Pattern.compile("^xp drop ([A-Z]+) \\+(\\d+)");
 	private static final Pattern SPAWN = Pattern.compile("^THRALL spawned: npc (\\d+) \\(index (\\d+)\\), (\\d+) tiles");
+	private static final Pattern CLAIMED = Pattern.compile("^THRALL claimed npc (\\d+) \\(index (\\d+)\\)");
 	private static final Pattern RELEASED = Pattern.compile("^THRALL released npc \\d+ \\(index (\\d+)\\): despawned");
 	private static final Pattern VARBIT = Pattern.compile("^THRALL resurrection active varbit -> (\\d+)");
 	private static final Pattern ANIMATION = Pattern.compile("^THRALL animation (-?\\d+): npc \\d+ \\(index (\\d+)\\)");
@@ -37,6 +38,7 @@ final class ThrallReplay
 		"^THRALL projectile \\d+ from (no source|index (\\d+)) at npc \\d+ \\(index (\\d+)\\)");
 	private static final Pattern JUDGED = Pattern.compile("^hitsplat (\\d+) on .* \\(index (\\d+)\\): (THRALL|player),");
 	private static final Pattern RAW = Pattern.compile("^hitsplat (\\d+) type (\\d+) on .*index (\\d+)\\)");
+	private static final Pattern SPECIAL = Pattern.compile("^ +scored as a SPECIAL");
 	private static final Pattern START = Pattern.compile("^fight START .*\\(npc (\\d+),");
 	private static final Set<Integer> NON_ATTACK_ANIMATIONS = new HashSet<>(java.util.Arrays.asList(
 		-1, 9047, 9048, 13683, 11595, 13674));
@@ -94,6 +96,12 @@ final class ThrallReplay
 	final List<Judged> rejudged = new ArrayList<>();
 	private int targetId = -1;
 	private int fight;
+	// The last thrall seen spawning or claimed, which a projectile naming no source is taken to have come from: these
+	// are solo logs, and the log does not say where a projectile started.
+	private int lastThrall = -1;
+	// The tick the player's last special went out, from the log's own "scored as a SPECIAL" (the spec energy, which
+	// nothing here depends on).
+	private int specialTick = Integer.MIN_VALUE;
 
 	// Outputs.
 	final List<Judged> judged = new ArrayList<>();
@@ -141,7 +149,12 @@ final class ThrallReplay
 					tick = t;
 				}
 				Matcher e;
-				if ((e = START.matcher(body)).find())
+				if (SPECIAL.matcher(body).find())
+				{
+					// Logged at the booking, the tick after it was thrown.
+					specialTick = t - 1;
+				}
+				else if ((e = START.matcher(body)).find())
 				{
 					fight++;
 					targetId = Integer.parseInt(e.group(1));
@@ -157,9 +170,21 @@ final class ThrallReplay
 				{
 					ledger.add(Skill.valueOf(e.group(1)), Integer.parseInt(e.group(2)));
 				}
+				else if ((e = CLAIMED.matcher(body)).find())
+				{
+					// A log saved without file logging has no spawn lines, only the claim at the end of its tick.
+					final int index = Integer.parseInt(e.group(2));
+					lastThrall = index;
+					if (thralls.ownedIndex() != index)
+					{
+						thralls.onThrallSpawned(index, Integer.parseInt(e.group(1)), 1, t);
+						thralls.onResurrectionVarbit(true, t);
+					}
+				}
 				else if ((e = SPAWN.matcher(body)).find())
 				{
 					final int distance = Integer.parseInt(e.group(3));
+					lastThrall = Integer.parseInt(e.group(2));
 					thralls.onThrallSpawned(Integer.parseInt(e.group(2)), Integer.parseInt(e.group(1)), distance, t);
 					// The plugin polls the varbit each tick; the log shows the claim on the spawn tick itself.
 					if (distance <= ThrallTracker.SPAWN_RADIUS)
@@ -189,8 +214,8 @@ final class ThrallReplay
 				}
 				else if ((e = PROJECTILE.matcher(body)).find())
 				{
-					final int source = e.group(2) == null ? -1 : Integer.parseInt(e.group(2));
-					thralls.onThrallProjectile(source, Integer.parseInt(e.group(3)), t, true);
+					final int source = e.group(2) == null ? lastThrall : Integer.parseInt(e.group(2));
+					thralls.onThrallProjectile(source, Integer.parseInt(e.group(3)), t);
 					thrallProjectiles.computeIfAbsent(fight, k -> new ArrayList<>()).add(t);
 				}
 				else if ((e = JUDGED.matcher(body)).find())
@@ -231,7 +256,8 @@ final class ThrallReplay
 			ev.tick = tick;
 			ev.targetIndex = index;
 			ev.player = ThrallTracker.classifyPlayer(seen != null && seen == tick && burstBooked.contains(index),
-				seen != null && seen == tick - 1 && burstBooked.contains(index), false, true, tick, attackDueTick, false);
+				seen != null && seen == tick - 1 && burstBooked.contains(index) && specialTick != Integer.MIN_VALUE
+					&& tick - specialTick <= 3, false, true, tick, attackDueTick, false);
 			ev.xp = ledger.coverage(amount, tick);
 			ev.xpTrusted = ledger.trusted();
 			ev.playerAccuracy = playerAccuracy;

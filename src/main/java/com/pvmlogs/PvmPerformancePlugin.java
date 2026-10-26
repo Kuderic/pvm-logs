@@ -381,6 +381,9 @@ public class PvmPerformancePlugin extends Plugin
 	private static final double THRALL_THRESHOLD = 0.5;
 	// How close the only thrall in view must be to be taken for ours when its summon was never seen.
 	private static final int THRALL_FALLBACK_RADIUS = 3;
+	// How long after the special energy falls its burst may still be landing: thrown on the drop, first splats the tick
+	// after, the last of a burning claws special the tick after that.
+	private static final int SPECIAL_BURST_TICKS = 3;
 	// Animations a thrall plays that are not attacks.
 	private static final Set<Integer> THRALL_NON_ATTACK_ANIMATIONS = Collections.unmodifiableSet(new HashSet<>(
 		java.util.Arrays.asList(AnimationID.GHOST_UPDATE_THRALL_SPAWN, AnimationID.SKELETON_UPDATE_THRALL_SPAWN,
@@ -709,7 +712,9 @@ public class PvmPerformancePlugin extends Plugin
 		// Their own multi-hit attack already landing here this tick: a scythe's second and third, a claw special.
 		final Integer seen = lastHitsplatTick.get(index);
 		final boolean sameTickBurst = seen != null && seen == tick && burstBooked.contains(index);
-		final boolean burstLastTick = seen != null && seen == tick - 1 && burstBooked.contains(index);
+		// Only a special spreads its splats over two ticks; an ordinary blow's next tick is inside its cooldown.
+		final boolean burstLastTick = seen != null && seen == tick - 1 && burstBooked.contains(index)
+			&& specFiredTick != Integer.MIN_VALUE && tick - specFiredTick <= SPECIAL_BURST_TICKS;
 		boolean projectileDue = false;
 		final List<Integer> landing = pendingMineHits.get(index);
 		if (landing != null)
@@ -791,7 +796,7 @@ public class PvmPerformancePlugin extends Plugin
 			// want of seeing our own.
 			if (seen == 1 && distanceFromMe(only) <= THRALL_FALLBACK_RADIUS)
 			{
-				thralls.onOnlyCandidate(only.getIndex(), only.getId());
+				thralls.onOnlyCandidate(only.getIndex(), only.getId(), tick);
 			}
 		}
 		for (String note : thralls.drainNotes())
@@ -896,21 +901,35 @@ public class PvmPerformancePlugin extends Plugin
 			unbooked ? "; the blow it booked is withdrawn" : otherSplat ? "; the player's other splat keeps the blow" : "");
 	}
 
-	/** Whether a projectile set off within a couple of tiles of our thrall, which is how one naming no source is ours. */
-	private boolean leftFromOurThrall(Projectile projectile)
+	/**
+	 * The thrall a projectile naming no source set off from beside: the nearest
+	 * within a couple of tiles of where it started, or -1. Ours are seen this way
+	 * in practice, and so is anyone else's, which this is what tells apart.
+	 */
+	private int thrallLeftFrom(Projectile projectile)
 	{
-		if (!thralls.hasThrall() || client.getTopLevelWorldView() == null)
+		if (client.getTopLevelWorldView() == null)
 		{
-			return false;
-		}
-		final NPC ours = client.getTopLevelWorldView().npcs().byIndex(thralls.ownedIndex());
-		final LocalPoint at = ours == null ? null : ours.getLocalLocation();
-		if (at == null)
-		{
-			return false;
+			return -1;
 		}
 		final int reach = ThrallTracker.PROJECTILE_SOURCE_RADIUS * LOCAL_TILE_SIZE;
-		return Math.abs(projectile.getX1() - at.getX()) <= reach && Math.abs(projectile.getY1() - at.getY()) <= reach;
+		int best = -1;
+		int bestDistance = Integer.MAX_VALUE;
+		for (NPC npc : client.getTopLevelWorldView().npcs())
+		{
+			if (npc == null || !Thralls.isThrall(npc.getId()) || npc.getLocalLocation() == null)
+			{
+				continue;
+			}
+			final int dx = Math.abs(projectile.getX1() - npc.getLocalLocation().getX());
+			final int dy = Math.abs(projectile.getY1() - npc.getLocalLocation().getY());
+			if (dx <= reach && dy <= reach && Math.max(dx, dy) < bestDistance)
+			{
+				best = npc.getIndex();
+				bestDistance = Math.max(dx, dy);
+			}
+		}
+		return best;
 	}
 
 	private int distanceFromMe(Actor actor)
@@ -1037,9 +1056,10 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("THRALL projectile %d from %s at npc %d (index %d), lands tick %d",
 				projectile.getId(), source == null ? "no source" : "index " + ((NPC) source).getIndex(),
 				((NPC) target).getId(), ((NPC) target).getIndex(), lands);
-			// Ours name no source in practice, so where it left from decides. Either way it is nobody's attack of mine.
-			thralls.onThrallProjectile(source instanceof NPC ? ((NPC) source).getIndex() : -1,
-				((NPC) target).getIndex(), client.getTickCount(), leftFromOurThrall(projectile));
+			// Ours name no source in practice, so the thrall it left from beside decides. Either way it is nobody's attack of
+			// mine.
+			thralls.onThrallProjectile(source instanceof NPC ? ((NPC) source).getIndex() : thrallLeftFrom(projectile),
+				((NPC) target).getIndex(), client.getTickCount());
 			return;
 		}
 		if (!isProjectileMine(projectile, me, target))
@@ -1751,10 +1771,8 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void traceThrall(String what, NPC thrall)
 	{
-		if (!debug.isOn())
-		{
-			return;
-		}
+		// Not gated on file logging: the panel's "save recent" keeps every line whether or not it streams, and without
+		// these a saved log cannot show a zombie's attacks (the 16:08 log has none).
 		final Player me = client.getLocalPlayer();
 		final Actor at = thrall.getInteracting();
 		final int distance = me == null || me.getWorldLocation() == null || thrall.getWorldLocation() == null ? -1

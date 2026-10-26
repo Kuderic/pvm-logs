@@ -353,9 +353,11 @@ class XpLedger
 			}
 		}
 		int left = amount;
+		Award taker = null;
 		if (target != null)
 		{
 			left = take(target, left, certain);
+			taker = target;
 		}
 		for (Award a : awards)
 		{
@@ -365,35 +367,46 @@ class XpLedger
 			}
 			if (eligible(a, tick) && a.decoded() && a != target)
 			{
+				final int before = left;
 				left = take(a, left, certain);
-			}
-		}
-		// What no decoded attack could take - all of it, while the multiplier is wrong - lands on the latest attack thrown
-		// before it, so it is still counted against the drops that should have paid for it.
-		if (left > 0)
-		{
-			Award latest = null;
-			for (Award a : awards)
-			{
-				if (a.tick < tick && tick - a.tick <= WINDOW_TICKS)
+				if (left < before)
 				{
-					latest = a;
+					taker = a;
 				}
 			}
-			if (latest != null)
+		}
+		if (left <= 0)
+		{
+			return;
+		}
+		// More landed than the attacks' drops decode to. The rest stays with the attack that took the first of it, so its
+		// check sees the whole splat; failing that it goes to the latest attack whose drops could not be read at all,
+		// which is every attack while the multiplier is wrong. Never to one that decoded to nothing - a resurrection
+		// cast paying magic alone - which is how a claw special's last splat was charged to the cast beside it.
+		Award home = taker;
+		if (home == null)
+		{
+			for (Award a : awards)
 			{
-				latest.landed += left;
-				latest.splats++;
-				latest.allCertain &= certain;
-				latest.remainingHigh = Math.max(0, latest.remainingHigh - left);
-				latest.remainingLow = Math.max(0, latest.remainingLow - left);
+				if (a.tick < tick && tick - a.tick <= WINDOW_TICKS && !a.decoded())
+				{
+					home = a;
+				}
 			}
-			else if (certain)
-			{
-				// Damage that could only be the player's, and no drop at all to have paid for it: a place that pays no
-				// experience, or drops that stopped arriving. Fails at once, so trust earned elsewhere does not linger.
-				noteCheck(false);
-			}
+		}
+		if (home != null)
+		{
+			home.landed += left;
+			home.splats += home == taker ? 0 : 1;
+			home.allCertain &= certain;
+			home.remainingHigh = Math.max(0, home.remainingHigh - left);
+			home.remainingLow = Math.max(0, home.remainingLow - left);
+		}
+		else if (certain)
+		{
+			// Damage that could only be the player's, and no drop at all to have paid for it: a place that pays no
+			// experience, or drops that stopped arriving. Fails at once, so trust earned elsewhere does not linger.
+			noteCheck(false);
 		}
 	}
 
