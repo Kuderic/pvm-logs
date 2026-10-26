@@ -34,44 +34,92 @@ A thrall's hitsplats use the summoner's own hitsplat types, so `Hitsplat.isMine(
 - `95bff31` reversed that for hitpoints XP ("arrives with the damage"). `b16abfe` found the reversal was wrong: it read a total frozen at 200m XP. The drop is on the attack tick.
 - `95bff31`, worth keeping: a `StatChanged` trace printed nothing all session. "When an instrument produces no data, suspect the instrument."
 
-### Current design on `master` (`b16abfe`, traced by `fdc7972`)
-Files: `ThrallTracker`, `Thralls` (thrall NPC ids with each tier's max hit, including reskins, plus projectile ids), `XpLedger`, `XpDecoder`.
+### Current design on `master`
+Built in `b16abfe` (traced by `fdc7972`), then revised by [PR #3](https://github.com/Kuderic/pvm-logs/pull/3) (T-003, merged as `d7dc3ec`):
+| Commit | What |
+|---|---|
+| `0a0a093` | XP calibration from what landed; per-attack checks |
+| `9f191e7` | The thrall's projectile decides; the player side respects weapon cooldown; same-tick re-judging |
+| `3ba670d` | Replay tests over the 8-kill log |
+| `ad03b24` | Fixes from Eric's second session (the 15:26 and 16:08 logs) |
+| `a64b3b9` | Replay tests over those two logs |
+
+**Evidence:** Eric's three Vardorvis sessions on 2026-10-26, kept as replay fixtures in `src/test/resources/com/pvmlogs/replay/`:
+- `vardorvis-8-kills-20261026.log`
+- `vardorvis-4-kills-ghost-20261026-1526.log`
+- `vardorvis-zombie-then-ghost-20261026-1608.log`
+
+They're replayed by `VardorvisReplayTest` and `MoreVardorvisReplayTest` (through `ThrallReplay`). Numbers below without a commit come from those logs, as measured in `claude/status/thrall-attribution.md`.
+
+**Files:** `ThrallTracker`, `Thralls` (thrall NPC ids with each tier's max hit, including reskins, plus projectile ids), `XpLedger`, `XpDecoder`. `Fight.revokeDamageDealt` and `SessionTotals.revokeAttempt` support re-judging.
 
 While our thrall is out, each small `isMine()` splat is weighed and taken as the thrall's when that is likelier than not. The evidence is folded into odds and logged with every judgement:
-- **Experience.** A thrall pays none. Each tick's combat and hitpoints drops decode to the damage the player's attack dealt. Damage nothing paid for isn't the player's; damage that completes an attack's total is. The ledger checks itself against splats that can only be the player's, and is ignored while those checks fail.
-- **The PvM XP bonus**, from the wiki formula over the DPS calc's stats (matches Graardor +32.5% and Corp +55%), with the Olm set by hand and calibration from drops where the formula is wrong.
-- **The thrall's own attacks:** its animation and projectile, seen at least a tick before its splat, open a window where one 0-to-max splat is due. Ours is the thrall that spawns beside the player as the resurrection varbit comes up, or as they cast.
-- **Its 4-tick cycle:** splats already judged its own lock a phase, and it can't land two inside one cycle.
-- **The amount,** against a thrall's even 0-to-max roll and the player's expected accuracy and max hit, and **what the player could have done** (a projectile due, a melee weapon off cooldown, their own burst landing).
+- **The thrall's projectile, for ghosts and skeletons** (`9f191e7`):
+  - A projectile was first seen on its splat's tick, and logged before it, in 223/223 cases (8-kill log) and 170/170 (4-kill log). No thrall splat came without one. 214/223 had attack animation 11101 a tick earlier.
+  - So a projectile opens a window for one 0-to-max splat on its first-seen tick (+1 slack), and a ghost or skeleton splat with no projectile is near impossible.
+  - The predicted landing tick (`getEndCycle`) is not used: it was a tick late on 3 of 9 projectiles in the first log (ticks 215, 219, 223).
+- **Which thrall is ours:**
+  - The thrall reads "interacting nothing", and **its projectiles name no source**. This contradicts `fbadb56` and `549b2bc`, which took `getSourceActor` to be the thrall NPC. A projectile is ours when it names our thrall, or names none and left from beside ours. The plugin names the thrall a sourceless projectile left from beside.
+  - Ours is the thrall that spawns beside the player as the resurrection varbit comes up, or as they cast. That window is 5 ticks: in the 16:08 log the varbit came up 4 ticks after the ghost spawned (`ad03b24`).
+  - A projectile from a thrall not yet claimed is held for a tick and replayed once it is claimed. In the 16:08 log, tick 194's splat had gone to the player. This also covers a recast's new thrall firing before the old one is gone.
+- **Zombies (melee, no projectile):**
+  - The attack animation opens a window without needing a target.
+  - The 4-tick cycle locks a phase from splats already judged, and a thrall can't land two inside one cycle.
+  - The cycle forgets faster: it re-locked within two splats of the zombie's one-tick re-path on ticks 94–99 (`ad03b24`).
+- **Experience.** A thrall pays none. Each tick's combat and hitpoints drops decode to the damage the player's attack dealt.
+  - Damage nothing paid for isn't the player's; damage that completes an attack's total is.
+  - Checks run per attack once its window closes, only on attacks whose every splat was certainly the player's (`0a0a093`). An attack that decodes to nothing fails. So does certain damage with no drop at all, which covers no-XP areas.
+  - Damage beyond what an attack decodes to stays with that attack, else goes to the latest attack whose drops couldn't be read, never to one that decoded to nothing (`ad03b24`). A resurrect cast pays magic only, and it had absorbed a claws spec's last splat, which calibrated the 4-kill log to ×1.575.
+  - The ledger is ignored while its checks fail.
+- **The PvM XP bonus**, from the wiki formula over the DPS calc's stats (matches Graardor +32.5% and Corp +55%). The Olm is set by hand. Calibration pools clean attacks and commits once rounding can't move it half of the game's 1/40 step; a change re-decodes open attacks and re-runs checks (`0a0a093`). Every log calibrates to ×1.55, and kill 1 is trusted from tick 197, before the thrall's first splat at 199.
+- **The player side**, in `ThrallTracker.classifyPlayer`, which is pure and shared with the replays:
+  - **inside the weapon's cooldown:** impossible;
+  - **on cadence:** likely;
+  - **later than the weapon allowed:** less likely (the zombie's zeros at 82 and 107 in the 16:08 log);
+  - **a special burst still landing:** likely only within 3 ticks of a special. Burning claws puts its third splat a tick late (ticks 2300, 2392, 2730); after an ordinary blow the next tick is in cooldown (171).
+- **The amount,** against a thrall's even 0-to-max roll and the player's expected accuracy and max hit.
+- **Same-tick re-judging** (`9f191e7`, melee path only). A thrall projectile always brings its splat, but the splat can arrive before anything says whose it is (tick 351: a 0 ahead of the player's 21). So at the top of each tick, before the blow is booked, a projectile whose splat went unclaimed takes back the likeliest player-judged small splat on its target. That reverses fight and session damage and hits, and withdraws the blow if nothing else of the player's landed.
+- **Trace:** thrall trace lines are always kept (`ad03b24`). When they were gated on file logging, the panel's saved 16:08 log had none of the zombie's animations.
 
 A thrall splat opens no fight, books nothing, counts no hit and drains nothing. It still lowers the target's remaining HP, and is kept as `thrallDamage` on the fight, room and raid, with its own CSV column.
 
-### Pending: PR #3 (T-003), not merged yet
-[PR #3](https://github.com/Kuderic/pvm-logs/pull/3) is a draft. Fold this section into the one above when it merges. From the bugs chat's status doc (`claude/status/thrall-attribution.md`), measured on Eric's 8-kill Vardorvis log (2026-10-26):
-- **`5b73cfc`, XP calibration never converged.** At a wrong multiplier the drops decode to nothing, undecodable awards were never spent, and the self-check skipped them, so calibration only "confirmed" the wrong ×1.70. Now: per-attack checks once the attack's window closes, using attacks whose every splat was certainly the player's, and pooled calibration. Result: ×1.70 → ×1.55 after 2 claw specs.
-- **`47344b5`, the projectile decides.**
-  - 223/223 thrall projectiles were first seen on their splat's tick, and no thrall splat came without one. 214/223 had attack animation 11101 one tick earlier.
-  - The thrall reads "interacting nothing", and **its projectiles name no source**. This contradicts `fbadb56`'s `getSourceActor` = thrall. It is now matched by "names our thrall, or names none and leaves within 2 tiles of it".
-  - The predicted landing tick (`getEndCycle`) was a tick late on 3 of 9 projectiles in the first log (ticks 215, 219, 223). The splat always came on the first-seen tick, so the prediction is no longer used.
-  - Burning claws' third splat lands a tick late.
-  - The player is never booked twice inside a weapon's cooldown.
-  - An unclaimed projectile re-judges a same-tick small splat.
-- **`85b3045`:** replay tests over the 8-kill log (fixture `src/test/resources/com/pvmlogs/replay/vardorvis-8-kills-20261026.log`).
-- **Still unverified:** zombie (melee) thralls. The animation-only path needs a log with one.
+**Replay results.** Each claim below holds both as logged (×1.70, 98% expected accuracy) and corrected (×1.55, 55%):
+- 8-kill log, ticks 197–203: player, thrall, player, thrall.
+- Every projectile owns exactly one splat, with no thrall splat lacking one: in the 8-kill and 4-kill logs, and for the 16:08 ghost from tick 198.
+- 16:08 zombie stretch, by the cycle alone: all 25 zombie splats and all 7 player misses right.
+- No blow inside the weapon's cooldown, in any of the three logs.
+- Trusted within 5 clean hits in every kill.
+
+### Still open
+- **`XP CONTRADICTS BOOKING`:** an XP drop proving an attack inside the last booking's cooldown is logged, not undone. Same-tick re-judging can still take a splat back before its blow is booked, but bookings from earlier ticks stand. Re-scoring them is the job of workstream 03's Analyzer. Open question: should it become an encounter-log event?
+- **Zombie thralls:** the cycle alone gets the 16:08 zombie right, but no log has yet shown the zombie's animation→splat lag. One zombie trip on the current build settles it; the trace now keeps animations with file logging off.
 
 ## Lessons from the first real-fight log (Vardorvis, 2026-10-26, master `66da36d`)
 Source: `claude/status/vardorvis-log-review.md`. The log is on Eric's PC in `~/.runelite/pvm-logs/`, written before the data folder went back to `pvm-performance-tracker`.
-1. **Defence read as 0.** The DPS calc's `monsters.json` stores Vardorvis with `def 0, str 0` as placeholders; the calc computes them from current HP (`src/lib/scaling/Vardorvis.ts`). Expected accuracy showed ~98% against a real ~62% (26/42). → T-001 boss rules; T-002's watcher flags new placeholder-stat bosses.
-2. **Wrong version.** Id 12223 is both "Awakened" (1400 HP) and "Post-quest" (700 HP), and the plugin took the first. The XP multiplier gave it away: ×1.70 is the formula on Awakened stats, while every clean hit paid ×1.55, the formula on post-quest stats.
-3. **XP evidence never switched on:** the calibration loop above.
-4. **Misattribution before the thrall's cycle locked** (ticks 197–203): the player's misses and the thrall's zeros were swapped, and 3 thrall damage went to the player. Fixed by the projectile rule above.
-5. **Burn was invisible.** Burning claws applied burn, but the log has zero `BURN` (74) splats, because only `isMine()` splats were handled or logged. Types seen: 12, 16, 43.
-6. **Totals don't reconcile:** 678 player + 52 thrall = 730 against a 700-HP boss, cause unknown (heals weren't logged).
+1. **Defence read as 0.** The DPS calc's `monsters.json` stores Vardorvis with `def 0, str 0` as placeholders; the calc computes them from current HP (`src/lib/scaling/Vardorvis.ts`). Expected accuracy showed ~98% against a real ~62% (26/42). **Fixed by T-001** (PR #7, `c88f7c3`): `boss-rules.json` scales his strength and defence with HP. T-002's watcher flags new placeholder-stat bosses.
+2. **Wrong version.** Id 12223 is both "Awakened" (1400 HP) and "Post-quest" (700 HP), and the plugin took the first. The XP multiplier gave it away: ×1.70 is the formula on Awakened stats, while every clean hit paid ×1.55, the formula on post-quest stats. **Fixed by T-001:** the version is picked from the health bar's full HP. In the 17:15 confirmation fight the log header showed the post-quest version: 700 HP, defence 215, XP bonus ×1.550.
+3. **XP evidence never switched on:** the calibration loop, fixed in `0a0a093` (above).
+4. **Misattribution before the thrall's cycle locked** (ticks 197–203): the player's misses and the thrall's zeros were swapped, and 3 thrall damage went to the player. Fixed by the projectile rule in `9f191e7` (above).
+5. **Burn was invisible.** Burning claws applied burn, but the log has zero `BURN` (74) splats, because only `isMine()` splats were handled or logged. Types seen: 12, 16, 43. **Fixed by T-001:** every splat on the target is now classified and logged (below).
+6. **Totals don't reconcile:** 678 player + 52 thrall = 730 against a 700-HP boss, cause then unknown. **Cause: Vardorvis heals.** The 17:15 confirmation fight had 20 heal splats (type 6, 71 HP), which the old build never saw.
 
-**The general lesson:** log every hitsplat on the target unfiltered (type, amount, `isMine()`), plus heals. On a kill, Σdamage − Σheals should equal max HP; make that a standing check.
+**The general lesson:** log every hitsplat on the target unfiltered (type, amount, `isMine()`), plus heals. On a kill, Σdamage − Σheals should equal max HP. T-001 made that a standing check: the `RECONCILE` line, below.
 
 ## Other damage with no attack behind it
-Not attributed on `master` yet. T-001 ("Boss stats & damage sources") is wiring it.
-- **Hitsplat types** (RuneLite API 1.13.4, decompiled; T-001 brief): `isMine()` is true only for 12, 16, 18, 20, 22, 24, 43–47, 53, 55. BURN 74, POISON 65, VENOM 5, BLEED 67, DISEASE 4 and HEAL 6 are **not** mine, so today's plugin drops them.
-- **Burn from burning claws** is left out of expected damage on purpose (`CombatCalc.burningClawsAverage`): 10 over 40 ticks per inflicting splat, stacking to five, so 0 to 29 extra per spec.
-- **Still to check against a real log:** recoil (ring of recoil/suffering), vengeance, item procs, multi-hit weapons and AoE.
+On `master` since T-001 ([PR #7](https://github.com/Kuderic/pvm-logs/pull/7), merged as `c88f7c3`): `29ed308`, `3def1a9`, `5c68141`, `3c13329`, `dc4457f`, `c3d73dd`. Numbers below come from `claude/status/08-boss-stats.md` and Eric's 17:15 confirmation fight, kept as `src/test/resources/com/pvmlogs/replay/vardorvis-burn-heals-bar-20261026-1715.log`.
+- **Hitsplat types** (RuneLite API 1.13.4, decompiled; checked against the real API in `HitsplatKindTest`): `isMine()` is true only for 12, 16, 18, 20, 22, 24, 43–47, 53, 55. BURN 74, POISON 65, VENOM 5, BLEED 67, DISEASE 4 and HEAL 6 are **not** mine.
+- **`HitsplatKind`** sorts every splat on the target into `PLAYER`, `DAMAGE_OVER_TIME` (burn, poison, venom, bleed), `HEAL`, `OTHER_PLAYER`, `NO_HEALTH_EFFECT` (disease, charge, poise, prayer drain, sanity: logged, not counted against HP) or `UNCLASSIFIED`.
+- **`onNotMineSplat`** books the non-mine ones:
+  - DoT goes to `dotDamage` and doesn't extend the fight;
+  - a heal goes to `healed` and comes off the damage counted on the target;
+  - other players' splats and unclassified ones go to their own tallies;
+  - every one is logged with its type number.
+- **Measured:** 14 burn splats (type 74, 40 damage) were counted as DoT, never as the player's. Vardorvis healed 71 HP over 20 heal splats.
+- **Health bar:** varp `HPBAR_HUD_NPC` (1683) holds the NPC's **composition id**, not its index. Varbits 6099/6100 are exact current and base HP, and they change on the splat's own tick. The varp read 12223 in game; that matches RuneLite's own `OpponentInfoOverlay`.
+- **`RECONCILE`**, logged at every fight's end: weapon + thrall + DoT + others + unclassified − healed, against full HP.
+  - In the saved 17:15 fight (not a kill), all 54 health-bar changes were matched by the splats counted. `HealthBarReplayTest` replays that log and matches the bar at all 55 readings.
+  - On the kill after it (from `history.json`): weapon 665 + thrall 51 + burn 10 − healed 26 = 700, **diff 0**.
+- **Burn from burning claws** is still left out of *expected* damage on purpose (`CombatCalc.burningClawsAverage`): 10 over 40 ticks per inflicting splat, stacking to five, so 0 to 29 extra per spec. It's counted as DoT once it lands.
+- **Still open:**
+  - The coloured "mine" types 18/20/22/24/53/55 are still booked as the player's weapon damage. Per the wiki some colours are shield, armour or poise damage, not HP (Verzik P1's shield, Kephri, the wardens' poise).
+  - Recoil (ring of recoil/suffering), vengeance, item procs, multi-hit weapons and AoE are not yet checked against a real log.
