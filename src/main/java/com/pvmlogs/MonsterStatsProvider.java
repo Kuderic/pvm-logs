@@ -9,10 +9,12 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -49,9 +51,22 @@ class MonsterStatsProvider
 	private final ScheduledExecutorService executor;
 	private final Client client;
 	private final DebugLog debug;
+	private final TargetHealth health;
+
+	// Loaded before the monster data, since the XP bonus and the warnings are worked out from both. See BossRules.
+	private volatile BossRules rules = BossRules.empty();
 
 	// npcId -> stats; replaced wholesale after a load, so reads need no lock.
 	private volatile Map<Integer, MonsterStats> byId = Collections.emptyMap();
+	// npcId -> every version the data lists under it, in the data's order. One id can be several bosses: every DT2 boss
+	// lists its Awakened form first under the same id as the ordinary one, so "first wins" read Vardorvis at 1400
+	// hitpoints and the Leviathan and the Whisperer at 2700 instead of 900. See chooseVersion.
+	private volatile Map<Integer, List<MonsterStats>> versionsById = Collections.emptyMap();
+	// Scaled copies of entries whose stats move with hitpoints, keyed by id and the scaled defence, so the per-tick lookups
+	// do not allocate.
+	private final Map<Long, MonsterStats> scaledCache = new java.util.concurrent.ConcurrentHashMap<>();
+	// (id, observed full hitpoints) pairs whose choice of version has been logged, so it is said once per reading.
+	private final Set<Long> versionLogged = java.util.concurrent.ConcurrentHashMap.newKeySet();
 	// name -> stats, for the ids the data does not carry. A monster wears several ids as it idles, walks and fights and
 	// the source lists one: Tekton appears in game as 7542 as well as the 7540 and 7543 listed. Every miss meant no
 	// accuracy, no expected damage and no drain, reading as whole stretches of a raid being ignored.
@@ -63,13 +78,20 @@ class MonsterStatsProvider
 
 	@Inject
 	MonsterStatsProvider(OkHttpClient httpClient, Gson gson, ScheduledExecutorService executor,
-		Client client, DebugLog debug)
+		Client client, DebugLog debug, TargetHealth health)
 	{
 		this.httpClient = httpClient;
 		this.gson = gson;
 		this.executor = executor;
 		this.client = client;
 		this.debug = debug;
+		this.health = health;
+	}
+
+	/** The rules in force, for the debug header. */
+	BossRules rules()
+	{
+		return rules;
 	}
 
 	void startUp()
@@ -207,20 +229,30 @@ class MonsterStatsProvider
 		return alias == null ? -1 : alias;
 	}
 
+	/**
+	 * The stats to judge an attack on this npc by, as they stand now: the right
+	 * version of it, with any stat that moves with its hitpoints moved.
+	 */
 	MonsterStats get(int npcId)
 	{
-		final MonsterStats exact = byId.get(npcId);
-		if (exact != null)
+		final MonsterStats base = resolve(npcId);
+		return base == null ? null : applyRules(npcId, base);
+	}
+
+	private MonsterStats resolve(int npcId)
+	{
+		final List<MonsterStats> exact = versionsById.get(npcId);
+		if (exact != null && !exact.isEmpty())
 		{
-			return exact;
+			return pickVersion(npcId, exact);
 		}
 		final Integer alias = ALIASES.get(npcId);
 		if (alias != null)
 		{
-			final MonsterStats aliased = byId.get(alias);
-			if (aliased != null)
+			final List<MonsterStats> aliased = versionsById.get(alias);
+			if (aliased != null && !aliased.isEmpty())
 			{
-				return aliased;
+				return pickVersion(npcId, aliased);
 			}
 		}
 		if (npcId < 0 || byName.isEmpty())
@@ -254,6 +286,125 @@ class MonsterStatsProvider
 		return resolved;
 	}
 
+	/**
+	 * One of the versions listed under an id. A rule's choice first (the version
+	 * whose full hitpoints the boss health bar has shown, else the rule's default);
+	 * without a rule, the same evidence through {@link #chooseVersion}.
+	 */
+	private MonsterStats pickVersion(int npcId, List<MonsterStats> versions)
+	{
+		if (versions.size() == 1)
+		{
+			return versions.get(0);
+		}
+		final int observed = health.observedMaxForId(npcId);
+		final BossRules.Boss boss = rules.forNpc(npcId);
+		final BossRules.Variant wanted = BossRules.choose(boss, observed);
+		if (wanted != null)
+		{
+			for (MonsterStats s : versions)
+			{
+				if (wanted.version.equalsIgnoreCase(s.getVersion()))
+				{
+					return s;
+				}
+			}
+		}
+		final MonsterStats chosen = chooseVersion(versions, observed);
+		if (debug.isOn() && versionLogged.add(((long) npcId << 32) | Math.max(0, observed)))
+		{
+			debug.log("monster stats for npc %d: %d versions under this id, using '%s' (%d hp) - %s", npcId,
+				versions.size(), chosen.getVersion(), chosen.getHitpoints(),
+				observed > 0 ? "the boss health bar shows " + observed + " full hitpoints"
+					: "the bar has not been read yet, so the smallest");
+		}
+		return chosen;
+	}
+
+	/**
+	 * Which of several versions under one id is being fought, without a rule.
+	 *
+	 * <p>With the boss health bar's full hitpoints, the version that has them. That
+	 * alone settles every DT2 boss (Awakened or not), Doom of Mokhaiotl's delves, and
+	 * the Deadman variants. Without it, the version with the fewest hitpoints, which is
+	 * the ordinary one in every case the data holds today.
+	 *
+	 * <p>Where versions share hitpoints but not defences (the wardens' Damaged and
+	 * Enraged, the Maggot King's Roaring) no reading can tell them apart: those are
+	 * phases. The first is used and the result carries a warning saying so.
+	 */
+	static MonsterStats chooseVersion(List<MonsterStats> versions, int observedMaxHp)
+	{
+		MonsterStats chosen = null;
+		if (observedMaxHp > 0)
+		{
+			for (MonsterStats s : versions)
+			{
+				if (s.getHitpoints() == observedMaxHp)
+				{
+					chosen = s;
+					break;
+				}
+			}
+		}
+		if (chosen == null)
+		{
+			for (MonsterStats s : versions)
+			{
+				if (chosen == null || s.getHitpoints() < chosen.getHitpoints())
+				{
+					chosen = s;
+				}
+			}
+		}
+		for (MonsterStats s : versions)
+		{
+			if (s != chosen && s.getHitpoints() == chosen.getHitpoints() && !sameDefences(s, chosen))
+			{
+				return chosen.withWarning(String.format("versions '%s' and '%s' share this id and hitpoints but not "
+					+ "defences, which are phases this plugin does not track; using '%s'",
+					chosen.getVersion(), s.getVersion(), chosen.getVersion()));
+			}
+		}
+		return chosen;
+	}
+
+	private static boolean sameDefences(MonsterStats a, MonsterStats b)
+	{
+		return a.getDefenceLevel() == b.getDefenceLevel() && a.getMagicLevel() == b.getMagicLevel()
+			&& a.getDefStab() == b.getDefStab() && a.getDefSlash() == b.getDefSlash()
+			&& a.getDefCrush() == b.getDefCrush() && a.getDefMagic() == b.getDefMagic()
+			&& a.getDefRanged() == b.getDefRanged();
+	}
+
+	/** Stats that move with the boss's hitpoints, moved to where they stand now. */
+	private MonsterStats applyRules(int npcId, MonsterStats base)
+	{
+		final BossRules.Boss boss = rules.forNpc(npcId);
+		if (boss == null)
+		{
+			return base;
+		}
+		BossRules.Variant variant = BossRules.variantNamed(boss, base.getVersion());
+		if (variant == null)
+		{
+			variant = BossRules.choose(boss, health.observedMaxForId(npcId));
+		}
+		if (variant == null || variant.scaleWithHp == null || variant.scaleWithHp.defence == null)
+		{
+			return base;
+		}
+		final int max = variant.maxHp > 0 ? variant.maxHp : base.getHitpoints();
+		final int defence = BossRules.scaleWithHp(variant.scaleWithHp.defence,
+			health.remainingForId(npcId, client.getTickCount()), max);
+		if (defence < 0)
+		{
+			return base;
+		}
+		final long key = ((long) npcId << 32) | ((long) max << 16) | (defence & 0xFFFF);
+		return scaledCache.computeIfAbsent(key, k -> base.scaled(defence, max));
+	}
+
 	private static String normalise(String name)
 	{
 		return name == null ? "" : Text.removeTags(name).toLowerCase().trim();
@@ -264,8 +415,16 @@ class MonsterStatsProvider
 		return new File(new File(RuneLite.RUNELITE_DIR, "pvm-logs"), "monsters.json").toPath();
 	}
 
+	/** Where a user can drop a boss-rules.json that overrides the bundled one, boss by boss. */
+	static Path rulesOverrideFile()
+	{
+		return new File(new File(RuneLite.RUNELITE_DIR, "pvm-logs"), "boss-rules.json").toPath();
+	}
+
 	private void loadOrFetch()
 	{
+		rules = BossRules.load(gson, rulesOverrideFile());
+		log.debug("PvM Logs: {} boss rule ids from {}", rules.size(), rules.provenance());
 		final Path cache = cacheFile();
 		try
 		{
@@ -333,15 +492,18 @@ class MonsterStatsProvider
 			{
 				return;
 			}
+			final BossRules rulesNow = rules;
 			final Map<Integer, MonsterStats> map = new HashMap<>(monsters.length * 2);
+			final Map<Integer, List<MonsterStats>> versions = new HashMap<>(monsters.length * 2);
 			for (MonsterJson m : monsters)
 			{
 				if (m == null || m.skills == null || m.defensive == null)
 				{
 					continue;
 				}
-				// First version of each id wins; later variants (phases) are ignored for now.
-				map.putIfAbsent(m.id, new MonsterStats(
+				final BossRules.Boss boss = rulesNow.forNpc(m.id);
+				final BossRules.Variant variant = BossRules.variantNamed(boss, m.version);
+				final MonsterStats stats = new MonsterStats(
 					m.name == null ? "" : m.name, m.size,
 					m.skills.hitpoints,
 					m.skills.defence, m.skills.magic,
@@ -354,9 +516,18 @@ class MonsterStatsProvider
 					m.attributes == null
 						? Collections.emptySet()
 						: new HashSet<>(Arrays.asList(m.attributes)),
-					xpMultiplier(m)));
+					xpMultiplier(m, variant),
+					m.version == null ? "" : m.version,
+					boss != null && boss.defenceDrainImmune,
+					warningFor(m, boss));
+				// The first version still answers the name lookup; chooseVersion decides between versions of an id.
+				map.putIfAbsent(m.id, stats);
+				versions.computeIfAbsent(m.id, k -> new ArrayList<>()).add(stats);
 			}
 			byId = map;
+			versionsById = versions;
+			scaledCache.clear();
+			versionLogged.clear();
 			final Map<String, MonsterStats> names = new HashMap<>(map.size() * 2);
 			for (MonsterStats stats : map.values())
 			{
@@ -403,10 +574,33 @@ class MonsterStatsProvider
 		/** How many points of it, 0 when there is none. */
 		private final int weaknessSeverity;
 
+		/** The data's version name ("Post-quest", "Awakened", "Delve 3"), empty where it gives none. */
+		private final String version;
+		/** Whether drains do nothing to this boss's defence (Vardorvis, by the DPS calculator's floor). */
+		private final boolean drainImmune;
+		/**
+		 * Why this target's expected figures should not be trusted, or null: a phase
+		 * a rule names as unmodelled, placeholder stats, versions that cannot be told
+		 * apart. Shown on the overlay and kept on the fight.
+		 */
+		private final String warning;
+
 		MonsterStats(String name, int size, int hitpoints, int defenceLevel, int magicLevel, int offensiveMagic,
 			int defStab, int defSlash, int defCrush, int defMagic, int defRanged, String weaknessElement,
 			int weaknessSeverity, Set<String> attributes, double xpMultiplier)
 		{
+			this(name, size, hitpoints, defenceLevel, magicLevel, offensiveMagic, defStab, defSlash, defCrush, defMagic,
+				defRanged, weaknessElement, weaknessSeverity, attributes, xpMultiplier, "", false, null);
+		}
+
+		MonsterStats(String name, int size, int hitpoints, int defenceLevel, int magicLevel, int offensiveMagic,
+			int defStab, int defSlash, int defCrush, int defMagic, int defRanged, String weaknessElement,
+			int weaknessSeverity, Set<String> attributes, double xpMultiplier, String version, boolean drainImmune,
+			String warning)
+		{
+			this.version = version == null ? "" : version;
+			this.drainImmune = drainImmune;
+			this.warning = warning;
 			this.xpMultiplier = xpMultiplier;
 			this.hitpoints = hitpoints;
 			this.weaknessElement = weaknessElement;
@@ -435,26 +629,82 @@ class MonsterStatsProvider
 		{
 			return attributes.contains(attribute);
 		}
+
+		/** This entry with its defence where a hitpoints-scaled rule puts it, and the rule's full hitpoints. */
+		MonsterStats scaled(int defence, int hitpoints)
+		{
+			return new MonsterStats(name, size, hitpoints, defence, magicLevel, offensiveMagic, defStab, defSlash,
+				defCrush, defMagic, defRanged, weaknessElement, weaknessSeverity, attributes, xpMultiplier, version,
+				drainImmune, warning);
+		}
+
+		/** This entry carrying a warning, appended to any it already has. */
+		MonsterStats withWarning(String extra)
+		{
+			final String combined = warning == null ? extra : warning + "; " + extra;
+			return new MonsterStats(name, size, hitpoints, defenceLevel, magicLevel, offensiveMagic, defStab, defSlash,
+				defCrush, defMagic, defRanged, weaknessElement, weaknessSeverity, attributes, xpMultiplier, version,
+				drainImmune, combined);
+		}
 	}
 
-	/** The bonus by the wiki's formula, or the value the game sets by hand where it does. */
-	private static double xpMultiplier(MonsterJson m)
+	/**
+	 * The bonus by the wiki's formula, or the value the game sets by hand where it does.
+	 *
+	 * <p>A boss whose rule scales a stat with hitpoints has that stat stored as 0, and
+	 * the game's bonus is worked out on its full-hitpoints value: Vardorvis's drops pay
+	 * x1.55 on every hit of a kill, which is the formula on his 270 strength and 215
+	 * defence, and nothing like the x1.375 the zeros give.
+	 */
+	private static double xpMultiplier(MonsterJson m, BossRules.Variant variant)
 	{
 		final double fixed = XpDecoder.overrideFor(m.name);
 		if (fixed > 0)
 		{
 			return fixed;
 		}
+		final BossRules.ScaleWithHp scaled = variant == null ? null : variant.scaleWithHp;
+		final int strength = scaled != null && scaled.strength != null ? scaled.strength[0] : m.skills.strength;
+		final int defence = scaled != null && scaled.defence != null ? scaled.defence[0] : m.skills.defence;
 		final MonsterJson.Offensive o = m.offensive;
-		return XpDecoder.bonusMultiplier(m.skills.attack, m.skills.strength, m.skills.defence, m.skills.hitpoints,
+		return XpDecoder.bonusMultiplier(m.skills.attack, strength, defence, m.skills.hitpoints,
 			m.defensive.stab, m.defensive.slash, m.defensive.crush,
 			o == null ? 0 : o.attack, o == null ? 0 : o.strength);
+	}
+
+	/**
+	 * Why this entry's figures should not be believed, or null.
+	 *
+	 * <p>A rule that says what is not modelled says so. Without a rule, a boss whose
+	 * defence AND strength are both 0 while it has an attack and a few hundred
+	 * hitpoints is the shape the DPS calculator's data takes when it computes those
+	 * stats in code: true of Vardorvis and of nothing else in the data today, and the
+	 * first sign of a new boss that needs a rule.
+	 */
+	static String warningFor(int defence, int strength, int attack, int hitpoints, BossRules.Boss boss)
+	{
+		if (boss != null)
+		{
+			return boss.unmodelled;
+		}
+		if (defence == 0 && strength == 0 && attack > 0 && hitpoints >= 200)
+		{
+			return "the monster data has 0 defence and 0 strength for this boss, which is what it holds where the DPS "
+				+ "calculator computes them in code; expected figures are unreliable until a boss rule covers it";
+		}
+		return null;
+	}
+
+	private static String warningFor(MonsterJson m, BossRules.Boss boss)
+	{
+		return warningFor(m.skills.defence, m.skills.strength, m.skills.attack, m.skills.hitpoints, boss);
 	}
 
 	private static class MonsterJson
 	{
 		int id;
 		String name;
+		String version;
 		int size;
 		Skills skills;
 		Offensive offensive;

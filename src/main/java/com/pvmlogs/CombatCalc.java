@@ -56,6 +56,7 @@ class CombatCalc
 	private final NPCManager npcManager;
 	private final DefenceDrain drain;
 	private final PartyHitpoints partyHitpoints;
+	private final TargetHealth health;
 
 	// A manual cast counts for a few ticks past the click, so it survives the gap between casts while the player keeps
 	// going.
@@ -153,8 +154,9 @@ class CombatCalc
 	@Inject
 	CombatCalc(Client client, ItemManager itemManager, MonsterStatsProvider monsters,
 		GearBonusCalc gearBonuses, PvmPerformanceConfig config, NPCManager npcManager,
-		DefenceDrain drain, PartyHitpoints partyHitpoints)
+		DefenceDrain drain, PartyHitpoints partyHitpoints, TargetHealth health)
 	{
+		this.health = health;
 		this.client = client;
 		this.itemManager = itemManager;
 		this.monsters = monsters;
@@ -490,6 +492,13 @@ class CombatCalc
 	 */
 	private int overkillCap(int npcId)
 	{
+		// The boss health bar where the game is drawing one for this target, else every splat on it counted, heals
+		// included - see TargetHealth. Both beat the count below, which saw only the player's and the thrall's damage.
+		final int known = targetIndex < 0 ? -1 : health.remaining(targetIndex, client.getTickCount());
+		if (known > 0)
+		{
+			return known;
+		}
 		final int max = targetMaxHitpoints(npcId);
 		if (max <= 0)
 		{

@@ -54,6 +54,26 @@ class Raid
 		return total;
 	}
 
+	int getDotDamage()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getDotDamage();
+		}
+		return total;
+	}
+
+	int getHealed()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getHealed();
+		}
+		return total;
+	}
+
 	int getDamageDealt()
 	{
 		int total = 0;
