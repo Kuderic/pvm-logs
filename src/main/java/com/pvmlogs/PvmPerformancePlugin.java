@@ -344,6 +344,39 @@ public class PvmPerformancePlugin extends Plugin
 	// Each combat skill's experience as last seen, so a StatChanged can be read as a gain.
 	private final int[] lastSkillXp = new int[XpLedger.SKILLS.length];
 	private static final int MAX_XP = 200_000_000;
+	// This tick's splats that went down the player's path, so a thrall projectile whose splat was given to the player can
+	// be put right before the tick's attack is booked. Cleared every tick.
+	private final List<PlayerSplatRecord> playerSplatsThisTick = new ArrayList<>();
+	// The one being processed now, filled in as the player's path decides what it was.
+	private PlayerSplatRecord splatInFlight;
+
+	/** One splat the player's path took, with what it changed - enough to give it back. */
+	private static final class PlayerSplatRecord
+	{
+		final int npcIndex;
+		final int amount;
+		// Weighed by the thrall gate, and how thrall-like it looked. Only these can be re-judged.
+		final boolean judged;
+		final double thrallProbability;
+		final Integer previousSeen;
+		final int previousAttackSeenTick;
+		boolean landed;
+		boolean booked;
+		boolean fromFlight;
+		boolean done;
+
+		PlayerSplatRecord(int npcIndex, int amount, boolean judged, double thrallProbability, Integer previousSeen,
+			int previousAttackSeenTick)
+		{
+			this.npcIndex = npcIndex;
+			this.amount = amount;
+			this.judged = judged;
+			this.thrallProbability = thrallProbability;
+			this.previousSeen = previousSeen;
+			this.previousAttackSeenTick = previousAttackSeenTick;
+		}
+	}
+
 	// Splats at or above this probability of being the thrall's are taken as its own.
 	private static final double THRALL_THRESHOLD = 0.5;
 	// How close the only thrall in view must be to be taken for ours when its summon was never seen.
@@ -351,7 +384,8 @@ public class PvmPerformancePlugin extends Plugin
 	// Animations a thrall plays that are not attacks.
 	private static final Set<Integer> THRALL_NON_ATTACK_ANIMATIONS = Collections.unmodifiableSet(new HashSet<>(
 		java.util.Arrays.asList(AnimationID.GHOST_UPDATE_THRALL_SPAWN, AnimationID.SKELETON_UPDATE_THRALL_SPAWN,
-			AnimationID.GHOST_UPDATE_TENDRILL_DEATH_THRALL, AnimationID.SKELETON_UPDATE_CHAMPION_DEATH_THRALL)));
+			AnimationID.GHOST_UPDATE_THRALL_SPAWN_RAISED, AnimationID.GHOST_UPDATE_TENDRILL_DEATH_THRALL,
+			AnimationID.SKELETON_UPDATE_CHAMPION_DEATH_THRALL)));
 
 	// Running totals for the trip, shown instead of the current fight when the overlay is set to whole-trip mode.
 	private final SessionTotals session = new SessionTotals(System.currentTimeMillis());
@@ -482,18 +516,24 @@ public class PvmPerformancePlugin extends Plugin
 			// Issue #1. isMine() passes our thrall's splats too, and nothing on the splat says whose it is, so with a thrall
 			// out each small one is weighed before anything else hears of it. A thrall's splat opens no fight, books no
 			// attack and counts no hit; it still takes the target's health down.
+			splatInFlight = null;
 			if (thralls.hasThrall() && hitsplat.getAmount() <= thralls.maxHit())
 			{
-				if (judgedThralls(npc, hitsplat.getAmount(), now))
+				final double p = judgedThralls(npc, hitsplat.getAmount(), now);
+				if (p >= THRALL_THRESHOLD)
 				{
 					return;
 				}
 				xpLedger.spend(hitsplat.getAmount(), client.getTickCount(), false);
+				splatInFlight = new PlayerSplatRecord(npc.getIndex(), hitsplat.getAmount(), true, p,
+					lastHitsplatTick.get(npc.getIndex()), lastAttackSeenTick);
 			}
 			else
 			{
 				// Too big for a thrall, or none out: certainly the player's, so it is what the ledger checks itself on.
 				xpLedger.spend(hitsplat.getAmount(), client.getTickCount(), true);
+				splatInFlight = new PlayerSplatRecord(npc.getIndex(), hitsplat.getAmount(), false, 0,
+					lastHitsplatTick.get(npc.getIndex()), lastAttackSeenTick);
 			}
 			final int previousMineTick = lastMineHitsplatTick;
 			lastMineHitsplatTick = client.getTickCount();
@@ -593,11 +633,22 @@ public class PvmPerformancePlugin extends Plugin
 				|| client.getTickCount() - lastMeleeTick <= MELEE_SWAP_GRACE_TICKS;
 			final boolean melee = meleeRecently || unbookedCast;
 			final boolean firstOfBurst = !burstBooked.contains(npc.getIndex());
-			if (!arrivedFromFlight && melee && burstBooked.add(npc.getIndex()))
+			final boolean booked = !arrivedFromFlight && melee && burstBooked.add(npc.getIndex());
+			if (booked)
 			{
 				recordAttackObserved(false, npc.getId(), combatCalc.isMeleeEquipped()
 					? MELEE_BOOKING_LAG : castLag);
 			}
+			// What the player's path made of it, kept for this tick in case the thrall's projectile says otherwise.
+			if (splatInFlight != null && splatInFlight.npcIndex == npc.getIndex())
+			{
+				splatInFlight.landed = landedAttack;
+				splatInFlight.booked = booked;
+				splatInFlight.fromFlight = arrivedFromFlight;
+				splatInFlight.done = true;
+				playerSplatsThisTick.add(splatInFlight);
+			}
+			splatInFlight = null;
 		}
 		else if (actor == client.getLocalPlayer() && current != null && !current.isEnded())
 		{
@@ -611,9 +662,9 @@ public class PvmPerformancePlugin extends Plugin
 	 * thrall's if that is likelier than not. Every judgement is logged with the
 	 * evidence behind it.
 	 *
-	 * @return whether the splat was the thrall's and has been dealt with
+	 * @return the probability it was the thrall's; at or above THRALL_THRESHOLD it has been dealt with as such
 	 */
-	private boolean judgedThralls(NPC npc, int amount, long now)
+	private double judgedThralls(NPC npc, int amount, long now)
 	{
 		final int tick = client.getTickCount();
 		final ThrallTracker.Evidence e = new ThrallTracker.Evidence();
@@ -635,7 +686,7 @@ public class PvmPerformancePlugin extends Plugin
 			thralls.thrallRate(npc.getIndex(), tick), e.player, e.xp, xpLedger.trustSummary(), thralls.lockedPhase());
 		if (!isThralls)
 		{
-			return false;
+			return p;
 		}
 		thralls.noteThrallSplat(npc.getIndex(), tick);
 		if (current != null && !current.isEnded())
@@ -644,52 +695,46 @@ public class PvmPerformancePlugin extends Plugin
 			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
 			current.recordThrallDamage(amount);
 		}
-		return true;
+		return p;
 	}
 
-	/** What the player could have done to put a splat on this npc now. */
+	/**
+	 * What the player could have done to put a splat on this npc now. The facts
+	 * are gathered here; the judgement is ThrallTracker.classifyPlayer, which the
+	 * replay tests share.
+	 */
 	private ThrallTracker.PlayerSplat playerSplatFor(NPC npc, int tick)
 	{
 		final int index = npc.getIndex();
 		// Their own multi-hit attack already landing here this tick: a scythe's second and third, a claw special.
 		final Integer seen = lastHitsplatTick.get(index);
-		if (seen != null && seen == tick && burstBooked.contains(index))
-		{
-			return ThrallTracker.PlayerSplat.SAME_TICK_BURST;
-		}
+		final boolean sameTickBurst = seen != null && seen == tick && burstBooked.contains(index);
+		final boolean burstLastTick = seen != null && seen == tick - 1 && burstBooked.contains(index);
+		boolean projectileDue = false;
 		final List<Integer> landing = pendingMineHits.get(index);
 		if (landing != null)
 		{
 			for (int due : landing)
 			{
-				if (Math.abs(due - tick) <= FLIGHT_SLACK_TICKS)
-				{
-					return ThrallTracker.PlayerSplat.PROJECTILE_DUE;
-				}
+				projectileDue |= Math.abs(due - tick) <= FLIGHT_SLACK_TICKS;
 			}
 		}
 		for (PendingCast cast : castsAwaiting)
 		{
-			if (cast.npcIndex == index && Math.abs(cast.resolveTick - tick) <= FLIGHT_SLACK_TICKS)
-			{
-				return ThrallTracker.PlayerSplat.PROJECTILE_DUE;
-			}
+			projectileDue |= cast.npcIndex == index && Math.abs(cast.resolveTick - tick) <= FLIGHT_SLACK_TICKS;
 		}
 		final boolean melee = combatCalc.isMeleeEquipped() || tick - lastMeleeTick <= MELEE_SWAP_GRACE_TICKS;
-		// A melee blow is stamped on the tick its splat lands, so two of them are exactly one weapon speed apart. A tick of
-		// slack, as the projectile guard allows.
-		if (melee && (lastAttackSeenTick == Integer.MIN_VALUE
-			|| tick - lastAttackSeenTick >= fastestSpeedSeen() - 1))
-		{
-			return ThrallTracker.PlayerSplat.MELEE_POSSIBLE;
-		}
-		return ThrallTracker.PlayerSplat.UNEXPLAINED;
+		// The weapon's own due tick from the last booking: a blow thrown before it is impossible, which is what stops a
+		// thrall's splat booking an attack inside the weapon's cooldown (T-003, Vardorvis ticks 199 and 203).
+		return ThrallTracker.classifyPlayer(sameTickBurst, burstLastTick, projectileDue, melee, tick, attackDueTick,
+			lastAttackFromProjectile);
 	}
 
 	/** Closes the tick's experience into an award and keeps the thrall's state moving. Run first in the tick. */
 	private void trackThrallAndXp()
 	{
 		final int tick = client.getTickCount();
+		rejudgeUnclaimedProjectiles(tick);
 		final boolean[] cannotReport = new boolean[XpLedger.SKILLS.length];
 		for (int i = 0; i < cannotReport.length; i++)
 		{
@@ -709,6 +754,14 @@ public class PvmPerformancePlugin extends Plugin
 		if (award != null)
 		{
 			debug.log("xp award %s against npc %d", award, targetId);
+			// The drop is on the attack tick, so it proves an attack thrown now. If the last booking says the weapon was still
+			// busy, that booking was not the player's - most likely a thrall's splat taken for a blow. Not undone here: a
+			// booking touches the fight, the room and the session, and re-scoring belongs in the analyzer (workstream 03).
+			if (attackDueTick != Integer.MIN_VALUE && tick < attackDueTick && current != null && !current.isEnded())
+			{
+				debug.log("XP CONTRADICTS BOOKING: an attack was thrown on %d, but the last booking had the weapon busy until "
+					+ "%d", tick, attackDueTick);
+			}
 		}
 		for (String note : xpLedger.expire(tick))
 		{
@@ -745,6 +798,119 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			debug.log(note);
 		}
+	}
+
+	/**
+	 * Puts right a splat the player was given that the thrall's projectile says
+	 * was its own. A projectile of ours always brings its splat on the tick it is
+	 * first seen (223 of 223 in the Vardorvis logs), but that splat can arrive
+	 * before anything else that tick says whose it is: a 0 landed ahead of the
+	 * player's 21 on 351 and was judged the player's miss. Done here, at the top
+	 * of the tick, because the attack is only booked further down: an undo now
+	 * reverses exactly what the splat did, and nothing has been built on it yet.
+	 *
+	 * <p>Only a splat the thrall gate weighed, and one that did not arrive as one
+	 * of the player's projectiles, is taken back. A splat that spent experience
+	 * stays spent: that award is already marked as not certain, which is all the
+	 * ledger learns from.
+	 */
+	private void rejudgeUnclaimedProjectiles(int tick)
+	{
+		try
+		{
+			if (!thralls.hasThrall())
+			{
+				return;
+			}
+			for (int target : thralls.unclaimedProjectileTargets(tick))
+			{
+				PlayerSplatRecord pick = null;
+				for (PlayerSplatRecord r : playerSplatsThisTick)
+				{
+					if (r.npcIndex == target && r.judged && r.done && !r.fromFlight && r.amount <= thralls.maxHit()
+						&& (pick == null || r.thrallProbability > pick.thrallProbability))
+					{
+						pick = r;
+					}
+				}
+				if (pick != null)
+				{
+					giveToThrall(pick, tick);
+				}
+			}
+		}
+		finally
+		{
+			playerSplatsThisTick.clear();
+			splatInFlight = null;
+		}
+	}
+
+	private void giveToThrall(PlayerSplatRecord r, int tick)
+	{
+		boolean otherSplat = false;
+		boolean otherLanded = false;
+		for (PlayerSplatRecord o : playerSplatsThisTick)
+		{
+			if (o != r && o.npcIndex == r.npcIndex && o.done)
+			{
+				otherSplat = true;
+				otherLanded |= o.amount > 0;
+			}
+		}
+		// If another of the player's splats landed beside it, that one is what made the attack a hit.
+		final boolean hitTaken = r.landed && !otherLanded;
+		if (current != null && !current.isEnded())
+		{
+			current.revokeDamageDealt(r.amount, hitTaken);
+			current.recordThrallDamage(r.amount);
+			if (current.isScored())
+			{
+				session.revokeAttempt(r.amount, hitTaken);
+			}
+		}
+		thralls.noteThrallSplat(r.npcIndex, tick);
+		// Nothing else of the player's landed on that npc this tick, so there was no blow: its booking goes, and the
+		// burst it began with it.
+		final boolean unbooked = r.booked && !otherSplat && attackObservedTick == tick;
+		if (!otherSplat)
+		{
+			if (unbooked)
+			{
+				attackObservedTick = -1;
+				lastAttackSeenTick = r.previousAttackSeenTick;
+			}
+			burstBooked.remove(r.npcIndex);
+			burstLanded.remove(r.npcIndex);
+			if (r.previousSeen == null)
+			{
+				lastHitsplatTick.remove(r.npcIndex);
+			}
+			else
+			{
+				lastHitsplatTick.put(r.npcIndex, r.previousSeen);
+			}
+		}
+		debug.log("RE-JUDGED hitsplat %d on index %d (was player, thrall p=%.2f): THRALL - its projectile's splat had gone "
+				+ "unclaimed%s", r.amount, r.npcIndex, r.thrallProbability,
+			unbooked ? "; the blow it booked is withdrawn" : otherSplat ? "; the player's other splat keeps the blow" : "");
+	}
+
+	/** Whether a projectile set off within a couple of tiles of our thrall, which is how one naming no source is ours. */
+	private boolean leftFromOurThrall(Projectile projectile)
+	{
+		if (!thralls.hasThrall() || client.getTopLevelWorldView() == null)
+		{
+			return false;
+		}
+		final NPC ours = client.getTopLevelWorldView().npcs().byIndex(thralls.ownedIndex());
+		final LocalPoint at = ours == null ? null : ours.getLocalLocation();
+		if (at == null)
+		{
+			return false;
+		}
+		final int reach = ThrallTracker.PROJECTILE_SOURCE_RADIUS * LOCAL_TILE_SIZE;
+		return Math.abs(projectile.getX1() - at.getX()) <= reach && Math.abs(projectile.getY1() - at.getY()) <= reach;
 	}
 
 	private int distanceFromMe(Actor actor)
@@ -871,12 +1037,9 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("THRALL projectile %d from %s at npc %d (index %d), lands tick %d",
 				projectile.getId(), source == null ? "no source" : "index " + ((NPC) source).getIndex(),
 				((NPC) target).getId(), ((NPC) target).getIndex(), lands);
-			// One that names no source cannot be pinned on ours, but it is still nobody's attack of mine.
-			if (source != null)
-			{
-				thralls.onThrallProjectile(((NPC) source).getIndex(), ((NPC) target).getIndex(), lands,
-					client.getTickCount());
-			}
+			// Ours name no source in practice, so where it left from decides. Either way it is nobody's attack of mine.
+			thralls.onThrallProjectile(source instanceof NPC ? ((NPC) source).getIndex() : -1,
+				((NPC) target).getIndex(), client.getTickCount(), leftFromOurThrall(projectile));
 			return;
 		}
 		if (!isProjectileMine(projectile, me, target))
@@ -1657,11 +1820,13 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			final NPC thrall = (NPC) event.getActor();
 			traceThrall("animation " + thrall.getAnimation(), thrall);
+			// A thrall names no target ("interacting nothing" throughout the Vardorvis log), so the window opens on whatever
+			// it hits.
 			final Actor at = thrall.getInteracting();
-			if (thrall.getAnimation() != IDLE_ANIMATION && at instanceof NPC
-				&& !THRALL_NON_ATTACK_ANIMATIONS.contains(thrall.getAnimation()))
+			if (thrall.getAnimation() != IDLE_ANIMATION && !THRALL_NON_ATTACK_ANIMATIONS.contains(thrall.getAnimation()))
 			{
-				thralls.onThrallAttackAnimation(thrall.getIndex(), ((NPC) at).getIndex(), client.getTickCount());
+				thralls.onThrallAttackAnimation(thrall.getIndex(), at instanceof NPC ? ((NPC) at).getIndex() : -1,
+					client.getTickCount());
 			}
 			return;
 		}

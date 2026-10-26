@@ -54,6 +54,22 @@ final class Thralls
 		}
 	}
 
+	// The thralls that attack with a projectile: ghosts (magic) and skeletons (ranged), in every skin. Zombies hit in
+	// melee and fire nothing.
+	private static final Set<Integer> FIRES_PROJECTILE = Collections.unmodifiableSet(new HashSet<>(java.util.Arrays.asList(
+		NpcID.ARCEUUS_THRALL_GHOST_LESSER, NpcID.ARCEUUS_THRALL_GHOST_SUPERIOR, NpcID.ARCEUUS_THRALL_GHOST_GREATER,
+		NpcID.ARCEUUS_THRALL_SKELETON_LESSER, NpcID.ARCEUUS_THRALL_SKELETON_SUPERIOR,
+		NpcID.ARCEUUS_THRALL_SKELETON_GREATER, NpcID.THRALL_IMP_MAGIC_LESSER, NpcID.THRALL_IMP_MAGIC_SUPERIOR,
+		NpcID.THRALL_IMP_MAGIC_GREATER, NpcID.THRALL_IMP_RANGED_LESSER, NpcID.THRALL_IMP_RANGED_SUPERIOR,
+		NpcID.THRALL_IMP_RANGED_GREATER, NpcID.DEADMAN_THRALL_SKELETAL_GREATER_PRINCESS,
+		NpcID.DEADMAN_THRALL_GHOSTLY_GREATER_WISP)));
+
+	/** Whether every attack this thrall makes is a projectile, so a splat with none is not its own. */
+	static boolean firesProjectile(int npcId)
+	{
+		return FIRES_PROJECTILE.contains(npcId);
+	}
+
 	static boolean isThrall(int npcId)
 	{
 		return MAX_HIT_BY_ID.containsKey(npcId);
