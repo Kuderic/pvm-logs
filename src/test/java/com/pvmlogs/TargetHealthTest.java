@@ -1,6 +1,8 @@
 package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 // What the target has left: the boss health bar while it is fresh and names the target, every splat counted otherwise.
@@ -119,5 +121,41 @@ public class TargetHealthTest
 		assertEquals(700, h.remainingForId(VARDORVIS, 21));
 		h.clear();
 		assertEquals(-1, h.remainingForId(VARDORVIS, 21));
+	}
+
+	/** The count alone, for checking a bar reading against: never the bar's own value. */
+	@Test
+	public void theCountAloneIgnoresTheBar()
+	{
+		final TargetHealth h = new TargetHealth();
+		assertEquals(-1, h.countedRemaining(INDEX));
+		h.setTableMaxHp(INDEX, VARDORVIS, 700, 0);
+		h.damage(INDEX, VARDORVIS, 100, 1);
+		h.hud(INDEX, VARDORVIS, 640, 700, 1);
+		assertEquals(640, h.remaining(INDEX, 1));
+		assertEquals(600, h.countedRemaining(INDEX));
+	}
+
+	/** Alone with its id, the target is what the bar shows, whatever the count says. */
+	@Test
+	public void aBarNamingTheOnlyNpcOfItsIdIsTheTargets()
+	{
+		assertTrue(TargetHealth.barIsTarget(1, 640, 700, 600));
+		assertTrue(TargetHealth.barIsTarget(1, 640, 700, -1));
+		// Out of view counts as alone: the bar can only be showing the npc the fight is on.
+		assertTrue(TargetHealth.barIsTarget(0, 640, 700, -1));
+	}
+
+	/** With adds of the same id, the bar is believed only while it agrees with the count. */
+	@Test
+	public void withSeveralOfTheIdTheBarMustAgreeWithTheCount()
+	{
+		assertTrue(TargetHealth.barIsTarget(3, 598, 700, 600));
+		assertTrue(TargetHealth.barIsTarget(3, 586, 700, 600));
+		assertFalse(TargetHealth.barIsTarget(3, 585, 700, 600));
+		assertFalse(TargetHealth.barIsTarget(3, 120, 120, 40));
+		assertFalse(TargetHealth.barIsTarget(2, 600, 700, -1));
+		assertEquals(14, TargetHealth.barTolerance(700));
+		assertEquals(2, TargetHealth.barTolerance(50));
 	}
 }

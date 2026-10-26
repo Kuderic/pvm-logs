@@ -138,6 +138,39 @@ class TargetHealth
 		return Math.max(0, Math.min(max, max - e.damage + e.healed));
 	}
 
+	/** What is left by the count alone, never the bar's reading; -1 when no full hitpoints are known. */
+	int countedRemaining(int index)
+	{
+		final Entry e = byIndex.get(index);
+		if (e == null)
+		{
+			return -1;
+		}
+		final int max = fullHp(e);
+		return max <= 0 ? -1 : Math.max(0, Math.min(max, max - e.damage + e.healed));
+	}
+
+	/**
+	 * Whether a bar reading can be taken as this target's. The bar names its npc
+	 * by id only, so with several npcs of that id in the scene (adds) it may be
+	 * showing another one. It is trusted when the target is the only one with the
+	 * id, or when it agrees with the count to within {@link #barTolerance}.
+	 */
+	static boolean barIsTarget(int sameIdInScene, int barHp, int barBase, int counted)
+	{
+		if (sameIdInScene <= 1)
+		{
+			return true;
+		}
+		return counted >= 0 && Math.abs(barHp - counted) <= barTolerance(barBase);
+	}
+
+	/** How far the bar and the count may differ and still be the same npc: 2% of full hitpoints, at least 2. */
+	static int barTolerance(int barBase)
+	{
+		return Math.max(2, barBase / 50);
+	}
+
 	/** Which source {@link #remaining} answered from: "bar", "counted" or "unknown". */
 	String source(int index, int tick)
 	{

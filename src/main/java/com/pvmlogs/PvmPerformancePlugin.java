@@ -2898,21 +2898,52 @@ public class PvmPerformancePlugin extends Plugin
 		final int liveId = target == null ? -1 : target.getId();
 		final NPCComposition composition = target == null ? null : target.getComposition();
 		final int compositionId = composition == null ? -1 : composition.getId();
-		final boolean ours = !disabled && target != null && target.getIndex() == index
+		final boolean named = !disabled && target != null && target.getIndex() == index
 			&& healthBarNames(barNpc, compositionId, liveId);
+		// The bar names an id, not an npc. With adds of the target's id about, it may be showing one of them: then it is
+		// only believed while it agrees with the count, and the count carries on otherwise.
+		final int sameId = named ? npcsWithId(barNpc) : 0;
+		final int counted = health.countedRemaining(index);
+		final boolean ours = named && TargetHealth.barIsTarget(sameId, hp, base, counted);
 		final long reading = ((long) (barNpc & 0xFFFFF) << 40) | ((long) (hp & 0xFFFFF) << 20) | (base & 0xFFFFF)
-			| (disabled ? 1L << 62 : 0) | (ours ? 1L << 61 : 0);
+			| (disabled ? 1L << 62 : 0) | (ours ? 1L << 61 : 0) | (named ? 1L << 60 : 0);
 		if (reading != lastHealthBarReading)
 		{
 			lastHealthBarReading = reading;
 			debug.log("health bar: npc varp %d, hp %d / %d%s; target index %d, id %d, composition %d -> %s",
 				barNpc, hp, base, disabled ? ", boss bar turned off" : "", index, liveId, compositionId,
-				ours ? "OURS" : "not ours");
+				ours ? (sameId > 1 ? "OURS (" + sameId + " npcs with this id; agrees with the count, " + counted + ")"
+					: "OURS")
+					: named ? "AMBIGUOUS: " + sameId + " npcs with this id and the count says " + counted
+						+ ", so the count is used" : "not ours");
 		}
 		if (ours)
 		{
 			health.hud(index, liveId, hp, base, client.getTickCount());
 		}
+	}
+
+	/** How many npcs in the scene wear this id, by composition or as they stand. */
+	private int npcsWithId(int npcId)
+	{
+		if (client.getTopLevelWorldView() == null)
+		{
+			return 0;
+		}
+		int n = 0;
+		for (NPC npc : client.getTopLevelWorldView().npcs())
+		{
+			if (npc == null)
+			{
+				continue;
+			}
+			final NPCComposition c = npc.getComposition();
+			if (npc.getId() == npcId || (c != null && c.getId() == npcId))
+			{
+				n++;
+			}
+		}
+		return n;
 	}
 
 	/** Whether the bar's npc varp names this npc. -1 is no bar at all. */
