@@ -52,4 +52,4 @@ jobs:
           args=()
           if [ "$EVENT" = "pull_request" ] || [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
           if [ "$IGNORE_BASELINE" = "true" ]; then args+=(--ignore-baseline); fi
-          python3 scripts/dps-calc-watch/watch.py "${args[@]}"
+          python3 -u scripts/dps-calc-watch/watch.py "${args[@]}"

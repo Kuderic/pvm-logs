@@ -366,7 +366,11 @@ class GitHub:
 		result = subprocess.run(["gh", "api", *args] + (["--input", "-"] if payload is not None else []),
 			input=json.dumps(payload) if payload is not None else None, capture_output=True, text=True)
 		if result.returncode != 0:
-			raise WatchError("gh api " + " ".join(args) + " failed: " + (result.stderr or result.stdout).strip())
+			message = (result.stderr or result.stdout).strip()
+			if "Issues has been disabled" in message:
+				raise WatchError("Issues are turned off for %s (GitHub turns them off on forks). Turn them on under "
+					"Settings > General > Features > Issues, then run this again." % self.repo)
+			raise WatchError("gh api " + " ".join(args) + " failed: " + message)
 		return result.stdout
 
 	def open_issues(self):
