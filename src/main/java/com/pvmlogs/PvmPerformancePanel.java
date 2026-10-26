@@ -70,7 +70,7 @@ class PvmPerformancePanel extends PluginPanel
 		header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
 		header.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-		final JLabel title = new JLabel("PvM Logs");
+		final JLabel title = new JLabel("PvM Performance");
 		title.setFont(FontManager.getRunescapeBoldFont());
 		title.setForeground(Color.WHITE);
 		title.setAlignmentX(LEFT_ALIGNMENT);

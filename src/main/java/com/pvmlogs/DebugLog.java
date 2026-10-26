@@ -45,7 +45,6 @@ import net.runelite.client.RuneLite;
 @Singleton
 class DebugLog
 {
-	private static final String DIR = "pvm-logs";
 	private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 	private static final long FLUSH_SECONDS = 2;
 	/**
@@ -112,7 +111,7 @@ class DebugLog
 		{
 			return;
 		}
-		file = new File(new File(RuneLite.RUNELITE_DIR, DIR),
+		file = new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR),
 			"pvm-debug-" + LocalDateTime.now().format(STAMP) + ".log").toPath();
 		pending.clear();
 		queued.set(0);
@@ -211,7 +210,7 @@ class DebugLog
 			}
 			lines = new ArrayList<>(recent);
 		}
-		final Path target = new File(new File(RuneLite.RUNELITE_DIR, DIR),
+		final Path target = new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR),
 			"pvm-debug-recent-" + LocalDateTime.now().format(STAMP) + ".log").toPath();
 		final StringBuilder buffer = new StringBuilder();
 		buffer.append("=== PvM Logs, the last ").append(lines.size())

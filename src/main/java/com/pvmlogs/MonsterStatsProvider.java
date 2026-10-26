@@ -261,7 +261,7 @@ class MonsterStatsProvider
 
 	private Path cacheFile()
 	{
-		return new File(new File(RuneLite.RUNELITE_DIR, "pvm-logs"), "monsters.json").toPath();
+		return new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR), "monsters.json").toPath();
 	}
 
 	private void loadOrFetch()
