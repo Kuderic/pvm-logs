@@ -346,6 +346,36 @@ public class PvmPerformancePlugin extends Plugin
 	// NPCs whose current burst has already booked an attack. Claws split one special across two ticks, and each hitsplat
 	// was booking its own attack, so one spec counted as two.
 	private final Set<Integer> burstBooked = new HashSet<>();
+	// Per NPC: the attack of mine whose splats are landing on it now, and how many it has put down (T-017). A splat beyond
+	// what the attack deals is not its own: a tentacle hits once, so a second splat on its tick was the zombie's (19:34,
+	// tick 439). Kept for projectile attacks too, which burstBooked is not: a dark bow's second arrow is its own.
+	private final Map<Integer, AttackSplats.Burst> bursts = new HashMap<>();
+	// The ticks the special energy fell on lately. Unlike specFiredTick, never spent by a booking: how many splats an attack
+	// puts down turns on whether it was a special, and its last splats are judged after the booking has spent that.
+	private final java.util.Deque<Integer> recentSpecDrops = new java.util.ArrayDeque<>();
+	private static final int SPEC_DROPS_KEPT = 8;
+	// The weapon held at the end of each recent tick, so an attack's splats are counted for the weapon that threw it: a
+	// special is thrown with the claws, which are usually swapped out again before their splats land.
+	private final Map<Integer, Integer> weaponByTick = new HashMap<>();
+	// This tick's splats counted beyond their attack's splats, logged once the tick's re-judging is done.
+	private final List<ExtraSplat> extrasThisTick = new ArrayList<>();
+
+	/** A splat counted beyond what its attack deals, waiting for the tick's re-judging before it is logged. */
+	private static final class ExtraSplat
+	{
+		final AttackSplats.Burst burst;
+		final String npcName;
+		final int amount;
+		final int tick;
+
+		ExtraSplat(AttackSplats.Burst burst, String npcName, int amount, int tick)
+		{
+			this.burst = burst;
+			this.npcName = npcName;
+			this.amount = amount;
+			this.tick = tick;
+		}
+	}
 	// Whether the goal prayer was up during each recent tick. A history rather than a slot, because the tick an attack
 	// goes out on is not the tick it is booked on, and the gap differs by style.
 	private final Map<Integer, Boolean> prayerUpByTick = new HashMap<>();
@@ -404,9 +434,6 @@ public class PvmPerformancePlugin extends Plugin
 	private static final double THRALL_THRESHOLD = 0.5;
 	// How close the only thrall in view must be to be taken for ours when its summon was never seen.
 	private static final int THRALL_FALLBACK_RADIUS = 3;
-	// How long after the special energy falls its burst may still be landing: thrown on the drop, first splats the tick
-	// after, the last of a burning claws special the tick after that.
-	private static final int SPECIAL_BURST_TICKS = 3;
 	// Animations a thrall plays that are not attacks.
 	private static final Set<Integer> THRALL_NON_ATTACK_ANIMATIONS = Collections.unmodifiableSet(new HashSet<>(
 		java.util.Arrays.asList(AnimationID.GHOST_UPDATE_THRALL_SPAWN, AnimationID.SKELETON_UPDATE_THRALL_SPAWN,
@@ -452,7 +479,30 @@ public class PvmPerformancePlugin extends Plugin
 	private final Map<Long, Integer> countedProjectiles = new HashMap<>();
 	// npcIndex -> my launched attacks not yet resolved. A splash carries no caster, so it only counts as mine when it
 	// resolves one of these.
-	private final Map<Integer, List<Integer>> pendingMineHits = new HashMap<>();
+	private final Map<Integer, List<PendingHit>> pendingMineHits = new HashMap<>();
+
+	/**
+	 * One of my attacks in flight: the tick it lands, and the splats it will put
+	 * down there, read from the weapon that threw it rather than whatever is held
+	 * when it lands (T-017).
+	 */
+	private static final class PendingHit
+	{
+		final int lands;
+		final int thrownTick;
+		final AttackSplats ordinary;
+		final AttackSplats special;
+		final String weapon;
+
+		PendingHit(int lands, int thrownTick, AttackSplats ordinary, AttackSplats special, String weapon)
+		{
+			this.lands = lands;
+			this.thrownTick = thrownTick;
+			this.ordinary = ordinary;
+			this.special = special;
+			this.weapon = weapon;
+		}
+	}
 
 	@Provides
 	PvmPerformanceConfig provideConfig(ConfigManager configManager)
@@ -520,8 +570,12 @@ public class PvmPerformancePlugin extends Plugin
 		// back lower than it was.
 		specFiredTick = Integer.MIN_VALUE;
 		specEnergy = -1;
+		recentSpecDrops.clear();
+		weaponByTick.clear();
+		extrasThisTick.clear();
 		lastHitsplatTick.clear();
 		burstLanded.clear();
+		bursts.clear();
 		pendingMineHits.clear();
 		drain.clear();
 		health.clear();
@@ -619,7 +673,8 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			// Whether this hitsplat is one of MY projectiles landing. Consumed here rather than further down because the resolve
 			// below depends on it.
-			final boolean arrivedFromFlight = consumePending(npc.getIndex());
+			final PendingHit flight = consumePending(npc.getIndex());
+			final boolean arrivedFromFlight = flight != null;
 			// KNOWN-WRONG, deliberately: this resolves on ANY hitsplat of mine, so a melee blow can resolve a projectile still
 			// in the air. The melee attack then books its own too, so the tick adds both and the total comes out right by luck -
 			// and would not if the target died in between. It is left this way because the obvious fix is worse, and
@@ -694,11 +749,12 @@ public class PvmPerformancePlugin extends Plugin
 			final boolean melee = meleeRecently || unbookedCast;
 			final boolean firstOfBurst = !burstBooked.contains(npc.getIndex());
 			final boolean booked = !arrivedFromFlight && melee && burstBooked.add(npc.getIndex());
+			final int bookingLag = combatCalc.isMeleeEquipped() ? MELEE_BOOKING_LAG : castLag;
 			if (booked)
 			{
-				recordAttackObserved(false, npc.getId(), combatCalc.isMeleeEquipped()
-					? MELEE_BOOKING_LAG : castLag);
+				recordAttackObserved(false, npc.getId(), bookingLag);
 			}
+			countSplat(npc, tick, hitsplat.getAmount(), booked ? tick - bookingLag : Integer.MIN_VALUE, flight);
 			// What the player's path made of it, kept for this tick in case the thrall's projectile says otherwise.
 			if (splatInFlight != null && splatInFlight.npcIndex == npc.getIndex())
 			{
@@ -826,6 +882,103 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/**
+	 * Counts a splat the player's path kept against the attack it belongs to
+	 * (T-017). A booked blow or a projectile arriving starts an attack's count;
+	 * a splat beside it on its tick, or on the next, is one more of its splats,
+	 * and one beyond what the weapon deals is logged as an extra (once the
+	 * tick's re-judging is done, see reportExtras). Without our thrall out, that
+	 * extra is still the player's for now: T-017 Part B (recoil, vengeance)
+	 * decides where those go.
+	 *
+	 * @param bookedThrownTick the tick a blow this splat booked was thrown on,
+	 *                         or {@code Integer.MIN_VALUE} if it booked none
+	 * @param flight           the projectile attack this splat arrived as, or null
+	 */
+	private void countSplat(NPC npc, int tick, int amount, int bookedThrownTick, PendingHit flight)
+	{
+		final int index = npc.getIndex();
+		if (flight != null)
+		{
+			bursts.put(index, new AttackSplats.Burst(flight.thrownTick, tick, flight.ordinary, flight.special,
+				AttackSplats.specialNear(recentSpecDrops, flight.thrownTick), flight.weapon));
+			return;
+		}
+		if (bookedThrownTick != Integer.MIN_VALUE)
+		{
+			final PendingHit blow = attackThrownOn(bookedThrownTick, tick, npc.getId());
+			bursts.put(index, new AttackSplats.Burst(bookedThrownTick, tick, blow.ordinary, blow.special,
+				AttackSplats.specialNear(recentSpecDrops, bookedThrownTick), blow.weapon));
+			return;
+		}
+		final AttackSplats.Burst burst = bursts.get(index);
+		if (burst == null || !burst.belongsOn(tick))
+		{
+			// Not landing beside any attack this plugin saw go out, so there is nothing to count it against.
+			bursts.remove(index);
+			return;
+		}
+		refreshSpecial(burst);
+		if (!burst.give(tick))
+		{
+			extrasThisTick.add(new ExtraSplat(burst, npc.getName(), amount, tick));
+		}
+	}
+
+	/**
+	 * The splats an attack thrown on this tick puts on this npc, read from the
+	 * weapons held around the throw rather than from what is held when its
+	 * splats land: a special is thrown with the claws, which are usually swapped
+	 * out again by then. A swap is taken as wielded from the tick after it, as
+	 * recordAttackObserved takes it, so the weapon held at the end of the tick
+	 * before the throw; that tick's, and the weapon held now, are asked as well,
+	 * and the larger count kept, so a switch never costs an attack its own
+	 * splats. The weapon named is the one with the most.
+	 */
+	private PendingHit attackThrownOn(int thrownTick, int lands, int npcId)
+	{
+		final List<Integer> held = new ArrayList<>();
+		for (int t = thrownTick - 1; t <= thrownTick; t++)
+		{
+			final Integer weapon = weaponByTick.get(t);
+			if (weapon != null && !held.contains(weapon))
+			{
+				held.add(weapon);
+			}
+		}
+		final int now = combatCalc.equippedWeaponId();
+		if (!held.contains(now))
+		{
+			held.add(now);
+		}
+		AttackSplats ordinary = null;
+		AttackSplats special = null;
+		int named = held.get(0);
+		int namedCount = 0;
+		for (int weapon : held)
+		{
+			final AttackSplats o = combatCalc.splatsPerAttack(npcId, false, weapon);
+			final AttackSplats s = combatCalc.splatsPerAttack(npcId, true, weapon);
+			ordinary = AttackSplats.atLeast(ordinary, o);
+			special = AttackSplats.atLeast(special, s);
+			if (Math.max(o.count, s.count) > namedCount)
+			{
+				named = weapon;
+				namedCount = Math.max(o.count, s.count);
+			}
+		}
+		return new PendingHit(lands, thrownTick, ordinary, special, combatCalc.itemLabel(named));
+	}
+
+	// The energy can be read after the attack's first splat, so an attack counted as ordinary may turn out a special.
+	private void refreshSpecial(AttackSplats.Burst burst)
+	{
+		if (!burst.isSpecial() && AttackSplats.specialNear(recentSpecDrops, burst.thrownTick()))
+		{
+			burst.markSpecial();
+		}
+	}
+
+	/**
 	 * What the player could have done to put a splat on this npc now. The facts
 	 * are gathered here; the judgement is ThrallTracker.classifyPlayer, which the
 	 * replay tests share.
@@ -833,19 +986,21 @@ public class PvmPerformancePlugin extends Plugin
 	private ThrallTracker.PlayerSplat playerSplatFor(NPC npc, int tick)
 	{
 		final int index = npc.getIndex();
-		// Their own multi-hit attack already landing here this tick: a scythe's second and third, a claw special.
-		final Integer seen = lastHitsplatTick.get(index);
-		final boolean sameTickBurst = seen != null && seen == tick && burstBooked.contains(index);
-		// Only a special spreads its splats over two ticks; an ordinary blow's next tick is inside its cooldown.
-		final boolean burstLastTick = seen != null && seen == tick - 1 && burstBooked.contains(index)
-			&& specFiredTick != Integer.MIN_VALUE && tick - specFiredTick <= SPECIAL_BURST_TICKS;
+		// Their own attack landing here: a scythe's second and third splats, a claw special's, a dual macuahuitl's second
+		// hit a tick after its first - but only as many as the attack deals (T-017). A tentacle hits once.
+		final AttackSplats.Burst burst = bursts.get(index);
+		if (burst != null)
+		{
+			refreshSpecial(burst);
+		}
+		final AttackSplats.State state = burst == null ? AttackSplats.State.NONE : burst.stateOn(tick);
 		boolean projectileDue = false;
-		final List<Integer> landing = pendingMineHits.get(index);
+		final List<PendingHit> landing = pendingMineHits.get(index);
 		if (landing != null)
 		{
-			for (int due : landing)
+			for (PendingHit due : landing)
 			{
-				projectileDue |= Math.abs(due - tick) <= FLIGHT_SLACK_TICKS;
+				projectileDue |= Math.abs(due.lands - tick) <= FLIGHT_SLACK_TICKS;
 			}
 		}
 		for (PendingCast cast : castsAwaiting)
@@ -855,8 +1010,7 @@ public class PvmPerformancePlugin extends Plugin
 		final boolean melee = combatCalc.isMeleeEquipped() || tick - lastMeleeTick <= MELEE_SWAP_GRACE_TICKS;
 		// The weapon's own due tick from the last booking: a blow thrown before it is impossible, which is what stops a
 		// thrall's splat booking an attack inside the weapon's cooldown (T-003, Vardorvis ticks 199 and 203).
-		return ThrallTracker.classifyPlayer(sameTickBurst, burstLastTick, projectileDue, melee, tick, attackDueTick,
-			lastAttackFromProjectile);
+		return ThrallTracker.classifyPlayer(state, projectileDue, melee, tick, attackDueTick, lastAttackFromProjectile);
 	}
 
 	/** Closes the tick's experience into an award and keeps the thrall's state moving. Run first in the tick. */
@@ -972,6 +1126,42 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			playerSplatsThisTick.clear();
 			splatInFlight = null;
+			reportExtras();
+		}
+	}
+
+	/**
+	 * Logs the tick's splats counted beyond their attack's splats (T-017), once
+	 * the re-judging above is done: when the thrall's 0 lands ahead of the
+	 * player's 45, the 0 takes the blow's place and the 45 reads as an extra
+	 * until the thrall's unclaimed projectile hands the 0 back. Only the extras
+	 * still standing are logged.
+	 */
+	private void reportExtras()
+	{
+		if (extrasThisTick.isEmpty())
+		{
+			return;
+		}
+		final Map<AttackSplats.Burst, List<ExtraSplat>> byAttack = new LinkedHashMap<>();
+		for (ExtraSplat extra : extrasThisTick)
+		{
+			byAttack.computeIfAbsent(extra.burst, k -> new ArrayList<>()).add(extra);
+		}
+		extrasThisTick.clear();
+		for (Map.Entry<AttackSplats.Burst, List<ExtraSplat>> attack : byAttack.entrySet())
+		{
+			final AttackSplats.Burst burst = attack.getKey();
+			final List<ExtraSplat> extras = attack.getValue();
+			final int count = burst.splats().count;
+			final int standing = Math.min(extras.size(), burst.given() - count);
+			for (int i = extras.size() - standing; i < extras.size(); i++)
+			{
+				final ExtraSplat extra = extras.get(i);
+				debug.log("EXTRA SPLAT on %s: %s hits %d, this is %d%s (a %d on tick %d)", extra.npcName, burst.weapon(),
+					count, count + standing - (extras.size() - i) + 1, burst.isSpecial() ? " (special)" : "", extra.amount,
+					extra.tick);
+			}
 		}
 	}
 
@@ -1003,7 +1193,16 @@ public class PvmPerformancePlugin extends Plugin
 		// Nothing else of the player's landed on that npc this tick, so there was no blow: its booking goes, and the
 		// burst it began with it.
 		final boolean unbooked = r.booked && !otherSplat && attackObservedTick == tick;
-		if (!otherSplat)
+		if (otherSplat)
+		{
+			// The attack stays, one splat short of what was counted against it.
+			final AttackSplats.Burst burst = bursts.get(r.npcIndex);
+			if (burst != null)
+			{
+				burst.takeBack();
+			}
+		}
+		else
 		{
 			if (unbooked)
 			{
@@ -1012,6 +1211,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			burstBooked.remove(r.npcIndex);
 			burstLanded.remove(r.npcIndex);
+			bursts.remove(r.npcIndex);
 			if (r.previousSeen == null)
 			{
 				lastHitsplatTick.remove(r.npcIndex);
@@ -1214,7 +1414,8 @@ public class PvmPerformancePlugin extends Plugin
 			startFight(npc, now);
 		}
 		final int lands = landingTick(projectile);
-		pendingMineHits.computeIfAbsent(npc.getIndex(), k -> new ArrayList<>()).add(lands);
+		pendingMineHits.computeIfAbsent(npc.getIndex(), k -> new ArrayList<>())
+			.add(attackThrownOn(startTick(projectile), lands, npc.getId()));
 		debug.log("projectile %d taken as mine, aimed at npc %d (index %d), lands tick %d",
 			projectile.getId(), npc.getId(), npc.getIndex(), lands);
 		recordAttackObserved(true, npc.getId());
@@ -1462,7 +1663,7 @@ public class PvmPerformancePlugin extends Plugin
 		// area spells have none, and no hitsplat either, so for those this graphic is the only evidence the cast happened -
 		// which is why the attack itself is recorded here too.
 		final boolean noProjectile = combatCalc.castLandsWithoutProjectile();
-		if (!noProjectile && !consumePending(index))
+		if (!noProjectile && consumePending(index) == null)
 		{
 			return;
 		}
@@ -1550,6 +1751,7 @@ public class PvmPerformancePlugin extends Plugin
 		// held by then, and worse: the combat tab lags a swap by a tick, so rapid would be read off the old style and applied
 		// to the new weapon's speed.
 		speedByTick.put(client.getTickCount(), combatCalc.attackSpeedTicks());
+		weaponByTick.put(client.getTickCount(), combatCalc.equippedWeaponId());
 		if (combatCalc.isMeleeEquipped())
 		{
 			lastMeleeTick = client.getTickCount();
@@ -1557,6 +1759,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (client.getTickCount() % 5 == 0)
 		{
 			speedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
+			weaponByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 		}
 		if (shown != null)
 		{
@@ -2573,6 +2776,11 @@ public class PvmPerformancePlugin extends Plugin
 		if (previous >= 0 && energy < previous)
 		{
 			specFiredTick = client.getTickCount();
+			recentSpecDrops.addLast(specFiredTick);
+			while (recentSpecDrops.size() > SPEC_DROPS_KEPT)
+			{
+				recentSpecDrops.removeFirst();
+			}
 		}
 	}
 
@@ -2640,6 +2848,7 @@ public class PvmPerformancePlugin extends Plugin
 		lastHitsplatTick.values().removeIf(seen -> client.getTickCount() - seen > PROJECTILE_KEY_TICKS);
 		burstLanded.retainAll(lastHitsplatTick.keySet());
 		burstBooked.retainAll(lastHitsplatTick.keySet());
+		bursts.keySet().retainAll(lastHitsplatTick.keySet());
 
 		if (current != null && !current.isEnded())
 		{
@@ -2702,6 +2911,7 @@ public class PvmPerformancePlugin extends Plugin
 			recentTiles.clear();
 			lastHitsplatTick.clear();
 			burstLanded.clear();
+			bursts.clear();
 			pendingMineHits.clear();
 			damageByIndex.clear();
 			health.clear();
@@ -3297,30 +3507,31 @@ public class PvmPerformancePlugin extends Plugin
 	// Whether a hitsplat landing now is one of my attacks arriving from flight rather than a fresh melee blow. Matched on
 	// when the attack was due rather than counted, because a count cannot expire: a projectile that never produces a
 	// hitsplat would leave it high forever.
-	private boolean consumePending(int npcIndex)
+	//
+	// Returns the attack it was, or null for none.
+	private PendingHit consumePending(int npcIndex)
 	{
-		final List<Integer> due = pendingMineHits.get(npcIndex);
+		final List<PendingHit> due = pendingMineHits.get(npcIndex);
 		if (due == null)
 		{
-			return false;
+			return null;
 		}
 		final int now = client.getTickCount();
 		// Anything that should have landed and did not is dropped rather than left to be matched against something unrelated
 		// later.
-		due.removeIf(tick -> now - tick > FLIGHT_SLACK_TICKS);
+		due.removeIf(hit -> now - hit.lands > FLIGHT_SLACK_TICKS);
 		for (int i = 0; i < due.size(); i++)
 		{
-			if (Math.abs(due.get(i) - now) <= FLIGHT_SLACK_TICKS)
+			if (Math.abs(due.get(i).lands - now) <= FLIGHT_SLACK_TICKS)
 			{
-				due.remove(i);
-				return true;
+				return due.remove(i);
 			}
 		}
 		if (due.isEmpty())
 		{
 			pendingMineHits.remove(npcIndex);
 		}
-		return false;
+		return null;
 	}
 
 	/** The fight the overlay should display: the active one, else the last finished. */

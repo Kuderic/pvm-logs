@@ -1,6 +1,7 @@
 package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -21,13 +22,12 @@ import org.junit.Test;
  * attack was due, a shark with the weapon ready, and a brew.
  *
  * <p>What it settles: the zombie's splat lands exactly one tick after its
- * attack animation, 6 of 6 - the lag no earlier log could show.
+ * attack animation, 7 of 7 - the lag no earlier log could show.
  *
- * <p>What it does not yet hold the plugin to: tick 439, where the tentacle's
- * miss and the zombie's zero land together and both go to the player, the
- * second as SAME_TICK_BURST although a tentacle hits once. That is a known bug
- * waiting on a brief (claude/status/thrall-attribution.md); its test belongs
- * with the fix.
+ * <p>Tick 439 (T-017): the tentacle's miss and the zombie's 0 landed together.
+ * The plugin gave both to the player, the second as SAME_TICK_BURST although a
+ * tentacle hits once. Counted against the one splat a tentacle deals, the
+ * second is an extra, and the zombie's.
  */
 public class ZombieThrallReplayTest
 {
@@ -43,9 +43,10 @@ public class ZombieThrallReplayTest
 	}
 
 	// The zombie's splats and the player's misses on this stretch, from the log: the zombie's on 415 + 4k, each a tick after
-	// its animation; the player's tentacle misses a tick after each blow thrown (408, 412, 419, 423, 430, 434, 438).
-	private static final int[][] ZOMBIE = {{415, 2}, {419, 2}, {423, 1}, {427, 2}, {431, 3}, {435, 1}};
-	private static final int[][] PLAYER = {{413, 0}, {424, 0}, {431, 0}, {435, 0}};
+	// its animation; the player's tentacle misses a tick after each blow thrown (408, 412, 419, 423, 430, 434, 438). On 439
+	// both are 0s, and which of the two is whose cannot be told: one each.
+	private static final int[][] ZOMBIE = {{415, 2}, {419, 2}, {423, 1}, {427, 2}, {431, 3}, {435, 1}, {439, 0}};
+	private static final int[][] PLAYER = {{413, 0}, {424, 0}, {431, 0}, {435, 0}, {439, 0}};
 
 	private static boolean judged(ThrallReplay r, int tick, int amount, boolean thralls)
 	{
@@ -79,6 +80,19 @@ public class ZombieThrallReplayTest
 			}
 		}
 		assertTrue(wrong + " in " + r.judged, wrong.isEmpty());
+	}
+
+	@Test
+	public void onTick439TheSecondZeroIsBeyondTheTentaclesOneSplatAndGoesToTheZombie() throws IOException
+	{
+		final List<ThrallReplay.Judged> on439 = replay().judgedBetween(439, 439);
+		assertEquals(on439.toString(), 2, on439.size());
+		// The first is the blow's, on cadence.
+		assertFalse(on439.toString(), on439.get(0).thralls);
+		assertEquals(ThrallTracker.PlayerSplat.ON_CADENCE, on439.get(0).player);
+		// The second is an extra: the tentacle has put its one splat down.
+		assertTrue(on439.toString(), on439.get(1).thralls);
+		assertEquals(ThrallTracker.PlayerSplat.EXTRA_SPLAT, on439.get(1).player);
 	}
 
 	@Test
@@ -126,7 +140,7 @@ public class ZombieThrallReplayTest
 				}
 			}
 		}
-		// Seven attacks before the fight ended: 414 to 438. The last one's splat is the zero on 439 (see the class note).
+		// Seven attacks before the fight ended: 414 to 438. The last one's splat is a zero on 439 (see the class note).
 		assertEquals(7, animations.size());
 		for (int i = 0; i < ZOMBIE.length; i++)
 		{
