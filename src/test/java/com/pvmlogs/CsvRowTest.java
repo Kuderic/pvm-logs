@@ -1,6 +1,7 @@
 package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
+import java.util.Arrays;
 import java.util.Collections;
 import org.junit.Test;
 
@@ -30,8 +31,9 @@ public class CsvRowTest
 	@Test
 	public void theHeaderNamesEveryColumnOnce()
 	{
-		// attempts and targets are both there now: one throw of chinchompas is one attempt and several targets.
-		assertEquals(36, COLUMNS);
+		// attempts and targets are both there now: one throw of chinchompas is one attempt and several targets. T-018 added
+		// four at the end.
+		assertEquals(40, COLUMNS);
 	}
 
 	@Test
@@ -80,12 +82,48 @@ public class CsvRowTest
 			+ "so its \"expected\" damage and luck are not reliable");
 		f.recordDotDamage(12);
 		f.recordHeal(30);
-		final String row = PvmPerformancePlugin.csvRow(f);
-		assertEquals(COLUMNS, columns("fight,x,1,\"room\"," + row));
+		final String row = "fight,x,1,\"room\"," + PvmPerformancePlugin.csvRow(f);
+		assertEquals(COLUMNS, columns(row));
+		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
 		final String[] cells = row.trim().split(",", -1);
-		assertEquals("12", cells[cells.length - 3]);
-		assertEquals("30", cells[cells.length - 2]);
-		org.junit.Assert.assertTrue(cells[cells.length - 1].startsWith("\"landed 26 of 42"));
+		assertEquals("12", cells[header.indexOf("dotDamage")]);
+		assertEquals("30", cells[header.indexOf("healed")]);
+		org.junit.Assert.assertTrue(cells[header.indexOf("statsWarning")].startsWith("\"landed 26 of 42"));
+	}
+
+	/**
+	 * T-018: damage taken is hits only, and its breakdown sits at the end so no older column moves. The raid row now
+	 * fills damageTaken too.
+	 */
+	@Test
+	public void damageTakenAndItsBreakdownHaveTheirColumns()
+	{
+		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
+		assertEquals(Arrays.asList("dotTaken", "hitsTaken", "biggestHitTaken", "damageTakenUnprotected"),
+			header.subList(header.size() - 4, header.size()));
+		assertEquals(10, header.indexOf("damageTaken"));
+		final Fight f = fight();
+		f.recordHitTaken(41, true, 700L);
+		f.recordHitTaken(0, false, 800L);
+		f.recordHitTaken(12, false, 900L);
+		f.recordDotTaken(6, 1000L);
+		final String[] fightCells = ("fight,x,1,\"room\"," + PvmPerformancePlugin.csvRow(f)).trim().split(",", -1);
+		assertEquals("53", fightCells[header.indexOf("damageTaken")]);
+		assertEquals("6", fightCells[header.indexOf("dotTaken")]);
+		assertEquals("3", fightCells[header.indexOf("hitsTaken")]);
+		assertEquals("41", fightCells[header.indexOf("biggestHitTaken")]);
+		assertEquals("41", fightCells[header.indexOf("damageTakenUnprotected")]);
+		final Encounter room = new Encounter("Kephri", RaidType.TOMBS_OF_AMASCUT, 0L);
+		room.add(f);
+		room.add(fight());
+		final String[] roomCells = PvmPerformancePlugin.csvRoomRow("Tombs of Amascut", 2, room).trim().split(",", -1);
+		assertEquals("53", roomCells[header.indexOf("damageTaken")]);
+		assertEquals("3", roomCells[header.indexOf("hitsTaken")]);
+		final String[] raidCells = PvmPerformancePlugin.csvRaidRow("Tombs of Amascut", 2,
+			Collections.singletonList(room)).trim().split(",", -1);
+		assertEquals("53", raidCells[header.indexOf("damageTaken")]);
+		assertEquals("6", raidCells[header.indexOf("dotTaken")]);
+		assertEquals("41", raidCells[header.indexOf("damageTakenUnprotected")]);
 	}
 
 	@Test

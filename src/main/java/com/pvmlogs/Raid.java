@@ -85,6 +85,50 @@ class Raid
 		return total;
 	}
 
+	/** Damage over time on the player across the rooms (T-018). */
+	int getDotTaken()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getDotTaken();
+		}
+		return total;
+	}
+
+	/** Hit splats on the player across the rooms, 0s included (T-018). */
+	int getHitsTaken()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getHitsTaken();
+		}
+		return total;
+	}
+
+	/** The biggest hit on the player in any room (T-018). */
+	int getBiggestHitTaken()
+	{
+		int biggest = 0;
+		for (Encounter encounter : encounters)
+		{
+			biggest = Math.max(biggest, encounter.getBiggestHitTaken());
+		}
+		return biggest;
+	}
+
+	/** Hit damage on the player with no protection prayer up, across the rooms (T-018). */
+	int getDamageTakenUnprotected()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getDamageTakenUnprotected();
+		}
+		return total;
+	}
+
 	/** The first reason any room gives not to trust its expected side, or null. */
 	String getStatsWarning()
 	{

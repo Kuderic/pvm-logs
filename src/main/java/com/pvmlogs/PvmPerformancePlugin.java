@@ -37,6 +37,7 @@ import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
+import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
 import net.runelite.api.Projectile;
 import net.runelite.api.coords.LocalPoint;
@@ -167,7 +168,9 @@ public class PvmPerformancePlugin extends Plugin
 		+ "accuracyPct,durationSec,dps,avgHit,expMaxHit,expAccuracyPct,expAvgHit,"
 		+ "ticksLost,ticksLostPct,ticksLostEating,"
 		+ "attacksMade,attacksPrayed,attacksPotted,attacksSwitched,efficiencyPct,boostPct,boostCostPct,switchCostPct,"
-		+ "thrallDamage,dotDamage,healed,statsWarning\n";
+		+ "thrallDamage,dotDamage,healed,statsWarning,"
+		// T-018, at the end so no older column moves. damageTaken above is hits only from T-018 on.
+		+ "dotTaken,hitsTaken,biggestHitTaken,damageTakenUnprotected\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -474,6 +477,12 @@ public class PvmPerformancePlugin extends Plugin
 	// (client thread) append to it.
 	private final List<Fight> history = new CopyOnWriteArrayList<>();
 
+	// Splats on me (T-018): their kinds, what they add to the fight, and the hit damage tick by tick for recoil and
+	// vengeance to be matched against (T-017 Part B: damageTakenOn).
+	private final DamageTaken taken = new DamageTaken();
+	// The fight target's animations and projectiles of the last few ticks, for the TAKEN line only (T-018).
+	private final TargetActions targetSeen = new TargetActions();
+
 	// My in-flight projectiles, each credited once. Keyed by start cycle, id and target rather than by the Projectile,
 	// whose identity the client recycles.
 	private final Map<Long, Integer> countedProjectiles = new HashMap<>();
@@ -564,6 +573,8 @@ public class PvmPerformancePlugin extends Plugin
 		lastFinished = null;
 		history.clear();
 		countedProjectiles.clear();
+		taken.clear();
+		targetSeen.clear();
 		recentTiles.clear();
 		expectedByTick.clear();
 		// Both re-read from scratch: a stale energy reading across a reset would look like a special the moment the bar came
@@ -770,15 +781,99 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			onNotMineSplat((NPC) actor, hitsplat);
 		}
-		else if (actor == client.getLocalPlayer() && current != null && !current.isEnded())
+		else if (actor != null && actor == client.getLocalPlayer())
 		{
-			// Damage on us during an active fight is attributed to it.
-			current.recordDamageTaken(hitsplat.getAmount(), now);
-			if (current.isScored())
+			onSplatOnMe(hitsplat, now);
+		}
+	}
+
+	/**
+	 * A splat on the local player (T-018). Classified by {@link HitsplatKind#onPlayer}:
+	 * a hit is damage taken, damage over time is kept beside it, and heals and splats
+	 * that leave hitpoints alone count nowhere. Only an open fight takes them; the
+	 * per-tick hit record and the TAKEN line take every one.
+	 */
+	private void onSplatOnMe(Hitsplat hitsplat, long now)
+	{
+		final int tick = client.getTickCount();
+		final String protection = protectionUp();
+		final boolean fighting = current != null && !current.isEnded();
+		final HitsplatKind kind = taken.onSplat(hitsplat.getHitsplatType(), hitsplat.getAmount(), tick,
+			protection != null, fighting ? current : null, session, now);
+		final String target = fighting ? targetSeen.describe(tick, current.getTargetIndex()) : "";
+		debug.log("%s", DamageTaken.line(hitsplat.getAmount(), hitsplat.getHitsplatType(), kind, protection,
+			client.getBoostedSkillLevel(Skill.HITPOINTS), npcsOnMe(), target, fighting));
+	}
+
+	/**
+	 * The hit damage on me on {@code tick}, fight or not: see {@link DamageTaken#damageTakenOn}. For recoil and
+	 * vengeance (T-017 Part B), which answer a hit a tick or so after it lands.
+	 */
+	int damageTakenOn(int tick)
+	{
+		return taken.damageTakenOn(tick);
+	}
+
+	/** Each hit splat on me on {@code tick}, 0s included: see {@link DamageTaken#hitsTakenOn}. */
+	List<Integer> hitsTakenOn(int tick)
+	{
+		return taken.hitsTakenOn(tick);
+	}
+
+	/**
+	 * The protection prayer up as the server has it, or null for none. The server's copy for the reason
+	 * CombatCalc.prayerActive gives: a flick at the end of a tick changes the client's at once.
+	 */
+	private String protectionUp()
+	{
+		for (Prayer prayer : DamageTaken.PROTECTION)
+		{
+			if (client.getServerVarbitValue(prayer.getVarbit()) == 1)
 			{
-				session.recordDamageTaken(hitsplat.getAmount());
+				return DamageTaken.protectionName(prayer);
 			}
 		}
+		return null;
+	}
+
+	/**
+	 * The npcs that have me as their target, for the TAKEN line: a splat names no source, so this is the nearest the
+	 * client comes. The fight's target is marked. At most four, then a count.
+	 */
+	private String npcsOnMe()
+	{
+		final Player me = client.getLocalPlayer();
+		if (me == null || client.getTopLevelWorldView() == null)
+		{
+			return "";
+		}
+		final StringBuilder out = new StringBuilder();
+		int count = 0;
+		for (NPC npc : client.getTopLevelWorldView().npcs())
+		{
+			if (npc == null || npc.getInteracting() != me)
+			{
+				continue;
+			}
+			if (++count > 4)
+			{
+				continue;
+			}
+			if (out.length() > 0)
+			{
+				out.append(", ");
+			}
+			out.append("npc ").append(npc.getId()).append(" #").append(npc.getIndex());
+			if (current != null && !current.isEnded() && npc.getIndex() == current.getTargetIndex())
+			{
+				out.append(" (target)");
+			}
+		}
+		if (count > 4)
+		{
+			out.append(" and ").append(count - 4).append(" more");
+		}
+		return out.toString();
 	}
 
 	/**
@@ -1363,6 +1458,7 @@ public class PvmPerformancePlugin extends Plugin
 		final Projectile projectile = event.getProjectile();
 		final Player me = client.getLocalPlayer();
 		final Actor target = projectile.getTargetActor();
+		noteTargetProjectile(projectile, me, target);
 		if (me == null || !(target instanceof NPC))
 		{
 			return;
@@ -1430,6 +1526,31 @@ public class PvmPerformancePlugin extends Plugin
 	// Close enough to have been fired by me. Not exact, because running covers two tiles a tick while the history records
 	// one, so the tile an attack was thrown from is often never in it.
 
+
+	/**
+	 * For the TAKEN line (T-018): a projectile from the fight's target, wherever it is aimed, or one aimed at me from
+	 * anything else. Seen every frame; TargetActions keeps each once.
+	 */
+	private void noteTargetProjectile(Projectile projectile, Player me, Actor target)
+	{
+		if (me == null || current == null || current.isEnded())
+		{
+			return;
+		}
+		final Actor source = projectile.getSourceActor();
+		final boolean fromTarget = source instanceof NPC && ((NPC) source).getIndex() == current.getTargetIndex();
+		if (!fromTarget && target != me)
+		{
+			return;
+		}
+		final String from = fromTarget ? "" : source instanceof NPC
+			? "npc " + ((NPC) source).getId() + " #" + ((NPC) source).getIndex()
+			: source == null ? "no source" : "a player";
+		final String at = target == me ? "me" : target instanceof NPC ? "npc #" + ((NPC) target).getIndex()
+			: target == null ? "a tile" : "a player";
+		targetSeen.noteProjectile(client.getTickCount(), current.getTargetIndex(), projectile.getId(),
+			projectile.getStartCycle(), from, at, landingTick(projectile));
+	}
 
 	/**
 	 * Identifies one cast: two projectiles sharing a start cycle, an id and a
@@ -2182,6 +2303,12 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onAnimationChanged(AnimationChanged event)
 	{
+		// For the TAKEN line (T-018): what the fight's target started, logged beside the next splats on me.
+		if (event.getActor() instanceof NPC && current != null && !current.isEnded()
+			&& ((NPC) event.getActor()).getIndex() == current.getTargetIndex())
+		{
+			targetSeen.noteAnimation(client.getTickCount(), current.getTargetIndex(), event.getActor().getAnimation());
+		}
 		if (event.getActor() instanceof NPC && Thralls.isThrall(((NPC) event.getActor()).getId()))
 		{
 			final NPC thrall = (NPC) event.getActor();
@@ -2908,6 +3035,8 @@ public class PvmPerformancePlugin extends Plugin
 				currentEncounter.end(System.currentTimeMillis());
 			}
 			countedProjectiles.clear();
+			taken.clear();
+			targetSeen.clear();
 			recentTiles.clear();
 			lastHitsplatTick.clear();
 			burstLanded.clear();
@@ -3389,6 +3518,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
 			current.getCombatTicks(), current.getSumExpectedAverageHit());
 		closeTargetHealth(died);
+		debug.log("%s", DamageTaken.summary(current));
 		current.end(died, now);
 		// Anything still in the air never landed. Counting what it was expected to deal against the nought it dealt made a
 		// group kill read as underperformance.
@@ -3831,7 +3961,8 @@ public class PvmPerformancePlugin extends Plugin
 		// Expected accuracy is per npc reached and expected damage per throw, which is what each side is accumulated over.
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
-			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s%n",
+			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
+				+ "%d,%d,%d,%d%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -3859,7 +3990,11 @@ public class PvmPerformancePlugin extends Plugin
 				room.getThrallDamage(),
 				room.getDotDamage(),
 				room.getHealed(),
-				csvText(room.getStatsWarning()));
+				csvText(room.getStatsWarning()),
+				room.getDotTaken(),
+				room.getHitsTaken(),
+				room.getBiggestHitTaken(),
+				room.getDamageTakenUnprotected());
 	}
 
 	static String csvRaidRow(String raidName, int raidRun, List<Encounter> rooms)
@@ -3875,9 +4010,11 @@ public class PvmPerformancePlugin extends Plugin
 		final int attempts = raid.getAttempts();
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
-			+ String.format("%s,,,,,%d,,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s%n",
+			+ String.format("%s,,,,,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
+				+ "%d,%d,%d,%d%n",
 				started,
 				raid.getDamageDealt(),
+				raid.getDamageTaken(),
 				attempts,
 				targets,
 				raid.getHits(),
@@ -3901,7 +4038,11 @@ public class PvmPerformancePlugin extends Plugin
 				raid.getThrallDamage(),
 				raid.getDotDamage(),
 				raid.getHealed(),
-				csvText(raid.getStatsWarning()));
+				csvText(raid.getStatsWarning()),
+				raid.getDotTaken(),
+				raid.getHitsTaken(),
+				raid.getBiggestHitTaken(),
+				raid.getDamageTakenUnprotected());
 	}
 
 	private static String csvFightRow(String raidName, int raidRun, Fight fight)
@@ -3915,7 +4056,8 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
-		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s%n",
+		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
+			+ "%d,%d,%d,%d%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -3947,7 +4089,11 @@ public class PvmPerformancePlugin extends Plugin
 			fight.getThrallDamage(),
 			fight.getDotDamage(),
 			fight.getHealed(),
-			csvText(fight.getStatsWarning()));
+			csvText(fight.getStatsWarning()),
+			fight.getDotTaken(),
+			fight.getHitsTaken(),
+			fight.getBiggestHitTaken(),
+			fight.getDamageTakenUnprotected());
 	}
 
 	/**

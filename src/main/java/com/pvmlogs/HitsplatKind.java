@@ -42,6 +42,19 @@ import net.runelite.api.HitsplatID;
  * attacks landing, and the expected side scores those attacks, so they stay the
  * player's weapon damage (Eric, 2026-10-26, T-011 item 3); they are kept out of
  * the target's hitpoints only.
+ *
+ * <p><b>Splats on the local player</b> ({@link #onPlayer}, T-018) mean something
+ * else, because "mine" and "others'" are about who is looking, not who struck:
+ * an NPC's hit on the player shows the same red and blue a player's own hit does.
+ * What each type does to a player is the wiki's Hitsplat page (read 2026-10-27):
+ * poison, venom, bleed (Vardorvis's axes) and burn (Yama) take hitpoints over
+ * time; a heal restores them; disease drains other stats, corruption and prayer
+ * drain (Frost Nagua) drain prayer, sanity is the Whisperer's, doom is a Fortis
+ * Colosseum handicap counted in stacks, and a cyan shield splat on a player is an
+ * attack the player was protected from (Moons of Peril, Yama). None of those take
+ * hitpoints. The wiki's corrosion (the Shellbane Gryphon) does, but RuneLite has
+ * no id for it yet: it arrives as an unknown type, which is logged by number and
+ * counted nowhere until a log names it.
  */
 enum HitsplatKind
 {
@@ -66,7 +79,13 @@ enum HitsplatKind
 	 * tally stays honest, logged by number so a new type can be identified from a
 	 * debug log, and never credited to the player.
 	 */
-	UNCLASSIFIED;
+	UNCLASSIFIED,
+	/**
+	 * A hit on the local player: an attack's damage, or its 0. Only {@link #onPlayer}
+	 * gives it. The game says nothing of where it came from, so a mechanic's typeless
+	 * damage reads the same as a boss's swing.
+	 */
+	HIT_TAKEN;
 
 	static HitsplatKind of(boolean mine, boolean others, int type)
 	{
@@ -97,6 +116,62 @@ enum HitsplatKind
 				return NO_HEALTH_EFFECT;
 			default:
 				return others ? OTHER_PLAYER : UNCLASSIFIED;
+		}
+	}
+
+	/**
+	 * What a splat on the local player is (T-018): a hit, damage over time, a heal,
+	 * no hitpoints effect, or a type not known here. See the class notes. A hit and
+	 * damage over time take the player's hitpoints; a heal restores them; the rest
+	 * are logged and counted nowhere.
+	 */
+	static HitsplatKind onPlayer(int type)
+	{
+		switch (type)
+		{
+			case HitsplatID.BLOCK_ME:
+			case HitsplatID.BLOCK_OTHER:
+			case HitsplatID.DAMAGE_ME:
+			case HitsplatID.DAMAGE_OTHER:
+			case HitsplatID.DAMAGE_MAX_ME:
+				return HIT_TAKEN;
+			case HitsplatID.POISON:
+			case HitsplatID.VENOM:
+			case HitsplatID.BURN:
+			case HitsplatID.BLEED:
+				return DAMAGE_OVER_TIME;
+			case HitsplatID.HEAL:
+				return HEAL;
+			case HitsplatID.CORRUPTION:
+			case HitsplatID.DISEASE:
+			case HitsplatID.DISEASE_BLOCKED:
+			case HitsplatID.CYAN_UP:
+			case HitsplatID.CYAN_DOWN:
+			case HitsplatID.PRAYER_DRAIN:
+			case HitsplatID.SANITY_DRAIN:
+			case HitsplatID.SANITY_RESTORE:
+			case HitsplatID.DOOM:
+				return NO_HEALTH_EFFECT;
+			default:
+				return notHitpoints(type) ? NO_HEALTH_EFFECT : UNCLASSIFIED;
+		}
+	}
+
+	/** The kind of a splat on the local player, as the TAKEN line names it. */
+	String takenName()
+	{
+		switch (this)
+		{
+			case HIT_TAKEN:
+				return "hit";
+			case DAMAGE_OVER_TIME:
+				return "dot";
+			case HEAL:
+				return "heal";
+			case NO_HEALTH_EFFECT:
+				return "no hp";
+			default:
+				return "unknown";
 		}
 	}
 
@@ -137,6 +212,20 @@ enum HitsplatKind
 	{
 		switch (type)
 		{
+			case HitsplatID.BLOCK_ME:
+				return "zero";
+			case HitsplatID.BLOCK_OTHER:
+				return "others' zero";
+			case HitsplatID.DAMAGE_ME:
+				return "damage";
+			case HitsplatID.DAMAGE_OTHER:
+				return "others' damage";
+			case HitsplatID.DAMAGE_MAX_ME:
+				return "max hit";
+			case HitsplatID.CORRUPTION:
+				return "corruption";
+			case HitsplatID.DOOM:
+				return "doom";
 			case HitsplatID.BURN:
 				return "burn";
 			case HitsplatID.POISON:
