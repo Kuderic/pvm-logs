@@ -27,6 +27,11 @@ class SessionTotals
 	private int attacksSwitched;
 	private double sumActualSetup;
 	private double sumIdealSetup;
+	// See Fight: the boost share read per attack, and what the missing boost and missed switches cost (T-010).
+	private double sumBoostShare;
+	private int boostSamples;
+	private double sumBoostCost;
+	private double sumSwitchCost;
 	private int ticksLostEating;
 	private int ticksLostOther;
 	private int combatTicks;
@@ -59,6 +64,10 @@ class SessionTotals
 		attacksSwitched = 0;
 		sumActualSetup = 0;
 		sumIdealSetup = 0;
+		sumBoostShare = 0;
+		boostSamples = 0;
+		sumBoostCost = 0;
+		sumSwitchCost = 0;
 		ticksLostEating = 0;
 		ticksLostOther = 0;
 		combatTicks = 0;
@@ -123,6 +132,17 @@ class SessionTotals
 	 */
 	void recordAttackMade(boolean potted)
 	{
+		recordAttackMade(potted, -1);
+	}
+
+	/** See {@code Fight.recordAttackMade(boolean, double)}. */
+	void recordAttackMade(boolean potted, double boostShare)
+	{
+		if (boostShare >= 0)
+		{
+			sumBoostShare += Math.min(1, boostShare);
+			boostSamples++;
+		}
 		attacksMade++;
 		combatTicks++;
 		attempts++;
@@ -173,6 +193,13 @@ class SessionTotals
 
 	void recordAttackResolved(boolean prayed, boolean switched, double actualSetup, double idealSetup)
 	{
+		recordAttackResolved(prayed, switched, actualSetup, idealSetup, 0, 0);
+	}
+
+	/** See {@code Fight.recordAttackResolved(boolean, boolean, double, double, double, double)}. */
+	void recordAttackResolved(boolean prayed, boolean switched, double actualSetup, double idealSetup,
+		double boostCost, double switchCost)
+	{
 		if (prayed)
 		{
 			attacksPrayed++;
@@ -185,12 +212,32 @@ class SessionTotals
 		{
 			sumActualSetup += actualSetup;
 			sumIdealSetup += idealSetup;
+			sumBoostCost += Math.max(0, boostCost);
+			sumSwitchCost += Math.max(0, switchCost);
 		}
 	}
 
 	double efficiency()
 	{
 		return sumIdealSetup <= 0 ? -1 : sumActualSetup / sumIdealSetup;
+	}
+
+	/** See {@code Fight.boostShare}. */
+	double boostShare()
+	{
+		return boostSamples == 0 ? -1 : sumBoostShare / boostSamples;
+	}
+
+	/** See {@code Fight.boostCostShare}. */
+	double boostCostShare()
+	{
+		return sumIdealSetup <= 0 ? -1 : sumBoostCost / sumIdealSetup;
+	}
+
+	/** See {@code Fight.switchCostShare}. */
+	double switchCostShare()
+	{
+		return sumIdealSetup <= 0 ? -1 : sumSwitchCost / sumIdealSetup;
 	}
 
 	void recordExpected(double accuracy, double averageHit)

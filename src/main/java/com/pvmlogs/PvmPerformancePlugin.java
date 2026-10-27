@@ -167,8 +167,8 @@ public class PvmPerformancePlugin extends Plugin
 		+ "started,npc,npcId,maxHp,killed,damageDealt,damageTaken,attempts,targets,hits,"
 		+ "accuracyPct,durationSec,dps,avgHit,expMaxHit,expAccuracyPct,expAvgHit,"
 		+ "ticksLost,ticksLostPct,ticksLostEating,"
-		+ "attacksMade,attacksPrayed,attacksPotted,attacksSwitched,efficiencyPct,thrallDamage,"
-		+ "dotDamage,healed,statsWarning\n";
+		+ "attacksMade,attacksPrayed,attacksPotted,attacksSwitched,efficiencyPct,boostPct,boostCostPct,switchCostPct,"
+		+ "thrallDamage,dotDamage,healed,statsWarning\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -291,6 +291,8 @@ public class PvmPerformancePlugin extends Plugin
 	// Prayer and boost as they stood the instant the attack was proven, not at the end of the tick: a potion drunk after
 	// the attack but inside the same tick has already raised the boosted level by the time GameTick runs.
 	private boolean attackObservedPotted;
+	// How much of the full boost the attack's stats held, read with the potted flag (T-010).
+	private double attackObservedBoostShare = -1;
 	// The tick the attack left on, which is not always the tick its event surfaces: a projectile's start cycle can be a
 	// tick before the plugin hears of it, by which time the player may have switched. Melee has no such gap.
 	private int attackOriginTick = -1;
@@ -339,7 +341,7 @@ public class PvmPerformancePlugin extends Plugin
 	private final Map<Integer, Boolean> prayerUpByTick = new HashMap<>();
 	// Whether the gear worn on each recent tick was the best available, kept as a history for the same reason the prayer
 	// is.
-	private final Map<Integer, Boolean> switchedByTick = new HashMap<>();
+	private final Map<Integer, CombatCalc.SwitchCheck> switchedByTick = new HashMap<>();
 	// The attack speed in force on each recent tick, so the wait after an attack is the throwing weapon's and not that of
 	// whatever replaced it.
 	private final Map<Integer, Integer> speedByTick = new HashMap<>();
@@ -1494,7 +1496,7 @@ public class PvmPerformancePlugin extends Plugin
 		// was judged against the whip switched to by then. Cheap: the search is held until the weapon, style, target or
 		// carried items change.
 		switchedByTick.put(client.getTickCount(),
-			!combatCalc.missedGearSwitch(shown != null ? shown.getTargetId() : -1));
+			combatCalc.switchCheck(shown != null ? shown.getTargetId() : -1));
 		if (client.getTickCount() % 5 == 0)
 		{
 			switchedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
@@ -1613,13 +1615,14 @@ public class PvmPerformancePlugin extends Plugin
 		return lastAttackWasProjectile || !meleeEquippedNow ? PROJECTILE_BOOKING_LAG : MELEE_BOOKING_LAG;
 	}
 
-	private void record(boolean prayed, boolean switched, double actual, double ideal)
+	private void record(boolean prayed, boolean switched, double actual, double ideal, double boostCost,
+		double switchCost)
 	{
 		if (current != null && !current.isEnded())
 		{
-			current.recordAttackResolved(prayed, switched, actual, ideal);
+			current.recordAttackResolved(prayed, switched, actual, ideal, boostCost, switchCost);
 		}
-		session.recordAttackResolved(prayed, switched, actual, ideal);
+		session.recordAttackResolved(prayed, switched, actual, ideal, boostCost, switchCost);
 	}
 
 	/**
@@ -2138,6 +2141,7 @@ public class PvmPerformancePlugin extends Plugin
 			final int targetId = attacker.getTargetId();
 			final boolean prayed = Boolean.TRUE.equals(prayerUpByTick.get(attackTick));
 			final boolean potted = attackObservedPotted;
+			final double boostShare = attackObservedBoostShare;
 			// Worked out both ways while the loadout and boost are the ones that threw the attack. Which applies is decided by
 			// the prayer, and for a projectile that is not known until it lands.
 			final double ifPrayed = combatCalc.actualAverageHit(targetId, true);
@@ -2155,9 +2159,18 @@ public class PvmPerformancePlugin extends Plugin
 						+ "something the ideal is built from is under-reading",
 					targetId, bestSetup, actualSetup);
 			}
+			// What the missing boost cost this attack: the same attack at full boost, prayer and gear as they were (T-010).
+			final double boosted = combatCalc.boostedAverageHit(targetId, prayed);
+			final double boostCost = actualSetup >= 0 && boosted >= 0 ? Math.max(0, boosted - actualSetup) : 0;
 			// Read from the tick the attack went out on, never live: by now the gear may be someone else's. Absent means never
 			// sampled, which is not evidence of a missed switch, so it reads as clean.
-			final boolean switched = !Boolean.FALSE.equals(switchedByTick.get(attackTick));
+			final CombatCalc.SwitchCheck switchCheck = switchedByTick.get(attackTick);
+			final boolean switched = switchCheck == null || !switchCheck.isMissed();
+			final double switchCost = switchCheck == null ? 0 : switchCheck.cost();
+			if (!switched && attacker.isScored())
+			{
+				debug.log("SWITCH MISSED on attack thrown tick %d: %s", attackTick, switchCheck.describe());
+			}
 			// Whether this attack dealt damage, read from the tick it went out, which is where the gauntlets are armed or spent:
 			// every style passes through this one place with its attack tick worked out.
 			if (combatCalc.usesConflictionGauntlets())
@@ -2168,7 +2181,7 @@ public class PvmPerformancePlugin extends Plugin
 			// waiting for it; one after it already belongs to the next cooldown, so it is kept. Settled against the due tick
 			// this attack was waiting on, before it moves.
 			logEats(foodDelay.attackThrown(attackTick, attackDueTick));
-			attacker.recordAttackMade(potted);
+			attacker.recordAttackMade(potted, boostShare);
 			// The room remembers it too. From here every fight under it counts its ticks from the first one, rather than each
 			// waiting to be attacked in its own right.
 			if (currentEncounter != null && !currentEncounter.isEnded())
@@ -2177,11 +2190,11 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			if (attacker.isScored())
 			{
-				session.recordAttackMade(potted);
+				session.recordAttackMade(potted, boostShare);
 				// Decided here, at the attack. The damage this is measured against was worked out on this tick from this loadout,
 				// so the prayer has to be the one that went with it - read at the hitsplat it is measured at the LANDING, ticks
 				// after the server scored the attack.
-				record(prayed, switched, actualSetup, idealSetup);
+				record(prayed, switched, actualSetup, idealSetup, boostCost, switchCost);
 				// Sampled on the tick the attack went out, so the figures describe the loadout that threw it and one attack takes
 				// one sample however it ends.
 				sampleExpected(attacker);
@@ -2199,10 +2212,11 @@ public class PvmPerformancePlugin extends Plugin
 			// Every figure here was already worked out above, so the line costs nothing beyond formatting it. An expected
 			// average of -1 is the tell that the target has no stats and that this attack was scored against nothing.
 			debug.log("ATTACK on %s (npc %d) thrown tick %d, booked +%d, speed %d, next due %d, "
-					+ "prayed=%b potted=%b switched=%b projectile=%b, scored=%b, expected avg %.2f, ideal %.2f",
+					+ "prayed=%b potted=%b boost %.2f (cost %.2f) switched=%b (cost %.2f) projectile=%b, scored=%b, "
+					+ "expected avg %.2f, ideal %.2f",
 				attacker.getTargetName(), targetId, attackTick, attackObservedLag, speed, attackDueTick,
-				prayed, potted, switched, attackObservedFromProjectile, attacker.isScored(),
-				actualSetup, idealSetup);
+				prayed, potted, boostShare, boostCost, switched, switchCost, attackObservedFromProjectile,
+				attacker.isScored(), actualSetup, idealSetup);
 			lastAttackFromProjectile = attackObservedFromProjectile;
 			if (attackObservedFromProjectile)
 			{
@@ -2361,6 +2375,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 		}
 		attackObservedPotted = combatCalc.isPotted();
+		attackObservedBoostShare = combatCalc.boostShare();
 	}
 
 	// Notices the intended prayer going up part-way through a tick, so a prayer switched on and attacked with on the same
@@ -3450,7 +3465,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Expected accuracy is per npc reached and expected damage per throw, which is what each side is accumulated over.
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
-			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d,%d,%d,%s%n",
+			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -3472,6 +3487,9 @@ public class PvmPerformancePlugin extends Plugin
 				room.getAttacksPotted(),
 				room.getAttacksSwitched(),
 				csvExpected(room.efficiency() * 100, 1),
+				csvExpected(room.boostShare() * 100, 1),
+				csvExpected(room.boostCostShare() * 100, 2),
+				csvExpected(room.switchCostShare() * 100, 2),
 				room.getThrallDamage(),
 				room.getDotDamage(),
 				room.getHealed(),
@@ -3491,7 +3509,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int attempts = raid.getAttempts();
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
-			+ String.format("%s,,,,,%d,,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d,%d,%d,%s%n",
+			+ String.format("%s,,,,,%d,,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s%n",
 				started,
 				raid.getDamageDealt(),
 				attempts,
@@ -3511,6 +3529,9 @@ public class PvmPerformancePlugin extends Plugin
 				raid.getAttacksPotted(),
 				raid.getAttacksSwitched(),
 				csvExpected(raid.efficiency() * 100, 1),
+				csvExpected(raid.boostShare() * 100, 1),
+				csvExpected(raid.boostCostShare() * 100, 2),
+				csvExpected(raid.switchCostShare() * 100, 2),
 				raid.getThrallDamage(),
 				raid.getDotDamage(),
 				raid.getHealed(),
@@ -3528,7 +3549,7 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
-		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%d,%d,%d,%s%n",
+		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -3554,6 +3575,9 @@ public class PvmPerformancePlugin extends Plugin
 			fight.getAttacksPotted(),
 			fight.getAttacksSwitched(),
 			csvExpected(fight.efficiency() * 100, 1),
+			csvExpected(fight.boostShare() * 100, 1),
+			csvExpected(fight.boostCostShare() * 100, 2),
+			csvExpected(fight.switchCostShare() * 100, 2),
 			fight.getThrallDamage(),
 			fight.getDotDamage(),
 			fight.getHealed(),

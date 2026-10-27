@@ -31,7 +31,7 @@ public class CsvRowTest
 	public void theHeaderNamesEveryColumnOnce()
 	{
 		// attempts and targets are both there now: one throw of chinchompas is one attempt and several targets.
-		assertEquals(33, COLUMNS);
+		assertEquals(36, COLUMNS);
 	}
 
 	@Test
@@ -93,5 +93,31 @@ public class CsvRowTest
 	{
 		assertEquals("", PvmPerformancePlugin.csvText(null));
 		assertEquals("", PvmPerformancePlugin.csvText(""));
+	}
+
+	/** T-010: the boost share and both costs, as percentages, in their named columns. */
+	@Test
+	public void theBoostShareAndCostsHaveTheirColumns()
+	{
+		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
+		final Fight f = new Fight("Vardorvis", NpcIds.GOBLIN, 1, 700, 0L, null, 0);
+		f.recordAttackMade(false, 0.84);
+		f.recordAttackResolved(true, false, 9.5, 10.0, 0.3, 0.12);
+		f.end(true, 1200L);
+		final String[] cells = ("fight,,,\"\"," + PvmPerformancePlugin.csvRow(f)).trim().split(",", -1);
+		assertEquals("84.0", cells[header.indexOf("boostPct")]);
+		assertEquals("3.00", cells[header.indexOf("boostCostPct")]);
+		assertEquals("1.20", cells[header.indexOf("switchCostPct")]);
+		// The old count stays, for fights saved before the share.
+		assertEquals("0", cells[header.indexOf("attacksPotted")]);
+	}
+
+	@Test
+	public void aFightFromBeforeTheShareLeavesItBlank()
+	{
+		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
+		final String[] cells = ("fight,x,1,\"room\"," + PvmPerformancePlugin.csvRow(fight())).trim().split(",", -1);
+		assertEquals("", cells[header.indexOf("boostPct")]);
+		assertEquals("1", cells[header.indexOf("attacksPotted")]);
 	}
 }

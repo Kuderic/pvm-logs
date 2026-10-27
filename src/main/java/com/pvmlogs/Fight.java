@@ -101,6 +101,15 @@ class Fight
 	private int attacksSwitched;
 	private double sumActualSetup;
 	private double sumIdealSetup;
+	// How much of the full boost each attack's stats held, summed with the number of attacks it was read for (T-010).
+	// attacksPotted stays beside it: a fight saved before these existed reads back with no samples, and falls back to the
+	// count.
+	private double sumBoostShare;
+	private int boostSamples;
+	// What the missing boost and the missed switches cost, in expected damage, summed over the same attacks as the two
+	// setup sums. Both are parts of sumIdealSetup - sumActualSetup; the prayer is the rest.
+	private double sumBoostCost;
+	private double sumSwitchCost;
 
 	// Ticks the weapon was off cooldown with no attack made, against those elapsed since the first attack. Eating is
 	// separated out because it is a choice with a known cost.
@@ -378,6 +387,17 @@ class Fight
 	// it resolves, and the flag and the efficiency pair have to come from the same reading.
 	void recordAttackResolved(boolean prayed, boolean switched, double actualSetup, double idealSetup)
 	{
+		recordAttackResolved(prayed, switched, actualSetup, idealSetup, 0, 0);
+	}
+
+	/**
+	 * As above, with what this attack lost to a missing boost and to a missed
+	 * switch, in expected damage. Counted only where the setup pair is, so the
+	 * parts and the whole are summed over the same attacks.
+	 */
+	void recordAttackResolved(boolean prayed, boolean switched, double actualSetup, double idealSetup,
+		double boostCost, double switchCost)
+	{
 		if (prayed)
 		{
 			attacksPrayed++;
@@ -390,6 +410,8 @@ class Fight
 		{
 			sumActualSetup += actualSetup;
 			sumIdealSetup += idealSetup;
+			sumBoostCost += Math.max(0, boostCost);
+			sumSwitchCost += Math.max(0, switchCost);
 		}
 	}
 
@@ -451,6 +473,20 @@ class Fight
 
 	void recordAttackMade(boolean potted)
 	{
+		recordAttackMade(potted, -1);
+	}
+
+	/**
+	 * @param boostShare how much of the full boost the attack's stats held, 0
+	 *                   to 1, or negative when it was not read
+	 */
+	void recordAttackMade(boolean potted, double boostShare)
+	{
+		if (boostShare >= 0)
+		{
+			sumBoostShare += Math.min(1, boostShare);
+			boostSamples++;
+		}
 		attacking = true;
 		combatTicks++;
 		attacksMade++;
@@ -473,6 +509,28 @@ class Fight
 	double efficiency()
 	{
 		return sumIdealSetup <= 0 ? -1 : sumActualSetup / sumIdealSetup;
+	}
+
+	/** The mean share of the full boost the attacks held, or -1 when none was read (a fight saved before T-010). */
+	double boostShare()
+	{
+		return boostSamples == 0 ? -1 : sumBoostShare / boostSamples;
+	}
+
+	/**
+	 * What the missing boost cost, as a share of the damage the attacks would
+	 * have been set up to deal. With switchCostShare and the prayer's part it
+	 * makes up 1 - efficiency. -1 when nothing was comparable.
+	 */
+	double boostCostShare()
+	{
+		return sumIdealSetup <= 0 ? -1 : sumBoostCost / sumIdealSetup;
+	}
+
+	/** What the missed switches cost, on the same terms as boostCostShare. */
+	double switchCostShare()
+	{
+		return sumIdealSetup <= 0 ? -1 : sumSwitchCost / sumIdealSetup;
 	}
 
 	/**

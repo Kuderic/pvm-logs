@@ -327,6 +327,49 @@ class Encounter
 		return ideal <= 0 ? -1 : actual / ideal;
 	}
 
+	/** See {@code Fight.boostShare}: over every scored fight's attacks, or -1 if none was read. */
+	double boostShare()
+	{
+		double sum = 0;
+		int samples = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				sum += fight.getSumBoostShare();
+				samples += fight.getBoostSamples();
+			}
+		}
+		return samples == 0 ? -1 : sum / samples;
+	}
+
+	/** See {@code Fight.boostCostShare}. */
+	double boostCostShare()
+	{
+		return costShare(true);
+	}
+
+	/** See {@code Fight.switchCostShare}. */
+	double switchCostShare()
+	{
+		return costShare(false);
+	}
+
+	private double costShare(boolean boost)
+	{
+		double cost = 0;
+		double ideal = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				cost += boost ? fight.getSumBoostCost() : fight.getSumSwitchCost();
+				ideal += fight.getSumIdealSetup();
+			}
+		}
+		return ideal <= 0 ? -1 : cost / ideal;
+	}
+
 	int getTicksLostEating()
 	{
 		int total = 0;

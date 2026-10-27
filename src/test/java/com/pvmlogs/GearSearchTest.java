@@ -2,10 +2,17 @@ package com.pvmlogs;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import net.runelite.api.EquipmentInventorySlot;
+import net.runelite.api.gameval.ItemID;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 /**
@@ -108,5 +115,166 @@ public class GearSearchTest
 		final Loadout worn = empty().with(EquipmentInventorySlot.HEAD, 500);
 		assertSame(worn, GearSearch.best(worn, carrying(EquipmentInventorySlot.HEAD, 500),
 			false, higherIdIsBetter()));
+	}
+
+	// T-010: scored per tick, and items worn on purpose.
+
+	private static final int TENTACLE = ItemID.ABYSSAL_TENTACLE;
+	private static final int ELDER_MAUL = ItemID.ELDER_MAUL;
+	private static final int BLOOD_FURY = ItemID.BLOOD_AMULET;
+	private static final int TORTURE = ItemID.ZENYTE_AMULET_ENCHANTED;
+
+	// Made-up figures in the shape CombatCalc gives: each item adds to the average hit, and the weapon sets the speed.
+	private static final Map<Integer, Double> HIT = new HashMap<>();
+	private static final Map<Integer, Integer> SPEED = new HashMap<>();
+	private static final Map<Integer, String> NAME = new HashMap<>();
+
+	static
+	{
+		HIT.put(TENTACLE, 15.0);
+		SPEED.put(TENTACLE, 4);
+		NAME.put(TENTACLE, "Abyssal tentacle");
+		HIT.put(ELDER_MAUL, 20.0);
+		SPEED.put(ELDER_MAUL, 6);
+		NAME.put(ELDER_MAUL, "Elder maul");
+		HIT.put(BLOOD_FURY, 0.0);
+		NAME.put(BLOOD_FURY, "Amulet of blood fury");
+		HIT.put(TORTURE, 0.4);
+		NAME.put(TORTURE, "Amulet of torture");
+	}
+
+	private static double hit(Loadout gear)
+	{
+		double total = 0;
+		for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
+		{
+			total += HIT.getOrDefault(gear.id(slot), 0.0);
+		}
+		return total;
+	}
+
+	private static int speed(Loadout gear)
+	{
+		return SPEED.getOrDefault(gear.id(EquipmentInventorySlot.WEAPON), 4);
+	}
+
+	// What CombatCalc now passes the search: damage per tick.
+	private static GearSearch.Score perTick()
+	{
+		return gear -> GearSearch.perTick(hit(gear), speed(gear));
+	}
+
+	private static String nameIn(Loadout gear, EquipmentInventorySlot slot)
+	{
+		return NAME.get(gear.id(slot));
+	}
+
+	private static Set<EquipmentInventorySlot> kept(Loadout worn, String setting)
+	{
+		return GearSearch.keptSlots(worn, GearSearch.deliberateNames(setting), slot -> nameIn(worn, slot));
+	}
+
+	private static final Loadout TENTACLE_AND_BLOOD_FURY = empty()
+		.with(EquipmentInventorySlot.WEAPON, TENTACLE)
+		.with(EquipmentInventorySlot.AMULET, BLOOD_FURY);
+
+	@Test
+	public void perTickRanksASlowHeavyHitterBelowAFasterWeaponThatOutdamagesIt()
+	{
+		// Per attack the maul wins, 20 to 15; per tick it loses, 3.33 to 3.75. Per tick is what a fight is made of.
+		assertTrue(HIT.get(ELDER_MAUL) > HIT.get(TENTACLE));
+		assertTrue(GearSearch.perTick(20.0, 6) < GearSearch.perTick(15.0, 4));
+		assertEquals(0.0, GearSearch.switchCost(15.0, 4, 20.0, 6), 1e-9);
+	}
+
+	@Test
+	public void aSlowerHarderHittingCarriedWeaponIsNotAMissedSwitch()
+	{
+		final Loadout worn = empty().with(EquipmentInventorySlot.WEAPON, TENTACLE);
+		assertSame(worn, GearSearch.best(worn, carrying(EquipmentInventorySlot.WEAPON, ELDER_MAUL), false, perTick()));
+	}
+
+	@Test
+	public void aBetterSameSpeedAmuletIsAMissedSwitchWithItsCost()
+	{
+		// The weapon stays pinned (Eric, 2026-10-26), so the brief's "better same-speed weapon" case is an amulet here.
+		final Loadout best = GearSearch.best(TENTACLE_AND_BLOOD_FURY, carrying(EquipmentInventorySlot.AMULET, TORTURE),
+			false, perTick());
+		assertEquals(TORTURE, best.id(EquipmentInventorySlot.AMULET));
+		assertEquals(0.4, GearSearch.switchCost(hit(TENTACLE_AND_BLOOD_FURY), 4, hit(best), speed(best)), 1e-9);
+	}
+
+	@Test
+	public void bloodFuryWornWithTortureCarriedIsNotFlaggedByDefault()
+	{
+		final String setting = new PvmPerformanceConfig()
+		{
+		}.deliberateItems();
+		final Set<EquipmentInventorySlot> kept = kept(TENTACLE_AND_BLOOD_FURY, setting);
+		assertEquals(EnumSet.of(EquipmentInventorySlot.AMULET), kept);
+		assertSame(TENTACLE_AND_BLOOD_FURY, GearSearch.best(TENTACLE_AND_BLOOD_FURY,
+			carrying(EquipmentInventorySlot.AMULET, TORTURE), false, kept, perTick()));
+	}
+
+	@Test
+	public void withTheSettingClearedBloodFuryIsFlaggedWithItsCost()
+	{
+		final Set<EquipmentInventorySlot> kept = kept(TENTACLE_AND_BLOOD_FURY, "");
+		assertTrue(kept.isEmpty());
+		final Loadout best = GearSearch.best(TENTACLE_AND_BLOOD_FURY, carrying(EquipmentInventorySlot.AMULET, TORTURE),
+			false, kept, perTick());
+		assertNotSame(TENTACLE_AND_BLOOD_FURY, best);
+		assertEquals(TORTURE, best.id(EquipmentInventorySlot.AMULET));
+		// Small, and shown as small: 0.4 of a 15 hit.
+		assertEquals(0.4, GearSearch.switchCost(hit(TENTACLE_AND_BLOOD_FURY), 4, hit(best), speed(best)), 1e-9);
+	}
+
+	@Test
+	public void aKeptSlotLeavesTheOtherSlotsJudged()
+	{
+		final Loadout worn = TENTACLE_AND_BLOOD_FURY.with(EquipmentInventorySlot.HEAD, 100);
+		final Loadout best = GearSearch.best(worn, Arrays.asList(
+			new GearSearch.Candidate(EquipmentInventorySlot.AMULET, TORTURE),
+			new GearSearch.Candidate(EquipmentInventorySlot.HEAD, 500)),
+			false, EnumSet.of(EquipmentInventorySlot.AMULET), higherIdIsBetter());
+		assertEquals(BLOOD_FURY, best.id(EquipmentInventorySlot.AMULET));
+		assertEquals(500, best.id(EquipmentInventorySlot.HEAD));
+	}
+
+	@Test
+	public void theSettingIsCommaSeparatedNamesMatchedWithoutCase()
+	{
+		assertEquals(2, GearSearch.deliberateNames(" Amulet of Blood Fury , ring of suffering (i),, ").size());
+		assertTrue(GearSearch.deliberateNames("").isEmpty());
+		assertTrue(GearSearch.deliberateNames(null).isEmpty());
+		assertEquals(EnumSet.of(EquipmentInventorySlot.AMULET), kept(TENTACLE_AND_BLOOD_FURY, "AMULET OF BLOOD FURY"));
+		// A name has to match whole: "blood fury" alone is not the amulet.
+		assertTrue(kept(TENTACLE_AND_BLOOD_FURY, "blood fury").isEmpty());
+	}
+
+	@Test
+	public void theWeaponIsNeverKeptOrJudgedWhateverTheSettingSays()
+	{
+		// Naming the weapon changes nothing: it is pinned already.
+		assertTrue(kept(TENTACLE_AND_BLOOD_FURY, "Abyssal tentacle").isEmpty());
+	}
+
+	@Test
+	public void aSwitchCostIsNothingWithoutBothFigures()
+	{
+		assertEquals(0.0, GearSearch.switchCost(-1, 4, 10.0, 4), 1e-9);
+		assertEquals(0.0, GearSearch.switchCost(10.0, 4, -1, 4), 1e-9);
+		assertEquals(-1.0, GearSearch.perTick(-1, 4), 1e-9);
+	}
+
+	@Test
+	public void aSwitchCheckCarriesItsCostAndNothingWhenClean()
+	{
+		final Loadout best = TENTACLE_AND_BLOOD_FURY.with(EquipmentInventorySlot.AMULET, TORTURE);
+		final CombatCalc.SwitchCheck missed = new CombatCalc.SwitchCheck(TENTACLE_AND_BLOOD_FURY, best, 15.0, 4, 15.4, 4);
+		assertTrue(missed.isMissed());
+		assertEquals(0.4, missed.cost(), 1e-9);
+		assertTrue(!CombatCalc.SwitchCheck.NONE.isMissed());
+		assertEquals(0.0, CombatCalc.SwitchCheck.NONE.cost(), 1e-9);
 	}
 }
