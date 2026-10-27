@@ -2,8 +2,8 @@ package com.pvmlogs;
 
 import lombok.Getter;
 
-// The offensive prayer a player intends to hold up, chosen in the config and used as the standard the efficiency figure
-// measures against.
+// The offensive prayers and what each multiplies. Once the config's choice of prayer; since T-015 the table the ideal prayer
+// is picked from (PrayerIdeal), from what the player has unlocked and the levels they have.
 @Getter
 public enum PrayerChoice
 {
@@ -18,6 +18,8 @@ public enum PrayerChoice
 	INCREDIBLE_REFLEXES("Incredible Reflexes", 1.15, 1.0),
 	CHIVALRY("Chivalry", 1.15, 1.18),
 	PIETY("Piety", 1.20, 1.23),
+	// Released 2026-10-20 (The Fractured Archive's Horn of Bran); replaces Piety once unlocked.
+	ZEAL("Zeal", 1.25, 1.28),
 
 	// Ranged
 	SHARP_EYE("Sharp Eye", 1.05, 1.05),

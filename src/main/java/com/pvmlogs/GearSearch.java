@@ -1,12 +1,6 @@
 package com.pvmlogs;
 
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.function.Function;
 import net.runelite.api.EquipmentInventorySlot;
 
 // The best gear the player could have been wearing for the weapon in hand.
@@ -21,8 +15,9 @@ import net.runelite.api.EquipmentInventorySlot;
 // right if a candidate ever does, where per attack would rank a slow heavy hitter above a faster weapon that outdamages
 // it.
 //
-// Some items are worn for what the damage figures cannot see - an amulet of blood fury for its healing - and the player
-// names them in the settings. Their slot is kept as worn, so a better-damage amulet is not called a missed switch.
+// A trade the damage figures cannot see - blood fury worn for its healing, a torture in the bag - is still a missed
+// switch, but it carries its cost (switchCost), so a small trade reads as small. T-010's "Worn on purpose" setting that
+// excused such items was removed again by T-015: typing item names was too hard to use.
 final class GearSearch
 {
 	// Two passes, so a slot judged early can be reconsidered once a later one changed what the loadout is worth. The
@@ -63,16 +58,6 @@ final class GearSearch
 	 */
 	static Loadout best(Loadout worn, List<Candidate> candidates, boolean twoHandedWeapon, Score score)
 	{
-		return best(worn, candidates, twoHandedWeapon, Collections.emptySet(), score);
-	}
-
-	/**
-	 * As above, leaving the {@code kept} slots as they are worn: the ones
-	 * holding an item the player wears on purpose.
-	 */
-	static Loadout best(Loadout worn, List<Candidate> candidates, boolean twoHandedWeapon,
-		Set<EquipmentInventorySlot> kept, Score score)
-	{
 		Loadout best = worn;
 		double bestScore = score.of(worn);
 		for (int pass = 0; pass < MAX_PASSES; pass++)
@@ -83,8 +68,7 @@ final class GearSearch
 				// The weapon is not judged, and a two-hander leaves no shield slot - offering one would be advice the game will not
 				// let the player take.
 				if (candidate.slot == EquipmentInventorySlot.WEAPON
-					|| (twoHandedWeapon && candidate.slot == EquipmentInventorySlot.SHIELD)
-					|| kept.contains(candidate.slot))
+					|| (twoHandedWeapon && candidate.slot == EquipmentInventorySlot.SHIELD))
 				{
 					continue;
 				}
@@ -130,51 +114,5 @@ final class GearSearch
 			return 0;
 		}
 		return Math.max(0, (perTick(bestHit, bestSpeed) - perTick(wornHit, wornSpeed)) * Math.max(1, wornSpeed));
-	}
-
-	/** The setting's comma-separated item names, trimmed and lower-cased. */
-	static Set<String> deliberateNames(String setting)
-	{
-		final Set<String> names = new HashSet<>();
-		if (setting == null)
-		{
-			return names;
-		}
-		for (String name : setting.split(","))
-		{
-			final String trimmed = name.trim().toLowerCase(Locale.ROOT);
-			if (!trimmed.isEmpty())
-			{
-				names.add(trimmed);
-			}
-		}
-		return names;
-	}
-
-	/**
-	 * The slots whose worn item is one the player named as worn on purpose.
-	 * Names are matched whole and without case.
-	 */
-	static Set<EquipmentInventorySlot> keptSlots(Loadout worn, Set<String> deliberate,
-		Function<EquipmentInventorySlot, String> nameOf)
-	{
-		final Set<EquipmentInventorySlot> kept = EnumSet.noneOf(EquipmentInventorySlot.class);
-		if (deliberate.isEmpty())
-		{
-			return kept;
-		}
-		for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
-		{
-			if (slot == EquipmentInventorySlot.WEAPON || worn.id(slot) < 0)
-			{
-				continue;
-			}
-			final String name = nameOf.apply(slot);
-			if (name != null && deliberate.contains(name.trim().toLowerCase(Locale.ROOT)))
-			{
-				kept.add(slot);
-			}
-		}
-		return kept;
 	}
 }

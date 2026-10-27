@@ -183,6 +183,17 @@ class Raid
 		return total;
 	}
 
+	/** See {@code Fight.attacksDrained}: over every room. */
+	int getAttacksDrained()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getAttacksDrained();
+		}
+		return total;
+	}
+
 	int getAttacksPotted()
 	{
 		int total = 0;

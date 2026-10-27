@@ -3,6 +3,7 @@ package com.pvmlogs;
 import static org.junit.Assert.assertEquals;
 import com.google.gson.Gson;
 import net.runelite.api.Skill;
+import net.runelite.api.gameval.ItemID;
 import org.junit.Test;
 
 /**
@@ -12,7 +13,7 @@ import org.junit.Test;
  */
 public class BoostShareTest
 {
-	private static final int SUPER_COMBAT_99 = MeleeBoost.SUPER_COMBAT.boost(Skill.STRENGTH, 99);
+	private static final int SUPER_COMBAT_99 = BoostTable.get(ItemID._4DOSE2COMBAT).boost(Skill.STRENGTH, 99, 1);
 
 	private static Fight fight()
 	{
@@ -52,7 +53,7 @@ public class BoostShareTest
 	public void withNoBoostExpectedAStatAtItsBaseHoldsAllOfIt()
 	{
 		// Super strength leaves attack's goal at nothing; attack at its base is not marked down. The same call isPotted made.
-		assertEquals(0, MeleeBoost.SUPER_STRENGTH.boost(Skill.ATTACK, 99));
+		assertEquals(0, BoostTable.get(ItemID._4DOSE2STRENGTH).boost(Skill.ATTACK, 99, 1));
 		assertEquals(1.0, CombatCalc.boostShare(99, 99, 0), 1e-9);
 		assertEquals(0.0, CombatCalc.boostShare(95, 99, 0), 1e-9);
 	}

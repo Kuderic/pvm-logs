@@ -193,6 +193,10 @@ public class PvmPerformancePlugin extends Plugin
 	@Inject
 	private ItemManager itemManager;
 
+	// For the blowpipe dart remembered per account (T-015), a hidden key rather than a setting.
+	@Inject
+	private ConfigManager configManager;
+
 	@Inject
 	private ScheduledExecutorService executor;
 
@@ -295,6 +299,8 @@ public class PvmPerformancePlugin extends Plugin
 	private boolean attackObservedPotted;
 	// How much of the full boost the attack's stats held, read with the potted flag (T-010).
 	private double attackObservedBoostShare = -1;
+	// Whether any stat the attack rolled on was below its base (T-015).
+	private boolean attackObservedDrained;
 	// The tick the attack left on, which is not always the tick its event surfaces: a projectile's start cycle can be a
 	// tick before the plugin hears of it, by which time the player may have switched. Melee has no such gap.
 	private int attackOriginTick = -1;
@@ -1097,11 +1103,8 @@ public class PvmPerformancePlugin extends Plugin
 			final Fight shown = getDisplayFight();
 			final int targetId = current != null && !current.isEnded() ? targetLiveId
 				: shown == null ? -1 : shown.getTargetId();
-			header.add(String.format("melee boost %s, ranged boost %s, magic boost %s",
-				config.meleeBoostGoal(), config.rangedBoostGoal(), config.magicBoostGoal()));
-			header.add(String.format("prayers: melee %s, ranged %s, magic %s; slayer helm off task %b",
-				config.meleePrayerGoal(), config.rangedPrayerGoal(), config.magicPrayerGoal(),
-				config.slayerHelmetOffTask()));
+			// What used to be settings, now worked out from the game (T-015).
+			header.add(combatCalc.describeWorkedOut(targetId));
 			header.add(String.format("fight timeout %d ticks, file logging %b",
 				config.fightTimeoutTicks(), debug.isOn()));
 			header.addAll(combatCalc.describeLoadout(targetId));
@@ -1121,6 +1124,7 @@ public class PvmPerformancePlugin extends Plugin
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
 		noteConsumed(event);
+		noteDartsLoaded(event);
 		// Any click on an NPC, whatever it ordered: attacking it, casting on it, or firing at it. What matters is that I
 		// aimed something at that NPC.
 		final NPC clicked = event.getMenuEntry().getNpc();
@@ -2179,6 +2183,7 @@ public class PvmPerformancePlugin extends Plugin
 			final boolean prayed = Boolean.TRUE.equals(prayerUpByTick.get(attackTick));
 			final boolean potted = attackObservedPotted;
 			final double boostShare = attackObservedBoostShare;
+			final boolean drained = attackObservedDrained;
 			// Worked out both ways while the loadout and boost are the ones that threw the attack. Which applies is decided by
 			// the prayer, and for a projectile that is not known until it lands.
 			final double ifPrayed = combatCalc.actualAverageHit(targetId, true);
@@ -2218,7 +2223,7 @@ public class PvmPerformancePlugin extends Plugin
 			// waiting for it; one after it already belongs to the next cooldown, so it is kept. Settled against the due tick
 			// this attack was waiting on, before it moves.
 			logEats(foodDelay.attackThrown(attackTick, attackDueTick));
-			attacker.recordAttackMade(potted, boostShare);
+			attacker.recordAttackMade(potted, boostShare, drained);
 			// The room remembers it too. From here every fight under it counts its ticks from the first one, rather than each
 			// waiting to be attacked in its own right.
 			if (currentEncounter != null && !currentEncounter.isEnded())
@@ -2227,7 +2232,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			if (attacker.isScored())
 			{
-				session.recordAttackMade(potted, boostShare);
+				session.recordAttackMade(potted, boostShare, drained);
 				// Decided here, at the attack. The damage this is measured against was worked out on this tick from this loadout,
 				// so the prayer has to be the one that went with it - read at the hitsplat it is measured at the LANDING, ticks
 				// after the server scored the attack.
@@ -2314,6 +2319,75 @@ public class PvmPerformancePlugin extends Plugin
 			eating ? String.format(" (eating %d/%d)",
 				FoodDelay.eatingTickNumber(client.getTickCount(), attackDueTick, lag), added) : "",
 			attackDueTick, lag, counts ? "" : ", NOT COUNTED - no attack made in this fight yet");
+	}
+
+	// The hidden per-account key holding the blowpipe dart last seen (T-015), and the setting it replaced, read once as the
+	// starting guess so a player who had set it keeps their dart until the game shows another.
+	private static final String DART_SEEN_KEY = "blowpipeDartSeen";
+	private static final String LEGACY_DART_KEY = "blowpipeDart";
+	// Whether this login's remembered dart has been read. Read on the first tick logged in, when the account's profile is
+	// known, and again after every logout or hop.
+	private boolean dartLoaded;
+
+	// Darts used on the blowpipe: "Dragon dart -> Toxic blowpipe". Loading them is the one moment the game shows which.
+	private void noteDartsLoaded(MenuOptionClicked event)
+	{
+		if (!"Use".equals(event.getMenuOption()) || event.getMenuTarget() == null)
+		{
+			return;
+		}
+		final BlowpipeDart dart = BlowpipeDart.fromUseTarget(Text.removeTags(event.getMenuTarget()));
+		if (dart != null)
+		{
+			rememberDart(dart, "darts used on the blowpipe, tick " + client.getTickCount());
+		}
+	}
+
+	// The blowpipe's Check message names its darts. Any "Darts:" message not understood is logged, since the wording was
+	// written from memory of the game rather than a log.
+	private void noteBlowpipeCheck(String message)
+	{
+		if (!message.contains("Darts"))
+		{
+			return;
+		}
+		final BlowpipeDart dart = BlowpipeDart.fromCheckMessage(message);
+		if (dart == null)
+		{
+			debug.log("BLOWPIPE message not understood: %s", message);
+			return;
+		}
+		rememberDart(dart, "blowpipe checked, tick " + client.getTickCount());
+	}
+
+	private void rememberDart(BlowpipeDart dart, String how)
+	{
+		combatCalc.setBlowpipeDart(dart, how);
+		configManager.setRSProfileConfiguration(PvmPerformanceConfig.GROUP, DART_SEEN_KEY, dart.name());
+		debug.log("BLOWPIPE dart %s (%s)", dart, how);
+	}
+
+	// The dart remembered for this account, else the old setting's value, else nothing (the calc then assumes dragon).
+	private void loadRememberedDart()
+	{
+		final String seen = configManager.getRSProfileConfiguration(PvmPerformanceConfig.GROUP, DART_SEEN_KEY);
+		final String legacy = configManager.getConfiguration(PvmPerformanceConfig.GROUP, LEGACY_DART_KEY);
+		final String name = seen != null ? seen : legacy;
+		if (name == null)
+		{
+			// Another account may have been logged in before: its dart is not this one's.
+			combatCalc.setBlowpipeDart(BlowpipeDart.DRAGON, "assumed, not seen yet");
+			return;
+		}
+		try
+		{
+			combatCalc.setBlowpipeDart(BlowpipeDart.valueOf(name),
+				seen != null ? "remembered for this account" : "from the old Blowpipe dart setting, not seen yet");
+		}
+		catch (IllegalArgumentException e)
+		{
+			debug.log("BLOWPIPE remembered dart '%s' is not one this knows", name);
+		}
 	}
 
 	// Notes a click on food or drink. It counts once the inventory shows it eaten: a click can be refused, and two on one
@@ -2413,6 +2487,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		attackObservedPotted = combatCalc.isPotted();
 		attackObservedBoostShare = combatCalc.boostShare();
+		attackObservedDrained = combatCalc.isDrained();
 	}
 
 	// Notices the intended prayer going up part-way through a tick, so a prayer switched on and attacked with on the same
@@ -2449,6 +2524,7 @@ public class PvmPerformancePlugin extends Plugin
 			return;
 		}
 		final String message = Text.removeTags(event.getMessage());
+		noteBlowpipeCheck(message);
 		if (message.startsWith("You have placed a Mark of Darkness upon yourself"))
 		{
 			gearBonuses.setMarkOfDarkness(true);
@@ -2496,6 +2572,11 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick tick)
 	{
+		if (!dartLoaded)
+		{
+			dartLoaded = true;
+			loadRememberedDart();
+		}
 		// Before anything asks for the target's stats: the bar decides which version of a boss this is, and what it has left
 		// moves Vardorvis's defence.
 		readHealthBar();
@@ -2508,6 +2589,11 @@ public class PvmPerformancePlugin extends Plugin
 		// verdict must be on screen the moment the miss is known - safe ahead of the booking because a cast is never judged
 		// on its own tick.
 		resolveCasts(System.currentTimeMillis());
+		// The highest boost seen this fight is part of the ideal (T-015): a pre-pot counts after it has worn off.
+		if (current != null && !current.isEnded())
+		{
+			combatCalc.noteBoosts();
+		}
 		refreshExpected();
 		// Sampled BEFORE the booking reads it back: a cast booked from its animation has no lag, so it asks for this tick's
 		// answer, and written afterwards there was none. hasOffensivePrayer reads the server's copy.
@@ -2592,6 +2678,8 @@ public class PvmPerformancePlugin extends Plugin
 		final GameState state = event.getGameState();
 		if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING)
 		{
+			// Possibly another account next, with its own blowpipe.
+			dartLoaded = false;
 			if (current != null && !current.isEnded())
 			{
 				finalizeFight(false, current.getLastActivityMillis(), "logged out or hopped");
@@ -2650,6 +2738,9 @@ public class PvmPerformancePlugin extends Plugin
 		targetLiveId = npc.getId();
 		targetNpc = npc;
 		combatCalc.setTarget(npc);
+		// A new fight's standard: the boosts seen in the last one no longer count, and this tick's do.
+		combatCalc.startFight();
+		combatCalc.noteBoosts();
 		labelOlmPhase(current);
 		labelNightmareTotem(current, npc.getId());
 		openEncounterFor(current, now);
@@ -2657,6 +2748,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.getTargetName(), npc.getId(), npc.getIndex(), maxHp,
 			current.getGroupName(), current.encounterName(), raidType);
 		debug.log("  %s", monsterStats.describe(npc.getId()));
+		debug.log("  %s", combatCalc.describeWorkedOut(npc.getId()));
 	}
 
 	// Opens a fight as soon as the player targets something attackable, so the overlay is up while the first attack is

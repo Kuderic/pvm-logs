@@ -3,6 +3,7 @@ package com.pvmlogs;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
@@ -20,6 +21,7 @@ import net.runelite.api.NPCComposition;
 import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
 import net.runelite.api.widgets.Widget;
+import net.runelite.api.gameval.DBTableID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
@@ -178,7 +180,69 @@ class CombatCalc
 	private GearBonus computeGearBonus(int npcId)
 	{
 		return gearBonuses.compute(gear(), attackStyle(), monsters.get(npcId), activeSpell(),
-			!config.slayerHelmetOffTask());
+			slayerVerdict(npcId).onTask);
+	}
+
+	// What the on-task verdict was worked out from: the slayer varps, the boss id and the npc. Recomputed only when one of
+	// them moves, since the task name comes from the game's tables.
+	private String slayerKey;
+	private SlayerTasks.Verdict slayerVerdictMemo;
+
+	/**
+	 * Whether this npc is the player's slayer task, for the slayer helmet and
+	 * black mask (T-015). Read from the game as RuneLite's Slayer plugin does;
+	 * when it cannot be told, assumed on task, as the old setting's default was.
+	 */
+	SlayerTasks.Verdict slayerVerdict(int npcId)
+	{
+		final int count = client.getVarpValue(VarPlayerID.SLAYER_COUNT);
+		final int taskId = client.getVarpValue(VarPlayerID.SLAYER_TARGET);
+		final int bossId = client.getVarbitValue(VarbitID.SLAYER_TARGET_BOSSID);
+		final int area = client.getVarpValue(VarPlayerID.SLAYER_AREA);
+		final String key = count + "/" + taskId + "/" + bossId + "/" + area + "/" + npcId;
+		if (!key.equals(slayerKey) || slayerVerdictMemo == null)
+		{
+			slayerKey = key;
+			final NPCComposition npc = npcId < 0 ? null : client.getNpcDefinition(npcId);
+			slayerVerdictMemo = SlayerTasks.verdict(count, count > 0 ? slayerTaskName(taskId, bossId) : null,
+				npc == null ? null : npc.getName(), area);
+		}
+		return slayerVerdictMemo;
+	}
+
+	// The task's name from the game's tables, as RuneLite's Slayer plugin reads it; task 98 is "bosses", whose boss comes
+	// from its own sublist. Null when the tables cannot be read.
+	private String slayerTaskName(int taskId, int bossId)
+	{
+		try
+		{
+			final int row;
+			if (taskId == 98)
+			{
+				final List<Integer> bosses = client.getDBRowsByValue(DBTableID.SlayerTaskSublist.ID,
+					DBTableID.SlayerTaskSublist.COL_TASK_SUBTABLE_ID, 0, bossId);
+				if (bosses.isEmpty())
+				{
+					return null;
+				}
+				row = (Integer) client.getDBTableField(bosses.get(0), DBTableID.SlayerTaskSublist.COL_TASK, 0)[0];
+			}
+			else
+			{
+				final List<Integer> tasks = client.getDBRowsByValue(DBTableID.SlayerTask.ID, DBTableID.SlayerTask.COL_ID, 0,
+					taskId);
+				if (tasks.isEmpty())
+				{
+					return null;
+				}
+				row = tasks.get(0);
+			}
+			return (String) client.getDBTableField(row, DBTableID.SlayerTask.COL_NAME_UPPERCASE, 0)[0];
+		}
+		catch (RuntimeException e)
+		{
+			return null;
+		}
 	}
 
 	// Held for the tick. Equipment, varbits and the combat option cannot change within one, and an attack tick asks for
@@ -205,9 +269,6 @@ class CombatCalc
 	private int memoBestGearWeapon = Integer.MIN_VALUE;
 	private AttackStyle memoBestGearStyle;
 	private long memoBestGearAvailable = Long.MIN_VALUE;
-	// And the slots kept as worn because the player wears that item on purpose: taking blood fury off moves this, and so
-	// does changing the setting.
-	private Set<EquipmentInventorySlot> memoBestGearKept;
 	// Every equippable item on the player, worn and carried together, and whether a container has said anything moved
 	// since it was last counted.
 	private long availableSignature;
@@ -1073,6 +1134,10 @@ class CombatCalc
 		{
 			return 1.15;
 		}
+		if (prayerActive(Prayer.ZEAL))
+		{
+			return 1.25;
+		}
 		if (prayerActive(Prayer.PIETY))
 		{
 			return 1.20;
@@ -1325,9 +1390,29 @@ class CombatCalc
 		return w.getAslash() >= w.getAcrush() ? AttackType.SLASH : AttackType.CRUSH;
 	}
 
+	// The dart in the blowpipe, as last seen (T-015): from its Check message or darts used on it, remembered per account by
+	// the plugin. Dragon until seen, as the old setting's default was.
+	private BlowpipeDart loadedDart = BlowpipeDart.DRAGON;
+	private String loadedDartSource = "assumed, not seen yet";
+
+	/** The dart the player was seen loading or checking, and how it was seen. */
+	void setBlowpipeDart(BlowpipeDart dart, String source)
+	{
+		if (dart != null)
+		{
+			loadedDart = dart;
+			loadedDartSource = source;
+		}
+	}
+
+	BlowpipeDart getLoadedDart()
+	{
+		return loadedDart;
+	}
+
 	/**
 	 * The dart loaded in the blowpipe, or null when one is not held. The game
-	 * does not say which, so this comes from the config.
+	 * has no varbit for it, so it is the one last seen; see setBlowpipeDart.
 	 */
 	private ItemEquipmentStats blowpipeDart()
 	{
@@ -1336,13 +1421,13 @@ class CombatCalc
 		{
 			return null;
 		}
-		final BlowpipeDart dart = config.blowpipeDart();
+		final BlowpipeDart dart = loadedDart;
 		if (dart == null || dart == BlowpipeDart.NONE)
 		{
 			return null;
 		}
 		// Held onto rather than looked up again: this is reached several times a tick, and the answer only changes when the
-		// setting does.
+		// dart seen does.
 		if (dart != cachedDart)
 		{
 			final ItemStats stats = itemManager.getItemStats(dart.getItemId());
@@ -2354,8 +2439,8 @@ class CombatCalc
 				landChance(npcId) * 100, averageHit(npcId), expectedDps(npcId)));
 
 		// Where a melee or ranged max hit came from - the counterpart of the magic breakdown below. Without it a wrong max
-		// hit is one number with nothing behind it, and for a blowpipe the strength bonus carries the dart from the CONFIG
-		// rather than from the weapon, which is the first thing to check when the figure looks too high or too low.
+		// hit is one number with nothing behind it, and for a blowpipe the strength bonus carries the dart last seen rather
+		// than anything worn, which is the first thing to check when the figure looks too high or too low.
 		if (style.getAttackType() != AttackType.MAGIC)
 		{
 			final boolean melee = style.getAttackType().isMelee();
@@ -2363,8 +2448,8 @@ class CombatCalc
 			lines.add(String.format("%s: str bonus %+d%s, level %d, attack bonus %+d",
 				melee ? "Melee" : "Ranged",
 				equipmentBonus(melee),
-				dart == null ? "" : String.format(" (config dart %s %+d)",
-					config.blowpipeDart(), dart.getRstr()),
+				dart == null ? "" : String.format(" (dart %s %+d, %s)",
+					loadedDart, dart.getRstr(), loadedDartSource),
 				boostedLevel(melee ? Skill.STRENGTH : Skill.RANGED),
 				attackBonus(style.getAttackType())));
 
@@ -2528,6 +2613,10 @@ class CombatCalc
 		{
 			return 1.15;
 		}
+		if (prayerActive(Prayer.ZEAL))
+		{
+			return 1.28;
+		}
 		if (prayerActive(Prayer.PIETY))
 		{
 			return 1.23;
@@ -2654,10 +2743,8 @@ class CombatCalc
 		final int weaponId = worn.id(EquipmentInventorySlot.WEAPON);
 		final AttackStyle style = attackStyle();
 		final long available = availableEquippableSignature();
-		final Set<EquipmentInventorySlot> kept = GearSearch.keptSlots(worn,
-			GearSearch.deliberateNames(config.deliberateItems()), worn::name);
 		if (memoBestGear != null && memoBestGearNpc == npcId && memoBestGearWeapon == weaponId
-			&& memoBestGearStyle == style && memoBestGearAvailable == available && kept.equals(memoBestGearKept))
+			&& memoBestGearStyle == style && memoBestGearAvailable == available)
 		{
 			// Kept only while it still beats what is worn. The search is greedy, so an answer reached from one set is not
 			// guaranteed to beat a different set reached later - void put on after the fact is exactly that - and a stale answer
@@ -2675,8 +2762,7 @@ class CombatCalc
 		memoBestGearWeapon = weaponId;
 		memoBestGearStyle = style;
 		memoBestGearAvailable = available;
-		memoBestGearKept = kept;
-		memoBestGear = GearSearch.best(worn, carriedCandidates(), weapon != null && weapon.isTwoHanded(), kept,
+		memoBestGear = GearSearch.best(worn, carriedCandidates(), weapon != null && weapon.isTwoHanded(),
 			candidate -> damagePerTick(candidate, npcId, IDEAL));
 		return memoBestGear;
 	}
@@ -2776,33 +2862,18 @@ class CombatCalc
 		return base + maxBoost(skill, base);
 	}
 
-	// The boost this content's potion gives, applied to every stat the style rolls on - attack as well as strength for
-	// melee - so the accuracy a dose buys is counted and not just the damage.
+	// The full boost the attack is measured against, on every stat the style rolls on - attack as well as strength for
+	// melee - so the accuracy a dose buys is counted and not just the damage. Since T-015 it is worked out, not set: the
+	// strongest boost on hand or seen this fight (idealBoost). A player who brought nothing reads as fully boosted at their
+	// base level - intended: not bringing a potion shows in the kill time, not in Execution - and an attack below its base
+	// still costs, because the ideal is never below the base.
 	private int maxBoost(Skill skill, int base)
 	{
-		// What the player says they meant to bring. A raid was assumed to supply its own dose, which is wrong from the moment
-		// one starts: you enter with what you carried. The Chambers tier varbit survives the raid that set it.
-		int boost;
-		if (skill == Skill.RANGED)
-		{
-			boost = config.rangedBoostGoal().boost(base);
-		}
-		else if (skill == Skill.MAGIC)
-		{
-			boost = config.magicBoostGoal().boost(base);
-		}
-		else
-		{
-			boost = config.meleeBoostGoal().boost(skill, base);
-		}
-		// Raised if something stronger is up, never lowered: taking the standard from what the player happens to hold would
-		// let one who took nothing read as perfectly dosed.
-		//
-		// The boost ACTUALLY up is one of those things, whatever it is. Only two are recognised by name below, and an
-		// imbued heart is neither - so a slayer task barraged with one up had a real magic level above the ideal one, which
-		// is meant to be a ceiling. The efficiency it feeds then read over 100%. Raising, never lowering, so a decayed or
-		// undrunk dose still shows up as the damage it costs.
+		int boost = idealBoost(skill).boost;
+		// The boost ACTUALLY up is one of those things, whatever it is. Raising, never lowering, so the ideal stays a
+		// ceiling (a boost the table does not know would otherwise read over 100%) and a decayed dose still costs.
 		boost = Math.max(boost, client.getBoostedSkillLevel(skill) - base);
+		// Raid boosts that re-apply on a timer: still running is still on hand, whatever the inventory says.
 		if (client.getVarbitValue(VarbitID.STATRENEWAL_POTION_TIMER) > 0)
 		{
 			boost = Math.max(boost, base * 16 / 100 + 11);
@@ -2812,6 +2883,119 @@ class CombatCalc
 			boost = Math.max(boost, chambersOverloadBoost(base));
 		}
 		return boost;
+	}
+
+	// The skills the ideal boost is worked out for.
+	private static final Skill[] BOOSTED_SKILLS = {Skill.ATTACK, Skill.STRENGTH, Skill.RANGED, Skill.MAGIC};
+	// The highest boost seen on each this fight: a pre-pot, or a dose drunk with none left. Reset at each fight's start.
+	private final Map<Skill, Integer> fightPeakBoost = new EnumMap<>(Skill.class);
+	// Worked out once a tick: the inventory cannot change within one, and the gear search asks dozens of times.
+	private int memoIdealTick = Integer.MIN_VALUE;
+	private final Map<Skill, IdealBoost.Result> memoIdealBoost = new EnumMap<>(Skill.class);
+
+	/** A new fight: what was seen in the last one no longer counts. */
+	void startFight()
+	{
+		fightPeakBoost.clear();
+		memoIdealTick = Integer.MIN_VALUE;
+		slayerKey = null;
+	}
+
+	/** Notes this tick's boosts, so a dose seen once stays the standard for the rest of the fight. Called every tick. */
+	void noteBoosts()
+	{
+		for (Skill skill : BOOSTED_SKILLS)
+		{
+			final int boost = client.getBoostedSkillLevel(skill) - client.getRealSkillLevel(skill);
+			fightPeakBoost.merge(skill, Math.max(0, boost), Math::max);
+		}
+	}
+
+	/** The strongest boost on hand for this stat, and where it came from. See IdealBoost. */
+	IdealBoost.Result idealBoost(Skill skill)
+	{
+		final int tick = client.getTickCount();
+		if (tick != memoIdealTick)
+		{
+			memoIdealTick = tick;
+			memoIdealBoost.clear();
+		}
+		IdealBoost.Result result = memoIdealBoost.get(skill);
+		if (result == null)
+		{
+			final ItemContainer inventory = client.getItemContainer(InventoryID.INV);
+			int[] ids = null;
+			if (inventory != null)
+			{
+				final Item[] items = inventory.getItems();
+				ids = new int[items.length];
+				for (int i = 0; i < items.length; i++)
+				{
+					ids[i] = items[i] == null ? -1 : items[i].getId();
+				}
+			}
+			// The imbued and saturated hearts share one cooldown; ready when it reads nought (RuneLite's timers plugin reads
+			// the same varbit, in units of ten ticks).
+			final boolean heartReady = client.getVarbitValue(VarbitID.IMBUED_HEART_TIMER) == 0;
+			result = IdealBoost.best(skill, client.getRealSkillLevel(skill), client.getRealSkillLevel(Skill.HERBLORE), ids,
+				heartReady, fightPeakBoost.getOrDefault(skill, 0));
+			memoIdealBoost.put(skill, result);
+		}
+		return result;
+	}
+
+	/**
+	 * What the plugin worked out about the player's setup instead of asking
+	 * (T-015), as one line for the fight-start log: each style's ideal boost and
+	 * where it came from, its ideal prayer and why, whether this npc is on task,
+	 * and the blowpipe dart.
+	 */
+	String describeWorkedOut(int npcId)
+	{
+		final StringBuilder line = new StringBuilder("SETUP worked out:");
+		line.append(" melee ").append(boostText(Skill.ATTACK)).append(" / ").append(boostText(Skill.STRENGTH))
+			.append(", prayer ").append(prayerText(PrayerIdeal.Style.MELEE));
+		line.append("; ranged ").append(boostText(Skill.RANGED))
+			.append(", prayer ").append(prayerText(PrayerIdeal.Style.RANGED));
+		line.append("; magic ").append(boostText(Skill.MAGIC))
+			.append(", prayer ").append(prayerText(PrayerIdeal.Style.MAGIC));
+		line.append("; on task ").append(slayerVerdict(npcId));
+		line.append("; blowpipe dart ").append(loadedDart).append(" (").append(loadedDartSource).append(')');
+		return line.toString();
+	}
+
+	private String boostText(Skill skill)
+	{
+		final IdealBoost.Result ideal = idealBoost(skill);
+		final String source = ideal.source == IdealBoost.SEEN_THIS_FIGHT ? "seen this fight"
+			: ideal.source == IdealBoost.NOTHING ? "nothing on hand"
+			: itemManager.getItemComposition(ideal.source).getName();
+		return String.format("%s %+d (%s)", skill.getName(), ideal.boost, source);
+	}
+
+	private String prayerText(PrayerIdeal.Style style)
+	{
+		final PrayerIdeal.Goal goal = prayerGoal(style);
+		return goal.getName() + " (" + goal.why + ")";
+	}
+
+	/** Whether any stat the style in hand rolls on is below its base level: drained, or brewed down. */
+	boolean isDrained()
+	{
+		switch (attackStyle().getAttackType())
+		{
+			case MAGIC:
+				return drained(Skill.MAGIC);
+			case RANGED:
+				return drained(Skill.RANGED);
+			default:
+				return drained(Skill.ATTACK) || drained(Skill.STRENGTH);
+		}
+	}
+
+	private boolean drained(Skill skill)
+	{
+		return client.getBoostedSkillLevel(skill) < client.getRealSkillLevel(skill);
 	}
 
 	// The Chambers overload the player brewed. The tiers are far apart - at 99 they give 13, 17 and 21
@@ -2830,23 +3014,64 @@ class CombatCalc
 	}
 
 	/** The prayer the player means to be using for the style in hand. */
-	private PrayerChoice prayerGoal()
+	private PrayerIdeal.Goal prayerGoal()
 	{
 		switch (attackStyle().getAttackType())
 		{
 			case MAGIC:
-				return config.magicPrayerGoal();
+				return prayerGoal(PrayerIdeal.Style.MAGIC);
 			case RANGED:
-				return config.rangedPrayerGoal();
+				return prayerGoal(PrayerIdeal.Style.RANGED);
 			default:
-				return config.meleePrayerGoal();
+				return prayerGoal(PrayerIdeal.Style.MELEE);
 		}
+	}
+
+	// The strongest prayer for the style the player can use now (T-015): unlocks from their varbits, levels from the base
+	// levels, and the active book. Worked out once a tick per style.
+	private int memoPrayerTick = Integer.MIN_VALUE;
+	private final Map<PrayerIdeal.Style, PrayerIdeal.Goal> memoPrayerGoal = new EnumMap<>(PrayerIdeal.Style.class);
+
+	PrayerIdeal.Goal prayerGoal(PrayerIdeal.Style style)
+	{
+		final int tick = client.getTickCount();
+		if (tick != memoPrayerTick)
+		{
+			memoPrayerTick = tick;
+			memoPrayerGoal.clear();
+		}
+		PrayerIdeal.Goal goal = memoPrayerGoal.get(style);
+		if (goal == null)
+		{
+			goal = PrayerIdeal.best(style, prayerPlayer());
+			memoPrayerGoal.put(style, goal);
+		}
+		return goal;
+	}
+
+	private PrayerIdeal.Player prayerPlayer()
+	{
+		final PrayerIdeal.Player p = new PrayerIdeal.Player();
+		p.prayer = client.getRealSkillLevel(Skill.PRAYER);
+		p.defence = client.getRealSkillLevel(Skill.DEFENCE);
+		p.attack = client.getRealSkillLevel(Skill.ATTACK);
+		p.strength = client.getRealSkillLevel(Skill.STRENGTH);
+		// King's Ransom's Knight Waves: states 0-7 are in progress (Quest Helper's steps), 8 is done.
+		p.knightWaves = client.getVarbitValue(VarbitID.KR_KNIGHTWAVES_STATE) >= 8;
+		p.zeal = client.getVarbitValue(VarbitID.PRAYER_ZEAL_UNLOCKED) != 0;
+		p.rigour = client.getVarbitValue(VarbitID.PRAYER_RIGOUR_UNLOCKED) != 0;
+		p.augury = client.getVarbitValue(VarbitID.PRAYER_AUGURY_UNLOCKED) != 0;
+		p.deadeye = client.getVarbitValue(VarbitID.PRAYER_DEADEYE_UNLOCKED) != 0;
+		p.mysticVigour = client.getVarbitValue(VarbitID.PRAYER_MYSTIC_VIGOUR_UNLOCKED) != 0;
+		// 1 is the Ruinous Powers book, as RuneLite's prayer plugin reads it.
+		p.ruinousBook = client.getVarbitValue(VarbitID.PRAYERBOOK) == 1;
+		return p;
 	}
 
 	// Whether the prayer that was up is at least the one intended for the style.
 	boolean hasOffensivePrayer()
 	{
-		final PrayerChoice goal = prayerGoal();
+		final PrayerIdeal.Goal goal = prayerGoal();
 		final double attack;
 		final double strength;
 		switch (attackStyle().getAttackType())

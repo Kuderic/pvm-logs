@@ -110,6 +110,9 @@ class Fight
 	// setup sums. Both are parts of sumIdealSetup - sumActualSetup; the prayer is the rest.
 	private double sumBoostCost;
 	private double sumSwitchCost;
+	// Attacks made with any stat the style rolls on below its base: drained, or brewed down (T-015). Additive, so a fight
+	// saved before it loads with none.
+	private int attacksDrained;
 
 	// Ticks the weapon was off cooldown with no attack made, against those elapsed since the first attack. Eating is
 	// separated out because it is a choice with a known cost.
@@ -482,6 +485,18 @@ class Fight
 	 */
 	void recordAttackMade(boolean potted, double boostShare)
 	{
+		recordAttackMade(potted, boostShare, false);
+	}
+
+	/**
+	 * @param drained whether any stat the attack rolled on was below its base
+	 */
+	void recordAttackMade(boolean potted, double boostShare, boolean drained)
+	{
+		if (drained)
+		{
+			attacksDrained++;
+		}
 		if (boostShare >= 0)
 		{
 			sumBoostShare += Math.min(1, boostShare);
