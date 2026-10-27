@@ -1,0 +1,117 @@
+package com.pvmlogs;
+
+import java.awt.Font;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import net.runelite.client.ui.FontManager;
+
+/**
+ * Not a test: writes every v1 overlay state, from {@link LedgerRows}' real
+ * output and the overlay's own font roles, as input files for the design
+ * harness ({@code claude/specs/overlay-harness/Render.java} in the project),
+ * which draws them with RuneLite's own panel and line components and fonts.
+ * <pre>
+ *   java -cp &lt;test classpath&gt; com.pvmlogs.LedgerPictures &lt;out dir&gt; &lt;name=scene.png&gt;...
+ *   java -cp &lt;harness classpath&gt; Render &lt;out dir&gt;/*.txt
+ * </pre>
+ * One file per state, interface font and background.
+ */
+public final class LedgerPictures
+{
+	private LedgerPictures()
+	{
+	}
+
+	/** Every state in the spec's section 4, with the rows the canvas draws. */
+	static Map<String, List<LedgerRows.Row>> states()
+	{
+		final LedgerRows.Settings all = new LedgerRows.Settings();
+		final Map<String, List<LedgerRows.Row>> s = new LinkedHashMap<>();
+		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis", LedgerExamples.loadout()), all));
+		s.put("2-mid", LedgerRows.build(LedgerExamples.midFight(),
+			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+		s.put("3-dead", LedgerRows.build(LedgerExamples.kill(),
+			LedgerRows.State.fight("Vardorvis", true, true, false), all));
+		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
+			LedgerRows.State.fight("Vardorvis", true, false, false), all));
+		s.put("5-trip", LedgerRows.build(LedgerExamples.trip(), LedgerRows.State.trip(6, false, false), all));
+		s.put("6-raid", LedgerRows.build(LedgerExamples.raid(),
+			LedgerRows.State.raid("Tombs of Amascut", 3, false, false), all));
+		s.put("7-unsure", LedgerRows.build(LedgerExamples.midFight(),
+			LedgerRows.State.fight("Vardorvis", false, false, true), all));
+		s.put("8-nodata", LedgerRows.build(LedgerExamples.noData(),
+			LedgerRows.State.fight("New boss", false, false, false), all));
+		s.put("9-setup", LedgerRows.build(LedgerExamples.midFightBeforeT010(),
+			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+		return s;
+	}
+
+	public static void main(String[] args) throws IOException
+	{
+		final Path out = Paths.get(args.length > 0 ? args[0] : "build/ledger-pictures");
+		Files.createDirectories(out);
+		final Map<String, String> scenes = new LinkedHashMap<>();
+		for (int i = 1; i < args.length; i++)
+		{
+			final int eq = args[i].indexOf('=');
+			scenes.put(args[i].substring(0, eq), args[i].substring(eq + 1));
+		}
+		if (scenes.isEmpty())
+		{
+			scenes.put("flat", null);
+		}
+		final Map<String, Font> fonts = new LinkedHashMap<>();
+		fonts.put("regular", FontManager.getRunescapeFont());
+		fonts.put("bold", FontManager.getRunescapeBoldFont());
+		fonts.put("small", FontManager.getRunescapeSmallFont());
+
+		for (Map.Entry<String, List<LedgerRows.Row>> state : states().entrySet())
+		{
+			for (Map.Entry<String, Font> font : fonts.entrySet())
+			{
+				final PvmPerformanceOverlay.FontRoles roles = PvmPerformanceOverlay.FontRoles.of(font.getValue());
+				for (Map.Entry<String, String> scene : scenes.entrySet())
+				{
+					final String name = state.getKey() + "-" + font.getKey() + "-" + scene.getKey();
+					final List<String> lines = new ArrayList<>();
+					lines.add("@ font=" + font.getKey() + " bg=70,61,50,156"
+						+ (scene.getValue() == null ? "" : " scene=" + scene.getValue())
+						+ " x=6 y=6 pad=6 width=auto padding=" + PvmPerformanceOverlay.PADDING
+						+ " out=" + out.resolve(name + ".png"));
+					for (LedgerRows.Row row : state.getValue())
+					{
+						lines.add(row.isBlank() ? "G" : String.format("L|%s|%s|lf=%s rf=%s lc=%06X rc=%06X",
+							row.left, row.right, roleName(roles.get(row.leftFont)), roleName(roles.get(row.rightFont)),
+							row.leftColour.rgb, row.rightColour.rgb));
+					}
+					Files.write(out.resolve(name + ".txt"), lines, StandardCharsets.UTF_8);
+				}
+			}
+		}
+	}
+
+	/** The harness's name for one of the three RuneScape fonts. */
+	private static String roleName(Font f)
+	{
+		if (f == FontManager.getRunescapeBoldFont())
+		{
+			return "bold";
+		}
+		if (f == FontManager.getRunescapeSmallFont())
+		{
+			return "small";
+		}
+		if (f == FontManager.getRunescapeFont())
+		{
+			return "regular";
+		}
+		throw new IllegalArgumentException("not a RuneScape font: " + f);
+	}
+}

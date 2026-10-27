@@ -2,37 +2,35 @@ package com.pvmlogs;
 
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FontMetrics;
+import java.awt.Font;
 import java.awt.Graphics2D;
+import java.util.List;
 import javax.inject.Inject;
+import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.components.LineComponent;
-import net.runelite.client.ui.overlay.components.TitleComponent;
-import net.runelite.client.util.QuantityFormatter;
+import net.runelite.client.util.Text;
 
+/**
+ * The live overlay ("Ledger", T-014). What it says is {@link LedgerRows}; this
+ * class only picks the scope and state, turns the rows into line components in
+ * the player's own fonts, and sizes the panel.
+ * <p>
+ * The background is never set: RuneLite gives the panel the player's "Overlay
+ * color" only while it keeps the standard one.
+ */
 class PvmPerformanceOverlay extends OverlayPanel
 {
-	/**
-	 * The panel is only as wide as it needs to be. A single fight's lines fit
-	 * the standard width; a whole trip's do not - "Damage 83,955 / 100,811"
-	 * wrapped onto a second line and the box became a wall of half sentences.
-	 * Measured every frame from the text actually about to be drawn, since what
-	 * is on it changes with the mode, the loadout and the size of the numbers.
-	 */
-	private static final int MIN_WIDTH = 129;
+	/** RuneLite's standard overlay width; narrower and the rows wrap. */
+	static final int MIN_WIDTH = 129;
 	/** Past this a long name is better wrapped than allowed to cross the screen. */
-	private static final int MAX_WIDTH = 400;
-	/** The panel's own border, plus the gap that keeps the two columns apart. */
-	private static final int PADDING = 14;
-	private static final Color WARNING = new Color(255, 200, 0);
+	static final int MAX_WIDTH = 400;
+	/** The panel's 4 px border each side plus a 12 px gap between the columns. RuneLite's +14 left only 6. */
+	static final int PADDING = 20;
 
 	private final PvmPerformancePlugin plugin;
 	private final PvmPerformanceConfig config;
-
-	// Set at the top of each render and used by line(); the overlay is drawn on one thread.
-	private FontMetrics metrics;
-	private int contentWidth;
 
 	@Inject
 	PvmPerformanceOverlay(PvmPerformancePlugin plugin, PvmPerformanceConfig config)
@@ -49,18 +47,13 @@ class PvmPerformanceOverlay extends OverlayPanel
 		{
 			return null;
 		}
-
-		metrics = graphics.getFontMetrics();
-		contentWidth = 0;
-
 		final Fight fight = plugin.getDisplayFight();
 		if (fight == null)
 		{
 			return null;
 		}
-		// A finished fight is left up so the kill can be read, but it was left up FOREVER: the last fight of a trip sat on
-		// screen until the next one, which outside a boss trip is the rest of the session. It now goes when the fight
-		// timeout says the fighting is over, which is the same clock that ended the fight itself.
+		// A finished fight is left up so the kill can be read, until the fight timeout says the fighting is over - the same
+		// clock that ended the fight itself.
 		if (fight.isEnded()
 			&& System.currentTimeMillis() - fight.getEndMillis() > config.fightTimeoutTicks() * 600L)
 		{
@@ -71,233 +64,193 @@ class PvmPerformanceOverlay extends OverlayPanel
 			return null;
 		}
 
-		// Expected-only asks for the loadout's figures and nothing else. Otherwise it is the whole trip, the raid so far, or
-		// the room being fought - the room by default, since a single fight would blink between a room's adds.
-		final boolean expectedOnly = config.overlayExpectedOnly();
-		final SessionTotals session = expectedOnly || !config.overlaySessionTotals()
-			? null : plugin.getSession();
-		final Raid raid = expectedOnly || session != null || config.raidScope() != RaidScope.RAID
-			? null : plugin.getCurrentRaid();
-		final Encounter room = session != null || raid != null ? null : plugin.getDisplayEncounter();
-		if (!expectedOnly && session == null && raid == null && room == null)
+		final Encounter room = plugin.getDisplayEncounter();
+		LedgerRows.Scope scope = null;
+		final LedgerRows.State state;
+		if (config.overlayExpectedOnly())
 		{
-			return null;
+			state = LedgerRows.State.loadoutOnly(fight.encounterName(), loadout());
 		}
-
-		final String heading = title(session, raid, room, fight);
-		contentWidth = Math.max(contentWidth, metrics.stringWidth(heading));
-		panelComponent.getChildren().add(TitleComponent.builder()
-			.text(heading)
-			.build());
-
-		// Before any expected figure: a boss the model cannot describe, or a fight whose hits are too far from expected to
-		// be luck, makes every one of them suspect. The reason is in the debug log and the CSV; the overlay only says so.
-		if (plugin.getStatsWarning(fight) != null)
+		else if (isBeforeFirstAttack(fight, room))
 		{
-			line("Expected", "unreliable", WARNING);
+			state = LedgerRows.State.preAttack(fight.encounterName(), loadout());
 		}
-
-		final SpecialAttack spec = plugin.getSpecialAttack();
-		final int specMaxHit = plugin.getExpectedSpecMaxHit();
-		final boolean hasSpec = spec != null && specMaxHit > 0;
-
-		final int maxHit = plugin.getExpectedMaxHit();
-		if (maxHit > 0)
+		else
 		{
-			line(hasSpec ? "Max hit (Spec)" : "Max hit",
-				hasSpec ? String.format("%d (%d)", maxHit, specMaxHit) : String.valueOf(maxHit));
-		}
-
-		// Top half: what the loadout does against this target. These hold still through a fight, so they read as stats rather
-		// than as a running score.
-		final double expAcc = plugin.getExpectedAccuracy();
-		final double specAcc = plugin.getExpectedSpecAccuracy();
-		if (expAcc >= 0)
-		{
-			line(hasSpec ? "Accuracy (Spec)" : "Accuracy",
-				hasSpec && specAcc >= 0 ? String.format("%.1f%% (%.1f%%)", expAcc * 100, specAcc * 100) : String.format("%.1f%%", expAcc * 100));
-		}
-
-		final double expAvgHit = plugin.getExpectedAverageHit();
-		final double specAvgHit = plugin.getExpectedSpecAverageHit();
-		if (expAvgHit >= 0)
-		{
-			line(hasSpec ? "Avg hit (Spec)" : "Avg hit",
-				hasSpec && specAvgHit >= 0 ? String.format("%.2f (%.2f)", expAvgHit, specAvgHit) : String.format("%.2f", expAvgHit));
-		}
-
-		// Under Avg hit because it answers the question a bigger average hit cannot: which of two setups is actually better
-		// when they swing at different speeds. Off the weapon's own cooldown rather than any clock, so it holds still through
-		// a fight like the rest of this half.
-		final double expDps = plugin.getExpectedDps();
-		if (expDps >= 0)
-		{
-			line("DPS", String.format("%.2f", expDps));
-		}
-
-		if (expectedOnly)
-		{
-			return super.render(graphics);
-		}
-
-		// Bottom half: what happened, against what the model expected. The expected side is a running total of each attack's
-		// own figure, so swapping weapons mid-fight adds each weapon's share.
-		line("", "");
-
-		final int damage = session != null ? session.getDamageDealt()
-			: raid != null ? raid.getDamageDealt() : room.getDamageDealt();
-		final double expDamage = session != null ? session.getSumExpectedAverageHit()
-			: raid != null ? raid.sumExpectedAverageHit() : room.sumExpectedAverageHit();
-		line("Damage",
-			expDamage > 0 ? String.format("%s / %.0f", QuantityFormatter.formatNumber(damage), expDamage) : QuantityFormatter.formatNumber(damage));
-
-		// The rest of the target's health that was not the player's weapon, for the room or fight on show. Damage above is the
-		// weapon's alone, which is what the expected side describes; these say where the rest went. All the player's own
-		// output except the heal, which is the boss's doing and so only shown once the fight is over.
-		if (room != null)
-		{
-			if (room.getThrallDamage() > 0)
+			final boolean warning = plugin.getStatsWarning(fight) != null;
+			final boolean running = !fight.isEnded();
+			final SessionTotals session = config.overlaySessionTotals() ? plugin.getSession() : null;
+			final Raid raid = session == null && config.raidScope() == RaidScope.RAID ? plugin.getCurrentRaid() : null;
+			if (session != null)
 			{
-				line("  thrall", QuantityFormatter.formatNumber(room.getThrallDamage()));
+				scope = LedgerRows.of(session);
+				state = LedgerRows.State.trip(session.getKills(), running, warning);
 			}
-			if (room.getDotDamage() > 0)
+			else if (raid != null)
 			{
-				line("  burn/poison", QuantityFormatter.formatNumber(room.getDotDamage()));
+				scope = LedgerRows.of(raid);
+				state = LedgerRows.State.raid(raid.getName(), raid.getEncounters().size(), running, warning);
 			}
-			if (fight.isEnded() && room.getHealed() > 0)
+			else if (room != null)
 			{
-				line("Boss healed", QuantityFormatter.formatNumber(room.getHealed()));
-			}
-		}
-
-		final int hits = session != null ? session.getHits()
-			: raid != null ? raid.getHits() : room.getHits();
-		// Measured hits against what was expected, then the accuracy those two make. The top half carries the accuracy the
-		// LOADOUT should get; this is the one that happened.
-		final double realAccuracy = session != null ? session.accuracy()
-			: raid != null ? raid.accuracy() : room.accuracy();
-		// Landed against what was EXPECTED to land, which is the comparison this plugin is for. How many were thrown is
-		// already on screen under Efficiency, where prayed, potted and switches all divide by it, so spending this line on
-		// it would only repeat that. The percentage is the real one - landed over thrown - so the two figures beside it
-		// and the number below it always agree.
-		//
-		// With an AoE weapon both halves are per npc reached: five adds caught by one throw are five chances, and the
-		// expected side is the sum of their five accuracies.
-		final double expHits = session != null ? session.getSumExpectedAccuracy()
-			: raid != null ? raid.sumExpectedAccuracy() : room.sumExpectedAccuracy();
-		line("Hits", expHits > 0
-			? String.format("%d / %.1f (%.0f%%)", hits, expHits, realAccuracy * 100)
-			: String.valueOf(hits));
-
-		// How well the attacks were set up, with the parts shown only when one of them slipped, a clean fight needs no
-		// breakdown.
-		final double efficiency = session != null ? session.efficiency()
-			: raid != null ? raid.efficiency() : room.efficiency();
-		if (efficiency >= 0)
-		{
-			line("Efficiency", String.format("%.0f%%", efficiency * 100));
-
-			final int made = session != null ? session.getAttacksMade()
-				: raid != null ? raid.getAttacksMade() : room.getAttacksMade();
-			final int prayed = session != null ? session.getAttacksPrayed()
-				: raid != null ? raid.getAttacksPrayed() : room.getAttacksPrayed();
-			// Always shown, all of them. Hiding a counter that reads full makes it impossible to tell a perfect run from one
-			// that is not counting.
-			line("  prayed", prayed + "/" + made);
-			// The boost as a share of the full effect, not a count of attacks at exactly full boost: a super combat drops a
-			// level a minute, and the count read every attack after the first minute as unpotted (T-010). Beside it, what
-			// the missing boost cost, as a share of the damage the attacks would have been set up to deal.
-			final double boost = session != null ? session.boostShare()
-				: raid != null ? raid.boostShare() : room.boostShare();
-			if (boost >= 0)
-			{
-				final double boostCost = session != null ? session.boostCostShare()
-					: raid != null ? raid.boostCostShare() : room.boostCostShare();
-				line("  boost", withCost(String.format("%.0f%%", boost * 100), boostCost));
+				scope = LedgerRows.of(room);
+				state = LedgerRows.State.fight(room.getName(), fight.isEnded(), room.isKilled(), warning);
 			}
 			else
 			{
-				// Fights from before the share was read have only the count.
-				final int potted = session != null ? session.getAttacksPotted()
-					: raid != null ? raid.getAttacksPotted() : room.getAttacksPotted();
-				line("  potted", potted + "/" + made);
+				return null;
 			}
-			final int switched = session != null ? session.getAttacksSwitched()
-				: raid != null ? raid.getAttacksSwitched() : room.getAttacksSwitched();
-			final double switchCost = session != null ? session.switchCostShare()
-				: raid != null ? raid.switchCostShare() : room.switchCostShare();
-			// The gap to made is the number of attacks that missed at least one switch, read the same way as prayed. The cost
-			// beside it is what tells a small trade (blood fury cleared from "Worn on purpose") from a real miss.
-			line("  switches", withCost(switched + "/" + made, switchCost));
 		}
 
-		final double lostShare = session != null ? session.ticksLostShare()
-			: raid != null ? raid.ticksLostShare() : room.ticksLostShare();
-		if (lostShare >= 0)
+		final List<LedgerRows.Row> rows = LedgerRows.build(scope, state, settings());
+		if (rows.isEmpty())
 		{
-			final int lost = session != null ? session.getTicksLost()
-				: raid != null ? raid.getTicksLost() : room.getTicksLost();
-			line("Ticks lost", String.format("%d (%.0f%%)", lost, lostShare * 100));
-
-			final int eating = session != null ? session.getTicksLostEating()
-				: raid != null ? raid.getTicksLostEating() : room.getTicksLostEating();
-			if (eating > 0)
-			{
-				line("  to eating", String.valueOf(eating));
-			}
+			return null;
 		}
-
-		panelComponent.setPreferredSize(new Dimension(
-			Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, contentWidth + PADDING)), 0));
+		final Font body = graphics.getFont();
+		final FontRoles fonts = FontRoles.of(body);
+		int widest = 0;
+		for (LedgerRows.Row row : rows)
+		{
+			final Font left = fonts.get(row.leftFont);
+			final Font right = fonts.get(row.rightFont);
+			widest = Math.max(widest, graphics.getFontMetrics(left).stringWidth(Text.removeTags(row.left))
+				+ graphics.getFontMetrics(right).stringWidth(Text.removeTags(row.right)));
+			panelComponent.getChildren().add(LineComponent.builder()
+				.left(row.left)
+				.right(row.right)
+				.leftFont(left)
+				.rightFont(right)
+				.leftColor(new Color(row.leftColour.rgb))
+				.rightColor(new Color(row.rightColour.rgb))
+				.build());
+		}
+		panelComponent.setPreferredSize(new Dimension(width(widest), 0));
 		return super.render(graphics);
 	}
 
-	/**
-	 * One row, measured as it is added. Both halves are drawn on the same line
-	 * with the right one flush to the edge, so the row needs the sum of them.
-	 */
-	private void line(String left, String right)
+	/** The widest row's two sides plus the padding, held to the standard width and the cap. */
+	static int width(int widestRow)
 	{
-		line(left, right, Color.WHITE);
+		return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, widestRow + PADDING));
+	}
+
+	/**
+	 * Whether the fight on show hasn't started in its own room yet, so the
+	 * loadout against its target is what's worth showing. Asked of the fight, not
+	 * the room on show: until the new room has an attempt, the room on show is
+	 * the last one. A fight on a new add in a room already under way is not "before
+	 * the first attack", so a room's adds don't blink the panel back to the
+	 * loadout one by one.
+	 */
+	static boolean isBeforeFirstAttack(Fight fight, Encounter room)
+	{
+		if (fight == null || fight.isEnded())
+		{
+			return false;
+		}
+		final boolean ownRoomUnderway = room != null && room.hasAttempts() && containsSame(room, fight);
+		return !ownRoomUnderway;
+	}
+
+	private static boolean containsSame(Encounter room, Fight fight)
+	{
+		for (Fight f : room.getFights())
+		{
+			if (f == fight)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private LedgerRows.Loadout loadout()
+	{
+		final LedgerRows.Loadout l = new LedgerRows.Loadout();
+		l.maxHit = plugin.getExpectedMaxHit();
+		l.accuracy = plugin.getExpectedAccuracy();
+		l.dps = plugin.getExpectedDps();
+		if (plugin.getSpecialAttack() != null)
+		{
+			l.specMaxHit = plugin.getExpectedSpecMaxHit();
+			l.specAccuracy = plugin.getExpectedSpecAccuracy();
+		}
+		return l;
+	}
+
+	private LedgerRows.Settings settings()
+	{
+		final LedgerRows.Settings s = new LedgerRows.Settings();
+		s.showLoadout = config.overlayShowLoadout();
+		s.luck = config.overlayLuck();
+		s.parts = config.overlayParts() == null ? ExecutionParts.ALL : config.overlayParts();
+		s.details = config.overlayDetails();
+		return s;
 	}
 
 	/**
 	 * A figure with what it cost beside it, e.g. "84% (-1.2%)": the cost as a
 	 * share of the damage the attacks would have been set up to deal. Nothing is
-	 * added when there was no cost or no figure to price it against.
+	 * added when there was no cost or no figure to price it against. The overlay
+	 * prices its parts in seconds now (T-014); kept for T-010's test and any
+	 * other view that wants the share.
 	 */
 	static String withCost(String figure, double costShare)
 	{
 		return costShare >= 0.0005 ? figure + String.format(" (-%.1f%%)", costShare * 100) : figure;
 	}
 
-	private void line(String left, String right, Color rightColor)
-	{
-		contentWidth = Math.max(contentWidth,
-			metrics.stringWidth(left == null ? "" : left) + metrics.stringWidth(right == null ? "" : right));
-		panelComponent.getChildren().add(LineComponent.builder()
-			.left(left)
-			.right(right)
-			.rightColor(rightColor)
-			.build());
-	}
-
 	/**
-	 * What is being reported on. A raid names itself and how far in it is; a
-	 * room names itself, which for a grouped room is the room rather than
-	 * whichever of its NPCs happens to be dying.
+	 * The three fonts a row can use, picked from the player's interface font
+	 * (spec section 6). Our overlay sits TOP_LEFT, so RuneLite hands render() the
+	 * "Interface font" setting, which may be any family at any size.
 	 */
-	private static String title(SessionTotals session, Raid raid, Encounter room, Fight fight)
+	static final class FontRoles
 	{
-		if (session != null)
+		final Font body;
+		final Font emphasis;
+		final Font detail;
+
+		private FontRoles(Font body, Font emphasis, Font detail)
 		{
-			return String.format("Trip: %d kill%s", session.getKills(), session.getKills() == 1 ? "" : "s");
+			this.body = body;
+			this.emphasis = emphasis;
+			this.detail = detail;
 		}
-		if (raid != null)
+
+		Font get(LedgerRows.FontRole role)
 		{
-			return String.format("%s: %d room%s", raid.getName(),
-				raid.getEncounters().size(), raid.getEncounters().size() == 1 ? "" : "s");
+			switch (role)
+			{
+				case EMPHASIS:
+					return emphasis;
+				case DETAIL:
+					return detail;
+				default:
+					return body;
+			}
 		}
-		return room == null ? fight.getTargetName() : room.getName();
+
+		static FontRoles of(Font body)
+		{
+			final Font regular = FontManager.getRunescapeFont();
+			final Font small = FontManager.getRunescapeSmallFont();
+			if (body.getSize() == 16)
+			{
+				// Regular and Bold share a family; isBold tells them apart.
+				if (body.getFamily().equals(regular.getFamily()))
+				{
+					return body.isBold()
+						? new FontRoles(body, body, regular)
+						: new FontRoles(body, FontManager.getRunescapeBoldFont(), small);
+				}
+				if (body.getFamily().equals(small.getFamily()))
+				{
+					return new FontRoles(body, body, body);
+				}
+			}
+			return new FontRoles(body, body.deriveFont(Font.BOLD), body);
+		}
 	}
 }

@@ -46,16 +46,66 @@ public interface PvmPerformanceConfig extends Config
 		return false;
 	}
 
+	// The overlay's content settings share position 3, so they sit together and in name order (T-014).
 	@ConfigItem(
 		keyName = "overlayExpectedOnly",
-		name = "Expected figures only",
-		description = "Show what the loadout does against the target and nothing else: no damage, "
-			+ "efficiency or ticks lost",
+		name = "Loadout only",
+		description = "Show only what the loadout does against the target - max hit, accuracy, expected DPS - "
+			+ "and nothing from the fight",
 		position = 3
 	)
 	default boolean overlayExpectedOnly()
 	{
+		// The key is Arodab's "Expected figures only", relabelled, so players who set it keep it.
 		return false;
+	}
+
+	@ConfigItem(
+		keyName = "overlayShowLoadout",
+		name = "Show loadout before the first attack",
+		description = "Once you target something, and until your first attack, show your max hit, accuracy and "
+			+ "expected DPS against it. Off shows the name alone",
+		position = 3
+	)
+	default boolean overlayShowLoadout()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "overlayLuck",
+		name = "Show luck",
+		description = "Show how many seconds the rolls saved or cost, against your expected damage, and after "
+			+ "the fight how long the same play would have taken at average luck",
+		position = 3
+	)
+	default boolean overlayLuck()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "overlayParts",
+		name = "Execution parts",
+		description = "Under Execution, list uptime, stat boost, prayer and gear with the seconds each cost. "
+			+ "Costing only lists those that cost real time",
+		position = 3
+	)
+	default ExecutionParts overlayParts()
+	{
+		return ExecutionParts.ALL;
+	}
+
+	@ConfigItem(
+		keyName = "overlayDetails",
+		name = "Details after the fight",
+		description = "Once the fight ends, add duration against expected, hits, thrall and burn/poison damage, "
+			+ "what the boss healed and ticks spent eating",
+		position = 3
+	)
+	default boolean overlayDetails()
+	{
+		return true;
 	}
 
 	@ConfigItem(
