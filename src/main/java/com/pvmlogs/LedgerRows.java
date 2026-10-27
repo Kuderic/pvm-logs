@@ -49,6 +49,9 @@ final class LedgerRows
 	static final String WARNING_TEXT = "! Boss data unsure";
 	/** The main row the details sit under once the fight is over (Eric, 2026-10-26). */
 	static final String SUMMARY = "Summary";
+	/** The middle half's edges, for Luck's band and colour (T-029). */
+	static final double LOW_QUARTILE = 0.25;
+	static final double HIGH_QUARTILE = 0.75;
 	/** What a name cut to fit ends with: U+2026, which all three RuneScape fonts have (checked with Font.canDisplay). */
 	static final String CUT = "…";
 	/** An item's variant tag: a space and a bracketed word in lower case, like " (or)" or " (uncharged)". */
@@ -108,6 +111,11 @@ final class LedgerRows
 		 * does "Damage/expected", one word RuneLite can't wrap.
 		 */
 		final String shortLeft;
+		/**
+		 * T-029: the same for the right side, for a figure that may run long (the
+		 * Luck row's {@code bottom 20%} without its seconds); null for none.
+		 */
+		final String shortRight;
 
 		Row(String left, String right, FontRole leftFont, FontRole rightFont, Colour leftColour, Colour rightColour)
 		{
@@ -117,6 +125,12 @@ final class LedgerRows
 		Row(String left, String right, FontRole leftFont, FontRole rightFont, Colour leftColour, Colour rightColour,
 			String shortLeft)
 		{
+			this(left, right, leftFont, rightFont, leftColour, rightColour, shortLeft, null);
+		}
+
+		Row(String left, String right, FontRole leftFont, FontRole rightFont, Colour leftColour, Colour rightColour,
+			String shortLeft, String shortRight)
+		{
 			this.left = left == null ? "" : left;
 			this.right = right == null ? "" : right;
 			this.leftFont = leftFont;
@@ -124,12 +138,19 @@ final class LedgerRows
 			this.leftColour = leftColour;
 			this.rightColour = rightColour;
 			this.shortLeft = shortLeft;
+			this.shortRight = shortRight;
 		}
 
 		/** This row with its left side swapped, e.g. for a shortened name; the rest as it was. */
 		Row withLeft(String newLeft)
 		{
-			return new Row(newLeft, right, leftFont, rightFont, leftColour, rightColour, shortLeft);
+			return new Row(newLeft, right, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight);
+		}
+
+		/** This row with its right side swapped for its short form; the rest as it was. */
+		Row withRight(String newRight)
+		{
+			return new Row(left, newRight, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight);
 		}
 
 		boolean isBlank()
@@ -146,13 +167,14 @@ final class LedgerRows
 			}
 			final Row r = (Row) o;
 			return left.equals(r.left) && right.equals(r.right) && leftFont == r.leftFont && rightFont == r.rightFont
-				&& leftColour == r.leftColour && rightColour == r.rightColour && Objects.equals(shortLeft, r.shortLeft);
+				&& leftColour == r.leftColour && rightColour == r.rightColour && Objects.equals(shortLeft, r.shortLeft)
+				&& Objects.equals(shortRight, r.shortRight);
 		}
 
 		@Override
 		public int hashCode()
 		{
-			return Objects.hash(left, right, leftFont, rightFont, leftColour, rightColour, shortLeft);
+			return Objects.hash(left, right, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight);
 		}
 
 		@Override
@@ -194,6 +216,13 @@ final class LedgerRows
 		 * rows keep the whole scope's ({@link #thrallDamage()} and the rest).
 		 */
 		int scoredOtherDamage();
+
+		/**
+		 * T-028: the variance of the expected damage on the scored fights, summed;
+		 * -1 when any is unknown (fights saved before T-028) or nothing was scored.
+		 * T-029's luck percentile divides by its root.
+		 */
+		double damageVariance();
 
 		/** Burn, poison, venom, bleed. */
 		int dotDamage();
@@ -279,6 +308,11 @@ final class LedgerRows
 			public int scoredOtherDamage()
 			{
 				return room.getScoredThrallDamage() + room.getScoredDotDamage() + room.getScoredReflectDamage();
+			}
+
+			public double damageVariance()
+			{
+				return room.sumExpectedDamageVariance();
 			}
 
 			public int dotDamage()
@@ -415,6 +449,11 @@ final class LedgerRows
 			public int scoredOtherDamage()
 			{
 				return raid.getScoredOtherDamage();
+			}
+
+			public double damageVariance()
+			{
+				return raid.sumExpectedDamageVariance();
 			}
 
 			public int dotDamage()
@@ -554,6 +593,11 @@ final class LedgerRows
 				// The trip's thrall, DoT and reflect are recorded behind isScored() already.
 				return Math.max(0, trip.getThrallDamage()) + Math.max(0, trip.getDotDamage())
 					+ Math.max(0, trip.getReflectDamage());
+			}
+
+			public double damageVariance()
+			{
+				return trip.damageVariance();
 			}
 
 			public int dotDamage()
@@ -765,6 +809,11 @@ final class LedgerRows
 		final double clock;
 		/** T on the scored fights only (T-023): what luck's seconds and DPS are rates over. */
 		final double scoredClock;
+		/**
+		 * T-029: the share of fights with these same attacks that would have dealt
+		 * less, Φ((A − E) / √V) over T-028's variance; NaN when V is unknown.
+		 */
+		final double percentile;
 		/** A: the weapon's damage. */
 		final int damage;
 		/** E: what the weapon's attacks were expected to deal. */
@@ -809,6 +858,8 @@ final class LedgerRows
 			luck = expected <= 0 || expected + other <= 0 || scoredClock <= 0
 				? Double.NaN : scoredClock * (damage - expected) / (expected + other);
 			dps = scoredClock <= 0 ? Double.NaN : damage / scoredClock;
+			final double p = expected > 0 ? DamageMoments.percentile(damage, expected, s.damageVariance()) : -1;
+			percentile = p < 0 ? Double.NaN : p;
 			expectedDuration = Double.isNaN(luck) ? Double.NaN : clock + luck;
 
 			final double lostShare = s.ticksLostShare();
@@ -1030,11 +1081,15 @@ final class LedgerRows
 
 	private static void top(List<Row> rows, Numbers n, Scope scope, State state, Settings settings)
 	{
-		final Colour luckColour = luckColour(n.luck, n.clock);
+		// By the percentile when it's known (T-029), else by the seconds as before.
+		final Colour luckColour = Double.isNaN(n.percentile) ? luckColour(n.luck, n.clock) : percentileBand(n.percentile);
 		final boolean noData = n.expected <= 0;
 		if (settings.luck && !state.warning)
 		{
-			rows.add(row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
+			// A short form for a panel saved too narrow: the band without its seconds (T-029).
+			final String band = Double.isNaN(n.luck) || Double.isNaN(n.percentile) ? null : band(n.percentile);
+			rows.add(new Row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour, null,
+				band));
 		}
 		if (state.warning)
 		{
@@ -1237,14 +1292,12 @@ final class LedgerRows
 	}
 
 	/**
-	 * {@code 88% (14 s slower)}: the damage your rolls dealt against what your
-	 * attacks should average, then what that cost or saved on the clock (Eric,
-	 * 2026-10-27: "add back in the luck %", next to Execution's). No bracket when
-	 * the seconds round to none; a dash when there's nothing to compare.
-	 * <p>
-	 * The ratio reads a little high on average over kills (metrics spec 1.3: on a
-	 * kill the damage is fixed and the expected side varies, about +2.5%), which
-	 * is why the seconds, not the percentage, set the colour.
+	 * {@code bottom 20% (14 s slower)}, {@code top 10% (9 s faster)},
+	 * {@code average (2 s slower)} (T-029; Eric, 2026-10-27: a damage ratio read
+	 * like "76% lucky"): where this fight's damage sits among fights with the same
+	 * attacks, then what the rolls cost or saved on the clock. No bracket when the
+	 * seconds round to none. Without T-028's variance (fights saved before it),
+	 * the seconds alone; a dash when there's nothing to compare.
 	 */
 	static String luckFigure(Numbers n)
 	{
@@ -1252,24 +1305,41 @@ final class LedgerRows
 		{
 			return UNKNOWN;
 		}
-		final String percent = luckPercent(n.damage, n.expected);
 		final String seconds = fasterOrSlower(n.luck);
-		return seconds.equals(EVEN) ? percent : percent + " (" + seconds + ")";
+		if (Double.isNaN(n.percentile))
+		{
+			return seconds;
+		}
+		final String band = band(n.percentile);
+		return seconds.equals(EVEN) ? band : band + " (" + seconds + ")";
 	}
 
 	/**
-	 * Damage against expected as a whole percentage that never contradicts its
-	 * side: under expected reads 99% at most, over it 101% at least, and 100%
-	 * only when they're equal to the damage point.
+	 * {@code bottom N%} under the middle half, {@code top N%} over it,
+	 * {@code average} inside; N is never 0, as a fight can't be luckier than all
+	 * of them.
 	 */
-	static String luckPercent(double damage, double expected)
+	static String band(double percentile)
 	{
-		final long rounded = Math.round(damage / expected * 100);
-		if (Math.round(damage) == Math.round(expected))
+		if (percentile < LOW_QUARTILE)
 		{
-			return "100%";
+			return "bottom " + Math.max(1, Math.round(100 * percentile)) + "%";
 		}
-		return (damage < expected ? Math.min(99, rounded) : Math.max(101, rounded)) + "%";
+		if (percentile > HIGH_QUARTILE)
+		{
+			return "top " + Math.max(1, Math.round(100 * (1 - percentile))) + "%";
+		}
+		return "average";
+	}
+
+	/** Luck's colour from the percentile: Better over the middle half, Cost under it, as " your average" goes (T-029). */
+	static Colour percentileBand(double percentile)
+	{
+		if (percentile > HIGH_QUARTILE)
+		{
+			return Colour.BETTER;
+		}
+		return percentile < LOW_QUARTILE ? Colour.COST : Colour.NEUTRAL;
 	}
 
 	/**

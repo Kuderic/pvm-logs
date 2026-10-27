@@ -24,6 +24,8 @@ final class LedgerExamples
 		int reflectDamage;
 		/** T-025: negative means all the thrall, DoT and reflected damage was on scored fights. */
 		int scoredOtherDamage = -1;
+		/** T-029: T-028's damage variance; negative means unknown, as for fights saved before T-028. */
+		double damageVariance = -1;
 		int dotDamage;
 		int healed;
 		int ticksLost;
@@ -71,6 +73,11 @@ final class LedgerExamples
 		public int reflectDamage()
 		{
 			return reflectDamage;
+		}
+
+		public double damageVariance()
+		{
+			return damageVariance;
 		}
 
 		public int scoredOtherDamage()

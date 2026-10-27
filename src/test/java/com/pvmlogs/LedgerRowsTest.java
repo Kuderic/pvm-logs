@@ -132,7 +132,7 @@ public class LedgerRowsTest
 		// is under 2% of 73.2 s and stays white.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "89% (8 s slower)", COST),
+			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -150,7 +150,7 @@ public class LedgerRowsTest
 		// Eric's kill. 688 + thrall 80 - healed 68 = 700, the boss's HP.
 		assertRows(Arrays.asList(
 			r("Vardorvis (dead)", "2:16", EMPHASIS, EMPHASIS, DEAD, NEUTRAL),
-			emph("Luck", "88% (14 s slower)", COST),
+			emph("Luck", "14 s slower", COST),
 			damage("688/778", COST),
 			main("DPS", "5.0"),
 			main("Execution", "84%"),
@@ -173,7 +173,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis (ended)", "2:20"),
-			emph("Luck", "89% (15 s slower)", COST),
+			emph("Luck", "15 s slower", COST),
 			damage("721/812", COST),
 			main("DPS", "5.1"),
 			main("Execution", "93%"),
@@ -197,7 +197,7 @@ public class LedgerRowsTest
 		// The trip keeps no heal (only thrall and DoT were added for it), so there's no "boss healed" row.
 		assertRows(Arrays.asList(
 			title("Trip · 6 kills", "12:40"),
-			emph("Luck", "98% (14 s slower)", NEUTRAL),
+			emph("Luck", "14 s slower", NEUTRAL),
 			damage("4,120/4,201", NEUTRAL),
 			main("DPS", "5.4"),
 			main("Execution", "92%"),
@@ -228,7 +228,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("ToA · 3 rooms", "9:12"),
-			emph("Luck", "103% (13 s faster)", BETTER),
+			emph("Luck", "13 s faster", BETTER),
 			damage("8,410/8,200", BETTER),
 			main("DPS", "15.2"),
 			main("Execution", "86%"),
@@ -467,7 +467,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "89% (8 s slower)", COST),
+			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -485,7 +485,7 @@ public class LedgerRowsTest
 		// T-022: no loadout under the fight's rows; it has an overlay of its own.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "89% (8 s slower)", COST),
+			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -968,28 +968,6 @@ public class LedgerRowsTest
 
 	// ---- the luck % (Eric, 2026-10-27: "add back in the luck %") ----
 
-	@Test
-	public void theLuckPercentNeverContradictsItsSide()
-	{
-		assertEquals("89%", LedgerRows.luckPercent(370, 418));
-		assertEquals("103%", LedgerRows.luckPercent(8410, 8200));
-		// 99.6% and 100.4% would round to 100%, which reads as no luck either way.
-		assertEquals("99%", LedgerRows.luckPercent(996, 1000));
-		assertEquals("101%", LedgerRows.luckPercent(1004, 1000));
-		assertEquals("100%", LedgerRows.luckPercent(1000, 1000.2));
-	}
-
-	@Test
-	public void luckShowsThePercentThenTheSeconds()
-	{
-		assertEquals("88% (14 s slower)", LedgerRows.luckFigure(new LedgerRows.Numbers(LedgerExamples.kill())));
-		// No bracket when the seconds round to none.
-		final FakeScope close = LedgerExamples.midFight();
-		close.damage = 417;
-		assertEquals("99%", LedgerRows.luckFigure(new LedgerRows.Numbers(close)));
-		assertEquals("\u2014", LedgerRows.luckFigure(new LedgerRows.Numbers(LedgerExamples.noData())));
-	}
-
 	// ---- damage taken, after the fight (T-019) ----
 
 	@Test
@@ -1095,7 +1073,7 @@ public class LedgerRowsTest
 		final List<Row> rows = build(sire, State.fight("Abyssal Sire", true, true, false));
 		assertEquals(title("Abyssal Sire", "1:51").left + " (dead)", rows.get(0).left);
 		assertEquals("1:51", rows.get(0).right);
-		assertEquals("73% (20 s slower)", rows.get(1).right);
+		assertEquals("20 s slower", rows.get(1).right);
 		assertTrue(rows.contains(main("DPS", "6.2")));
 	}
 
@@ -1248,5 +1226,107 @@ public class LedgerRowsTest
 		assertEquals(4.572, CombatCalc.burningClawsBurnAverage(0.6), 1e-9);
 		assertEquals(4.5, CombatCalc.burningClawsBurnAverage(1.0), 1e-9);
 		assertEquals(0.0, CombatCalc.burningClawsBurnAverage(0.0), 1e-9);
+	}
+
+	// ---- T-029: Luck as top/bottom percent ----
+
+	@Test
+	public void eachBandAndItsColour()
+	{
+		assertEquals("bottom 20%", LedgerRows.band(0.20));
+		assertEquals("average", LedgerRows.band(0.25));
+		assertEquals("average", LedgerRows.band(0.5));
+		assertEquals("average", LedgerRows.band(0.75));
+		assertEquals("top 25%", LedgerRows.band(0.7501));
+		assertEquals("top 10%", LedgerRows.band(0.9));
+		assertEquals(COST, LedgerRows.percentileBand(0.20));
+		assertEquals(NEUTRAL, LedgerRows.percentileBand(0.5));
+		assertEquals(BETTER, LedgerRows.percentileBand(0.9));
+	}
+
+	@Test
+	public void neverTopOrBottomZero()
+	{
+		assertEquals("bottom 1%", LedgerRows.band(0.003));
+		assertEquals("bottom 1%", LedgerRows.band(0.0));
+		assertEquals("top 1%", LedgerRows.band(0.999));
+		assertEquals("top 1%", LedgerRows.band(1.0));
+	}
+
+	@Test
+	public void luckReadsItsBandThenItsSecondsAndTakesItsColour()
+	{
+		// Eric's kill: 688 dealt against 778 expected. With a spread of 11,436, z = -90 / 106.9 = -0.842, so a fifth of
+		// fights with these attacks dealt less: the bottom 20%.
+		final FakeScope kill = LedgerExamples.kill();
+		kill.damageVariance = 11436;
+		final List<Row> rows = build(kill, State.fight("Vardorvis", true, true, false));
+		assertEquals("bottom 20% (14 s slower)", rows.get(1).right);
+		assertEquals(COST, rows.get(1).rightColour);
+		// Damage/expected takes the same colour.
+		assertEquals(COST, rows.get(2).rightColour);
+		// The short form for a narrow panel is the band alone.
+		assertEquals("bottom 20%", rows.get(1).shortRight);
+		// A middling fight: "average", neutral, even though its seconds would have coloured it.
+		kill.damageVariance = 200_000;
+		final List<Row> middling = build(kill, State.fight("Vardorvis", true, true, false));
+		assertEquals("average (14 s slower)", middling.get(1).right);
+		assertEquals(NEUTRAL, middling.get(1).rightColour);
+	}
+
+	@Test
+	public void noBracketWhenTheSecondsRoundToNone()
+	{
+		final FakeScope close = LedgerExamples.midFight();
+		close.damage = 417;
+		close.damageVariance = 4000;
+		assertEquals("average", build(close, State.fight("Vardorvis", false, false, false)).get(1).right);
+	}
+
+	@Test
+	public void unknownVarianceFallsBackToTheSeconds()
+	{
+		final FakeScope kill = LedgerExamples.kill();
+		kill.damageVariance = -1;
+		final List<Row> rows = build(kill, State.fight("Vardorvis", true, true, false));
+		assertEquals(emph("Luck", "14 s slower", COST), rows.get(1));
+		assertNull(rows.get(1).shortRight);
+	}
+
+	@Test
+	public void theSireKillReadsInTheBottom()
+	{
+		// T-023's numbers: 444 dealt against 612 expected over 28 attacks. A spread of about 20 an attack gives
+		// V = 28 x 400 = 11,200: z = -168 / 105.8 = -1.59, about 1 fight in 18 dealt less.
+		final FakeScope sire = LedgerExamples.kill();
+		sire.combatTicks = 186;
+		sire.scoredCombatTicks = 120;
+		sire.damage = 444;
+		sire.expectedDamage = 612;
+		sire.thrallDamage = 0;
+		sire.dotDamage = 8;
+		sire.damageVariance = 11_200;
+		assertEquals("bottom 6% (20 s slower)", build(sire, State.fight("Abyssal Sire", true, true, false)).get(1).right);
+	}
+
+	@Test
+	public void roomRaidAndTripSumTheirVariance()
+	{
+		final Fight a = new Fight("Vardorvis", NpcIds.GOBLIN, 1, 700, 0L, null, 0);
+		a.recordExpected(40, 0.7, 14, 150);
+		a.recordDamageDealt(10, 1L, true);
+		final Fight b = new Fight("Vardorvis", NpcIds.GOBLIN, 2, 700, 0L, null, 0);
+		b.recordExpected(40, 0.7, 14, 250);
+		final Encounter room = new Encounter("Vardorvis", null, 0L);
+		room.add(a);
+		room.add(b);
+		assertEquals(400, LedgerRows.of(room).damageVariance(), 1e-9);
+		final Raid raid = new Raid(RaidType.TOMBS_OF_AMASCUT, 1, 0L);
+		raid.add(room);
+		assertEquals(400, LedgerRows.of(raid).damageVariance(), 1e-9);
+		// 10 dealt against 28 expected over a spread of 400: z = -0.9.
+		assertEquals(DamageMoments.phi(-0.9), new LedgerRows.Numbers(LedgerRows.of(room)).percentile, 1e-12);
+		final SessionTotals trip = new SessionTotals(0L);
+		assertEquals(-1, LedgerRows.of(trip).damageVariance(), 0);
 	}
 }

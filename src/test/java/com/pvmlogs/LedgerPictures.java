@@ -35,21 +35,30 @@ public final class LedgerPictures
 		final LedgerRows.Settings all = new LedgerRows.Settings();
 		final Map<String, List<LedgerRows.Row>> s = new LinkedHashMap<>();
 		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis"), all));
-		s.put("2-mid", LedgerRows.build(LedgerExamples.midFight(),
-			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+		// T-029: illustrative spreads, so Luck shows its band: 370 against 418 over 6,000 sits in the middle half.
+		final LedgerExamples.FakeScope mid = LedgerExamples.midFight();
+		mid.damageVariance = 6000;
+		s.put("2-mid", LedgerRows.build(mid, LedgerRows.State.fight("Vardorvis", false, false, false), all));
 		// Illustrative average: the clock's median 1:59 over 10 kills.
 		// T-019: illustrative damage taken after the fight.
 		final LedgerExamples.FakeScope dead = LedgerExamples.kill();
 		dead.dotTaken = 27;
 		dead.biggestHitTaken = 41;
 		dead.damageTakenUnprotected = 85;
+		// 688 against 778 over 11,436: the bottom 20%.
+		dead.damageVariance = 11436;
 		s.put("3-dead", LedgerRows.build(dead, LedgerRows.State.fight("Vardorvis", true, true, false)
 			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
-		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
-			LedgerRows.State.fight("Vardorvis", true, false, false), all));
-		s.put("5-trip", LedgerRows.build(LedgerExamples.trip(), LedgerRows.State.trip(6, false, false), all));
-		s.put("6-raid", LedgerRows.build(LedgerExamples.raid(),
-			LedgerRows.State.raid("Tombs of Amascut", 3, false, false), all));
+		final LedgerExamples.FakeScope ended = LedgerExamples.ended();
+		ended.damageVariance = 8000;
+		s.put("4-ended", LedgerRows.build(ended, LedgerRows.State.fight("Vardorvis", true, false, false), all));
+		final LedgerExamples.FakeScope trip = LedgerExamples.trip();
+		trip.damageVariance = 60_000;
+		s.put("5-trip", LedgerRows.build(trip, LedgerRows.State.trip(6, false, false), all));
+		// 8,410 against 8,200 over 40,000: the top 15%.
+		final LedgerExamples.FakeScope raid = LedgerExamples.raid();
+		raid.damageVariance = 40_000;
+		s.put("6-raid", LedgerRows.build(raid, LedgerRows.State.raid("Tombs of Amascut", 3, false, false), all));
 		s.put("7-unsure", LedgerRows.build(LedgerExamples.midFight(),
 			LedgerRows.State.fight("Vardorvis", false, false, true), all));
 		s.put("8-nodata", LedgerRows.build(LedgerExamples.noData(),
@@ -164,7 +173,7 @@ public final class LedgerPictures
 					// As the overlay fits it, with the same font metrics.
 					final java.awt.FontMetrics left = METRICS.getFontMetrics(roles.get(row.leftFont));
 					final java.awt.FontMetrics right = METRICS.getFontMetrics(roles.get(row.rightFont));
-					rows.add(PvmPerformanceOverlay.fit(row, left::stringWidth, right.stringWidth(row.right), saved));
+					rows.add(PvmPerformanceOverlay.fit(row, left::stringWidth, right::stringWidth, saved));
 				}
 				for (Map.Entry<String, String> scene : scenes.entrySet())
 				{
