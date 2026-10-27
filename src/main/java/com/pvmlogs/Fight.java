@@ -142,6 +142,9 @@ class Fight
 	private int ticksLostOther;
 	private int combatTicks;
 	private boolean attacking;
+	// This session's attack-by-attack and tick-by-tick record (T-035), fed from the methods below where each counts, so
+	// its sums are the fight's. Transient: never saved, null for a fight read from history or with recording off.
+	private transient FightTimeline timeline;
 
 	// The tick this target became attackable, and how long it took to be
 
@@ -198,6 +201,10 @@ class Fight
 			hits++;
 		}
 		lastActivityMillis = now;
+		if (timeline != null)
+		{
+			timeline.damage(amount, landedAttack);
+		}
 	}
 
 	/**
@@ -206,11 +213,23 @@ class Fight
 	 */
 	void revokeDamageDealt(int amount, boolean hit)
 	{
+		final int before = damageDealt;
+		final boolean hitTaken = hit && hits > 0;
 		damageDealt = Math.max(0, damageDealt - amount);
-		if (hit && hits > 0)
+		if (hitTaken)
 		{
 			hits--;
 		}
+		if (timeline != null)
+		{
+			timeline.revoked(before - damageDealt, hitTaken);
+		}
+	}
+
+	/** This session's timeline (T-035), or null. Set by {@link FightTimeline.Store}. */
+	void setTimeline(FightTimeline timeline)
+	{
+		this.timeline = timeline;
 	}
 
 	/** A splat our thrall landed. Counted on its own and nowhere else - see thrallDamage. */
@@ -435,6 +454,10 @@ class Fight
 				sumExpectedDamageVariance += damageVariance;
 				expectedVarianceSamples++;
 			}
+			if (timeline != null)
+			{
+				timeline.expected(averageHit, damageVariance);
+			}
 		}
 	}
 
@@ -545,6 +568,10 @@ class Fight
 			hits++;
 		}
 		lastActivityMillis = now;
+		if (timeline != null)
+		{
+			timeline.damage(damage, landed);
+		}
 	}
 
 	/**
@@ -604,6 +631,10 @@ class Fight
 		if (potted)
 		{
 			attacksPotted++;
+		}
+		if (timeline != null)
+		{
+			timeline.attackMade();
 		}
 	}
 
@@ -677,6 +708,10 @@ class Fight
 			ticksLostOther++;
 		}
 		combatTicks++;
+		if (timeline != null)
+		{
+			timeline.tickLost(eating);
+		}
 	}
 
 	/** Every tick off cooldown with no attack, whatever the reason. */
@@ -697,6 +732,10 @@ class Fight
 		if (attacking || roomEngaged)
 		{
 			combatTicks++;
+			if (timeline != null)
+			{
+				timeline.tickSpent();
+			}
 		}
 	}
 

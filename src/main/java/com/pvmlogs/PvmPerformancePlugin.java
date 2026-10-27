@@ -479,6 +479,9 @@ public class PvmPerformancePlugin extends Plugin
 
 	// Running totals for the trip, shown instead of the current fight when the overlay is set to whole-trip mode.
 	private final SessionTotals session = new SessionTotals(System.currentTimeMillis());
+	// Every fight's attack-by-attack and tick-by-tick record this session, for the side panel's charts (T-035). Fed from
+	// Fight's own counting; the hooks below add what each attack was and whose each splat is.
+	private final FightTimeline.Store timelines = new FightTimeline.Store();
 
 
 	// The room the fights add up to, and the raid the rooms add up to. Both are views over the fights, so the three widths
@@ -559,6 +562,8 @@ public class PvmPerformancePlugin extends Plugin
 		// Turned off and on again, the plugin cannot know what happened in between: Mark of Darkness and Charge read down
 		// until their messages say otherwise (T-026).
 		gearBonuses.resetBuffs("the plugin has just started");
+		timelines.setClock(client::getTickCount);
+		timelines.setEnabled(config.panelCharts());
 		LoadoutOverlay.migrateLoadoutOnly(LoadoutOverlay.Settings.of(configManager));
 		overlayManager.add(overlay);
 		overlayManager.add(loadoutOverlay);
@@ -609,6 +614,8 @@ public class PvmPerformancePlugin extends Plugin
 		clientToolbar.removeNavigation(navButton);
 		panel = null;
 		navButton = null;
+		// This session's timelines go with it (T-035): they are never saved.
+		timelines.clear();
 		current = null;
 		lastFinished = null;
 		history.clear();
@@ -646,7 +653,17 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (!PvmPerformanceConfig.GROUP.equals(event.getGroup()) || !"debugLogging".equals(event.getKey()))
+		if (!PvmPerformanceConfig.GROUP.equals(event.getGroup()))
+		{
+			return;
+		}
+		if ("panelCharts".equals(event.getKey()))
+		{
+			// Off: fights from now on get no timeline. Those already recorded are kept until they age out.
+			timelines.setEnabled(config.panelCharts());
+			return;
+		}
+		if (!"debugLogging".equals(event.getKey()))
 		{
 			return;
 		}
@@ -847,6 +864,7 @@ public class PvmPerformancePlugin extends Plugin
 				current.recordNotHitpoints(HitsplatKind.typeName(hitsplat.getHitsplatType()), hitsplat.getAmount());
 			}
 			countSplat(npc, tick, hitsplat.getAmount(), booked ? tick - bookingLag : Integer.MIN_VALUE, flight);
+			attributeForTimeline(current, npc.getIndex());
 			// What the player's path made of it, kept for this tick in case the thrall's projectile says otherwise.
 			if (splatInFlight != null && splatInFlight.npcIndex == npc.getIndex())
 			{
@@ -2380,6 +2398,11 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
 			specFiredTick = Integer.MIN_VALUE;
+			final FightTimeline line = timelines.of(fight);
+			if (line != null)
+			{
+				line.markLatestSpecial();
+			}
 			maxHit = specMaxHit;
 			averageHit = specAverageHit;
 			variance = specVariance;
@@ -2394,8 +2417,10 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		else
 		{
+			final FightTimeline line = timelines.of(fight);
 			pendingSamples.add(new PendingSample(fight,
-				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance));
+				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance,
+				line == null ? null : line.latest()));
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
@@ -2422,11 +2447,14 @@ public class PvmPerformancePlugin extends Plugin
 		private final double accuracy;
 		private final double averageHit;
 		private final double variance;
+		// The attack in the fight's timeline the expectation is for (T-035), or null.
+		private final FightTimeline.Attack attack;
 
 		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit,
-			double variance)
+			double variance, FightTimeline.Attack attack)
 		{
 			this.variance = variance;
+			this.attack = attack;
 			this.fight = fight;
 			this.npcIndex = npcIndex;
 			this.tick = tick;
@@ -2450,6 +2478,12 @@ public class PvmPerformancePlugin extends Plugin
 			pendingSamples.remove(i);
 			if (sample.fight != null)
 			{
+				final FightTimeline line = timelines.of(sample.fight);
+				if (line != null && sample.attack != null)
+				{
+					// Other attacks may have gone out while it flew: the expectation is this one's.
+					line.expectNextFor(sample.attack);
+				}
 				sample.fight.recordExpected(sample.maxHit, sample.accuracy, sample.averageHit, sample.variance);
 			}
 			session.recordExpected(sample.accuracy, sample.averageHit, sample.variance);
@@ -2492,6 +2526,40 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/** The trip totals shown when the overlay is set to whole-trip mode. */
+	/** Every fight's timeline this session (T-035), for the side panel. Read on the client thread. */
+	FightTimeline.Store getTimelines()
+	{
+		return timelines;
+	}
+
+	// What the attack just booked into this fight was (T-035): named as the loadout names it, from the weapon held on the
+	// tick it was thrown.
+	private void describeForTimeline(Fight fight, int thrownTick)
+	{
+		final FightTimeline line = timelines.of(fight);
+		if (line == null)
+		{
+			return;
+		}
+		final Integer held = weaponByTick.get(thrownTick);
+		final int weapon = held != null ? held : combatCalc.equippedWeaponId();
+		final Spell spell = combatCalc.timelineSpell();
+		line.describeLatest(CombatCalc.attackName(combatCalc.itemLabel(weapon), spell == null ? null : spell.getDisplayName()),
+			weapon, spell, combatCalc.timelineStyle(), thrownTick);
+	}
+
+	// Whose the splat just counted is (T-035): the attack of its burst, which countSplat has just opened or continued.
+	private void attributeForTimeline(Fight fight, int npcIndex)
+	{
+		final FightTimeline line = timelines.of(fight);
+		if (line == null)
+		{
+			return;
+		}
+		final AttackSplats.Burst burst = bursts.get(npcIndex);
+		line.attributeSplat(burst == null ? Integer.MIN_VALUE : burst.thrownTick());
+	}
+
 	SessionTotals getSession()
 	{
 		return session;
@@ -2870,6 +2938,7 @@ public class PvmPerformancePlugin extends Plugin
 			// this attack was waiting on, before it moves.
 			logEats(foodDelay.attackThrown(attackTick, attackDueTick));
 			attacker.recordAttackMade(potted, boostShare, drained);
+			describeForTimeline(attacker, attackTick);
 			// The room remembers it too. From here every fight under it counts its ticks from the first one, rather than each
 			// waiting to be attacked in its own right.
 			if (currentEncounter != null && !currentEncounter.isEnded())
@@ -3443,6 +3512,7 @@ public class PvmPerformancePlugin extends Plugin
 			maxHp, now,
 			raidType, raidCounter);
 		current.noteStartTick(client.getTickCount());
+		timelines.attach(current);
 		// A boss the monster data cannot describe says so from the first tick, not only once the fight's numbers show it.
 		if (stats != null)
 		{

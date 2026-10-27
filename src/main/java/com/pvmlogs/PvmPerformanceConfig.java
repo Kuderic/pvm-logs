@@ -147,4 +147,18 @@ public interface PvmPerformanceConfig extends Config
 	{
 		return false;
 	}
+
+	// The side panel spec's key and default (side-panel-design.md §7). Added by T-035 ahead of T-033, which puts it in its
+	// "Side panel" section beside panelLive; the key stays.
+	@ConfigItem(
+		keyName = "panelCharts",
+		name = "Charts",
+		description = "The side panel's damage chart and tick strip. Off: they are not shown, and nothing is recorded for "
+			+ "them either",
+		position = 13
+	)
+	default boolean panelCharts()
+	{
+		return true;
+	}
 }
