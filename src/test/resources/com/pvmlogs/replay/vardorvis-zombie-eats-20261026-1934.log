@@ -1,0 +1,137 @@
+=== PvM Logs, the last 120 lines before this was saved. Plugin dev ===
+  melee boost Super combat, ranged boost Ranging potion, magic boost None
+  prayers: melee Piety, ranged Rigour, magic Augury; slayer helm off task false
+  fight timeout 100 ticks, file logging true
+  Abyssal tentacle (or) - Whip, SLASH ACCURATE, 4 tick
+  Target: Vardorvis (npc 12223), defence 215 (base 215), magic 215, toa raid level 0
+  Monster data: 'Vardorvis' (Post-quest), 700 hp, defence 215 now (hitpoints not known yet), xp bonus x1.550 - boss rule default, health bar not read yet; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+  Max hit 31, accuracy 33.9% (lands 33.9%), avg hit 5.25, dps 2.19
+  Melee: str bonus +140, level 88, attack bonus +142
+    str from: HEAD Neitiznot faceguard +6, CAPE Fire cape +4, AMULET Amulet of blood fury +8, WEAPON Abyssal tentacle (or) +86, BODY Bandos chestplate +4, SHIELD Dragon defender +6, LEGS Bandos tassets +2, GLOVES Barrows gloves +12, BOOTS Avernic treads +4, RING Berserker ring (i) +8
+  Prayers up: none (goal Piety, NOT met)
+  Efficiency goal: Piety, STRENGTH at 118 (+19)
+  (raid: cox indungeon 0, cox timer 0, tob progress 30, tob wave 0/0, tob party 0, toa level 0, toa partystatus 0)
+  (toa path 0, toa level frozen 0)
+  (instanced true, toa raid level varbit 0, stale unless instanced)
+  (category varbit 20, com mode 0, cox tier 3, cox timer 0, salts 0)
+=== log ===
+[180] debug logging to file on, plugin dev
+[180] send this file with a description of what you did and what you expected to see
+[407] monster stats for npc 12223: 2 versions under this id, using 'Post-quest' (700 hp) - boss rule default, health bar not read yet
+[407] fight START Vardorvis (npc 12223, index 42951, maxHp 700) group=null room=Vardorvis raid=null
+[407]   Monster data: 'Vardorvis' (Post-quest), 700 hp, defence 215 now (700 hp left), xp bonus x1.550 - boss rule default, health bar not read yet; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+[407] expected vs Vardorvis (npc 12223, 'Post-quest' def 215, 700 hp left (counted)): max 34, acc 0.378, avg 6.42, dps 2.68
+[407] tick LOST: overdue since -2147483648 + lag 1, NOT COUNTED - no attack made in this fight yet
+[408] health bar: npc varp 12223, hp 700 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[408] monster stats for npc 12223: 2 versions under this id, using 'Post-quest' (700 hp) - boss rule, the health bar shows 700 full hitpoints
+[408] tick LOST: overdue since -2147483648 + lag 1, NOT COUNTED - no attack made in this fight yet
+[409] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42951), landedAttack=false, fromFlight=false
+[409] THRALL spawned: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 0
+[409] THRALL animation 13685: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 0
+[409] xp drop MAGIC +88
+[409] xp award tick 409: 0-0 (left 0-0, x1.550) against npc 12223
+[409] THRALL claimed npc 10886 (index 43480), max hit 3: spawned beside me as the varbit came up
+[409]   scored as an ordinary attack: max 34, chances 0.38, avg 6.42
+[409] ATTACK on Vardorvis (npc 12223) thrown tick 408, booked +1, speed 4, next due 412, prayed=false potted=false boost 0.00 (cost 2.49) switched=true (cost 0.00) projectile=false, scored=true, expected avg 6.42, ideal 12.81
+[410] tick SPENT: on cooldown, due 412 + lag 1, attacking=true
+[411] tick SPENT: on cooldown, due 412 + lag 1, attacking=true
+[412] tick SPENT: on cooldown, due 412 + lag 1, attacking=true
+[413] hitsplat 0 on Vardorvis (index 42951): player, thrall p=0.01 [rate 0.030, player ON_CADENCE, xp NO_INFO (0/0 NOT trusted), phase -1]
+[413] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42951), landedAttack=false, fromFlight=false
+[413] THRALL animation -1: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 0
+[413]   scored as an ordinary attack: max 41, chances 0.45, avg 9.13
+[413] ATTACK on Vardorvis (npc 12223) thrown tick 412, booked +1, speed 4, next due 416, prayed=true potted=false boost 0.00 (cost 3.68) switched=true (cost 0.00) projectile=false, scored=true, expected avg 9.13, ideal 12.81
+[414] THRALL resurrection active varbit -> 1
+[414] THRALL animation 13681: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 1
+[414] tick SPENT: on cooldown, due 416 + lag 1, attacking=true
+[415] hitsplat 2 on Vardorvis (index 42951): THRALL, thrall p=1.00 [rate 0.900, player IN_COOLDOWN, xp UNCOVERED (0/0 NOT trusted), phase -1]
+[415] health bar: npc varp 12223, hp 698 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[415] EAT Shark (delay 3) on tick 414, clicked 413: attack pending, due 416 -> 419
+[415] tick SPENT: on cooldown, due 416 + lag 1, attacking=true
+[416] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 42951): HEAL, target has 698 left (bar)
+[416] health bar: npc varp 12223, hp 699 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[416] tick SPENT: on cooldown, due 416 + lag 1, attacking=true
+[417] tick LOST (eating 1/3): overdue since 416 + lag 1
+[418] THRALL animation -1: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 1
+[418] THRALL animation 13681: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 1
+[418] tick LOST (eating 2/3): overdue since 416 + lag 1
+[419] hitsplat 2 on Vardorvis (index 42951): THRALL, thrall p=0.99 [rate 0.900, player LATE, xp UNCOVERED (0/0 NOT trusted), phase 3]
+[419] xp drop ATTACK +117
+[419] xp drop HITPOINTS +39
+[419] health bar: npc varp 12223, hp 697 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[419] xp award tick 419: 19-19 (left 19-19, x1.550) against npc 12223
+[419] tick LOST (eating 3/3): overdue since 416 + lag 1
+[420] hitsplat 19 type 16 on Vardorvis (npc 12223, index 42951), landedAttack=true, fromFlight=false
+[420] health bar: npc varp 12223, hp 678 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[420]   scored as an ordinary attack: max 41, chances 0.45, avg 9.17
+[420] ATTACK on Vardorvis (npc 12223) thrown tick 419, booked +1, speed 4, next due 423, prayed=true potted=false boost 0.00 (cost 3.71) switched=true (cost 0.00) projectile=false, scored=true, expected avg 9.26, ideal 12.97
+[421] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 42951): HEAL, target has 678 left (bar)
+[421] health bar: npc varp 12223, hp 680 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[421] tick SPENT: on cooldown, due 423 + lag 1, attacking=true
+[422] THRALL animation -1: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 1
+[422] THRALL animation 13681: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 1
+[422] tick SPENT: on cooldown, due 423 + lag 1, attacking=true
+[423] hitsplat 1 on Vardorvis (index 42951): THRALL, thrall p=1.00 [rate 0.900, player IN_COOLDOWN, xp UNCOVERED (0/0 NOT trusted), phase 3]
+[423] health bar: npc varp 12223, hp 679 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[423] tick SPENT: on cooldown, due 423 + lag 1, attacking=true
+[424] hitsplat 0 on Vardorvis (index 42951): player, thrall p=0.00 [rate 0.002, player ON_CADENCE, xp NO_INFO (0/0 NOT trusted), phase 3]
+[424] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42951), landedAttack=false, fromFlight=false
+[424]   scored as an ordinary attack: max 41, chances 0.45, avg 9.26
+[424] ATTACK on Vardorvis (npc 12223) thrown tick 423, booked +1, speed 4, next due 427, prayed=true potted=false boost 0.00 (cost 3.71) switched=true (cost 0.00) projectile=false, scored=true, expected avg 9.26, ideal 12.97
+[425] tick SPENT: on cooldown, due 427 + lag 1, attacking=true
+[426] THRALL animation -1: npc 10886 (index 43480), 1 tiles from me, interacting nothing, active varbit 1
+[426] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 42951): HEAL, target has 679 left (bar)
+[426] THRALL animation 13681: npc 10886 (index 43480), 2 tiles from me, interacting nothing, active varbit 1
+[426] health bar: npc varp 12223, hp 680 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[426] tick SPENT: on cooldown, due 427 + lag 1, attacking=true
+[427] hitsplat 2 on Vardorvis (index 42951): THRALL, thrall p=1.00 [rate 0.900, player IN_COOLDOWN, xp UNCOVERED (0/0 NOT trusted), phase 3]
+[427] health bar: npc varp 12223, hp 678 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[427] tick SPENT: on cooldown, due 427 + lag 1, attacking=true
+[428] tick LOST: overdue since 427 + lag 1
+[429] tick LOST: overdue since 427 + lag 1
+[430] THRALL animation -1: npc 10886 (index 43480), 3 tiles from me, interacting nothing, active varbit 1
+[430] THRALL animation 13681: npc 10886 (index 43480), 3 tiles from me, interacting nothing, active varbit 1
+[430] EAT Shark (delay 3) on tick 429, clicked 429: weapon ready (due 427), no delay
+[430] tick LOST: overdue since 427 + lag 1
+[431] hitsplat 3 on Vardorvis (index 42951): THRALL, thrall p=0.99 [rate 0.900, player LATE, xp UNCOVERED (1/1 NOT trusted), phase 3]
+[431] hitsplat 0 on Vardorvis (index 42951): player, thrall p=0.00 [rate 0.002, player LATE, xp NO_INFO (1/1 NOT trusted), phase 3]
+[431] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42951), landedAttack=false, fromFlight=false
+[431] health bar: npc varp 12223, hp 675 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[431]   scored as an ordinary attack: max 41, chances 0.45, avg 9.26
+[431] ATTACK on Vardorvis (npc 12223) thrown tick 430, booked +1, speed 4, next due 434, prayed=true potted=false boost 0.00 (cost 3.71) switched=true (cost 0.00) projectile=false, scored=true, expected avg 9.26, ideal 12.97
+[432] tick SPENT: on cooldown, due 434 + lag 1, attacking=true
+[433] tick SPENT: on cooldown, due 434 + lag 1, attacking=true
+[434] THRALL animation -1: npc 10886 (index 43480), 3 tiles from me, interacting nothing, active varbit 1
+[434] THRALL animation 13681: npc 10886 (index 43480), 3 tiles from me, interacting nothing, active varbit 1
+[434] EAT Saradomin brew(4) (delay 0) on tick 433, clicked 433: a potion, no delay
+[434] tick SPENT: on cooldown, due 434 + lag 1, attacking=true
+[435] hitsplat 1 on Vardorvis (index 42951): THRALL, thrall p=0.96 [rate 0.900, player ON_CADENCE, xp UNCOVERED (1/1 NOT trusted), phase 3]
+[435] hitsplat 0 on Vardorvis (index 42951): player, thrall p=0.00 [rate 0.002, player ON_CADENCE, xp NO_INFO (1/1 NOT trusted), phase 3]
+[435] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42951), landedAttack=false, fromFlight=false
+[435] health bar: npc varp 12223, hp 674 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[435]   scored as an ordinary attack: max 37, chances 0.40, avg 7.42
+[435] ATTACK on Vardorvis (npc 12223) thrown tick 434, booked +1, speed 4, next due 438, prayed=true potted=false boost 0.00 (cost 5.55) switched=true (cost 0.00) projectile=false, scored=true, expected avg 7.42, ideal 12.97
+[436] tick SPENT: on cooldown, due 438 + lag 1, attacking=true
+[437] tick SPENT: on cooldown, due 438 + lag 1, attacking=true
+[438] THRALL animation -1: npc 10886 (index 43480), 3 tiles from me, interacting nothing, active varbit 1
+[438] THRALL animation 13681: npc 10886 (index 43480), 3 tiles from me, interacting nothing, active varbit 1
+[438] tick SPENT: on cooldown, due 438 + lag 1, attacking=true
+[439] hitsplat 0 on Vardorvis (index 42951): player, thrall p=0.29 [rate 0.900, player ON_CADENCE, xp NO_INFO (1/1 NOT trusted), phase 3]
+[439] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42951), landedAttack=false, fromFlight=false
+[439] hitsplat 0 on Vardorvis (index 42951): player, thrall p=0.29 [rate 0.900, player SAME_TICK_BURST, xp NO_INFO (1/1 NOT trusted), phase 3]
+[439] hitsplat 0 type 12 on Vardorvis (npc 12223, index 42951), landedAttack=false, fromFlight=false
+[439]   scored as an ordinary attack: max 37, chances 0.40, avg 7.42
+[439] ATTACK on Vardorvis (npc 12223) thrown tick 438, booked +1, speed 4, next due 442, prayed=true potted=false boost 0.00 (cost 5.55) switched=true (cost 0.00) projectile=false, scored=true, expected avg 7.42, ideal 12.97
+[440] tick SPENT: on cooldown, due 442 + lag 1, attacking=true
+[441] tick SPENT: on cooldown, due 442 + lag 1, attacking=true
+[442] THRALL animation -1: npc 10886 (index 43480), 3 tiles from me, interacting nothing, active varbit 1
+[442] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 42951): HEAL, target has 674 left (bar)
+[442] health bar: npc varp 12223, hp 678 / 700; target index 42951, id 12223, composition 12223 -> OURS
+[442] tick SPENT: on cooldown, due 442 + lag 1, attacking=true
+[443] tick LOST: overdue since 442 + lag 1
+[444] tick LOST: overdue since 442 + lag 1
+[445] tick LOST: overdue since 442 + lag 1
+[446] fight END Vardorvis (npc 12223) target despawned: attempts=7 made=7 damage=19 thrallDamage=11 hits=1 ticksLost=9 combatTicks=37 expDamage=58.1
+[446] RECONCILE Vardorvis (npc 12223): weapon 19 (of it not hitpoints 0) + thrall 11 + dot 0 + others 0 + unclassified 0, healed 8; on the target 30 - 8 = 22 against 700 full hp (bar); bar last read 678, now 678 left (bar)
+[446] STATS CHECK Vardorvis: landed 1 of 7 against 2.9 expected (variance 1.69): consistent with luck
+[446] THRALL released npc 10886 (index 43480): despawned
