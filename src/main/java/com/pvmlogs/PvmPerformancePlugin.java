@@ -718,6 +718,10 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// Damage on us during an active fight is attributed to it.
 			current.recordDamageTaken(hitsplat.getAmount(), now);
+			if (current.isScored())
+			{
+				session.recordDamageTaken(hitsplat.getAmount());
+			}
 		}
 	}
 

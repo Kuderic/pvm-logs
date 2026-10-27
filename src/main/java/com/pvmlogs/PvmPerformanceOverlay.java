@@ -280,6 +280,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 		{
 			l.specMaxHit = plugin.getExpectedSpecMaxHit();
 			l.specAccuracy = plugin.getExpectedSpecAccuracy();
+			l.specAverage = plugin.getExpectedSpecAverageHit();
 		}
 		return l;
 	}

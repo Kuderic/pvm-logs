@@ -31,6 +31,7 @@ final class LedgerExamples
 		int attacksPrayed;
 		int attacksSwitched;
 		int attacksDrained;
+		int damageTaken;
 		int hits;
 		double expectedHits;
 
@@ -114,6 +115,11 @@ final class LedgerExamples
 			return attacksDrained;
 		}
 
+		public int damageTaken()
+		{
+			return damageTaken;
+		}
+
 		public int hits()
 		{
 			return hits;
@@ -156,6 +162,7 @@ final class LedgerExamples
 		s.thrallDamage = 48;
 		s.ticksLost = 10;
 		s.ticksLostEating = 2;
+		s.damageTaken = 112;
 		s.attacksMade = 18;
 		s.attacksPrayed = 18;
 		s.attacksSwitched = 18;
@@ -176,6 +183,7 @@ final class LedgerExamples
 		s.healed = 68;
 		s.ticksLost = 32;
 		s.ticksLostEating = 7;
+		s.damageTaken = 248;
 		s.attacksMade = 49;
 		s.attacksPrayed = 49;
 		s.attacksSwitched = 49;
@@ -195,6 +203,7 @@ final class LedgerExamples
 		s.dotDamage = 40;
 		s.healed = 71;
 		s.ticksLost = 14;
+		s.damageTaken = 310;
 		s.attacksMade = 40;
 		s.attacksPrayed = 40;
 		s.attacksSwitched = 40;
@@ -214,6 +223,7 @@ final class LedgerExamples
 		s.dotDamage = 60;
 		s.ticksLost = 63;
 		s.ticksLostEating = 11;
+		s.damageTaken = 1404;
 		s.attacksMade = 170;
 		s.attacksPrayed = 168;
 		s.attacksSwitched = 168;
@@ -231,6 +241,7 @@ final class LedgerExamples
 		s.expectedDamage = 8200;
 		s.thrallDamage = 410;
 		s.ticksLost = 92;
+		s.damageTaken = 980;
 		s.attacksMade = 230;
 		s.attacksPrayed = 216;
 		s.attacksSwitched = 228;
@@ -246,6 +257,7 @@ final class LedgerExamples
 		s.combatTicks = 80;
 		s.damage = 212;
 		s.ticksLost = 4;
+		s.damageTaken = 36;
 		s.attacksMade = 12;
 		s.attacksPrayed = 12;
 		s.attacksSwitched = 12;
@@ -271,6 +283,7 @@ final class LedgerExamples
 		l.dps = 5.5;
 		l.specMaxHit = 50;
 		l.specAccuracy = 0.71;
+		l.specAverage = 17.8;
 		return l;
 	}
 }

@@ -170,6 +170,9 @@ final class LedgerRows
 		/** T-015: attacks made with any stat the style rolls on below its base (drained or brewed down). */
 		int attacksDrained();
 
+		/** The damage the player took (T-016). */
+		int damageTaken();
+
 		int hits();
 
 		double expectedHits();
@@ -259,6 +262,11 @@ final class LedgerRows
 			public int attacksDrained()
 			{
 				return room.getAttacksDrained();
+			}
+
+			public int damageTaken()
+			{
+				return room.getDamageTaken();
 			}
 
 			public int hits()
@@ -360,6 +368,11 @@ final class LedgerRows
 			public int attacksDrained()
 			{
 				return raid.getAttacksDrained();
+			}
+
+			public int damageTaken()
+			{
+				return raid.getDamageTaken();
 			}
 
 			public int hits()
@@ -464,6 +477,11 @@ final class LedgerRows
 				return trip.getAttacksDrained();
 			}
 
+			public int damageTaken()
+			{
+				return trip.getDamageTaken();
+			}
+
 			public int hits()
 			{
 				return trip.getHits();
@@ -507,6 +525,8 @@ final class LedgerRows
 		/** Only for a weapon with a special that hits. */
 		int specMaxHit;
 		double specAccuracy = -1;
+		/** What one spec is expected to deal: hit chance times damage, as the plugin books it (Eric, 2026-10-26). */
+		double specAverage = -1;
 	}
 
 	/** Which state the overlay is in, beyond the numbers. */
@@ -686,11 +706,14 @@ final class LedgerRows
 				gearCost = gear * perShare;
 				prayerCost = prayer * perShare;
 				boostShare = Math.min(1, s.boostShare());
-				prayerShare = (double) s.attacksPrayed() / made;
+				// Like gear, the damage the setup kept against what the best prayer you can use would have dealt (Eric,
+				// 2026-10-26), not the share of attacks with it up: a weaker prayer (Chivalry with Piety unlocked) counted
+				// as none at all. It's the same remainder of the setup loss its seconds are.
+				prayerShare = Math.max(0, 1 - prayer);
 				// Your gear's damage against the best gear on hand, not the share of attacks with nothing better to switch
 				// to (Eric, 2026-10-26): blood fury worn over a torture flagged nearly every attack, so it read 6% while
 				// costing 2 s. The seconds beside it were right all along.
-				gearShare = Math.max(0, 1 - Math.max(0, s.switchCostShare()));
+				gearShare = Math.max(0, 1 - gear);
 				drained = (long) s.attacksDrained() * 2 > made;
 			}
 			else
@@ -709,7 +732,7 @@ final class LedgerRows
 		switch (state.view)
 		{
 			case PRE_ATTACK:
-				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL));
+				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL));
 				if (settings.showLoadout)
 				{
 					loadoutWarning(rows, state);
@@ -717,7 +740,7 @@ final class LedgerRows
 				}
 				return rows;
 			case LOADOUT_ONLY:
-				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL));
+				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL));
 				loadoutWarning(rows, state);
 				rows.addAll(loadout(state.loadout));
 				return rows;
@@ -730,18 +753,19 @@ final class LedgerRows
 		}
 		final Numbers n = new Numbers(scope);
 		rows.add(title(state, scope.combatTicks()));
-		top(rows, n, state, settings);
-		if (settings.details && state.ended)
-		{
-			details(rows, n, scope, state);
-		}
-		// The loadout at the bottom while fighting (Eric, 2026-10-26): before the first attack the panel is barely up, since
-		// the fight opens on targeting and the attack follows a tick or two later. The warning at the top covers it.
-		final List<Row> loadout = settings.showLoadout && !state.ended ? loadout(state.loadout) : Collections.emptyList();
+		top(rows, n, scope, state, settings);
+		// The loadout under the fight's rows (Eric, 2026-10-26): before the first attack the panel is barely up, since the
+		// fight opens on targeting and the attack follows a tick or two later. Kept once the boss is dead, with the details
+		// below it (Eric: "details at the bottom after the kill"). The warning at the top covers its accuracy.
+		final List<Row> loadout = settings.showLoadout ? loadout(state.loadout) : Collections.<Row>emptyList();
 		if (!loadout.isEmpty())
 		{
 			rows.add(blank());
 			rows.addAll(loadout);
+		}
+		if (settings.details && state.ended)
+		{
+			details(rows, n, scope, state);
 		}
 		return rows;
 	}
@@ -772,18 +796,16 @@ final class LedgerRows
 		{
 			rows.add(detail(" accuracy", percent(l.accuracy), Colour.NEUTRAL));
 		}
-		if (l.dps >= 0)
-		{
-			rows.add(detail(" expected DPS", oneDecimal(l.dps), Colour.NEUTRAL));
-		}
 		if (l.specMaxHit > 0)
 		{
-			rows.add(detail(" spec", l.specMaxHit + " max" + (l.specAccuracy >= 0 ? DOT + percent(l.specAccuracy) : ""),
-				Colour.NEUTRAL));
+			rows.add(detail(" spec", l.specMaxHit + " max" + (l.specAccuracy >= 0 ? DOT + percent(l.specAccuracy) : "")
+				+ (l.specAverage >= 0 ? DOT + oneDecimal(l.specAverage) + " dmg" : ""), Colour.NEUTRAL));
 		}
-		if (!rows.isEmpty())
+		if (!rows.isEmpty() || l.dps >= 0)
 		{
-			rows.add(0, main(l.attack == null || l.attack.isEmpty() ? "Loadout" : l.attack, ""));
+			// The expected DPS beside the attack's name rather than under it (Eric, 2026-10-26).
+			rows.add(0, main(l.attack == null || l.attack.isEmpty() ? "Loadout" : l.attack,
+				l.dps >= 0 ? oneDecimal(l.dps) + " DPS" : ""));
 		}
 		return rows;
 	}
@@ -794,19 +816,19 @@ final class LedgerRows
 		{
 			case TRIP:
 				return row("Trip" + DOT + plural(state.count, "kill"), clock(ticks),
-					FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
+					FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL);
 			case RAID:
 				return row(raidShortName(state.name) + DOT + plural(state.count, "room"), clock(ticks),
-					FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
+					FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL);
 			default:
 				final String name = !state.ended ? state.name
 					: state.name + (state.killed ? " (dead)" : " (ended)");
 				return row(name, clock(ticks),
-					FontRole.EMPHASIS, FontRole.BODY, state.killed ? Colour.DEAD : Colour.NEUTRAL, Colour.NEUTRAL);
+					FontRole.EMPHASIS, FontRole.EMPHASIS, state.killed ? Colour.DEAD : Colour.NEUTRAL, Colour.NEUTRAL);
 		}
 	}
 
-	private static void top(List<Row> rows, Numbers n, State state, Settings settings)
+	private static void top(List<Row> rows, Numbers n, Scope scope, State state, Settings settings)
 	{
 		final Colour luckColour = luckColour(n.luck, n.clock);
 		final boolean noData = n.expected <= 0;
@@ -839,6 +861,8 @@ final class LedgerRows
 		if (settings.parts != ExecutionParts.OFF)
 		{
 			parts(rows, n, settings.parts == ExecutionParts.COSTING);
+			// Under Execution too (Eric, 2026-10-26): the damage you took. Your own HP, nothing about the boss.
+			rows.add(detail(" damage taken", number(scope.damageTaken()), Colour.NEUTRAL));
 		}
 	}
 
@@ -854,12 +878,13 @@ final class LedgerRows
 		{
 			if (n.split)
 			{
-				// Eric, 2026-10-26 (option A): the share stays 0-100%, the seconds carry the whole cost, drains included.
-				// Mostly below base reads as the word, so it isn't taken for a plain 0%.
-				part(rows, " stat boost", n.drained ? DRAINED : partPercent(n.boostShare), n.boostCost, n.clock,
-					costingOnly);
+				// In Eric's order (2026-10-26): uptime, prayer, gear, stat boost.
 				part(rows, " prayer", partPercent(n.prayerShare), n.prayerCost, n.clock, costingOnly);
 				part(rows, " gear", partPercent(n.gearShare), n.gearCost, n.clock, costingOnly);
+				// Option A (Eric): the boost's share stays 0-100% of a full boost held, the seconds carry the whole cost,
+				// drains included. Mostly below base reads as the word, so it isn't taken for a plain 0%.
+				part(rows, " stat boost", n.drained ? DRAINED : partPercent(n.boostShare), n.boostCost, n.clock,
+					costingOnly);
 			}
 			else
 			{
@@ -1106,10 +1131,10 @@ final class LedgerRows
 		return row(left, right, FontRole.BODY, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
 	}
 
-	/** A main row: its label bold, its value in the body font. */
+	/** A main row: bold label, bold value (Eric, 2026-10-26: "bold all the big numbers next to bold titles"). */
 	private static Row main(String left, String right)
 	{
-		return row(left, right, FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
+		return row(left, right, FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL);
 	}
 
 	private static Row detail(String left, String right, Colour rightColour)

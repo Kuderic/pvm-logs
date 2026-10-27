@@ -74,6 +74,17 @@ class Raid
 		return total;
 	}
 
+	/** The damage the player took across the rooms (T-016, for the overlay). */
+	int getDamageTaken()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getDamageTaken();
+		}
+		return total;
+	}
+
 	/** The first reason any room gives not to trust its expected side, or null. */
 	String getStatsWarning()
 	{
