@@ -233,6 +233,19 @@ final class EncounterGroup
 			NpcID.MAIDEN_ELEMENTAL, NpcID.MAIDEN_ELEMENTAL_STORY, NpcID.MAIDEN_ELEMENTAL_HARD,
 			NpcID.MAIDEN_BLOOD_SLUG, NpcID.MAIDEN_BLOOD_SLUG_STORY, NpcID.MAIDEN_BLOOD_SLUG_HARD);
 
+		// The Abyssal Sire: its seven forms (asleep, awake and stunned in phase one; stepping out and walking, and fighting,
+		// in phase two; the two stages of phase three), its four respiratory systems, which are what phase one is, and the
+		// spawns and scions it summons. Ungrouped, one kill was eleven fights in eleven rooms - phase one a separate "not a
+		// kill", nine respiratory systems on their own, and the kill timed from the second Sire fight (T-020). The minions
+		// only join when attacked: a fight opens on what the player hits.
+		put(groups, "Abyssal Sire",
+			NpcID.ABYSSALSIRE_SIRE_STASIS_SLEEPING, NpcID.ABYSSALSIRE_SIRE_STASIS_AWAKE,
+			NpcID.ABYSSALSIRE_SIRE_STASIS_STUNNED, NpcID.ABYSSALSIRE_SIRE_PUPPET, NpcID.ABYSSALSIRE_SIRE_WANDERING,
+			NpcID.ABYSSALSIRE_SIRE_PANICKING, NpcID.ABYSSALSIRE_SIRE_APOCALYPSE,
+			NpcID.ABYSSALSIRE_LUNG, NpcID.ABYSSALSIRE_LUNG_DYING,
+			NpcID.ABYSSALSIRE_SPAWN, NpcID.ABYSSALSIRE_SPAWN_DYING,
+			NpcID.ABYSSALSIRE_SCION, NpcID.ABYSSALSIRE_SCION_DYING);
+
 		return Collections.unmodifiableMap(groups);
 	}
 
@@ -307,7 +320,16 @@ final class EncounterGroup
 			// against her as ticks lost; unscored, or their guaranteed max hits would flatter whoever spent longest on them.
 			NpcID.NIGHTMARE_CHALLENGE_HUSK_MAGIC, NpcID.NIGHTMARE_CHALLENGE_HUSK_RANGED,
 			NpcID.NIGHTMARE_CHALLENGE_PARASITE, NpcID.NIGHTMARE_CHALLENGE_PARASITE_WEAK,
-			NpcID.NIGHTMARE_CHALLENGE_SLEEPWALKER)));
+			NpcID.NIGHTMARE_CHALLENGE_SLEEPWALKER,
+			// The Sire's respiratory systems: a demonbane weapon destroys one on any successful hit, and anything else deals at
+			// least half its max hit (wiki, Abyssal Sire/Strategies). Scored by the ordinary model they read as huge luck: in
+			// Eric's kills of 2026-10-27, 36 of the 48 fights on them closed on exactly 50, their full hitpoints, and the 21 of
+			// those with an attack booked to them expected 12 to 24. The time on them counts; the damage stays out of the
+			// Sire's figures.
+			// And its spawns and scions, for the reason Phosani's adds are.
+			NpcID.ABYSSALSIRE_LUNG, NpcID.ABYSSALSIRE_LUNG_DYING,
+			NpcID.ABYSSALSIRE_SPAWN, NpcID.ABYSSALSIRE_SPAWN_DYING,
+			NpcID.ABYSSALSIRE_SCION, NpcID.ABYSSALSIRE_SCION_DYING)));
 	}
 
 	/**
@@ -375,7 +397,9 @@ final class EncounterGroup
 			NpcID.TOB_MAIDEN_DYING_A_STORY, NpcID.TOB_MAIDEN_DYING_B_STORY,
 			NpcID.TOB_MAIDEN_DYING_A_HARD, NpcID.TOB_MAIDEN_DYING_B_HARD,
 			NpcID.XARPUS_DEATH, NpcID.XARPUS_DEATH_STORY, NpcID.XARPUS_DEATH_HARD,
-			NpcID.TOA_WARDEN_P3_DEATH_ELIDINIS, NpcID.TOA_WARDEN_P3_DEATH_TUMEKEN)));
+			NpcID.TOA_WARDEN_P3_DEATH_ELIDINIS, NpcID.TOA_WARDEN_P3_DEATH_TUMEKEN,
+			// The Sire's respiratory systems and minions once they are dying.
+			NpcID.ABYSSALSIRE_LUNG_DYING, NpcID.ABYSSALSIRE_SPAWN_DYING, NpcID.ABYSSALSIRE_SCION_DYING)));
 	}
 
 	private static void put(Map<Integer, String> groups, String name, int... npcIds)

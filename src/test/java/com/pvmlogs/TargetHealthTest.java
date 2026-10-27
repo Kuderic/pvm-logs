@@ -178,4 +178,109 @@ public class TargetHealthTest
 		assertEquals(3250, h.remaining(INDEX, 60));
 		assertEquals(1250, h.countedRemaining(INDEX));
 	}
+
+	// The Abyssal Sire, T-020: phase one's damage is healed back when it leaves phase one (wiki, Abyssal Sire/Strategies;
+	// Eric's 10 kills of 2026-10-27 took 425-452 after phase one whatever phase one took).
+	private static final int SIRE_P1 = 5887;
+	private static final int SIRE_P1_DISORIENTED = 5888;
+	private static final int SIRE_P2 = 5889;
+	private static final int SIRE_P3 = 5891;
+	private static final int SIRE_P3_STAGE_2 = 5908;
+
+	private static TargetHealth withRules()
+	{
+		final TargetHealth h = new TargetHealth();
+		h.setRules(BossRules.load(new com.google.gson.Gson(), null));
+		return h;
+	}
+
+	@Test
+	public void leavingPhaseOneRestoresTheSiresCount()
+	{
+		final TargetHealth h = withRules();
+		h.setTableMaxHp(INDEX, SIRE_P1, 425, 0);
+		h.damage(INDEX, SIRE_P1, 60, 1);
+		h.damage(INDEX, SIRE_P1_DISORIENTED, 40, 2);
+		// Within phase one nothing is restored.
+		assertEquals(325, h.remaining(INDEX, 3));
+		assertTrue(h.drainNotes().isEmpty());
+		// The id changes on a tick with no splat: the plugin says so, and the count is full again before the next attack.
+		h.noteId(INDEX, SIRE_P2, 10);
+		assertEquals(425, h.remaining(INDEX, 10));
+		final java.util.List<String> notes = h.drainNotes();
+		assertEquals(1, notes.size());
+		assertTrue(notes.get(0), notes.get(0).startsWith("HP RESTORED: npc index " + INDEX + " went 5888 -> 5889 on tick 10"));
+		assertTrue(notes.get(0), notes.get(0).contains("heals back the 100 taken"));
+		assertTrue(h.drainNotes().isEmpty());
+		// Later phases keep their damage.
+		h.damage(INDEX, SIRE_P2, 200, 11);
+		h.noteId(INDEX, SIRE_P3, 20);
+		h.damage(INDEX, SIRE_P3, 100, 21);
+		h.noteId(INDEX, SIRE_P3_STAGE_2, 30);
+		assertEquals(125, h.remaining(INDEX, 30));
+		assertTrue(h.drainNotes().isEmpty());
+	}
+
+	@Test
+	public void aBossWithNoRuleKeepsItsCountAcrossIds()
+	{
+		final TargetHealth h = withRules();
+		h.setTableMaxHp(INDEX, VARDORVIS, 700, 0);
+		h.damage(INDEX, VARDORVIS, 100, 1);
+		h.noteId(INDEX, 12224, 2);
+		assertEquals(600, h.remaining(INDEX, 2));
+		assertTrue(h.drainNotes().isEmpty());
+		// And without rules at all, the Sire is just another id change.
+		final TargetHealth bare = new TargetHealth();
+		bare.setTableMaxHp(INDEX, SIRE_P1, 425, 0);
+		bare.damage(INDEX, SIRE_P1, 100, 1);
+		bare.noteId(INDEX, SIRE_P2, 2);
+		assertEquals(325, bare.remaining(INDEX, 2));
+	}
+
+	@Test
+	public void anIdNotedForAnIndexNeverSeenIsIgnored()
+	{
+		final TargetHealth h = withRules();
+		h.noteId(INDEX, SIRE_P2, 1);
+		assertEquals(-1, h.remaining(INDEX, 1));
+		assertEquals("unknown", h.source(INDEX, 1));
+	}
+
+	@Test
+	public void theSiresCapHasItsMarginOnTopOfTheCount()
+	{
+		final TargetHealth h = withRules();
+		h.setTableMaxHp(INDEX, SIRE_P2, 425, 0);
+		h.damage(INDEX, SIRE_P2, 410, 1);
+		assertEquals(15, h.remaining(INDEX, 1));
+		assertEquals(15 + 30, h.capRemaining(INDEX, 1));
+		// The count at 0 still leaves the margin, since the Sire has been seen to take up to 27 more.
+		h.damage(INDEX, SIRE_P3_STAGE_2, 40, 2);
+		assertEquals(0, h.remaining(INDEX, 2));
+		assertEquals(30, h.capRemaining(INDEX, 2));
+		// Never past full.
+		final TargetHealth fresh = withRules();
+		fresh.setTableMaxHp(INDEX, SIRE_P2, 425, 0);
+		fresh.damage(INDEX, SIRE_P2, 10, 1);
+		assertEquals(425, fresh.capRemaining(INDEX, 1));
+	}
+
+	@Test
+	public void noMarginWithoutARuleOrWhileTheBarIsFresh()
+	{
+		final TargetHealth h = withRules();
+		h.setTableMaxHp(INDEX, VARDORVIS, 700, 0);
+		h.damage(INDEX, VARDORVIS, 650, 1);
+		assertEquals(50, h.capRemaining(INDEX, 1));
+		// A fresh bar is the game's own number: no margin on it, even for the Sire.
+		final TargetHealth sire = withRules();
+		sire.setTableMaxHp(INDEX, SIRE_P2, 425, 0);
+		sire.damage(INDEX, SIRE_P2, 400, 4);
+		sire.hud(INDEX, SIRE_P2, 20, 425, 5);
+		assertEquals(20, sire.capRemaining(INDEX, 5));
+		// Once the bar is stale the count answers again, and gets the margin.
+		assertEquals(25 + 30, sire.capRemaining(INDEX, 5 + TargetHealth.HUD_FRESH_TICKS + 1));
+		assertEquals(-1, sire.capRemaining(INDEX + 1, 5));
+	}
 }

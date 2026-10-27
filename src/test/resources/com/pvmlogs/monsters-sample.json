@@ -1419,5 +1419,235 @@
   },
   "is_slayer_monster": true,
   "weakness": null
+ },
+ {
+  "id": 5886,
+  "name": "Abyssal Sire",
+  "version": "Phase 1",
+  "level": 350,
+  "speed": 7,
+  "style": [
+   "Melee"
+  ],
+  "size": 6,
+  "max_hit": "66 (Melee)",
+  "skills": {
+   "atk": 180,
+   "def": 250,
+   "hp": 425,
+   "magic": 200,
+   "ranged": 1,
+   "str": 136
+  },
+  "offensive": {
+   "atk": 65,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 50,
+   "magic": 20,
+   "heavy": 60,
+   "standard": 60,
+   "light": 60,
+   "slash": 60,
+   "stab": 40
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ },
+ {
+  "id": 5889,
+  "name": "Abyssal Sire",
+  "version": "Phase 2",
+  "level": 350,
+  "speed": 7,
+  "style": [
+   "Melee"
+  ],
+  "size": 6,
+  "max_hit": "66 (Melee)",
+  "skills": {
+   "atk": 180,
+   "def": 250,
+   "hp": 425,
+   "magic": 200,
+   "ranged": 1,
+   "str": 136
+  },
+  "offensive": {
+   "atk": 65,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 50,
+   "magic": 20,
+   "heavy": 60,
+   "standard": 60,
+   "light": 60,
+   "slash": 60,
+   "stab": 40
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ },
+ {
+  "id": 5891,
+  "name": "Abyssal Sire",
+  "version": "Phase 3 (stage 1)",
+  "level": 350,
+  "speed": 7,
+  "style": [
+   "Melee"
+  ],
+  "size": 6,
+  "max_hit": "66 (Melee)",
+  "skills": {
+   "atk": 180,
+   "def": 250,
+   "hp": 425,
+   "magic": 200,
+   "ranged": 1,
+   "str": 136
+  },
+  "offensive": {
+   "atk": 65,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 50,
+   "magic": 20,
+   "heavy": 60,
+   "standard": 60,
+   "light": 60,
+   "slash": 60,
+   "stab": 40
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ },
+ {
+  "id": 5908,
+  "name": "Abyssal Sire",
+  "version": "Phase 3 (stage 2)",
+  "level": 350,
+  "speed": 7,
+  "style": [
+   "Melee"
+  ],
+  "size": 6,
+  "max_hit": "66 (Melee)",
+  "skills": {
+   "atk": 180,
+   "def": 250,
+   "hp": 425,
+   "magic": 200,
+   "ranged": 1,
+   "str": 136
+  },
+  "offensive": {
+   "atk": 65,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 25,
+   "magic": -40,
+   "heavy": 30,
+   "standard": 30,
+   "light": 30,
+   "slash": 30,
+   "stab": 20
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
+ },
+ {
+  "id": 5914,
+  "name": "Respiratory system",
+  "version": "",
+  "level": 0,
+  "speed": -1,
+  "style": [
+   "None"
+  ],
+  "size": 2,
+  "max_hit": "0",
+  "skills": {
+   "atk": 0,
+   "def": 80,
+   "hp": 50,
+   "magic": 0,
+   "ranged": 0,
+   "str": 0
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 0,
+   "magic": 0,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 0,
+   "stab": 0
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": true,
+  "weakness": null
  }
 ]

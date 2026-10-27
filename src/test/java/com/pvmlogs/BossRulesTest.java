@@ -1,6 +1,7 @@
 package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -129,10 +130,11 @@ public class BossRulesTest
 	@Test
 	public void aNewerSchemaIsRefusedAndTheBundledRulesStand() throws Exception
 	{
-		assertNull(BossRules.read(GSON, new StringReader("{\"schemaVersion\":2,\"bosses\":[]}")));
+		final int newer = BossRules.SCHEMA_VERSION + 1;
+		assertNull(BossRules.read(GSON, new StringReader("{\"schemaVersion\":" + newer + ",\"bosses\":[]}")));
 		final Path dir = Files.createTempDirectory("boss-rules");
 		final Path file = dir.resolve("boss-rules.json");
-		Files.write(file, ("{\"schemaVersion\":2,\"bosses\":[{\"name\":\"Vardorvis\",\"npcIds\":[12223]}]}")
+		Files.write(file, ("{\"schemaVersion\":" + newer + ",\"bosses\":[{\"name\":\"Vardorvis\",\"npcIds\":[12223]}]}")
 			.getBytes(StandardCharsets.UTF_8));
 		final BossRules rules = BossRules.load(GSON, at(file));
 		assertNotNull(BossRules.variantNamed(rules.forNpc(12223), "Awakened"));
@@ -162,5 +164,55 @@ public class BossRulesTest
 	private static Filepath at(Path file)
 	{
 		return Filepath.Unchecked.getRooted(file.getParent()).joinSegment(file.getFileName().toString());
+	}
+
+	/** Schema 2 only adds optional fields, so a hotfix file written for schema 1 still loads. */
+	@Test
+	public void aSchemaOneFileStillLoads()
+	{
+		final BossRules.RulesFile old = BossRules.read(GSON, new StringReader(
+			"{\"schemaVersion\":1,\"bosses\":[{\"name\":\"Vardorvis\",\"npcIds\":[12223]}]}"));
+		assertNotNull(old);
+		assertEquals(2, BossRules.SCHEMA_VERSION);
+	}
+
+	/** The Sire's ids and versions, from the wiki's Abyssal Sire page (id1 to id4). */
+	@Test
+	public void theSiresIdsAreItsPhases()
+	{
+		final BossRules rules = bundled();
+		final BossRules.Boss sire = rules.forNpc(5886);
+		assertNotNull(sire);
+		assertEquals("Abyssal Sire", sire.name);
+		assertEquals("Phase 1", BossRules.versionFor(sire, 5886));
+		assertEquals("Phase 1", BossRules.versionFor(sire, 5887));
+		assertEquals("Phase 1", BossRules.versionFor(sire, 5888));
+		assertEquals("Phase 2", BossRules.versionFor(sire, 5889));
+		assertEquals("Phase 2", BossRules.versionFor(sire, 5890));
+		assertEquals("Phase 3 (stage 1)", BossRules.versionFor(sire, 5891));
+		assertEquals("Phase 3 (stage 2)", BossRules.versionFor(sire, 5908));
+		for (int id : new int[]{5886, 5887, 5888, 5889, 5890, 5891, 5908})
+		{
+			assertEquals("npc " + id, sire, rules.forNpc(id));
+		}
+		assertNull(BossRules.versionFor(rules.forNpc(12223), 12223));
+		assertNull(BossRules.versionFor(sire, 5914));
+	}
+
+	/** Leaving phase one heals it back; moving within phase one, or between later phases, does not. */
+	@Test
+	public void onlyLeavingPhaseOneRestoresTheSire()
+	{
+		final BossRules.Boss sire = bundled().forNpc(5886);
+		assertTrue(BossRules.restoresOnLeaving(sire, 5888, 5889));
+		assertTrue(BossRules.restoresOnLeaving(sire, 5887, 5890));
+		assertFalse(BossRules.restoresOnLeaving(sire, 5886, 5887));
+		assertFalse(BossRules.restoresOnLeaving(sire, 5888, 5888));
+		assertFalse(BossRules.restoresOnLeaving(sire, 5890, 5891));
+		assertFalse(BossRules.restoresOnLeaving(sire, 5891, 5908));
+		assertFalse(BossRules.restoresOnLeaving(bundled().forNpc(12223), 12223, 12224));
+		assertFalse(BossRules.restoresOnLeaving(null, 5888, 5889));
+		assertEquals(30, sire.countedHpMargin);
+		assertEquals(1.125, sire.xpBonus, 1e-9);
 	}
 }
