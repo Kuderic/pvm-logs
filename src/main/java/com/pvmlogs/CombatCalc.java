@@ -774,9 +774,10 @@ class CombatCalc
 			final MagicDamage magic = magicModel(npcId);
 			if (accuracy < 0 || magic.preHitRoll() <= 0)
 			{
-				return -1;
+				return null;
 			}
-			return accuracy * magic.expectedOnHit(mitigation(npcId), damageCap(npcId), overkillCap(npcId));
+			// T-028: the variance from the same walk, the miss as the accuracy roll in front of it.
+			return magic.onHit(mitigation(npcId), damageCap(npcId), overkillCap(npcId)).landing(accuracy);
 		}
 		// Averages, not best cases: a keris crit or an ahrim's proc raises the max hit but only lifts sustained damage by a
 		// few percent.

@@ -145,27 +145,42 @@ final class MagicDamage
 	 */
 	double expectedOnHit(double mitigation, int splatCap, int attackCap)
 	{
+		return onHit(mitigation, splatCap, attackCap).mean;
+	}
+
+	/**
+	 * A successful hit's damage as moments (T-028): the same walk as
+	 * {@link #expectedOnHit}, every roll alike, Ahrim's as a 3:1 mixture, with
+	 * each outcome's square summed beside it. The mean is that walk's, to the bit.
+	 */
+	DamageMoments onHit(double mitigation, int splatCap, int attackCap)
+	{
 		final int top = preHitRoll();
 		final int bottom = minHit();
 		if (top <= 0)
 		{
-			return 0;
+			return DamageMoments.ZERO;
 		}
 		double total = 0;
+		double squares = 0;
 		for (int rolled = bottom; rolled <= top; rolled++)
 		{
 			final int marked = afterMark(rolled);
+			final double plain = landed(marked, mitigation, splatCap, attackCap);
 			if (ahrims)
 			{
-				total += 0.75 * landed(marked, mitigation, splatCap, attackCap)
-					+ 0.25 * landed(ahrimsProc(marked), mitigation, splatCap, attackCap);
+				final double proc = landed(ahrimsProc(marked), mitigation, splatCap, attackCap);
+				total += 0.75 * plain + 0.25 * proc;
+				squares += 0.75 * plain * plain + 0.25 * proc * proc;
 			}
 			else
 			{
-				total += landed(marked, mitigation, splatCap, attackCap);
+				total += plain;
+				squares += plain * plain;
 			}
 		}
-		return total / (top - bottom + 1);
+		final int rolls = top - bottom + 1;
+		return new DamageMoments(total / rolls, squares / rolls);
 	}
 
 	private double landed(int first, double mitigation, int splatCap, int attackCap)

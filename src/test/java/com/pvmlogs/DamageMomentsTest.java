@@ -285,6 +285,76 @@ public class DamageMomentsTest
 		assertTrue(CombatCalc.crimsonKistenMoments(40, 0.5, Integer.MAX_VALUE).variance() > 0);
 	}
 
+	// ---- Magic (T-026's formula) ----
+
+	private static MagicDamage spell(int base, double percent)
+	{
+		final MagicDamage m = new MagicDamage();
+		m.base = base;
+		m.percent = percent;
+		return m;
+	}
+
+	@Test
+	public void aMagicHitsMomentsAreItsWalks()
+	{
+		// Sunfire's minimum: rolls 2..30 alike.
+		final MagicDamage sunfire = spell(24, 20);
+		sunfire.tomePercent = 10;
+		sunfire.tenthMinimum = true;
+		final DamageMoments onHit = sunfire.onHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE);
+		assertEquals(sunfire.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), onHit.mean, 0);
+		assertMatches("sunfire", pmfRoll(2, 30, Integer.MAX_VALUE), onHit);
+		// Landing with the accuracy roll in front: the known case's shape.
+		assertMatches("sunfire landing", landing(pmfRoll(2, 30, Integer.MAX_VALUE), 0.6), onHit.landing(0.6));
+		// Under a cap, as overkillCap holds the attack.
+		assertMatches("sunfire capped", pmfRoll(2, 30, 12), sunfire.onHit(1.0, Integer.MAX_VALUE, 12));
+	}
+
+	@Test
+	public void twinflamesSecondHitMovesWithTheFirst()
+	{
+		// Fire Wave 20 at +10%: rolls 0..22, each with its 40% second splat. One value per roll, written out.
+		final MagicDamage m = spell(20, 10);
+		m.twinflame = true;
+		final double[] pmf = new double[31];
+		for (int rolled = 0; rolled <= 22; rolled++)
+		{
+			pmf[rolled + rolled * 40 / 100] += 1.0 / 23;
+		}
+		assertMatches("twinflame", pmf, m.onHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE));
+	}
+
+	@Test
+	public void ahrimsIsAMixtureOnTheRoll()
+	{
+		final MagicDamage m = spell(20, 0);
+		m.ahrims = true;
+		final double[] pmf = new double[27];
+		for (int rolled = 0; rolled <= 20; rolled++)
+		{
+			pmf[rolled] += 0.75 / 21;
+			pmf[rolled * 130 / 100] += 0.25 / 21;
+		}
+		final DamageMoments onHit = m.onHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE);
+		assertEquals(m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), onHit.mean, 0);
+		assertMatches("ahrims", pmf, onHit);
+	}
+
+	@Test
+	public void theMarkWithThePurgingStaff()
+	{
+		// Every roll 0..33 with half of it added: the walk's values, alike.
+		final MagicDamage m = spell(30, 10);
+		m.markPercent = 50;
+		final double[] pmf = new double[50];
+		for (int rolled = 0; rolled <= 33; rolled++)
+		{
+			pmf[m.afterMark(rolled)] += 1.0 / 34;
+		}
+		assertMatches("mark", pmf, m.onHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE));
+	}
+
 	// ---- The percentile ----
 
 	@Test
