@@ -1,0 +1,516 @@
+[0] debug logging to file on, plugin dev
+[0] send this file with a description of what you did and what you expected to see
+[189] xp drop MAGIC +130
+[189] xp award tick 189: 0-0 (left 0-0, x1.000) against npc -1
+[190] fight START Abyssal Sire (npc 5886, index 24468, maxHp 425) group=Abyssal Sire room=Abyssal Sire raid=null
+[190]   Monster data: 'Abyssal Sire' (Phase 1), 425 hp, defence 250 now (425 hp left), xp bonus x1.125 - boss rule: npc 5886 is 'Phase 1'; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+[190]   SETUP worked out: melee Attack +19 (Super attack(4)) / Strength +19 (Divine super strength potion(4)), prayer Piety (Knight Waves done; prayer 88, defence 94); ranged Ranged +0 (nothing on hand), prayer Deadeye (Rigour not unlocked; prayer 88, defence 94); magic Magic +0 (nothing on hand), prayer Mystic Vigour (Augury not unlocked; prayer 88, defence 94); on task yes (task is Abyssal Demons, 155 left); blowpipe dart Adamant (remembered for this account)
+[190] expected vs Abyssal Sire (npc 5886, 'Phase 1' def 250, 425 hp left (counted)): max 30, acc 0.503, avg 7.55, dps 3.14
+[190] tick LOST: overdue since -2147483648 + lag 2, NOT COUNTED - no attack made in this fight yet
+[191] health bar: npc varp -1, hp 0 / 0; target index 24468, id 5886, composition 5886 -> not ours
+[191] tick LOST: overdue since -2147483648 + lag 2, NOT COUNTED - no attack made in this fight yet
+[192] projectile 12 taken as mine, aimed at npc 5886 (index 24468), lands tick 193
+[?] BAD LOG FORMAT: IDEAL BELOW ACTUAL on npc %d: ideal %.2f, actual %.2f (prayed=%b) - clamped to the actual, so something the ideal is built from is under-reading
+[192]   scored as an ordinary attack: max 30, chances 0.50, avg 7.55
+[192] ATTACK on Abyssal Sire (npc 5886) thrown tick 190, booked +2, speed 4, next due 194, prayed=false potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=true, scored=true, expected avg 7.55, ideal 7.55
+[193] tick SPENT: on cooldown, due 194 + lag 2, attacking=true
+[194] hitsplat 0 type 12 on Abyssal Sire (npc 5888, index 24468), landedAttack=false, fromFlight=true
+[194] xp drop MAGIC +49
+[194] xp award tick 194: 0-0 (left 0-0, x1.125) against npc 5888
+[194] expected vs Abyssal Sire (npc 5888, 'Phase 1' def 250, 425 hp left (counted)): max 30, acc 0.503, avg 7.55, dps 3.14
+[194] tick SPENT: on cooldown, due 194 + lag 2, attacking=true
+[195] tick SPENT: on cooldown, due 194 + lag 2, attacking=true
+[196] tick LOST: overdue since 194 + lag 2
+[197] tick LOST: overdue since 194 + lag 2
+[198] tick LOST: overdue since 194 + lag 2
+[199] tick LOST: overdue since 194 + lag 2
+[200] tick LOST: overdue since 194 + lag 2
+[201] fight END Abyssal Sire (npc 5886) a different target in the room was attacked: attempts=1 made=1 damage=0 thrallDamage=0 hits=0 ticksLost=5 combatTicks=9 expDamage=7.5
+[201] RECONCILE Abyssal Sire (npc 5886): weapon 0 (of it not hitpoints 0) + thrall 0 + reflect 0 + dot 0 + others 0 + unclassified 0, healed 0; on the target 0 - 0 = 0 against 425 full hp (table); bar last read -1, now 425 left (counted)
+[201] STATS CHECK Abyssal Sire: landed 0 of 1 against 0.5 expected (variance 0.25): consistent with luck
+[201] TAKEN TOTAL Abyssal Sire (npc 5886): hits 0 for 0 (biggest 0, without protection 0), dot 0
+[201] fight START Respiratory system (npc 5914, index 56777, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[201]   Monster data: 'Respiratory system', 50 hp, defence 80 now (50 hp left), xp bonus x1.000 - the only version; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+[201]   SETUP worked out: melee Attack +19 (Super attack(4)) / Strength +19 (Divine super strength potion(4)), prayer Piety (Knight Waves done; prayer 88, defence 94); ranged Ranged +0 (nothing on hand), prayer Deadeye (Rigour not unlocked; prayer 88, defence 94); magic Magic +0 (nothing on hand), prayer Mystic Vigour (Augury not unlocked; prayer 88, defence 94); on task no (task is Abyssal Demons, 155 left); blowpipe dart Adamant (remembered for this account)
+[201] projectile 12 taken as mine, aimed at npc 5914 (index 56777), lands tick 202
+[201] expected vs Respiratory system (npc 5914, '' def 80, 50 hp left (counted)): max 27, acc 0.899, avg 12.13, dps 5.05
+[201] ATTACK on Respiratory system (npc 5914) thrown tick 199, booked +2, speed 4, next due 203, prayed=false potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=true, scored=false, expected avg 12.13, ideal 14.60
+[202] tick SPENT: on cooldown, due 203 + lag 2, attacking=true
+[203] hitsplat 0 type 12 on Respiratory system (npc 5914, index 56777), landedAttack=false, fromFlight=true
+[203] tick SPENT: on cooldown, due 203 + lag 2, attacking=true
+[204] tick SPENT: on cooldown, due 203 + lag 2, attacking=true
+[205] xp drop HITPOINTS +66
+[205] xp drop RANGED +200
+[205] xp award tick 205: 50-50 (left 50-50, x1.000) against npc 5914
+[205] tick LOST: overdue since 203 + lag 2
+[206] tick LOST: overdue since 203 + lag 2
+[207] fight END Respiratory system (npc 5914) a different target in the room was attacked: attempts=1 made=1 damage=0 thrallDamage=0 hits=0 ticksLost=2 combatTicks=6 expDamage=0.0
+[207] RECONCILE Respiratory system (npc 5914): weapon 0 (of it not hitpoints 0) + thrall 0 + reflect 0 + dot 0 + others 0 + unclassified 0, healed 0; on the target 0 - 0 = 0 against 50 full hp (table); bar last read -1, now 50 left (counted)
+[207] STATS CHECK Respiratory system: landed 0 of 0 against 0.0 expected (variance 0.00): consistent with luck
+[207] TAKEN TOTAL Respiratory system (npc 5914): hits 0 for 0 (biggest 0, without protection 0), dot 0
+[207] fight START Respiratory system (npc 5914, index 56779, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[207]   Monster data: 'Respiratory system', 50 hp, defence 80 now (50 hp left), xp bonus x1.000 - the only version; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+[207]   SETUP worked out: melee Attack +19 (Super attack(4)) / Strength +19 (Divine super strength potion(4)), prayer Piety (Knight Waves done; prayer 88, defence 94); ranged Ranged +0 (nothing on hand), prayer Deadeye (Rigour not unlocked; prayer 88, defence 94); magic Magic +0 (nothing on hand), prayer Mystic Vigour (Augury not unlocked; prayer 88, defence 94); on task no (task is Abyssal Demons, 155 left); blowpipe dart Adamant (remembered for this account)
+[207] projectile 12 taken as mine, aimed at npc 5914 (index 56779), lands tick 208
+[207] ATTACK on Respiratory system (npc 5914) thrown tick 205, booked +2, speed 4, next due 209, prayed=false potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=true, scored=false, expected avg 12.13, ideal 14.60
+[208] tick SPENT: on cooldown, due 209 + lag 2, attacking=true
+[209] hitsplat 50 type 43 on Respiratory system (npc 5914, index 56779), landedAttack=true, fromFlight=true
+[209] tick UNCOUNTED: target 5914 is dead but still standing
+[210] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=0 combatTicks=2 expDamage=0.0
+[210] RECONCILE Respiratory system (npc 5914) KILL: weapon 50 (of it not hitpoints 0) + thrall 0 + reflect 0 + dot 0 + others 0 + unclassified 0, healed 0; on the target 50 - 0 = 50 against 50 full hp (table), diff +0 (0.0%); bar last read -1, now 0 left (counted)
+[210] STATS CHECK Respiratory system: landed 1 of 0 against 0.0 expected (variance 0.00): consistent with luck
+[210] TAKEN TOTAL Respiratory system (npc 5914): hits 0 for 0 (biggest 0, without protection 0), dot 0
+[210] fight START Respiratory system (npc 5914, index 56777, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[210]   Monster data: 'Respiratory system', 50 hp, defence 80 now (50 hp left), xp bonus x1.000 - the only version; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+[210]   SETUP worked out: melee Attack +19 (Super attack(4)) / Strength +19 (Divine super strength potion(4)), prayer Piety (Knight Waves done; prayer 88, defence 94); ranged Ranged +0 (nothing on hand), prayer Deadeye (Rigour not unlocked; prayer 88, defence 94); magic Magic +0 (nothing on hand), prayer Mystic Vigour (Augury not unlocked; prayer 88, defence 94); on task no (task is Abyssal Demons, 155 left); blowpipe dart Adamant (remembered for this account)
+[210] tick SPENT: on cooldown, due 209 + lag 2, attacking=true
+[211] xp drop HITPOINTS +67
+[211] xp drop RANGED +200
+[211] xp award tick 211: 50-50 (left 50-50, x1.000) against npc 5914
+[211] tick LOST: overdue since 209 + lag 2
+[212] tick LOST: overdue since 209 + lag 2
+[213] projectile 12 taken as mine, aimed at npc 5914 (index 56777), lands tick 214
+[213] ATTACK on Respiratory system (npc 5914) thrown tick 211, booked +2, speed 4, next due 215, prayed=false potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=true, scored=false, expected avg 12.13, ideal 14.60
+[214] tick SPENT: on cooldown, due 215 + lag 2, attacking=true
+[215] hitsplat 50 type 43 on Respiratory system (npc 5914, index 56777), landedAttack=true, fromFlight=true
+[215] tick UNCOUNTED: target 5914 is dead but still standing
+[216] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=2 combatTicks=5 expDamage=0.0
+[216] RECONCILE Respiratory system (npc 5914) KILL: weapon 50 (of it not hitpoints 0) + thrall 0 + reflect 0 + dot 0 + others 0 + unclassified 0, healed 0; on the target 50 - 0 = 50 against 50 full hp (table), diff +0 (0.0%); bar last read -1, now 0 left (counted)
+[216] STATS CHECK Respiratory system: landed 1 of 0 against 0.0 expected (variance 0.00): consistent with luck
+[216] TAKEN TOTAL Respiratory system (npc 5914): hits 0 for 0 (biggest 0, without protection 0), dot 0
+[218] fight START Respiratory system (npc 5914, index 56778, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[218]   Monster data: 'Respiratory system', 50 hp, defence 80 now (50 hp left), xp bonus x1.000 - the only version; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+[218]   SETUP worked out: melee Attack +19 (Super attack(4)) / Strength +19 (Divine super strength potion(4)), prayer Piety (Knight Waves done; prayer 88, defence 94); ranged Ranged +0 (nothing on hand), prayer Deadeye (Rigour not unlocked; prayer 88, defence 94); magic Magic +0 (nothing on hand), prayer Mystic Vigour (Augury not unlocked; prayer 88, defence 94); on task no (task is Abyssal Demons, 155 left); blowpipe dart Adamant (remembered for this account)
+[218] tick LOST: overdue since -2147483648 + lag 2
+[219] xp drop HITPOINTS +66
+[219] xp drop RANGED +200
+[219] xp award tick 219: 50-50 (left 50-50, x1.000) against npc 5914
+[219] tick LOST: overdue since -2147483648 + lag 2
+[220] tick LOST: overdue since -2147483648 + lag 2
+[221] projectile 12 taken as mine, aimed at npc 5914 (index 56778), lands tick 222
+[221] ATTACK on Respiratory system (npc 5914) thrown tick 219, booked +2, speed 4, next due 223, prayed=false potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=true, scored=false, expected avg 12.13, ideal 14.60
+[222] tick SPENT: on cooldown, due 223 + lag 2, attacking=true
+[223] hitsplat 50 type 43 on Respiratory system (npc 5914, index 56778), landedAttack=true, fromFlight=true
+[223] tick UNCOUNTED: target 5914 is dead but still standing
+[224] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=3 combatTicks=5 expDamage=0.0
+[224] RECONCILE Respiratory system (npc 5914) KILL: weapon 50 (of it not hitpoints 0) + thrall 0 + reflect 0 + dot 0 + others 0 + unclassified 0, healed 0; on the target 50 - 0 = 50 against 50 full hp (table), diff +0 (0.0%); bar last read -1, now 0 left (counted)
+[224] STATS CHECK Respiratory system: landed 1 of 0 against 0.0 expected (variance 0.00): consistent with luck
+[224] TAKEN TOTAL Respiratory system (npc 5914): hits 0 for 0 (biggest 0, without protection 0), dot 0
+[224] fight START Respiratory system (npc 5914, index 56776, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[224]   Monster data: 'Respiratory system', 50 hp, defence 80 now (50 hp left), xp bonus x1.000 - the only version; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+[224]   SETUP worked out: melee Attack +19 (Super attack(4)) / Strength +19 (Divine super strength potion(4)), prayer Piety (Knight Waves done; prayer 88, defence 94); ranged Ranged +0 (nothing on hand), prayer Deadeye (Rigour not unlocked; prayer 88, defence 94); magic Magic +0 (nothing on hand), prayer Mystic Vigour (Augury not unlocked; prayer 88, defence 94); on task no (task is Abyssal Demons, 155 left); blowpipe dart Adamant (remembered for this account)
+[224] tick SPENT: on cooldown, due 223 + lag 2, attacking=true
+[225] tick LOST: overdue since 223 + lag 2
+[226] projectile 12 taken as mine, aimed at npc 5914 (index 56776), lands tick 227
+[226] ATTACK on Respiratory system (npc 5914) thrown tick 224, booked +2, speed 4, next due 228, prayed=false potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=true, scored=false, expected avg 12.13, ideal 14.60
+[227] hitsplat 0 type 12 on Respiratory system (npc 5914, index 56776), landedAttack=false, fromFlight=true
+[227] tick SPENT: on cooldown, due 228 + lag 2, attacking=true
+[228] xp drop HITPOINTS +67
+[228] xp drop RANGED +200
+[228] xp award tick 228: 50-50 (left 50-50, x1.000) against npc 5914
+[228] tick SPENT: on cooldown, due 228 + lag 2, attacking=true
+[229] tick SPENT: on cooldown, due 228 + lag 2, attacking=true
+[230] projectile 12 taken as mine, aimed at npc 5914 (index 56776), lands tick 231
+[230] ATTACK on Respiratory system (npc 5914) thrown tick 228, booked +2, speed 4, next due 232, prayed=false potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=true, scored=false, expected avg 12.13, ideal 14.60
+[231] tick SPENT: on cooldown, due 232 + lag 2, attacking=true
+[232] hitsplat 50 type 43 on Respiratory system (npc 5914, index 56776), landedAttack=true, fromFlight=true
+[232] tick UNCOUNTED: target 5914 is dead but still standing
+[233] fight END Respiratory system (npc 5914) target died: attempts=2 made=2 damage=50 thrallDamage=0 hits=1 ticksLost=1 combatTicks=8 expDamage=0.0
+[233] RECONCILE Respiratory system (npc 5914) KILL: weapon 50 (of it not hitpoints 0) + thrall 0 + reflect 0 + dot 0 + others 0 + unclassified 0, healed 0; on the target 50 - 0 = 50 against 50 full hp (table), diff +0 (0.0%); bar last read -1, now 0 left (counted)
+[233] STATS CHECK Respiratory system: landed 1 of 0 against 0.0 expected (variance 0.00): consistent with luck
+[233] TAKEN TOTAL Respiratory system (npc 5914): hits 0 for 0 (biggest 0, without protection 0), dot 0
+[245] fight START Abyssal Sire (npc 5889, index 24468, maxHp 425) group=Abyssal Sire room=Abyssal Sire raid=null
+[245]   Monster data: 'Abyssal Sire' (Phase 2), 425 hp, defence 250 now (425 hp left), xp bonus x1.125 - boss rule: npc 5889 is 'Phase 2'; rules weirdgloop/osrs-dps-calc@c446f2e (2026-10-26)
+[245]   SETUP worked out: melee Attack +19 (Super attack(4)) / Strength +19 (Divine super strength potion(4)), prayer Piety (Knight Waves done; prayer 88, defence 94); ranged Ranged +0 (nothing on hand), prayer Deadeye (Rigour not unlocked; prayer 88, defence 94); magic Magic +0 (nothing on hand), prayer Mystic Vigour (Augury not unlocked; prayer 88, defence 94); on task yes (task is Abyssal Demons, 155 left); blowpipe dart Adamant (remembered for this account)
+[245] expected vs Abyssal Sire (npc 5889, 'Phase 2' def 250, 425 hp left (counted)): max 30, acc 0.503, avg 7.55, dps 3.14
+[245] tick LOST: overdue since -2147483648 + lag 2
+[246] tick LOST: overdue since -2147483648 + lag 2
+[247] projectile 12 taken as mine, aimed at npc 5889 (index 24468), lands tick 248
+[247]   scored as an ordinary attack: max 30, chances 0.50, avg 7.55
+[247] ATTACK on Abyssal Sire (npc 5889) thrown tick 245, booked +2, speed 4, next due 249, prayed=false potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=true, scored=true, expected avg 7.55, ideal 10.28
+[248] tick SPENT: on cooldown, due 249 + lag 2, attacking=true
+[249] hitsplat 0 type 12 on Abyssal Sire (npc 5889, index 24468), landedAttack=false, fromFlight=true
+[249] tick SPENT: on cooldown, due 249 + lag 2, attacking=true
+[250] tick SPENT: on cooldown, due 249 + lag 2, attacking=true
+[251] tick LOST: overdue since 249 + lag 2
+[252] xp drop ATTACK +1
+[252] xp drop DEFENCE +2
+[252] xp drop STRENGTH +1
+[252] xp drop HITPOINTS +1
+[252] xp award tick 252: 1-1 (left 1-1, x1.125) against npc 5890
+[252] expected vs Abyssal Sire (npc 5890, 'Phase 2' def 250, 425 hp left (counted)): max 51, acc 0.702, avg 17.89, dps 7.45
+[252] tick LOST: overdue since 249 + lag 2
+[253] hitsplat 1 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[253]   scored as an ordinary attack: max 51, chances 0.70, avg 17.89
+[253] ATTACK on Abyssal Sire (npc 5890) thrown tick 252, booked +1, speed 4, next due 256, prayed=true potted=false boost 0.00 (cost 4.89) switched=true (cost 0.00) projectile=false, scored=true, expected avg 17.89, ideal 22.78
+[254] TAKEN 10 type 16 hit (damage), protect melee, hp 99, from npc 5890 #24468 (target), npc 8738 #58029; target anim 4533 t-2
+[254] tick SPENT: on cooldown, due 256 + lag 1, attacking=true
+[255] EAT Divine super strength potion(4) (delay 0) on tick 254, clicked 254: a potion, no delay
+[255] tick SPENT: on cooldown, due 256 + lag 1, attacking=true
+[256] xp drop ATTACK +66
+[256] xp drop DEFENCE +66
+[256] xp drop STRENGTH +66
+[256] xp drop HITPOINTS +66
+[256] xp award tick 256: 44-44 (left 44-44, x1.125) against npc 5890
+[256] tick SPENT: on cooldown, due 256 + lag 1, attacking=true
+[257] hitsplat 44 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[257]   scored as an ordinary attack: max 61, chances 0.70, avg 21.40
+[257] ATTACK on Abyssal Sire (npc 5890) thrown tick 256, booked +1, speed 4, next due 260, prayed=true potted=false boost 0.50 (cost 1.38) switched=true (cost 0.00) projectile=false, scored=true, expected avg 21.40, ideal 22.78
+[258] tick SPENT: on cooldown, due 260 + lag 1, attacking=true
+[259] tick SPENT: on cooldown, due 260 + lag 1, attacking=true
+[260] tick SPENT: on cooldown, due 260 + lag 1, attacking=true
+[261] hitsplat 0 type 12 on Abyssal Sire (npc 5890, index 24468), landedAttack=false, fromFlight=false
+[261]   scored as an ordinary attack: max 61, chances 0.70, avg 21.40
+[261] ATTACK on Abyssal Sire (npc 5890) thrown tick 260, booked +1, speed 4, next due 264, prayed=true potted=false boost 0.50 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[262] EAT Super attack(4) (delay 0) on tick 261, clicked 261: a potion, no delay
+[262] tick SPENT: on cooldown, due 264 + lag 1, attacking=true
+[263] tick SPENT: on cooldown, due 264 + lag 1, attacking=true
+[264] TAKEN 6 type 16 hit (damage), protect melee, hp 89, from npc 5890 #24468 (target), npc 8738 #58029; target anim 4533 t-4, anim 5369 t-1
+[264] xp drop ATTACK +50
+[264] xp drop DEFENCE +49
+[264] xp drop STRENGTH +50
+[264] xp drop HITPOINTS +50
+[264] xp award tick 264: 33-33 (left 33-33, x1.125) against npc 5890
+[264] tick SPENT: on cooldown, due 264 + lag 1, attacking=true
+[265] hitsplat 33 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[265]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[265] ATTACK on Abyssal Sire (npc 5890) thrown tick 264, booked +1, speed 4, next due 268, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[266] VENGEANCE varbit -> 1
+[266] xp drop MAGIC +112
+[266] xp award tick 266: 0-0 (left 0-0, x1.125) against npc 5890
+[266] XP CONTRADICTS BOOKING: an attack was thrown on 266, but the last booking had the weapon busy until 268
+[266] tick SPENT: on cooldown, due 268 + lag 1, attacking=true
+[267] tick SPENT: on cooldown, due 268 + lag 1, attacking=true
+[268] tick SPENT: on cooldown, due 268 + lag 1, attacking=true
+[269] EAT Super defence(4) (delay 0) on tick 268, clicked 268: a potion, no delay
+[269] tick LOST: overdue since 268 + lag 1
+[270] xp drop ATTACK +24
+[270] xp drop DEFENCE +24
+[270] xp drop STRENGTH +24
+[270] xp drop HITPOINTS +24
+[270] xp award tick 270: 16-16 (left 16-16, x1.125) against npc 5890
+[270] tick LOST: overdue since 268 + lag 1
+[271] VENGEANCE varbit -> 0
+[271] VENGEANCE said Taste vengeance!
+[271] TAKEN 4 type 16 hit (damage), protect melee, hp 83, from npc 5890 #24468 (target), npc 8738 #58029; target anim 5366 t-1
+[271] hitsplat 16 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[271] SWITCH MISSED on attack thrown tick 270: RING Ring of recoil -> Berserker ring (i); damage per tick 5.321 worn, 5.695 switched (speed 4 / 4), costing 1.49 a hit
+[271]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[271] ATTACK on Abyssal Sire (npc 5890) thrown tick 270, booked +1, speed 4, next due 274, prayed=true potted=true boost 1.00 (cost 0.00) switched=false (cost 1.49) projectile=false, scored=true, expected avg 21.28, ideal 22.78
+[272] REFLECT 1 type 16 on Abyssal Sire (npc 5890, index 24468): recoil of a 4 taken on 271
+[272] REFLECT 3 type 16 on Abyssal Sire (npc 5890, index 24468): vengeance of a 4 taken on 271
+[272] tick SPENT: on cooldown, due 274 + lag 1, attacking=true
+[273] tick SPENT: on cooldown, due 274 + lag 1, attacking=true
+[274] tick SPENT: on cooldown, due 274 + lag 1, attacking=true
+[275] hitsplat 0 type 12 on Abyssal Sire (npc 5890, index 24468), landedAttack=false, fromFlight=false
+[275] SWITCH MISSED on attack thrown tick 274: RING Ring of recoil -> Berserker ring (i); damage per tick 5.321 worn, 5.695 switched (speed 4 / 4), costing 1.49 a hit
+[275]   scored as an ordinary attack: max 57, chances 0.75, avg 21.28
+[275] ATTACK on Abyssal Sire (npc 5890) thrown tick 274, booked +1, speed 4, next due 278, prayed=true potted=true boost 1.00 (cost 0.00) switched=false (cost 1.49) projectile=false, scored=true, expected avg 21.28, ideal 22.78
+[276] tick SPENT: on cooldown, due 278 + lag 1, attacking=true
+[277] TAKEN 0 type 12 hit (zero), protect melee, hp 79, from npc 5890 #24468 (target), npc 8738 #58029; target anim 4533 t-3
+[277] tick SPENT: on cooldown, due 278 + lag 1, attacking=true
+[278] xp drop ATTACK +69
+[278] xp drop DEFENCE +69
+[278] xp drop STRENGTH +69
+[278] xp drop HITPOINTS +69
+[278] xp award tick 278: 46-46 (left 46-46, x1.125) against npc 5890
+[278] tick SPENT: on cooldown, due 278 + lag 1, attacking=true
+[279] hitsplat 46 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[279]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[279] ATTACK on Abyssal Sire (npc 5890) thrown tick 278, booked +1, speed 4, next due 282, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[280] tick SPENT: on cooldown, due 282 + lag 1, attacking=true
+[281] tick SPENT: on cooldown, due 282 + lag 1, attacking=true
+[282] xp drop ATTACK +27
+[282] xp drop DEFENCE +27
+[282] xp drop STRENGTH +27
+[282] xp drop HITPOINTS +27
+[282] xp award tick 282: 18-18 (left 18-18, x1.125) against npc 5890
+[282] tick SPENT: on cooldown, due 282 + lag 1, attacking=true
+[283] hitsplat 18 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[283]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[283] ATTACK on Abyssal Sire (npc 5890) thrown tick 282, booked +1, speed 4, next due 286, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[284] TAKEN 0 type 12 hit (zero), protect melee, hp 79, from npc 5890 #24468 (target), npc 8738 #58029; target anim 4533 t-2
+[284] tick SPENT: on cooldown, due 286 + lag 1, attacking=true
+[285] tick SPENT: on cooldown, due 286 + lag 1, attacking=true
+[286] xp drop ATTACK +12
+[286] xp drop DEFENCE +12
+[286] xp drop STRENGTH +12
+[286] xp drop HITPOINTS +12
+[286] xp award tick 286: 8-8 (left 8-8, x1.125) against npc 5890
+[286] tick SPENT: on cooldown, due 286 + lag 1, attacking=true
+[287] hitsplat 8 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[287]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[287] ATTACK on Abyssal Sire (npc 5890) thrown tick 286, booked +1, speed 4, next due 290, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[288] tick SPENT: on cooldown, due 290 + lag 1, attacking=true
+[289] tick SPENT: on cooldown, due 290 + lag 1, attacking=true
+[290] xp drop ATTACK +36
+[290] xp drop DEFENCE +36
+[290] xp drop STRENGTH +36
+[290] xp drop HITPOINTS +36
+[290] xp award tick 290: 24-24 (left 24-24, x1.125) against npc 5890
+[290] tick SPENT: on cooldown, due 290 + lag 1, attacking=true
+[291] TAKEN 0 type 12 hit (zero), protect melee, hp 79, from npc 5890 #24468 (target), npc 8738 #58029; target anim 4533 t-5, anim 4533 t-1
+[291] hitsplat 24 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[291]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[291] ATTACK on Abyssal Sire (npc 5890) thrown tick 290, booked +1, speed 4, next due 294, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[292] tick SPENT: on cooldown, due 294 + lag 1, attacking=true
+[293] tick SPENT: on cooldown, due 294 + lag 1, attacking=true
+[294] xp drop ATTACK +34
+[294] xp drop DEFENCE +35
+[294] xp drop STRENGTH +34
+[294] xp drop HITPOINTS +34
+[294] xp award tick 294: 23-23 (left 23-23, x1.125) against npc 5890
+[294] tick SPENT: on cooldown, due 294 + lag 1, attacking=true
+[295] hitsplat 23 type 16 on Abyssal Sire (npc 5890, index 24468), landedAttack=true, fromFlight=false
+[295]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[295] ATTACK on Abyssal Sire (npc 5890) thrown tick 294, booked +1, speed 4, next due 298, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[296] expected vs Abyssal Sire (npc 5889, 'Phase 2' def 250, 208 hp left (counted)): max 61, acc 0.747, avg 22.78, dps 9.49
+[296] tick SPENT: on cooldown, due 298 + lag 1, attacking=true
+[297] tick SPENT: on cooldown, due 298 + lag 1, attacking=true
+[298] xp drop ATTACK +23
+[298] xp drop DEFENCE +22
+[298] xp drop STRENGTH +23
+[298] xp drop HITPOINTS +23
+[298] xp award tick 298: 15-15 (left 15-15, x1.125) against npc 5889
+[298] tick SPENT: on cooldown, due 298 + lag 1, attacking=true
+[299] hitsplat 15 type 16 on Abyssal Sire (npc 5889, index 24468), landedAttack=true, fromFlight=false
+[299]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[299] ATTACK on Abyssal Sire (npc 5889) thrown tick 298, booked +1, speed 4, next due 302, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[300] tick SPENT: on cooldown, due 302 + lag 1, attacking=true
+[301] tick SPENT: on cooldown, due 302 + lag 1, attacking=true
+[302] xp drop ATTACK +13
+[302] xp drop DEFENCE +14
+[302] xp drop STRENGTH +13
+[302] xp drop HITPOINTS +13
+[302] xp award tick 302: 9-9 (left 9-9, x1.125) against npc 5889
+[302] tick SPENT: on cooldown, due 302 + lag 1, attacking=true
+[303] hitsplat 9 type 16 on Abyssal Sire (npc 5889, index 24468), landedAttack=true, fromFlight=false
+[303]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[303] ATTACK on Abyssal Sire (npc 5889) thrown tick 302, booked +1, speed 4, next due 306, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[304] tick SPENT: on cooldown, due 306 + lag 1, attacking=true
+[305] tick SPENT: on cooldown, due 306 + lag 1, attacking=true
+[306] tick SPENT: on cooldown, due 306 + lag 1, attacking=true
+[307] hitsplat 0 type 12 on Abyssal Sire (npc 5891, index 24468), landedAttack=false, fromFlight=false
+[307] expected vs Abyssal Sire (npc 5891, 'Phase 3 (stage 1)' def 250, 184 hp left (counted)): max 61, acc 0.747, avg 22.78, dps 9.49
+[307]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[307] ATTACK on Abyssal Sire (npc 5889) thrown tick 306, booked +1, speed 4, next due 310, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[308] tick SPENT: on cooldown, due 310 + lag 1, attacking=true
+[309] TAKEN 0 type 12 hit (zero), protect melee, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[309] TAKEN 0 type 12 hit (zero), protect melee, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[309] TAKEN 0 type 12 hit (zero), protect melee, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[309] tick SPENT: on cooldown, due 310 + lag 1, attacking=true
+[310] TAKEN 0 type 12 hit (zero), protect melee, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0
+[310] tick SPENT: on cooldown, due 310 + lag 1, attacking=true
+[311] tick LOST: overdue since 310 + lag 1
+[312] hitsplat 0 type 12 on Abyssal Sire (npc 5891, index 24468), landedAttack=false, fromFlight=false
+[312]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[312] ATTACK on Abyssal Sire (npc 5891) thrown tick 311, booked +1, speed 4, next due 315, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[313] TAKEN 0 type 12 hit (zero), protect melee, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[313] TAKEN 0 type 12 hit (zero), protect melee, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[313] TAKEN 0 type 12 hit (zero), protect melee, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[313] tick SPENT: on cooldown, due 315 + lag 1, attacking=true
+[314] TAKEN 0 type 12 hit (zero), protect melee, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0
+[314] tick SPENT: on cooldown, due 315 + lag 1, attacking=true
+[315] xp drop ATTACK +57
+[315] xp drop DEFENCE +57
+[315] xp drop STRENGTH +57
+[315] xp drop HITPOINTS +57
+[315] xp award tick 315: 38-38 (left 38-38, x1.125) against npc 5891
+[315] tick SPENT: on cooldown, due 315 + lag 1, attacking=true
+[316] hitsplat 38 type 16 on Abyssal Sire (npc 5891, index 24468), landedAttack=true, fromFlight=false
+[316]   scored as an ordinary attack: max 61, chances 0.75, avg 22.78
+[316] ATTACK on Abyssal Sire (npc 5891) thrown tick 315, booked +1, speed 4, next due 319, prayed=true potted=true boost 1.00 (cost 0.00) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.78, ideal 22.78
+[317] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7097 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[317] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7097 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[317] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7097 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[317] tick SPENT: on cooldown, due 319 + lag 1, attacking=true
+[318] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7097 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0
+[318] tick SPENT: on cooldown, due 319 + lag 1, attacking=true
+[319] xp drop ATTACK +42
+[319] xp drop DEFENCE +42
+[319] xp drop STRENGTH +42
+[319] xp drop HITPOINTS +42
+[319] xp award tick 319: 28-28 (left 28-28, x1.125) against npc 5891
+[319] tick SPENT: on cooldown, due 319 + lag 1, attacking=true
+[320] hitsplat 28 type 16 on Abyssal Sire (npc 5891, index 24468), landedAttack=true, fromFlight=false
+[320]   scored as an ordinary attack: max 61, chances 0.75, avg 22.73
+[320] ATTACK on Abyssal Sire (npc 5891) thrown tick 319, booked +1, speed 4, next due 323, prayed=true potted=false boost 0.97 (cost 0.05) switched=true (cost 0.00) projectile=false, scored=true, expected avg 22.73, ideal 22.78
+[321] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target anim 7097 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7097 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[321] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target anim 7097 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7097 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[321] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target anim 7097 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7097 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[321] tick SPENT: on cooldown, due 323 + lag 1, attacking=true
+[322] tick SPENT: on cooldown, due 323 + lag 1, attacking=true
+[323] tick SPENT: on cooldown, due 323 + lag 1, attacking=true
+[324] tick LOST: overdue since 323 + lag 1
+[325] VENGEANCE varbit -> 1
+[325] xp drop MAGIC +112
+[325] xp award tick 325: 0-0 (left 0-0, x1.125) against npc 5891
+[325] tick LOST: overdue since 323 + lag 1
+[326] tick LOST: overdue since 323 + lag 1
+[327] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62454, npc 5916 #62455, npc 5916 #62456 and 1 more; target proj 32 from no source at me t-6 lands t-5, anim 7098 t-6, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1
+[327] expected vs Abyssal Sire (npc 5908, 'Phase 3 (stage 2)' def 250, 118 hp left (counted)): max 61, acc 0.794, avg 24.22, dps 10.09
+[327] tick LOST: overdue since 323 + lag 1
+[328] tick LOST: overdue since 323 + lag 1
+[329] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62950, npc 5916 #62951, npc 5916 #62952 and 7 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-1 lands t+0
+[329] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62950, npc 5916 #62951, npc 5916 #62952 and 7 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-1 lands t+0
+[329] TAKEN 0 type 12 hit (zero), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62950, npc 5916 #62951, npc 5916 #62952 and 7 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-1 lands t+0
+[329] tick LOST: overdue since 323 + lag 1
+[330] TAKEN 11 type 65 dot (poison), protect missiles, hp 80, from npc 8738 #58029, npc 5916 #62950, npc 5916 #62951, npc 5916 #62952 and 7 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t+0 lands t+1
+[330] tick LOST: overdue since 323 + lag 1
+[331] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 8738 #58029, npc 5916 #62950, npc 5916 #62951, npc 5916 #62952 and 7 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[331] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 8738 #58029, npc 5916 #62950, npc 5916 #62951, npc 5916 #62952 and 7 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[331] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 8738 #58029, npc 5916 #62950, npc 5916 #62951, npc 5916 #62952 and 7 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[331] tick LOST: overdue since 323 + lag 1
+[332] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #62950, npc 5916 #62951 and 8 more; target proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7099 t-1
+[332] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #62950, npc 5916 #62951 and 8 more; target proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7099 t-1
+[332] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #62950, npc 5916 #62951 and 8 more; target proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7099 t-1
+[332] hitsplat 0 type 12 on Abyssal Sire (npc 5908, index 24468), landedAttack=false, fromFlight=false
+[332] SWITCH MISSED on attack thrown tick 331: RING Ring of recoil -> Berserker ring (i); damage per tick 5.668 worn, 6.066 switched (speed 4 / 4), costing 1.59 a hit
+[332]   scored as an ordinary attack: max 57, chances 0.79, avg 22.63
+[332] ATTACK on Abyssal Sire (npc 5908) thrown tick 331, booked +1, speed 4, next due 335, prayed=true potted=false boost 0.97 (cost 0.04) switched=false (cost 1.59) projectile=false, scored=true, expected avg 22.63, ideal 24.26
+[333] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #62950, npc 5916 #62951 and 8 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, anim 7099 t-2, proj 32 from no source at me t+0 lands t+1
+[333] tick SPENT: on cooldown, due 335 + lag 1, attacking=true
+[334] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[334] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[334] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[334] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[334] tick SPENT: on cooldown, due 335 + lag 1, attacking=true
+[335] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[335] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[335] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[335] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[335] tick SPENT: on cooldown, due 335 + lag 1, attacking=true
+[336] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[336] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[336] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[336] tick LOST: overdue since 335 + lag 1
+[337] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, anim 7099 t-6, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0
+[337] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63066, npc 5916 #62950 and 9 more; target proj 32 from no source at me t-6 lands t-5, anim 7099 t-6, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0
+[337] hitsplat 0 type 12 on Abyssal Sire (npc 5908, index 24468), landedAttack=false, fromFlight=false
+[337] SWITCH MISSED on attack thrown tick 336: RING Ring of recoil -> Berserker ring (i); damage per tick 5.668 worn, 6.066 switched (speed 4 / 4), costing 1.59 a hit
+[337]   scored as an ordinary attack: max 57, chances 0.79, avg 22.63
+[337] ATTACK on Abyssal Sire (npc 5908) thrown tick 336, booked +1, speed 4, next due 340, prayed=true potted=false boost 0.97 (cost 0.04) switched=false (cost 1.59) projectile=false, scored=true, expected avg 22.63, ideal 24.26
+[338] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63183, npc 5916 #63066 and 10 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t+0 lands t+1
+[338] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63183, npc 5916 #63066 and 10 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t+0 lands t+1
+[338] tick SPENT: on cooldown, due 340 + lag 1, attacking=true
+[339] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63183, npc 5916 #63066 and 10 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[339] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63183, npc 5916 #63066 and 10 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[339] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63183, npc 5916 #63066 and 10 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[339] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63015, npc 8738 #58029, npc 5916 #63183, npc 5916 #63066 and 10 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[339] tick SPENT: on cooldown, due 340 + lag 1, attacking=true
+[340] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[340] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[340] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[340] xp drop ATTACK +74
+[340] xp drop DEFENCE +73
+[340] xp drop STRENGTH +74
+[340] xp drop HITPOINTS +74
+[340] xp award tick 340: 49-49 (left 49-49, x1.125) against npc 5908
+[340] tick SPENT: on cooldown, due 340 + lag 1, attacking=true
+[341] VENGEANCE varbit -> 0
+[341] VENGEANCE said Taste vengeance!
+[341] TAKEN 0 type 12 hit (zero), protect missiles, hp 69, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7099 t-1, proj 32 from no source at me t+0 lands t+1
+[341] TAKEN 1 type 16 hit (damage), protect missiles, hp 69, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7099 t-1, proj 32 from no source at me t+0 lands t+1
+[341] hitsplat 49 type 16 on Abyssal Sire (npc 5908, index 24468), landedAttack=true, fromFlight=false
+[341] SWITCH MISSED on attack thrown tick 340: RING Ring of recoil -> Berserker ring (i); damage per tick 5.668 worn, 6.066 switched (speed 4 / 4), costing 1.59 a hit
+[341]   scored as an ordinary attack: max 57, chances 0.79, avg 22.63
+[341] ATTACK on Abyssal Sire (npc 5908) thrown tick 340, booked +1, speed 4, next due 344, prayed=true potted=false boost 0.97 (cost 0.04) switched=false (cost 1.59) projectile=false, scored=true, expected avg 22.63, ideal 24.26
+[342] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, anim 7099 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[342] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, anim 7099 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[342] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, anim 7099 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[342] REFLECT 1 type 16 on Scion (npc 5918, index 62456): vengeance of a 1 taken on 341, not the fight's target: not counted
+[342] REFLECT 1 type 16 on Scion (npc 5918, index 62456): recoil of a 1 taken on 341, not the fight's target: not counted
+[342] tick SPENT: on cooldown, due 344 + lag 1, attacking=true
+[343] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[343] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[343] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[343] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[343] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[343] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 11 more; target proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[343] tick SPENT: on cooldown, due 344 + lag 1, attacking=true
+[344] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[344] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[344] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[344] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[344] xp drop ATTACK +58
+[344] xp drop DEFENCE +59
+[344] xp drop STRENGTH +58
+[344] xp drop HITPOINTS +58
+[344] xp award tick 344: 39-39 (left 39-39, x1.125) against npc 5908
+[344] tick SPENT: on cooldown, due 344 + lag 1, attacking=true
+[345] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[345] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[345] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[345] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[345] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[345] hitsplat 39 type 16 on Abyssal Sire (npc 5908, index 24468), landedAttack=true, fromFlight=false
+[345] SWITCH MISSED on attack thrown tick 344: RING Ring of recoil -> Berserker ring (i); damage per tick 5.668 worn, 6.066 switched (speed 4 / 4), costing 1.59 a hit
+[345]   scored as an ordinary attack: max 57, chances 0.79, avg 22.63
+[345] ATTACK on Abyssal Sire (npc 5908) thrown tick 344, booked +1, speed 4, next due 348, prayed=true potted=false boost 0.97 (cost 0.04) switched=false (cost 1.59) projectile=false, scored=true, expected avg 22.63, ideal 24.25
+[346] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, anim 7099 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[346] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, anim 7099 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[346] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, anim 7099 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[346] tick SPENT: on cooldown, due 348 + lag 1, attacking=true
+[347] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[347] TAKEN 0 type 12 hit (zero), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[347] TAKEN 1 type 16 hit (damage), protect missiles, hp 68, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[347] tick SPENT: on cooldown, due 348 + lag 1, attacking=true
+[348] TAKEN 0 type 12 hit (zero), protect missiles, hp 67, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[348] TAKEN 0 type 12 hit (zero), protect missiles, hp 67, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[348] TAKEN 0 type 12 hit (zero), protect missiles, hp 67, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[348] TAKEN 0 type 12 hit (zero), protect missiles, hp 67, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[348] REFLECT 1 type 16 on Scion (npc 5918, index 62455): recoil of a 1 taken on 347, not the fight's target: not counted
+[348] tick SPENT: on cooldown, due 348 + lag 1, attacking=true
+[349] TAKEN 0 type 12 hit (zero), protect missiles, hp 67, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7099 t-1, proj 32 from no source at me t+0 lands t+1
+[349] TAKEN 0 type 12 hit (zero), protect missiles, hp 67, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7099 t-1, proj 32 from no source at me t+0 lands t+1
+[349] TAKEN 4 type 16 hit (damage), protect missiles, hp 67, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7099 t-1, proj 32 from no source at me t+0 lands t+1
+[349] hitsplat 0 type 12 on Abyssal Sire (npc 5908, index 24468), landedAttack=false, fromFlight=false
+[349] SWITCH MISSED on attack thrown tick 348: RING Ring of recoil -> Berserker ring (i); damage per tick 5.668 worn, 6.063 switched (speed 4 / 4), costing 1.58 a hit
+[349]   scored as an ordinary attack: max 57, chances 0.79, avg 22.63
+[349] ATTACK on Abyssal Sire (npc 5908) thrown tick 348, booked +1, speed 4, next due 352, prayed=true potted=false boost 0.97 (cost 0.04) switched=false (cost 1.58) projectile=false, scored=true, expected avg 22.63, ideal 24.25
+[350] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, anim 7099 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[350] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, anim 7099 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[350] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, anim 7099 t-2, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[350] REFLECT 1 type 16 on Spawn (npc 5916, index 63183): recoil of a 4 taken on 349, not the fight's target: not counted
+[350] tick SPENT: on cooldown, due 352 + lag 1, attacking=true
+[351] TAKEN 0 type 12 hit (zero), protect none, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[351] TAKEN 0 type 12 hit (zero), protect none, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[351] TAKEN 0 type 12 hit (zero), protect none, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[351] TAKEN 0 type 12 hit (zero), protect none, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[351] TAKEN 0 type 12 hit (zero), protect none, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[351] TAKEN 0 type 12 hit (zero), protect none, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[351] TAKEN 0 type 12 hit (zero), protect none, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[351] TAKEN 0 type 12 hit (zero), protect none, hp 63, from npc 5916 #63249, npc 5916 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, anim 7099 t-3, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[351] tick SPENT: on cooldown, due 352 + lag 1, attacking=true
+[352] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[352] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, anim 7099 t-4, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[352] tick SPENT: on cooldown, due 352 + lag 1, attacking=true
+[353] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[353] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[353] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, anim 7099 t-5, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[353] xp drop ATTACK +53
+[353] xp drop DEFENCE +52
+[353] xp drop STRENGTH +53
+[353] xp drop HITPOINTS +53
+[353] xp award tick 353: 35-35 (left 35-35, x1.125) against npc 5908
+[353] tick LOST: overdue since 352 + lag 1
+[354] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, anim 7099 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[354] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, anim 7099 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[354] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, anim 7099 t-6, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[354] hitsplat 35 type 16 on Abyssal Sire (npc 5908, index 24468), landedAttack=true, fromFlight=false
+[354] SWITCH MISSED on attack thrown tick 353: RING Ring of recoil -> Berserker ring (i); damage per tick 5.668 worn, 6.063 switched (speed 4 / 4), costing 1.58 a hit
+[354]   scored as an ordinary attack: max 57, chances 0.79, avg 22.63
+[354] ATTACK on Abyssal Sire (npc 5908) thrown tick 353, booked +1, speed 4, next due 357, prayed=true potted=false boost 0.97 (cost 0.03) switched=false (cost 1.58) projectile=false, scored=true, expected avg 17.46, ideal 17.90
+[355] TAKEN 1 type 16 hit (damage), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[355] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[355] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[355] TAKEN 0 type 12 hit (zero), protect missiles, hp 63, from npc 5916 #63249, npc 5918 #63015, npc 8738 #58029, npc 5916 #63183 and 12 more; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, proj 32 from no source at me t+0 lands t+1
+[355] tick UNCOUNTED: target 5908 is dead but still standing
+[356] TAKEN 0 type 12 hit (zero), protect none, hp 62, from npc 8738 #58029; target proj 32 from no source at me t-6 lands t-5, proj 32 from no source at me t-5 lands t-4, proj 32 from no source at me t-4 lands t-3, proj 32 from no source at me t-3 lands t-2, proj 32 from no source at me t-2 lands t-1, proj 32 from no source at me t-1 lands t+0, anim 7100 t-1
+[356] tick UNCOUNTED: target 5908 is dead but still standing
+[357] fight END Abyssal Sire (npc 5889) target died: attempts=24 made=24 damage=426 thrallDamage=0 hits=16 ticksLost=17 combatTicks=110 expDamage=521.4
+[357] RECONCILE Abyssal Sire (npc 5889) KILL: weapon 426 (of it not hitpoints 0) + thrall 0 + reflect 4 + dot 0 + others 0 + unclassified 0, healed 0; on the target 430 - 0 = 430 against 425 full hp (table), diff +5 (1.2%); bar last read -1, now 0 left (counted)
+[357] STATS CHECK Abyssal Sire: landed 16 of 24 against 17.5 expected (variance 4.65): consistent with luck
+[357] TAKEN TOTAL Abyssal Sire (npc 5889): hits 111 for 27 (biggest 10, without protection 0), dot 11
+[357] LOOT from Abyssal Sire (npc 5908, index 24468): room 'Abyssal Sire' closed with 7 fights
+[357] expected vs Abyssal Sire (npc 5889, 'Phase 2' def 250, -1 hp left (unknown)): max 47, acc 0.699, avg 16.43, dps 6.85

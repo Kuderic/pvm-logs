@@ -1272,6 +1272,12 @@ public class PvmPerformancePlugin extends Plugin
 		final MonsterStatsProvider.MonsterStats stats = targetId < 0 ? null : monsterStats.get(targetId);
 		final XpLedger.Award award = xpLedger.close(tick, targetId, stats == null ? 1.0 : stats.getXpMultiplier(),
 			cannotReport);
+		// A cast that is not an attack (Vengeance, a thrall, Death Charge; T-024) pays Magic the ledger takes out before
+		// the award, so it can neither make one nor raise the contradiction below.
+		if (xpLedger.castNote() != null)
+		{
+			debug.log(xpLedger.castNote());
+		}
 		if (award != null)
 		{
 			debug.log("xp award %s against npc %d", award, targetId);
@@ -2836,7 +2842,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			else
 			{
-				session.recordTickSpent();
+				session.recordTickSpent(false);
 			}
 			// Last of all: everything above describes the attack that just went out, the cooldown included. Taken from the tick
 			// the attack went out on and with the speed in force then - this is the booking tick, which trails the attack, so
@@ -2892,7 +2898,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.recordTickSpent(roomEngaged);
 			if (counts)
 			{
-				session.recordTickSpent();
+				session.recordTickSpent(current.isScored());
 			}
 			debug.log("tick SPENT: on cooldown, due %d + lag %d, attacking=%b", attackDueTick, lag, counts);
 			return;
@@ -2904,7 +2910,7 @@ public class PvmPerformancePlugin extends Plugin
 		current.recordTickLost(eating, roomEngaged);
 		if (counts)
 		{
-			session.recordTickLost(eating);
+			session.recordTickLost(eating, current.isScored());
 		}
 		// Only booked once the fight has an attack in it, so a lost tick that is NOT counted says so - that gap is what a
 		// safespot report looks like from here.
