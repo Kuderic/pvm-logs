@@ -33,7 +33,7 @@ final class LedgerRows
 	static final double MIN_SECONDS = 1;
 	/** ...and only from this share of the clock, so a trip's few seconds over twelve minutes stay neutral. */
 	static final double MIN_SHARE_OF_CLOCK = 0.02;
-	/** v2 (Analyzer): "luckier than" reads Better from this percentile... */
+	/** " luckier than" reads Better from this percentile... */
 	static final double PERCENTILE_BETTER = 0.60;
 	/** ...and Cost at or under this one. */
 	static final double PERCENTILE_COST = 0.40;
@@ -923,8 +923,7 @@ final class LedgerRows
 		final boolean noData = n.expected <= 0;
 		if (settings.luck && !state.warning)
 		{
-			rows.add(row("Luck", Double.isNaN(n.luck) ? UNKNOWN : fasterOrSlower(n.luck),
-				FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
+			rows.add(row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
 		}
 		if (state.warning)
 		{
@@ -1059,10 +1058,17 @@ final class LedgerRows
 		{
 			return Collections.emptyList();
 		}
-		return Arrays.asList(
+		final List<Row> rows = new ArrayList<>(Arrays.asList(
 			detail(" your average", duration(a.actual.median), Colour.NEUTRAL),
 			against(" this kill", n.clock, a.actual, true),
-			against(" luck removed", n.expectedDuration, a.adjusted, false));
+			against(" luck removed", n.expectedDuration, a.adjusted, false)));
+		// Eric, 2026-10-27, with the luck % at the top: how this kill's luck ranks among the same kills.
+		final double luckier = a.luckierThan(n.luck / n.clock);
+		if (!Double.isNaN(luckier))
+		{
+			rows.add(detail(" luckier than", Math.round(luckier * 100) + "% of kills", percentileColour(luckier)));
+		}
+		return rows;
 	}
 
 	/**
@@ -1108,7 +1114,7 @@ final class LedgerRows
 		return !Double.isNaN(seconds) && seconds >= MIN_SECONDS && seconds >= MIN_SHARE_OF_CLOCK * clock;
 	}
 
-	/** v2: the percentile's colour. Not shown in v1; here so the bands sit with the other thresholds. */
+	/** " luckier than"'s colour (Eric, 2026-10-27, brought forward from v2). */
 	static Colour percentileColour(double percentile)
 	{
 		if (percentile >= PERCENTILE_BETTER)
@@ -1131,6 +1137,42 @@ final class LedgerRows
 	{
 		final long secs = Double.isNaN(costSeconds) ? 0 : roundHalfAway(costSeconds);
 		return secs >= 1 ? figure + " (-" + secs + " s)" : figure;
+	}
+
+	/**
+	 * {@code 88% (14 s slower)}: the damage your rolls dealt against what your
+	 * attacks should average, then what that cost or saved on the clock (Eric,
+	 * 2026-10-27: "add back in the luck %", next to Execution's). No bracket when
+	 * the seconds round to none; a dash when there's nothing to compare.
+	 * <p>
+	 * The ratio reads a little high on average over kills (metrics spec 1.3: on a
+	 * kill the damage is fixed and the expected side varies, about +2.5%), which
+	 * is why the seconds, not the percentage, set the colour.
+	 */
+	static String luckFigure(Numbers n)
+	{
+		if (Double.isNaN(n.luck))
+		{
+			return UNKNOWN;
+		}
+		final String percent = luckPercent(n.damage, n.expected);
+		final String seconds = fasterOrSlower(n.luck);
+		return seconds.equals(EVEN) ? percent : percent + " (" + seconds + ")";
+	}
+
+	/**
+	 * Damage against expected as a whole percentage that never contradicts its
+	 * side: under expected reads 99% at most, over it 101% at least, and 100%
+	 * only when they're equal to the damage point.
+	 */
+	static String luckPercent(double damage, double expected)
+	{
+		final long rounded = Math.round(damage / expected * 100);
+		if (Math.round(damage) == Math.round(expected))
+		{
+			return "100%";
+		}
+		return (damage < expected ? Math.min(99, rounded) : Math.max(101, rounded)) + "%";
 	}
 
 	/**

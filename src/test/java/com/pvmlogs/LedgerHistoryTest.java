@@ -160,6 +160,9 @@ public class LedgerHistoryTest
 		assertEquals(144, a.adjusted.median, 0.01);
 		// The clock's own average keeps the luck in: 200 ticks.
 		assertEquals(120, a.actual.median, 0.01);
+		// Every kill had the same luck, +20% of its clock: a kill with more ranks above them all, one with less below.
+		assertEquals(1.0, a.luckierThan(0.25), 1e-9);
+		assertEquals(0.0, a.luckierThan(0.15), 1e-9);
 	}
 
 	@Test

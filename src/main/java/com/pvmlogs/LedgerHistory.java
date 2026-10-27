@@ -110,13 +110,44 @@ final class LedgerHistory
 	{
 		final Spread actual;
 		final Spread adjusted;
+		/** Each kill's luck as a share of its clock, sorted; null when not kept. */
+		private final double[] luck;
 		final int kills;
 
 		Average(Spread actual, Spread adjusted, int kills)
 		{
+			this(actual, adjusted, null, kills);
+		}
+
+		Average(Spread actual, Spread adjusted, double[] luck, int kills)
+		{
 			this.actual = actual;
 			this.adjusted = adjusted;
+			this.luck = luck == null ? null : luck.clone();
+			if (this.luck != null)
+			{
+				Arrays.sort(this.luck);
+			}
 			this.kills = kills;
+		}
+
+		/**
+		 * The share of these kills with worse luck than {@code share} (luck over
+		 * the clock, so short and long kills rank alike), ties counting half;
+		 * NaN with nothing to rank against.
+		 */
+		double luckierThan(double share)
+		{
+			if (luck == null || luck.length == 0 || Double.isNaN(share))
+			{
+				return Double.NaN;
+			}
+			double worse = 0;
+			for (double other : luck)
+			{
+				worse += other < share ? 1 : other == share ? 0.5 : 0;
+			}
+			return worse / luck.length;
 		}
 	}
 
@@ -146,6 +177,7 @@ final class LedgerHistory
 		}
 		final double[] clocks = new double[LedgerRows.AVERAGE_OF_LAST];
 		final double[] times = new double[LedgerRows.AVERAGE_OF_LAST];
+		final double[] lucks = new double[LedgerRows.AVERAGE_OF_LAST];
 		int n = 0;
 		final List<Encounter> rooms = rooms(history, like.name);
 		for (int i = rooms.size() - 1; i >= 0 && n < times.length; i--)
@@ -160,6 +192,7 @@ final class LedgerHistory
 			if (!Double.isNaN(numbers.expectedDuration))
 			{
 				clocks[n] = numbers.clock;
+				lucks[n] = numbers.luck / numbers.clock;
 				times[n++] = numbers.expectedDuration;
 			}
 		}
@@ -171,7 +204,7 @@ final class LedgerHistory
 		final double[] adjusted = Arrays.copyOf(times, n);
 		Arrays.sort(actual);
 		Arrays.sort(adjusted);
-		return new Average(Spread.of(actual), Spread.of(adjusted), n);
+		return new Average(Spread.of(actual), Spread.of(adjusted), Arrays.copyOf(lucks, n), n);
 	}
 
 	/**

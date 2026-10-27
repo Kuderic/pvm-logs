@@ -147,7 +147,7 @@ public class LedgerRowsTest
 		// is under 2% of 73.2 s and stays white.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "89% (8 s slower)", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -165,7 +165,7 @@ public class LedgerRowsTest
 		// Eric's kill. 688 + thrall 80 - healed 68 = 700, the boss's HP.
 		assertRows(Arrays.asList(
 			r("Vardorvis (dead)", "2:16", EMPHASIS, EMPHASIS, DEAD, NEUTRAL),
-			emph("Luck", "14 s slower", COST),
+			emph("Luck", "88% (14 s slower)", COST),
 			damage("688/778", COST),
 			main("DPS", "5.0"),
 			main("Execution", "84%"),
@@ -188,7 +188,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis (ended)", "2:20"),
-			emph("Luck", "15 s slower", COST),
+			emph("Luck", "89% (15 s slower)", COST),
 			damage("721/812", COST),
 			main("DPS", "5.1"),
 			main("Execution", "93%"),
@@ -212,7 +212,7 @@ public class LedgerRowsTest
 		// The trip keeps no heal (only thrall and DoT were added for it), so there's no "boss healed" row.
 		assertRows(Arrays.asList(
 			title("Trip · 6 kills", "12:40"),
-			emph("Luck", "14 s slower", NEUTRAL),
+			emph("Luck", "98% (14 s slower)", NEUTRAL),
 			damage("4,120/4,201", NEUTRAL),
 			main("DPS", "5.4"),
 			main("Execution", "92%"),
@@ -243,7 +243,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("ToA · 3 rooms", "9:12"),
-			emph("Luck", "13 s faster", BETTER),
+			emph("Luck", "103% (13 s faster)", BETTER),
 			damage("8,410/8,200", BETTER),
 			main("DPS", "15.2"),
 			main("Execution", "86%"),
@@ -512,7 +512,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "89% (8 s slower)", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -530,7 +530,7 @@ public class LedgerRowsTest
 		// Eric, 2026-10-26: the panel only comes up once the fight does, so the loadout goes under the fight's rows.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "89% (8 s slower)", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -1045,5 +1045,62 @@ public class LedgerRowsTest
 		// None while the fight runs.
 		assertFalse(build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false))
 			.contains(main("Summary", "")));
+	}
+
+	// ---- the luck % (Eric, 2026-10-27: "add back in the luck %") ----
+
+	@Test
+	public void theLuckPercentNeverContradictsItsSide()
+	{
+		assertEquals("89%", LedgerRows.luckPercent(370, 418));
+		assertEquals("103%", LedgerRows.luckPercent(8410, 8200));
+		// 99.6% and 100.4% would round to 100%, which reads as no luck either way.
+		assertEquals("99%", LedgerRows.luckPercent(996, 1000));
+		assertEquals("101%", LedgerRows.luckPercent(1004, 1000));
+		assertEquals("100%", LedgerRows.luckPercent(1000, 1000.2));
+	}
+
+	@Test
+	public void luckShowsThePercentThenTheSeconds()
+	{
+		assertEquals("88% (14 s slower)", LedgerRows.luckFigure(new LedgerRows.Numbers(LedgerExamples.kill())));
+		// No bracket when the seconds round to none.
+		final FakeScope close = LedgerExamples.midFight();
+		close.damage = 417;
+		assertEquals("99%", LedgerRows.luckFigure(new LedgerRows.Numbers(close)));
+		assertEquals("\u2014", LedgerRows.luckFigure(new LedgerRows.Numbers(LedgerExamples.noData())));
+	}
+
+	// ---- luckier than (Eric, 2026-10-27, with the luck %) ----
+
+	private static LedgerHistory.Average averageWithLuck(double... luckShares)
+	{
+		return new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), new LedgerHistory.Spread(130, 125, 135),
+			luckShares, luckShares.length);
+	}
+
+	@Test
+	public void luckierThanFollowsTheAverageRows()
+	{
+		// This kill's luck: -14.35 s over 136.8 s, -10.5% of its clock. Two of five kills were unluckier: 40%, Cost.
+		final List<Row> rows = deadWith(averageWithLuck(-0.20, -0.15, -0.05, 0.0, 0.10));
+		final int removed = rows.indexOf(d(" luck removed", "8 s faster", BETTER));
+		assertEquals(d(" luckier than", "40% of kills", COST), rows.get(removed + 1));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(removed + 2));
+	}
+
+	@Test
+	public void luckierThanIsColouredByTheBands()
+	{
+		assertTrue(deadWith(averageWithLuck(-0.30, -0.25, -0.20, -0.15, 0.10))
+			.contains(d(" luckier than", "80% of kills", BETTER)));
+		// Two of four: neither band.
+		assertTrue(deadWith(averageWithLuck(-0.30, -0.20, 0.0, 0.10))
+			.contains(d(" luckier than", "50% of kills", NEUTRAL)));
+		// A tie counts half: 1.5 of 3.
+		assertEquals(0.5, averageWithLuck(0.25, 0.5, 0.75).luckierThan(0.5), 1e-9);
+		// Without the kills' luck, no row.
+		assertFalse(deadWith(average(119, 115, 125, 130, 125, 135)).stream()
+			.anyMatch(row -> row.left.equals(" luckier than")));
 	}
 }
