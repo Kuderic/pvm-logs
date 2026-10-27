@@ -1,6 +1,5 @@
 package com.pvmlogs;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import net.runelite.api.gameval.ItemID;
@@ -37,8 +36,9 @@ import net.runelite.api.gameval.ItemID;
  * dagger 2, dragon and crystal halberd 2 (twice on targets of two tiles or
  * more, and a 1x1 "may be hit a second time", so 2 for any size), Saradomin
  * sword 2 (the melee hit and its magic hit), magic shortbow 2, webweaver bow 4,
- * dragon knives 2, Dinh's bulwark 2 (the target is hit twice in multicombat;
- * the upper bound is used everywhere).</li>
+ * dragon knives 2, Dinh's bulwark 2 in multicombat and 1 outside it ("The
+ * targeted monster gets hit twice by the attack ... only occur in multicombat
+ * areas", wiki, read 2026-10-27; T-032).</li>
  * <li>Everything else: 1.</li>
  * </ul>
  *
@@ -61,10 +61,6 @@ final class AttackSplats
 	private static final Set<Integer> TWO_ON_ONE_TICK = ids(ItemID.SULPHUR_BLADES, ItemID.GLACIAL_TEMOTLI,
 		ItemID.EARTHBOUND_TECPATL, ItemID.BARROWS_TORAG_WEAPON, ItemID.BARROWS_TORAG_WEAPON_100,
 		ItemID.BARROWS_TORAG_WEAPON_75, ItemID.BARROWS_TORAG_WEAPON_50, ItemID.BARROWS_TORAG_WEAPON_25);
-	private static final Set<Spell> TWINFLAME_SPELLS = new HashSet<>(Arrays.asList(
-		Spell.WIND_BOLT, Spell.WATER_BOLT, Spell.EARTH_BOLT, Spell.FIRE_BOLT,
-		Spell.WIND_BLAST, Spell.WATER_BLAST, Spell.EARTH_BLAST, Spell.FIRE_BLAST,
-		Spell.WIND_WAVE, Spell.WATER_WAVE, Spell.EARTH_WAVE, Spell.FIRE_WAVE));
 
 	/** All the splats the attack can put on this target. */
 	final int count;
@@ -98,6 +94,28 @@ final class AttackSplats
 		return new AttackSplats(count, first, true);
 	}
 
+	/** The dual macuahuitl: two hits a tick apart, the max split, the second only if the first landed (T-032). */
+	static boolean isMacuahuitl(int weaponId)
+	{
+		return MACUAHUITLS.contains(weaponId);
+	}
+
+	/**
+	 * Two independently rolled hits that split the max between them, ⌊M/2⌋ and
+	 * the rest (wiki, Multi-hit weapons, "45 → 22 + 23"): Torag's hammers, the
+	 * sulphur blades, the glacial temotli and both tecpatls (T-032).
+	 */
+	static boolean splitsMaxInTwo(int weaponId)
+	{
+		return TWO_ON_ONE_TICK.contains(weaponId) || weaponId == ItemID.INFERNAL_TECPATL;
+	}
+
+	/** The splats one attack puts on its target, counting Dinh's bulwark's special at its multicombat most. */
+	static AttackSplats of(int weaponId, boolean special, int targetSize, Spell spell)
+	{
+		return of(weaponId, special, targetSize, spell, true);
+	}
+
 	/**
 	 * The splats one attack puts on its target.
 	 *
@@ -105,8 +123,9 @@ final class AttackSplats
 	 * @param special    whether it was the weapon's special
 	 * @param targetSize the target's size in tiles, which only the scythe reads
 	 * @param spell      the spell cast, or null; only the twinflame staff reads it
+	 * @param multi      whether the player is in a multicombat area; only Dinh's bulwark's special reads it
 	 */
-	static AttackSplats of(int weaponId, boolean special, int targetSize, Spell spell)
+	static AttackSplats of(int weaponId, boolean special, int targetSize, Spell spell, boolean multi)
 	{
 		if (SCYTHES.contains(weaponId))
 		{
@@ -131,7 +150,8 @@ final class AttackSplats
 		}
 		if (weaponId == ItemID.TWINFLAME_STAFF)
 		{
-			return spell != null && TWINFLAME_SPELLS.contains(spell) ? thenLate(2, 1) : ONE;
+			// The same rule as the expected damage's second hit (T-026's Spell.twinflameFiresTwice), so the two cannot drift.
+			return spell != null && spell.twinflameFiresTwice() ? thenLate(2, 1) : ONE;
 		}
 		final SpecialAttack weapon = SpecialAttack.forItem(weaponId);
 		if (weapon == SpecialAttack.DARK_BOW)
@@ -156,8 +176,9 @@ final class AttackSplats
 			case SARADOMIN_SWORD:
 			case MAGIC_SHORTBOW:
 			case DRAGON_KNIFE:
-			case DINHS_BULWARK:
 				return upTo(2);
+			case DINHS_BULWARK:
+				return multi ? upTo(2) : ONE;
 			default:
 				return ONE;
 		}

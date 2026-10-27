@@ -85,7 +85,12 @@ enum SpecialAttack
 	ELDER_MAUL(ItemID.ELDER_MAUL, "Pulverize", 5, 4, 1.0),
 	ABYSSAL_WHIP(ItemID.ABYSSAL_WHIP, "Energy Drain", 5, 4, 1.0),
 	ABYSSAL_TENTACLE(ItemID.ABYSSAL_TENTACLE, "Binding Tentacle", 5, 4, 1.0),
-	DUAL_MACUAHUITL(ItemID.DUAL_MACUAHUITL, "Blood Infusion", 1, 1, 1.25),
+	// Blood Infusion (wiki, read 2026-10-27; T-032): +25% to each splat's accuracy and the max raised 25% before it is
+	// split in two, the two rolling independently (the ordinary attack's second needs its first) - see splitsMaxInTwo.
+	DUAL_MACUAHUITL(ItemID.DUAL_MACUAHUITL, "Blood Infusion", 5, 4, 1.25),
+	// Brand (wiki, read 2026-10-27; T-032): four hits in quick succession, +25% accuracy and max, the damage "split
+	// across the hits that pass accuracy" - see splitsAcrossSuccesses. Was missing, so a Brand was scored as a swing.
+	INFERNAL_TECPATL(ItemID.INFERNAL_TECPATL, "Brand", 5, 4, 1.25),
 	// The melee hit only; Saradomin's Lightning also splashes for magic damage that is not a multiple of this max hit and
 	// is not counted.
 	SARADOMIN_SWORD(ItemID.SARADOMIN_SWORD, "Saradomin's Lightning", 1, 1, 1.10),
@@ -398,7 +403,33 @@ enum SpecialAttack
 
 	int hits()
 	{
-		return Math.max(1, hitMultipliers.length);
+		if (splitsAcrossSuccesses())
+		{
+			return BRAND_ROLLS;
+		}
+		return splitsMaxInTwo() ? 2 : Math.max(1, hitMultipliers.length);
+	}
+
+	private static final int BRAND_ROLLS = 4;
+
+	/**
+	 * Whether the one max in the table is split over two hitsplats, ⌊max/2⌋ and
+	 * the rest, each rolling its own accuracy and damage: Blood Infusion (T-032).
+	 */
+	boolean splitsMaxInTwo()
+	{
+		return this == DUAL_MACUAHUITL;
+	}
+
+	/**
+	 * Whether several accuracy rolls are made and one damage roll, up to the
+	 * table's max, is shared among those that pass: Brand's four (T-032). A
+	 * reading of the wiki's "split across the hits that pass accuracy", which
+	 * gives no split: one success or four deal the same roll.
+	 */
+	boolean splitsAcrossSuccesses()
+	{
+		return this == INFERNAL_TECPATL;
 	}
 
 	/**

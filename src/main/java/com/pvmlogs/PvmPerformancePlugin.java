@@ -2375,7 +2375,7 @@ public class PvmPerformancePlugin extends Plugin
 		final boolean special = specialWentOutFor(attackOriginTick, specFiredTick)
 			&& specAverageHit >= 0;
 		double expectedChances =
-			CombatCalc.landChance(accuracy, combatCalc.hitsPerAttack(targetId));
+			combatCalc.attackLandChance(accuracy, targetId);
 		if (special)
 		{
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
@@ -3699,7 +3699,7 @@ public class PvmPerformancePlugin extends Plugin
 			final double average = meanOf(moments);
 			if (accuracy >= 0 && average >= 0 && current.isScored())
 			{
-				final double chances = CombatCalc.landChance(accuracy, combatCalc.hitsPerAttack(npc.getId()));
+				final double chances = combatCalc.attackLandChance(accuracy, npc.getId());
 				final double variance = varianceOf(moments);
 				current.recordExpected(combatCalc.maxHit(npc.getId()), chances, average, variance);
 				session.recordExpected(chances, average, variance);
