@@ -271,6 +271,10 @@ public class PvmPerformancePlugin extends Plugin
 	// interaction is not on the opening attack of a fight.
 	private int clickedNpcIndex = -1;
 	private int clickedNpcTick = -1;
+	// Every npc clicked or interacted with lately, by the last tick it was (T-021). A shot's projectile surfaces a tick or
+	// two after it was thrown, and by then a player switching targets has already clicked the next one: the last click
+	// alone said the shot at the respiratory system just left was not mine.
+	private final Map<Integer, Integer> engagedNpcs = new HashMap<>();
 	// Ticks left before the weapon can attack again; 0 means ready. Counted from the tick the last attack went out, not
 	// the tick it was booked: from the booking it measures the gap between bookings, which is a tick longer whenever the
 	// style changes from melee to a projectile one.
@@ -321,6 +325,7 @@ public class PvmPerformancePlugin extends Plugin
 	// made during it; the projectile event fires while the weapon that threw the attack is still in hand.
 	private int gearChangedTick = Integer.MIN_VALUE;
 	private int attackObservedNpcId = -1;
+	private int attackObservedNpcIndex = -1;
 	private int attackObservedMaxHit;
 	private double attackObservedAccuracy = -1;
 	private double attackObservedAverageHit = -1;
@@ -609,6 +614,7 @@ public class PvmPerformancePlugin extends Plugin
 		recentSpecDrops.clear();
 		weaponByTick.clear();
 		extrasThisTick.clear();
+		engagedNpcs.clear();
 		ringByTick.clear();
 		reflect.clear();
 		vengeanceUp = false;
@@ -659,6 +665,9 @@ public class PvmPerformancePlugin extends Plugin
 			final boolean couldBeReflected = hitsplat.getAmount() > 0 && couldHaveHitMe(npc);
 			final boolean xpExact = xpLedger.trusted()
 				&& xpLedger.coverage(hitsplat.getAmount(), client.getTickCount()) == XpLedger.Coverage.EXACT;
+			// The tick the attack this splat finishes was thrown on, from the experience it paid: asked before the splat spends
+			// it. What books a shot whose projectile was never taken as mine (T-021).
+			final int paidOnTick = xpLedger.attackTickFor(hitsplat.getAmount(), client.getTickCount());
 			if (couldBeReflected && !xpExact)
 			{
 				final Reflect.Match match = reflect.claim(client.getTickCount(), hitsplat.getAmount(), this::hitsTakenOn,
@@ -794,11 +803,26 @@ public class PvmPerformancePlugin extends Plugin
 				|| client.getTickCount() - lastMeleeTick <= MELEE_SWAP_GRACE_TICKS;
 			final boolean melee = meleeRecently || unbookedCast;
 			final boolean firstOfBurst = !burstBooked.contains(npc.getIndex());
-			final boolean booked = !arrivedFromFlight && melee && burstBooked.add(npc.getIndex());
-			final int bookingLag = combatCalc.isMeleeEquipped() ? MELEE_BOOKING_LAG : castLag;
+			// A ranged or magic splat that arrived as no projectile of mine: one whose projectile was not taken as mine, which
+			// target switching causes (T-021: the Abyssal Sire's respiratory systems on 78, 82 and 100, each paid for by a
+			// Ranged drop four ticks before). Booked from the drop's tick when the experience paid for it.
+			final int unseenShot = melee || arrivedFromFlight ? Integer.MIN_VALUE
+				: unseenShotThrown(npc.getIndex(), tick, paidOnTick);
+			final boolean booked = !arrivedFromFlight && (melee || unseenShot != Integer.MIN_VALUE)
+				&& burstBooked.add(npc.getIndex());
+			final int bookingLag = unseenShot != Integer.MIN_VALUE ? tick - unseenShot
+				: combatCalc.isMeleeEquipped() ? MELEE_BOOKING_LAG : castLag;
 			if (booked)
 			{
-				recordAttackObserved(false, npc.getId(), bookingLag);
+				recordAttackObserved(false, npc, bookingLag);
+				if (unseenShot != Integer.MIN_VALUE)
+				{
+					// It went out on the drop's tick, which is what says the weapon was busy from then and which loadout threw it.
+					lastAttackSeenTick = unseenShot;
+					attackOriginTick = unseenShot;
+					debug.log("UNSEEN SHOT on %s (npc %d, index %d): a %d with no projectile of mine due, thrown on %d by its drop",
+						npc.getName(), npc.getId(), npc.getIndex(), hitsplat.getAmount(), unseenShot);
+				}
 			}
 			// Counted against what the target has left only now, after the attack it books was judged: the overkill cap reads
 			// that count, and with the blow's own damage already in it a 39 on a Sire with 42 left was judged against 3 - an
@@ -1615,6 +1639,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			clickedNpcIndex = clicked.getIndex();
 			clickedNpcTick = client.getTickCount();
+			engagedNpcs.put(clicked.getIndex(), client.getTickCount());
 		}
 		if (event.getMenuAction() != MenuAction.WIDGET_TARGET_ON_NPC || !client.isWidgetSelected())
 		{
@@ -1696,7 +1721,7 @@ public class PvmPerformancePlugin extends Plugin
 			.add(attackThrownOn(startTick(projectile), lands, npc.getId()));
 		debug.log("projectile %d taken as mine, aimed at npc %d (index %d), lands tick %d",
 			projectile.getId(), npc.getId(), npc.getIndex(), lands);
-		recordAttackObserved(true, npc.getId());
+		recordAttackObserved(true, npc);
 		// Not always the tick the event surfaces on: the start cycle says when the projectile was fired, which for a slow one
 		// can be a tick earlier.
 		attackOriginTick = startTick(projectile);
@@ -1809,6 +1834,8 @@ public class PvmPerformancePlugin extends Plugin
 		final int firedTick = startTick(projectile);
 		if (tooSoonToBeMine(firedTick, lastAttackSeenTick, fastestSpeedSeen()))
 		{
+			debug.log("projectile %d at npc %d NOT taken as mine: from my tile, but set off on %d with my last attack seen on %d",
+				projectile.getId(), ((NPC) target).getId(), firedTick, lastAttackSeenTick);
 			return false;
 		}
 		// There is deliberately NO animation check here. There was one - a player with nothing playing did not throw this -
@@ -1826,8 +1853,36 @@ public class PvmPerformancePlugin extends Plugin
 				&& client.getTickCount() - clickedNpcTick <= CLICK_ATTRIBUTION_TICKS)
 			|| me.getInteracting() == target
 			|| (current != null && !current.isEnded()
-				&& current.getTargetIndex() == aimedAt.getIndex());
+				&& current.getTargetIndex() == aimedAt.getIndex())
+			|| engagedLately(aimedAt.getIndex());
+		if (!engaged)
+		{
+			debug.log("projectile %d at npc %d (index %d) NOT taken as mine: from my tile, but nothing says I was attacking it",
+				projectile.getId(), aimedAt.getId(), aimedAt.getIndex());
+		}
 		return engaged;
+	}
+
+	/** Whether I clicked or interacted with this npc within the click window (T-021). */
+	private boolean engagedLately(int npcIndex)
+	{
+		final Integer last = engagedNpcs.get(npcIndex);
+		return last != null && client.getTickCount() - last <= CLICK_ATTRIBUTION_TICKS;
+	}
+
+	// What the player is interacting with this tick, kept for the click window: see engagedNpcs.
+	private void noteEngaged()
+	{
+		final Player me = client.getLocalPlayer();
+		final Actor target = me == null ? null : me.getInteracting();
+		if (target instanceof NPC)
+		{
+			engagedNpcs.put(((NPC) target).getIndex(), client.getTickCount());
+		}
+		if (client.getTickCount() % 5 == 0)
+		{
+			engagedNpcs.values().removeIf(t -> client.getTickCount() - t > CLICK_ATTRIBUTION_TICKS);
+		}
 	}
 
 	// Whether the projectile set off from where I stood when it did: the start cycle says which tick that was, so one
@@ -2290,7 +2345,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		else
 		{
-			pendingSamples.add(new PendingSample(
+			pendingSamples.add(new PendingSample(fight,
 				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit));
 		}
 		// Spent: they describe one attack, not the next.
@@ -2308,14 +2363,18 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private static final class PendingSample
 	{
+		// The fight the attack was booked into, which takes the expectation when it lands, whatever is open by then: a
+		// player switching between a room's targets has moved on before the shot arrives (T-021).
+		private final Fight fight;
 		private final int npcIndex;
 		private final int tick;
 		private final int maxHit;
 		private final double accuracy;
 		private final double averageHit;
 
-		private PendingSample(int npcIndex, int tick, int maxHit, double accuracy, double averageHit)
+		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit)
 		{
+			this.fight = fight;
 			this.npcIndex = npcIndex;
 			this.tick = tick;
 			this.maxHit = maxHit;
@@ -2336,9 +2395,9 @@ public class PvmPerformancePlugin extends Plugin
 				continue;
 			}
 			pendingSamples.remove(i);
-			if (current != null && !current.isEnded())
+			if (sample.fight != null)
 			{
-				current.recordExpected(sample.maxHit, sample.accuracy, sample.averageHit);
+				sample.fight.recordExpected(sample.maxHit, sample.accuracy, sample.averageHit);
 			}
 			session.recordExpected(sample.accuracy, sample.averageHit);
 			return;
@@ -2556,7 +2615,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int distance = castDistance(target);
 		final int due = client.getTickCount() + magicHitDelay(distance);
 		castsAwaiting.add(new PendingCast(target.getIndex(), due));
-		recordAttackObserved(false, target.getId(), CAST_BOOKING_LAG);
+		recordAttackObserved(false, target, CAST_BOOKING_LAG);
 	}
 
 	/**
@@ -2656,7 +2715,9 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		if (current.getTargetIndex() == npc.getIndex())
 		{
-			finalizeFight(npc.isDead(), System.currentTimeMillis(), npc.isDead() ? "target died" : "target despawned");
+			// An add of the room dying is the room going on (T-021): what the boss and the other adds have left is kept.
+			finalizeFight(npc.isDead(), System.currentTimeMillis(), npc.isDead() ? "target died" : "target despawned",
+				npc.isDead() && EncounterGroup.isUnscored(npc.getId()) && switchesWithinRoom(current, npc.getId()));
 			return;
 		}
 		// A boss made of several NPCs does not die on the one being hit: the Hueycoatl is killed at its head while the fight
@@ -2697,7 +2758,7 @@ public class PvmPerformancePlugin extends Plugin
 			// And the fight it was thrown IN, which is not always the one open now. A booking arrives a tick or two after the
 			// attack, and a kill in between opens the next fight first - so the last swings of one kill were being counted
 			// against the next, which began life reading two attacks and two switches before a blow had been struck.
-			final Fight attacker = fightAsOf(attackTick);
+			final Fight attacker = attackerFor(attackObservedNpcIndex, attackTick, current, lastFinished);
 			if (attacker == null)
 			{
 				// Thrown during a fight that has since been discarded. The cooldown still has to advance or every tick after
@@ -2969,17 +3030,20 @@ public class PvmPerformancePlugin extends Plugin
 	 * that prove one did, and whose tick is exact: a melee hitsplat lands on the
 	 * tick it was thrown, and a projectile is created on the tick it was fired.
 	 */
-	private void recordAttackObserved(boolean fromProjectile, int npcId)
+	private void recordAttackObserved(boolean fromProjectile, NPC npc)
 	{
-		recordAttackObserved(fromProjectile, npcId,
+		recordAttackObserved(fromProjectile, npc,
 			fromProjectile ? PROJECTILE_BOOKING_LAG : MELEE_BOOKING_LAG);
 	}
 
 	// How far behind the attack this observation is depends on what proved it, and there are three answers rather than
 	// two: a melee blow lands the tick it is thrown, a projectile surfaces two ticks later, and a cast with no projectile
 	// lands three.
-	private void recordAttackObserved(boolean fromProjectile, int npcId, int bookingLag)
+	private void recordAttackObserved(boolean fromProjectile, NPC npc, int bookingLag)
 	{
+		final int npcId = npc.getId();
+		// The npc it was aimed at: the attack is booked into that npc's fight, whatever is open by the booking (T-021).
+		attackObservedNpcIndex = npc.getIndex();
 		attackObservedLag = bookingLag;
 		// Recorded here rather than at the booking, which is a tick or two later: this is what says a weapon is on cooldown,
 		// and it has to be true from the moment the attack goes out.
@@ -3144,6 +3208,7 @@ public class PvmPerformancePlugin extends Plugin
 		trackThrallAndXp();
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
 		trackRaid(System.currentTimeMillis());
+		noteEngaged();
 		startFightOnTarget();
 		// After any fight this tick opened, before anything is judged against the target: what it wears now.
 		if (current != null && !current.isEnded())
@@ -3211,7 +3276,11 @@ public class PvmPerformancePlugin extends Plugin
 					? 0 : notTargetingTicks + 1;
 				if (notTargetingTicks > LOOK_AWAY_TICKS)
 				{
-					finalizeFight(false, System.currentTimeMillis(), "looked away before attacking");
+					// Looking at another of the room's targets is the player moving on within the room (T-021).
+					final Player self = client.getLocalPlayer();
+					final boolean sameRoom = self != null && self.getInteracting() instanceof NPC
+						&& switchesWithinRoom(current, ((NPC) self.getInteracting()).getId());
+					finalizeFight(false, System.currentTimeMillis(), "looked away before attacking", sameRoom);
 				}
 			}
 			else
@@ -3289,7 +3358,9 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		if (current != null && !current.isEnded())
 		{
-			finalizeFight(false, now, "a different target was attacked");
+			final boolean sameRoom = switchesWithinRoom(current, npc.getId());
+			finalizeFight(false, now, sameRoom ? "a different target in the room was attacked"
+				: "a different target was attacked", sameRoom);
 		}
 		// Full hitpoints from the version of the monster data in use, which knows the Chambers and Vardorvis where
 		// RuneLite's table does not; RuneLite's (nullable) as the fallback. The boss health bar, once read, beats both.
@@ -3361,13 +3432,89 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/**
+	 * Whether ending this fight for one on {@code npcId} is the player moving
+	 * between targets of one room (T-021): the same group, its room open.
+	 */
+	private boolean switchesWithinRoom(Fight fight, int npcId)
+	{
+		return switchesWithinRoom(currentEncounter, fight, npcId);
+	}
+
+	static boolean switchesWithinRoom(Encounter room, Fight fight, int npcId)
+	{
+		return room != null && !room.isEnded() && fight.getGroupName() != null
+			&& EncounterGroup.sameGroup(npcId, fight.getTargetId());
+	}
+
+	/**
+	 * The fight an attack is booked into (T-021): the one on the npc it was aimed
+	 * at, whatever was open when it was thrown. The booking trails the attack by a
+	 * tick or two, and the fight that was open then is not always the attack's: on
+	 * the Abyssal Sire a shot thrown at a respiratory system on 68 was booked to the
+	 * Sire fight that the shot itself ended on 70, and the respiratory system's 40
+	 * on 72 landed against no attack and no expectation. The fight on that npc is
+	 * the current one when the attack opened it or found it open, else the one just
+	 * finished on it (its last swing, booked after the next fight opened); failing
+	 * both, the fight open on the attack's tick, as before.
+	 */
+	static Fight attackerFor(int npcIndex, int attackTick, Fight current, Fight lastFinished)
+	{
+		if (npcIndex >= 0)
+		{
+			if (current != null && !current.isEnded() && current.getTargetIndex() == npcIndex)
+			{
+				return current;
+			}
+			if (lastFinished != null && lastFinished.getTargetIndex() == npcIndex
+				&& attackTick >= lastFinished.getStartTick())
+			{
+				return lastFinished;
+			}
+		}
+		return fightAsOf(attackTick, current, lastFinished);
+	}
+
+	/**
+	 * The tick a shot landing now with no projectile of mine due was thrown on, or
+	 * {@code Integer.MIN_VALUE} when it should not be booked (T-021). Only with the
+	 * experience's word for it: the attack this splat finishes was paid for on that
+	 * tick. A miss pays nothing, so an unseen shot's 0 stays unbooked. Not while a
+	 * projectile of mine is still due on this npc (it may be that one, landing off
+	 * its estimate), and not when the weapon was still busy with the attack booked
+	 * last.
+	 */
+	private int unseenShotThrown(int npcIndex, int tick, int paidOnTick)
+	{
+		final List<PendingHit> due = pendingMineHits.get(npcIndex);
+		if (due != null && !due.isEmpty())
+		{
+			return Integer.MIN_VALUE;
+		}
+		return shotThrownOn(tick, paidOnTick, attackDueTick);
+	}
+
+	static int shotThrownOn(int tick, int paidOnTick, int attackDueTick)
+	{
+		if (paidOnTick == Integer.MIN_VALUE || paidOnTick >= tick)
+		{
+			return Integer.MIN_VALUE;
+		}
+		// A tick of slack: the due tick is the weapon's, and the drop can read a tick early against it.
+		if (attackDueTick != Integer.MIN_VALUE && paidOnTick < attackDueTick - 1)
+		{
+			return Integer.MIN_VALUE;
+		}
+		return paidOnTick;
+	}
+
+	/**
 	 * The fight that was open on a given tick: the current one if it had started
 	 * by then, otherwise the one before it, and null if neither covers it.
 	 *
 	 * <p>Only two are ever candidates. A booking trails its attack by a tick or
 	 * two, and nothing can close and open more than one fight in that gap.
 	 */
-	private Fight fightAsOf(int tick)
+	static Fight fightAsOf(int tick, Fight current, Fight lastFinished)
 	{
 		if (current != null && !current.isEnded() && tick >= current.getStartTick())
 		{
@@ -3775,6 +3922,20 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void finalizeFight(boolean died, long now, String reason)
 	{
+		finalizeFight(died, now, reason, false);
+	}
+
+	/**
+	 * @param keepCounts the player is switching between targets of one open room
+	 *                   (T-021): what each target has left, the shots still in
+	 *                   the air and their expectations carry on, since the player
+	 *                   is coming back to them. Before, every switch between the
+	 *                   Abyssal Sire's respiratory systems wiped all of it, so a
+	 *                   system came back counted at full health and a shot landing
+	 *                   after the switch had lost its expectation.
+	 */
+	private void finalizeFight(boolean died, long now, String reason, boolean keepCounts)
+	{
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
 				+ "combatTicks=%d expDamage=%.1f",
 			current.getTargetName(), current.getTargetId(), reason, current.getAttempts(), current.getAttacksMade(),
@@ -3783,16 +3944,40 @@ public class PvmPerformancePlugin extends Plugin
 		closeTargetHealth(died);
 		debug.log("%s", DamageTaken.summary(current));
 		current.end(died, now);
-		// Anything still in the air never landed. Counting what it was expected to deal against the nought it dealt made a
-		// group kill read as underperformance.
-		dropPendingSamples(died);
-		// A cast still in the air when the target died is not a splash, and the fight is over either way. The charge goes
-		// with it because the server reuses NPC indices, so a respawn can wear the one it was held against.
-		castsAwaiting.clear();
-		combatCalc.forgetConflictionCharge();
-		pendingMineHits.clear();
-		damageByIndex.clear();
-		health.clear();
+		if (!keepCounts)
+		{
+			// Anything still in the air never landed. Counting what it was expected to deal against the nought it dealt made a
+			// group kill read as underperformance.
+			dropPendingSamples(died);
+			// A cast still in the air when the target died is not a splash, and the fight is over either way. The charge goes
+			// with it because the server reuses NPC indices, so a respawn can wear the one it was held against.
+			castsAwaiting.clear();
+			combatCalc.forgetConflictionCharge();
+			pendingMineHits.clear();
+			damageByIndex.clear();
+			health.clear();
+		}
+		else if (died)
+		{
+			// One of the room's adds died and the room goes on: only what was its own goes, and its attacks still in the air
+			// never landed, as dropPendingSamples has it for a target that died.
+			final int index = current.getTargetIndex();
+			for (Iterator<PendingSample> it = pendingSamples.iterator(); it.hasNext(); )
+			{
+				if (it.next().fight == current)
+				{
+					it.remove();
+					current.recordAttackNulled();
+					if (current.isScored())
+					{
+						session.recordAttackNulled();
+					}
+				}
+			}
+			pendingMineHits.remove(index);
+			damageByIndex.remove(index);
+			health.forget(index);
+		}
 		// Nothing is being fought, so no drain should be read against anything.
 		combatCalc.setTarget(null);
 		targetNpc = null;
