@@ -38,7 +38,7 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "overlayBossesOnly",
 		name = "Overlay: bosses only",
-		description = "Only show the overlay while fighting a boss (from the hiscores list)",
+		description = "Only show the overlays while fighting a boss (from the hiscores list)",
 		position = 2
 	)
 	default boolean overlayBossesOnly()
@@ -47,25 +47,14 @@ public interface PvmPerformanceConfig extends Config
 	}
 
 	// The overlay's content settings share position 3, so they sit together and in name order (T-014).
-	@ConfigItem(
-		keyName = "overlayExpectedOnly",
-		name = "Loadout only",
-		description = "Show only what the loadout does against the target - max hit, accuracy, expected DPS - "
-			+ "and nothing from the fight",
-		position = 3
-	)
-	default boolean overlayExpectedOnly()
-	{
-		// The key is Arodab's "Expected figures only", relabelled, so players who set it keep it.
-		return false;
-	}
-
+	// "Loadout only" (key overlayExpectedOnly) is gone (T-022): "Show overlay" off with the loadout overlay on does the
+	// same. LoadoutOverlay.migrateLoadoutOnly moves it once.
 	@ConfigItem(
 		keyName = "overlayShowLoadout",
-		name = "Show loadout",
-		description = "Show your max hit, accuracy and expected DPS against the target: at the bottom while you "
-			+ "fight, and before your first attack",
-		position = 3
+		name = "Show loadout overlay",
+		description = "Show a second box with your attack's expected DPS, max hit, accuracy and spec against the "
+			+ "target, before, during and after the fight. Drag it anywhere",
+		position = 1
 	)
 	default boolean overlayShowLoadout()
 	{

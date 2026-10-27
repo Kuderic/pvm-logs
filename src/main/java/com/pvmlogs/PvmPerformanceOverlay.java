@@ -74,31 +74,20 @@ class PvmPerformanceOverlay extends OverlayPanel
 			return null;
 		}
 		final Fight fight = plugin.getDisplayFight();
-		if (fight == null)
-		{
-			return null;
-		}
-		// A finished fight is left up so the kill can be read, until the fight timeout says the fighting is over - the same
-		// clock that ended the fight itself.
-		if (fight.isEnded()
-			&& System.currentTimeMillis() - fight.getEndMillis() > config.fightTimeoutTicks() * 600L)
-		{
-			return null;
-		}
-		if (config.overlayBossesOnly() && !plugin.isBoss(fight))
+		if (!onShow(fight, plugin, config, System.currentTimeMillis()))
 		{
 			return null;
 		}
 
 		final Encounter room = plugin.getDisplayEncounter();
 		final Font font = graphics.getFont();
-		// Everything that can change what's on show. The tick covers the loadout, the warning and the clock; the fight's
+		// Everything that can change what's on show. The tick covers the warning and the clock; the fight's
 		// own totals cover a projectile booked or a splat landed between ticks; the rest are the player's choices. The
 		// saved width goes in as a number: RuneLite may resize the Dimension it hands back in place.
 		final List<Object> key = Arrays.asList(client.getTickCount(), fight, fight.isEnded(), fight.getAttacksMade(),
 			fight.getDamageDealt(), fight.getThrallDamage(), fight.getDotDamage(), fight.getHealed(), room,
-			config.overlayExpectedOnly(), config.overlaySessionTotals(), config.raidScope(), config.overlayShowLoadout(),
-			config.overlayLuck(), config.overlayParts(), config.overlayDetails(), font, savedWidth(getPreferredSize()));
+			config.overlaySessionTotals(), config.raidScope(), config.overlayLuck(), config.overlayParts(),
+			config.overlayDetails(), font, savedWidth(getPreferredSize()));
 		final Lines built = lines.get(key, () -> build(graphics, fight, room));
 		if (built == null)
 		{
@@ -128,13 +117,9 @@ class PvmPerformanceOverlay extends OverlayPanel
 		final boolean warning = plugin.getStatsWarning(fight) != null;
 		LedgerRows.Scope scope = null;
 		final LedgerRows.State state;
-		if (config.overlayExpectedOnly())
+		if (isBeforeFirstAttack(fight, room))
 		{
-			state = LedgerRows.State.loadoutOnly(fight.encounterName(), loadout(), warning);
-		}
-		else if (isBeforeFirstAttack(fight, room))
-		{
-			state = LedgerRows.State.preAttack(fight.encounterName(), loadout(), warning);
+			state = LedgerRows.State.preAttack(fight.encounterName());
 		}
 		else
 		{
@@ -144,20 +129,18 @@ class PvmPerformanceOverlay extends OverlayPanel
 			if (session != null)
 			{
 				scope = LedgerRows.of(session);
-				state = LedgerRows.State.trip(session.getKills(), running, warning).withLoadout(loadout());
+				state = LedgerRows.State.trip(session.getKills(), running, warning);
 			}
 			else if (raid != null)
 			{
 				scope = LedgerRows.of(raid);
-				state = LedgerRows.State.raid(raid.getName(), raid.getEncounters().size(), running, warning)
-					.withLoadout(loadout());
+				state = LedgerRows.State.raid(raid.getName(), raid.getEncounters().size(), running, warning);
 			}
 			else if (room != null)
 			{
 				scope = LedgerRows.of(room);
 				final boolean killed = fight.isEnded() && room.isKilled();
 				state = LedgerRows.State.fight(room.getName(), fight.isEnded(), room.isKilled(), warning)
-					.withLoadout(loadout())
 					.withAverage(killed && room.getRaid() == null ? average(room) : null);
 			}
 			else
@@ -167,6 +150,16 @@ class PvmPerformanceOverlay extends OverlayPanel
 		}
 
 		final List<LedgerRows.Row> rows = LedgerRows.build(scope, state, settings());
+		return lines(graphics, rows, getPreferredSize());
+	}
+
+	/**
+	 * Rows as line components in the player's fonts, and the panel's width for
+	 * them, or null for no rows. Both overlays draw through this (T-022), so the
+	 * loadout looks the same in its own box as it did in the Ledger.
+	 */
+	static Lines lines(Graphics2D graphics, List<LedgerRows.Row> rows, Dimension saved)
+	{
 		if (rows.isEmpty())
 		{
 			return null;
@@ -176,7 +169,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 		// A width the player dragged the panel to wins over ours (OverlayPanel.render), and a row wider than it wraps
 		// onto a second line, so the panel grows taller (Eric, 2026-10-26, "Abyssal tentacle (or)"). The attack's name
 		// is shortened to fit instead.
-		final int panelWidth = savedWidth(getPreferredSize());
+		final int panelWidth = savedWidth(saved);
 		int widest = 0;
 		for (LedgerRows.Row given : rows)
 		{
@@ -280,12 +273,38 @@ class PvmPerformanceOverlay extends OverlayPanel
 	}
 
 	/**
+	 * Whether either overlay has a fight to show (T-022: the Ledger and the
+	 * loadout overlay both go by this). A finished fight is left up so the kill
+	 * can be read, until the fight timeout says the fighting is over, the same
+	 * clock that ended the fight itself; and "bosses only" hides both off a boss.
+	 */
+	static boolean onShow(Fight fight, PvmPerformancePlugin plugin, PvmPerformanceConfig config, long now)
+	{
+		return onShow(fight, config.fightTimeoutTicks(), config.overlayBossesOnly(), fight != null && plugin.isBoss(fight),
+			now);
+	}
+
+	/** {@link #onShow(Fight, PvmPerformancePlugin, PvmPerformanceConfig, long)} with the plugin's answers read out. */
+	static boolean onShow(Fight fight, int timeoutTicks, boolean bossesOnly, boolean boss, long now)
+	{
+		if (fight == null)
+		{
+			return false;
+		}
+		if (fight.isEnded() && now - fight.getEndMillis() > timeoutTicks * 600L)
+		{
+			return false;
+		}
+		return !bossesOnly || boss;
+	}
+
+	/**
 	 * Whether the fight on show hasn't started in its own room yet, so the
-	 * loadout against its target is what's worth showing. Asked of the fight, not
+	 * Ledger shows its title alone (T-022). Asked of the fight, not
 	 * the room on show: until the new room has an attempt, the room on show is
 	 * the last one. A fight on a new add in a room already under way is not "before
-	 * the first attack", so a room's adds don't blink the panel back to the
-	 * loadout one by one.
+	 * the first attack", so a room's adds don't blink the panel back to its
+	 * title one by one.
 	 */
 	static boolean isBeforeFirstAttack(Fight fight, Encounter room)
 	{
@@ -309,26 +328,9 @@ class PvmPerformanceOverlay extends OverlayPanel
 		return false;
 	}
 
-	private LedgerRows.Loadout loadout()
-	{
-		final LedgerRows.Loadout l = new LedgerRows.Loadout();
-		l.attack = plugin.getAttackName();
-		l.maxHit = plugin.getExpectedMaxHit();
-		l.accuracy = plugin.getExpectedAccuracy();
-		l.dps = plugin.getExpectedDps();
-		if (plugin.getSpecialAttack() != null)
-		{
-			l.specMaxHit = plugin.getExpectedSpecMaxHit();
-			l.specAccuracy = plugin.getExpectedSpecAccuracy();
-			l.specAverage = plugin.getExpectedSpecAverageHit();
-		}
-		return l;
-	}
-
 	private LedgerRows.Settings settings()
 	{
 		final LedgerRows.Settings s = new LedgerRows.Settings();
-		s.showLoadout = config.overlayShowLoadout();
 		s.luck = config.overlayLuck();
 		s.parts = config.overlayParts() == null ? ExecutionParts.ALL : config.overlayParts();
 		s.details = config.overlayDetails();

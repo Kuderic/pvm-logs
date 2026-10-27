@@ -33,11 +33,10 @@ public final class LedgerPictures
 	static Map<String, List<LedgerRows.Row>> states()
 	{
 		final LedgerRows.Settings all = new LedgerRows.Settings();
-		final LedgerRows.Loadout tentacle = LedgerExamples.loadout();
 		final Map<String, List<LedgerRows.Row>> s = new LinkedHashMap<>();
-		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis", tentacle), all));
+		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis"), all));
 		s.put("2-mid", LedgerRows.build(LedgerExamples.midFight(),
-			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
+			LedgerRows.State.fight("Vardorvis", false, false, false), all));
 		// Illustrative average: the clock's median 1:59 over 10 kills.
 		// T-019: illustrative damage taken after the fight.
 		final LedgerExamples.FakeScope dead = LedgerExamples.kill();
@@ -45,37 +44,64 @@ public final class LedgerPictures
 		dead.biggestHitTaken = 41;
 		dead.damageTakenUnprotected = 85;
 		s.put("3-dead", LedgerRows.build(dead, LedgerRows.State.fight("Vardorvis", true, true, false)
-			.withLoadout(tentacle).withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
 		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
 			LedgerRows.State.fight("Vardorvis", true, false, false), all));
 		s.put("5-trip", LedgerRows.build(LedgerExamples.trip(), LedgerRows.State.trip(6, false, false), all));
 		s.put("6-raid", LedgerRows.build(LedgerExamples.raid(),
 			LedgerRows.State.raid("Tombs of Amascut", 3, false, false), all));
 		s.put("7-unsure", LedgerRows.build(LedgerExamples.midFight(),
-			LedgerRows.State.fight("Vardorvis", false, false, true).withLoadout(tentacle), all));
-		// Without monster data there is no accuracy to show; the max hit is known.
-		final LedgerRows.Loadout noAccuracy = new LedgerRows.Loadout();
-		noAccuracy.attack = "Osmumten's fang";
-		noAccuracy.maxHit = 44;
+			LedgerRows.State.fight("Vardorvis", false, false, true), all));
 		s.put("8-nodata", LedgerRows.build(LedgerExamples.noData(),
-			LedgerRows.State.fight("New boss", false, false, false).withLoadout(noAccuracy), all));
+			LedgerRows.State.fight("New boss", false, false, false), all));
 		s.put("9-setup", LedgerRows.build(LedgerExamples.midFightBeforeT010(),
-			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
+			LedgerRows.State.fight("Vardorvis", false, false, false), all));
 		s.put("10-pre-unsure", LedgerRows.build(null,
-			LedgerRows.State.preAttack("Vardorvis", tentacle, true), all));
+			LedgerRows.State.preAttack("Vardorvis"), all));
 		// T-016: brewed down for most of the fight. The word stands in for 0%, the seconds carry the cost.
 		final LedgerExamples.FakeScope brewed = LedgerExamples.midFight();
 		brewed.attacksDrained = 12;
 		brewed.setup(0.95, 0.0, 3.36, 0);
 		s.put("11-drained", LedgerRows.build(brewed,
-			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
-		// A panel the player dragged narrower than a long attack's name (Eric, 2026-10-26): drawn at SAVED_WIDTH, the
-		// name falls back to the spell rather than wrapping.
+			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+		// A panel the player dragged narrower than a long attack's name (Eric, 2026-10-26): drawn at SAVED_WIDTH; the
+		// loadout's name falls back to the spell rather than wrapping.
+		s.put("12-saved-width", LedgerRows.build(LedgerExamples.midFight(),
+			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+		// T-022: the loadout overlay under the Ledger, in the states it's worth seeing in. Each is drawn as its own picture,
+		// "<state>.L", which the sheet stacks under the Ledger's as RuneLite stacks the two boxes.
+		final Map<String, List<LedgerRows.Row>> both = new LinkedHashMap<>();
+		for (Map.Entry<String, List<LedgerRows.Row>> state : s.entrySet())
+		{
+			both.put(state.getKey(), state.getValue());
+			final List<LedgerRows.Row> loadout = LOADOUTS.get(state.getKey());
+			if (loadout != null)
+			{
+				both.put(state.getKey() + ".L", loadout);
+			}
+		}
+		return both;
+	}
+
+	/** The loadout overlay's rows for the states that show one. */
+	static final Map<String, List<LedgerRows.Row>> LOADOUTS = new LinkedHashMap<>();
+
+	static
+	{
+		final LedgerRows.Loadout tentacle = LedgerExamples.loadout();
+		// Without monster data there is no accuracy to show; the max hit is known.
+		final LedgerRows.Loadout fang = new LedgerRows.Loadout();
+		fang.attack = "Osmumten's fang";
+		fang.maxHit = 44;
 		final LedgerRows.Loadout staff = LedgerExamples.loadout();
 		staff.attack = "Harmonised nightmare staff (Fire Surge)";
-		s.put("12-saved-width", LedgerRows.build(LedgerExamples.midFight(),
-			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(staff), all));
-		return s;
+		LOADOUTS.put("1-pre", LedgerRows.loadout(tentacle, false));
+		LOADOUTS.put("2-mid", LedgerRows.loadout(tentacle, false));
+		LOADOUTS.put("3-dead", LedgerRows.loadout(tentacle, false));
+		LOADOUTS.put("7-unsure", LedgerRows.loadout(tentacle, true));
+		LOADOUTS.put("8-nodata", LedgerRows.loadout(fang, false));
+		LOADOUTS.put("10-pre-unsure", LedgerRows.loadout(tentacle, true));
+		LOADOUTS.put("12-saved-width", LedgerRows.loadout(staff, false));
 	}
 
 	/** States drawn at a width the player saved rather than the panel's own. */
@@ -84,6 +110,7 @@ public final class LedgerPictures
 	static
 	{
 		SAVED_WIDTH.put("12-saved-width", 160);
+		SAVED_WIDTH.put("12-saved-width.L", 160);
 	}
 
 	public static void main(String[] args) throws IOException

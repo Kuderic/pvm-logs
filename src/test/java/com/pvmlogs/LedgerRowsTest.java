@@ -99,45 +99,29 @@ public class LedgerRowsTest
 	// ---- every state ----
 
 	@Test
-	public void beforeTheFirstAttack()
+	public void beforeTheFirstAttackTheLedgerIsItsTitleAlone()
+	{
+		// T-022: the loadout overlay carries the figures.
+		assertRows(Arrays.asList(title("Vardorvis", "")), build(null, State.preAttack("Vardorvis")));
+	}
+
+	@Test
+	public void theLoadoutOverlaysRows()
 	{
 		assertRows(Arrays.asList(
-			title("Vardorvis", ""),
 			TENTACLE,
 			d(" max hit", "49"),
 			d(" accuracy", "54%"),
 			d(" spec", "50 max · 71% · 17.8 dmg")),
-			build(null, State.preAttack("Vardorvis", LedgerExamples.loadout())));
+			LedgerRows.loadout(LedgerExamples.loadout(), false));
 	}
 
 	@Test
-	public void beforeTheFirstAttackHidesUnknownsAndTheSpecRowWithoutASpecWeapon()
+	public void theLoadoutHidesUnknownsAndTheSpecRowWithoutASpecWeapon()
 	{
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.maxHit = 41;
-		assertRows(Arrays.asList(title("Duke Sucellus", ""), main("Loadout", ""), d(" max hit", "41")),
-			build(null, State.preAttack("Duke Sucellus", l)));
-	}
-
-	@Test
-	public void showLoadoutOffLeavesTheNameAlone()
-	{
-		final Settings s = new Settings();
-		s.showLoadout = false;
-		assertRows(Arrays.asList(title("Vardorvis", "")),
-			LedgerRows.build(null, State.preAttack("Vardorvis", LedgerExamples.loadout()), s));
-	}
-
-	@Test
-	public void loadoutOnlyShowsTheLoadoutEvenWithShowLoadoutOff()
-	{
-		final Settings s = new Settings();
-		s.showLoadout = false;
-		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(),
-			State.loadoutOnly("Vardorvis", LedgerExamples.loadout()), s);
-		assertEquals(5, rows.size());
-		assertEquals(TENTACLE, rows.get(1));
-		assertEquals(d(" max hit", "49"), rows.get(2));
+		assertRows(Arrays.asList(main("Loadout", ""), d(" max hit", "41")), LedgerRows.loadout(l, false));
 	}
 
 	@Test
@@ -497,7 +481,7 @@ public class LedgerRowsTest
 	@Test
 	public void theLoadoutSitsAtTheBottomWhileFighting()
 	{
-		// Eric, 2026-10-26: the panel only comes up once the fight does, so the loadout goes under the fight's rows.
+		// T-022: no loadout under the fight's rows; it has an overlay of its own.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
 			emph("Luck", "89% (8 s slower)", COST),
@@ -508,47 +492,37 @@ public class LedgerRowsTest
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
 			d(" stat boost", "84% (-1 s)"),
-			d(" damage taken", "112"),
-			b("", ""),
-			TENTACLE,
-			d(" max hit", "49"),
-			d(" accuracy", "54%"),
-			d(" spec", "50 max \u00b7 71% \u00b7 17.8 dmg")),
-			build(LedgerExamples.midFight(),
-				State.fight("Vardorvis", false, false, false).withLoadout(LedgerExamples.loadout())));
+			d(" damage taken", "112")),
+			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)));
 	}
 
 	@Test
-	public void underTheWarningTheLoadoutSitsBelowIt()
+	public void theLedgerKeepsItsOwnWarning()
 	{
-		final List<Row> rows = build(LedgerExamples.midFight(),
-			State.fight("Vardorvis", false, false, true).withLoadout(LedgerExamples.loadout()));
+		final List<Row> rows = build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, true));
 		assertEquals(r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL), rows.get(1));
-		assertEquals(d(" accuracy", "54%"), rows.get(rows.size() - 2));
+		assertEquals(d(" damage taken", "112"), rows.get(rows.size() - 1));
 	}
 
 	@Test
-	public void theLoadoutStaysAfterTheKillWithTheDetailsBelowIt()
+	public void noLedgerStateHasLoadoutRows()
 	{
-		// Eric, 2026-10-26: keep the weapon's figures once the boss is dead; the details stay at the bottom.
-		final List<Row> rows = build(LedgerExamples.kill(),
-			State.fight("Vardorvis", true, true, false).withLoadout(LedgerExamples.loadout()));
-		assertEquals(b("", ""), rows.get(10));
-		assertEquals(TENTACLE, rows.get(11));
-		assertEquals(b("", ""), rows.get(15));
-		assertEquals(main("Summary", ""), rows.get(16));
-		assertEquals(d(" hits/expected", "32/30.2"), rows.get(17));
-		assertEquals(d(" eating time", "4 s"), rows.get(rows.size() - 1));
-	}
-
-	@Test
-	public void aTripOrRaidShowsTheLoadoutToo()
-	{
-		final LedgerRows.Loadout l = LedgerExamples.loadout();
-		assertTrue(build(LedgerExamples.trip(), State.trip(6, true, false).withLoadout(l)).contains(TENTACLE));
-		assertTrue(build(LedgerExamples.trip(), State.trip(6, false, false).withLoadout(l)).contains(TENTACLE));
-		assertTrue(build(LedgerExamples.raid(), State.raid("Tombs of Amascut", 3, true, false).withLoadout(l))
-			.contains(TENTACLE));
+		// T-022: the loadout moved to its own overlay, in every state.
+		final List<List<Row>> states = Arrays.asList(
+			build(null, State.preAttack("Vardorvis")),
+			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)),
+			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, true)),
+			build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false)),
+			build(LedgerExamples.ended(), State.fight("Vardorvis", true, false, false)),
+			build(LedgerExamples.trip(), State.trip(6, true, false)),
+			build(LedgerExamples.trip(), State.trip(6, false, false)),
+			build(LedgerExamples.raid(), State.raid("Tombs of Amascut", 3, true, false)),
+			build(LedgerExamples.raid(), State.raid("Tombs of Amascut", 3, false, false)));
+		for (List<Row> rows : states)
+		{
+			assertFalse(rows.stream().anyMatch(row -> row.left.equals(TENTACLE.left) || row.left.equals("Loadout")
+				|| row.left.equals(" max hit") || row.left.equals(" accuracy") || row.left.equals(" spec")));
+		}
 	}
 
 	@Test
@@ -557,16 +531,15 @@ public class LedgerRowsTest
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.attack = "Purging staff (Fire Surge)";
 		l.dps = 6.1;
-		assertEquals(Arrays.asList(title("Vardorvis", ""), attack("Purging staff (Fire Surge)", "6.1 DPS", "Fire Surge")),
-			build(null, State.preAttack("Vardorvis", l)));
+		assertEquals(Arrays.asList(attack("Purging staff (Fire Surge)", "6.1 DPS", "Fire Surge")),
+			LedgerRows.loadout(l, false));
 		final LedgerRows.Loadout claws = new LedgerRows.Loadout();
 		claws.attack = "Burning claws";
 		claws.maxHit = 41;
 		claws.specMaxHit = 110;
 		claws.specAccuracy = 0.62;
 		claws.specAverage = 33.4;
-		assertTrue(build(null, State.preAttack("Vardorvis", claws))
-			.contains(d(" spec", "110 max \u00b7 62% \u00b7 33.4 dmg")));
+		assertTrue(LedgerRows.loadout(claws, false).contains(d(" spec", "110 max \u00b7 62% \u00b7 33.4 dmg")));
 	}
 
 	@Test
@@ -622,52 +595,22 @@ public class LedgerRowsTest
 	}
 
 	@Test
-	public void showLoadoutOffLeavesItOutOfTheFight()
+	public void aLoadoutWithNothingKnownShowsNothingNotEvenTheWarning()
 	{
-		final Settings s = new Settings();
-		s.showLoadout = false;
-		final List<Row> rows = LedgerRows.build(LedgerExamples.midFight(),
-			State.fight("Vardorvis", false, false, false).withLoadout(LedgerExamples.loadout()), s);
-		assertEquals(d(" damage taken", "112"), rows.get(rows.size() - 1));
+		assertTrue(LedgerRows.loadout(new LedgerRows.Loadout(), true).isEmpty());
 	}
 
 	@Test
-	public void aLoadoutWithNothingKnownAddsNoBlankRow()
-	{
-		final List<Row> rows = build(LedgerExamples.midFight(),
-			State.fight("Vardorvis", false, false, false).withLoadout(new LedgerRows.Loadout()));
-		assertEquals(d(" damage taken", "112"), rows.get(rows.size() - 1));
-	}
-
-	@Test
-	public void theWarningShowsOverTheLoadoutBeforeTheFirstAttack()
+	public void theWarningHeadsTheLoadoutOverlay()
 	{
 		// The accuracy is the figure bad boss data gets wrong (Vardorvis read 98% before T-001).
 		assertRows(Arrays.asList(
-			title("Vardorvis", ""),
 			r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL),
 			TENTACLE,
 			d(" max hit", "49"),
 			d(" accuracy", "54%"),
 			d(" spec", "50 max \u00b7 71% \u00b7 17.8 dmg")),
-			build(null, State.preAttack("Vardorvis", LedgerExamples.loadout(), true)));
-	}
-
-	@Test
-	public void andOverLoadoutOnly()
-	{
-		final List<Row> rows = build(null, State.loadoutOnly("Vardorvis", LedgerExamples.loadout(), true));
-		assertEquals(r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL), rows.get(1));
-		assertEquals(6, rows.size());
-	}
-
-	@Test
-	public void withShowLoadoutOffThereIsNothingToWarnAbout()
-	{
-		final Settings s = new Settings();
-		s.showLoadout = false;
-		assertRows(Arrays.asList(title("Vardorvis", "")),
-			LedgerRows.build(null, State.preAttack("Vardorvis", LedgerExamples.loadout(), true), s));
+			LedgerRows.loadout(LedgerExamples.loadout(), true));
 	}
 
 	// ---- settings ----
@@ -926,7 +869,7 @@ public class LedgerRowsTest
 			build(LedgerExamples.trip(), State.trip(1, true, false)).get(0));
 		assertEquals(title("Trip · 0 kills", "12:40"),
 			build(LedgerExamples.trip(), State.trip(0, false, false)).get(0));
-		assertEquals(title("Vardorvis", ""), build(null, State.preAttack("Vardorvis", null)).get(0));
+		assertEquals(title("Vardorvis", ""), build(null, State.preAttack("Vardorvis")).get(0));
 	}
 
 	@Test
@@ -983,7 +926,7 @@ public class LedgerRowsTest
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.attack = "Abyssal tentacle (or)";
 		l.dps = 5.5;
-		assertEquals(Arrays.asList(title("Vardorvis", ""), TENTACLE), build(null, State.preAttack("Vardorvis", l)));
+		assertEquals(Arrays.asList(TENTACLE), LedgerRows.loadout(l, false));
 	}
 
 	@Test
