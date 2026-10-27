@@ -1045,4 +1045,97 @@ public class LedgerRowsTest
 			assertEquals(31, scope.damageTakenUnprotected());
 		}
 	}
+
+	// ---- T-023: reflected damage in O, and rates over the scored fights ----
+
+	@Test
+	public void reflectedDamageIsLuckNeutralLikeThrallAndDot()
+	{
+		// Eric's kill: 688 dealt against 778 expected, thrall 80. With 20 of recoil the same gap is spread over more of the
+		// boss's HP that wasn't the weapon's rolls, so it costs fewer seconds.
+		final FakeScope kill = LedgerExamples.kill();
+		final double without = new LedgerRows.Numbers(kill).luck;
+		kill.reflectDamage = 20;
+		final double with = new LedgerRows.Numbers(kill).luck;
+		assertEquals(136.8 * (688 - 778) / (778 + 80 + 20.0), with, 1e-9);
+		assertTrue(with > without);
+	}
+
+	@Test
+	public void recoilAndVengeanceGetASummaryRowNextToTheThrall()
+	{
+		final FakeScope kill = LedgerExamples.kill();
+		kill.reflectDamage = 12;
+		final List<Row> rows = build(kill, State.fight("Vardorvis", true, true, false));
+		final int thrall = rows.indexOf(d(" thrall dmg", "80"));
+		assertEquals(d(" recoil/veng dmg", "12"), rows.get(thrall + 1));
+		assertFalse(build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false)).stream()
+			.anyMatch(row -> row.left.equals(" recoil/veng dmg")));
+	}
+
+	@Test
+	public void luckAndDpsAreRatesOverTheScoredFightsButTheClockIsTheWholeRoom()
+	{
+		// The Sire's case (T-020): 186 ticks in the room, 120 of them on the scored Sire, 444 dealt against 612 expected,
+		// 8 of burn. Over the whole room the gap would read 31 s; over the scored time it's 19.5 s.
+		final FakeScope sire = LedgerExamples.kill();
+		sire.combatTicks = 186;
+		sire.scoredCombatTicks = 120;
+		sire.damage = 444;
+		sire.expectedDamage = 612;
+		sire.thrallDamage = 0;
+		sire.dotDamage = 8;
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(sire);
+		assertEquals(72 * (444 - 612) / 620.0, n.luck, 1e-9);
+		assertEquals(444 / 72.0, n.dps, 1e-9);
+		assertEquals(111.6, n.clock, 1e-9);
+		final List<Row> rows = build(sire, State.fight("Abyssal Sire", true, true, false));
+		assertEquals(title("Abyssal Sire", "1:51").left + " (dead)", rows.get(0).left);
+		assertEquals("1:51", rows.get(0).right);
+		assertEquals("73% (20 s slower)", rows.get(1).right);
+		assertTrue(rows.contains(main("DPS", "6.2")));
+	}
+
+	@Test
+	public void uptimeStillCountsEveryTickInTheRoom()
+	{
+		// Idle on a respiratory system is still idle: the lost ticks are over the whole room's.
+		final FakeScope sire = LedgerExamples.kill();
+		sire.combatTicks = 186;
+		sire.scoredCombatTicks = 120;
+		final LedgerRows.Numbers whole = new LedgerRows.Numbers(sire);
+		sire.scoredCombatTicks = -1;
+		assertEquals(new LedgerRows.Numbers(sire).uptime, whole.uptime, 1e-12);
+		assertEquals(new LedgerRows.Numbers(sire).uptimeCost, whole.uptimeCost, 1e-12);
+	}
+
+	@Test
+	public void aRealRoomScoresOverItsScoredFightsOnly()
+	{
+		final Encounter room = new Encounter("Hespori", null, 0L);
+		final Fight scored = new Fight("Hespori", NpcIds.GOBLIN, 1, 425, 0L, null, 0);
+		for (int i = 0; i < 10; i++)
+		{
+			scored.recordAttackMade(false, 1.0);
+			scored.recordExpected(40, 0.5, 10);
+		}
+		scored.recordDamageDealt(80, 1L, true);
+		// Any id on EncounterGroup's unscored list: here a Hespori flower.
+		final Fight unscored = new Fight("Flower", net.runelite.api.gameval.NpcID.HESPORI_HEALER_ACTIVE, 2, 50, 0L, null, 0);
+		assertFalse(unscored.isScored());
+		unscored.recordAttackMade(false, 1.0);
+		for (int i = 0; i < 4; i++)
+		{
+			unscored.recordTickSpent();
+		}
+		room.add(scored);
+		room.add(unscored);
+		final Raid raid = new Raid(RaidType.TOMBS_OF_AMASCUT, 1, 0L);
+		raid.add(room);
+		assertEquals(5, unscored.getCombatTicks());
+		assertEquals(room.getCombatTicks() - 5, room.getScoredCombatTicks());
+		assertEquals(scored.getCombatTicks(), LedgerRows.of(room).scoredCombatTicks());
+		assertEquals(scored.getCombatTicks(), LedgerRows.of(raid).scoredCombatTicks());
+		assertTrue(LedgerRows.of(room).combatTicks() > LedgerRows.of(room).scoredCombatTicks());
+	}
 }

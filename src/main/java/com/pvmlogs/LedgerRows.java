@@ -170,12 +170,22 @@ final class LedgerRows
 	{
 		int combatTicks();
 
+		/**
+		 * T-023: the ticks of the scored fights only, which the damage and expected
+		 * damage come from, so luck's seconds and DPS are rates over the same time.
+		 * The clock in the title stays {@link #combatTicks()}.
+		 */
+		int scoredCombatTicks();
+
 		/** The weapon's damage only, which is what the expected side describes. */
 		int damage();
 
 		double expectedDamage();
 
 		int thrallDamage();
+
+		/** T-017 Part B: recoil and vengeance on the target, the player's own and luck-neutral like thrall and DoT. */
+		int reflectDamage();
 
 		/** Burn, poison, venom, bleed. */
 		int dotDamage();
@@ -233,6 +243,11 @@ final class LedgerRows
 				return room.getCombatTicks();
 			}
 
+			public int scoredCombatTicks()
+			{
+				return room.getScoredCombatTicks();
+			}
+
 			public int damage()
 			{
 				return room.getDamageDealt();
@@ -246,6 +261,11 @@ final class LedgerRows
 			public int thrallDamage()
 			{
 				return room.getThrallDamage();
+			}
+
+			public int reflectDamage()
+			{
+				return room.getReflectDamage();
 			}
 
 			public int dotDamage()
@@ -354,6 +374,11 @@ final class LedgerRows
 				return raid.getCombatTicks();
 			}
 
+			public int scoredCombatTicks()
+			{
+				return raid.getScoredCombatTicks();
+			}
+
 			public int damage()
 			{
 				return raid.getDamageDealt();
@@ -367,6 +392,11 @@ final class LedgerRows
 			public int thrallDamage()
 			{
 				return raid.getThrallDamage();
+			}
+
+			public int reflectDamage()
+			{
+				return raid.getReflectDamage();
 			}
 
 			public int dotDamage()
@@ -475,6 +505,13 @@ final class LedgerRows
 				return trip.getCombatTicks();
 			}
 
+			public int scoredCombatTicks()
+			{
+				// The trip's damage and expected are scored-only, but its ticks count unscored fights too (the plugin's tick
+				// handler feeds them either way; T-023 leaves that to the bugs chat), so this is the best there is.
+				return trip.getCombatTicks();
+			}
+
 			public int damage()
 			{
 				return trip.getDamageDealt();
@@ -488,6 +525,11 @@ final class LedgerRows
 			public int thrallDamage()
 			{
 				return trip.getThrallDamage();
+			}
+
+			public int reflectDamage()
+			{
+				return trip.getReflectDamage();
 			}
 
 			public int dotDamage()
@@ -693,6 +735,8 @@ final class LedgerRows
 	{
 		/** T: the clock, from the first attack. */
 		final double clock;
+		/** T on the scored fights only (T-023): what luck's seconds and DPS are rates over. */
+		final double scoredClock;
 		/** A: the weapon's damage. */
 		final int damage;
 		/** E: what the weapon's attacks were expected to deal. */
@@ -724,13 +768,18 @@ final class LedgerRows
 		Numbers(Scope s)
 		{
 			clock = Math.max(0, s.combatTicks()) * SECONDS_PER_TICK;
+			scoredClock = Math.max(0, s.scoredCombatTicks()) * SECONDS_PER_TICK;
 			damage = s.damage();
 			expected = s.expectedDamage();
-			other = Math.max(0, s.thrallDamage()) + Math.max(0, s.dotDamage());
+			// Recoil and vengeance are the player's too and luck-neutral, like thrall and DoT (T-023).
+			other = Math.max(0, s.thrallDamage()) + Math.max(0, s.dotDamage()) + Math.max(0, s.reflectDamage());
 
-			luck = expected <= 0 || expected + other <= 0 || clock <= 0
-				? Double.NaN : clock * (damage - expected) / (expected + other);
-			dps = clock <= 0 ? Double.NaN : damage / clock;
+			// Rates over the time the damage and expected damage come from: the scored fights. A room with unscored fights in
+			// it (the Sire's respiratory systems, T-020) would otherwise spread the damage gap over time spent elsewhere
+			// and overstate luck's seconds, and understate DPS (T-023). The clock in the title stays the whole room's.
+			luck = expected <= 0 || expected + other <= 0 || scoredClock <= 0
+				? Double.NaN : scoredClock * (damage - expected) / (expected + other);
+			dps = scoredClock <= 0 ? Double.NaN : damage / scoredClock;
 			expectedDuration = Double.isNaN(luck) ? Double.NaN : clock + luck;
 
 			final double lostShare = s.ticksLostShare();
@@ -1027,6 +1076,10 @@ final class LedgerRows
 		if (s.thrallDamage() > 0)
 		{
 			details.add(detail(" thrall dmg", number(s.thrallDamage()), Colour.NEUTRAL));
+		}
+		if (s.reflectDamage() > 0)
+		{
+			details.add(detail(" recoil/veng dmg", number(s.reflectDamage()), Colour.NEUTRAL));
 		}
 		if (s.dotDamage() > 0)
 		{

@@ -16,9 +16,12 @@ final class LedgerExamples
 	static final class FakeScope implements LedgerRows.Scope
 	{
 		int combatTicks;
+		/** T-023: negative means every tick was on a scored fight. */
+		int scoredCombatTicks = -1;
 		int damage;
 		double expectedDamage;
 		int thrallDamage;
+		int reflectDamage;
 		int dotDamage;
 		int healed;
 		int ticksLost;
@@ -43,6 +46,11 @@ final class LedgerExamples
 			return combatTicks;
 		}
 
+		public int scoredCombatTicks()
+		{
+			return scoredCombatTicks < 0 ? combatTicks : scoredCombatTicks;
+		}
+
 		public int damage()
 		{
 			return damage;
@@ -56,6 +64,11 @@ final class LedgerExamples
 		public int thrallDamage()
 		{
 			return thrallDamage;
+		}
+
+		public int reflectDamage()
+		{
+			return reflectDamage;
 		}
 
 		public int dotDamage()

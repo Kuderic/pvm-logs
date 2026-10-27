@@ -469,6 +469,23 @@ class Encounter
 		return total;
 	}
 
+	/**
+	 * The ticks of the scored fights only (T-023), the time the room's damage and
+	 * expected damage come from. {@link #getCombatTicks()} stays the whole room.
+	 */
+	int getScoredCombatTicks()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				total += fight.getCombatTicks();
+			}
+		}
+		return total;
+	}
+
 	double ticksLostShare()
 	{
 		final int ticks = getCombatTicks();

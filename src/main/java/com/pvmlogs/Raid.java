@@ -366,6 +366,17 @@ class Raid
 		return total;
 	}
 
+	/** The ticks of the scored fights only (T-023); see {@link Encounter#getScoredCombatTicks()}. */
+	int getScoredCombatTicks()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getScoredCombatTicks();
+		}
+		return total;
+	}
+
 	double ticksLostShare()
 	{
 		final int ticks = getCombatTicks();
