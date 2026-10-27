@@ -1138,4 +1138,64 @@ public class LedgerRowsTest
 		assertEquals(scored.getCombatTicks(), LedgerRows.of(raid).scoredCombatTicks());
 		assertTrue(LedgerRows.of(room).combatTicks() > LedgerRows.of(room).scoredCombatTicks());
 	}
+
+	// ---- T-025: O on scored fights only; the trip timed on scored ticks ----
+
+	@Test
+	public void thrallDamageOnAnUnscoredAddLeavesOUnchanged()
+	{
+		final Fight scored = new Fight("Hespori", NpcIds.GOBLIN, 1, 300, 0L, null, 0);
+		for (int i = 0; i < 10; i++)
+		{
+			scored.recordAttackMade(false, 1.0);
+			scored.recordExpected(40, 0.5, 10);
+		}
+		scored.recordDamageDealt(80, 1L, true);
+		scored.recordThrallDamage(12);
+		final Fight flower = new Fight("Flower", net.runelite.api.gameval.NpcID.HESPORI_HEALER_ACTIVE, 2, 50, 0L, null,
+			0);
+		flower.recordAttackMade(false, 1.0);
+		final Encounter room = new Encounter("Hespori", null, 0L);
+		room.add(scored);
+		room.add(flower);
+		final double before = new LedgerRows.Numbers(LedgerRows.of(room)).luck;
+		// A thrall hitting the flower: the room's thrall damage grows, its O doesn't.
+		flower.recordThrallDamage(30);
+		flower.recordDotDamage(5);
+		final LedgerRows.Scope after = LedgerRows.of(room);
+		assertEquals(12, after.scoredOtherDamage());
+		assertEquals(42, after.thrallDamage());
+		assertEquals(before, new LedgerRows.Numbers(after).luck, 1e-12);
+		final Raid raid = new Raid(RaidType.TOMBS_OF_AMASCUT, 1, 0L);
+		raid.add(room);
+		assertEquals(12, LedgerRows.of(raid).scoredOtherDamage());
+		// The Summary still shows the whole room's.
+		assertTrue(build(after, State.fight("Hespori", true, false, false)).contains(d(" thrall dmg", "42")));
+	}
+
+	@Test
+	public void theTripTimesLuckAndDpsOnScoredTicksAndTheClockOnAll()
+	{
+		final SessionTotals trip = new SessionTotals(0L);
+		for (int i = 0; i < 20; i++)
+		{
+			trip.recordAttackMade(false, 1.0);
+			trip.recordExpected(0.5, 10);
+		}
+		trip.recordAttempt(80, true, 1L);
+		// Ten ticks on an unscored add.
+		for (int i = 0; i < 10; i++)
+		{
+			trip.recordTickSpent(false);
+		}
+		final LedgerRows.Scope s = LedgerRows.of(trip);
+		assertEquals(30, s.combatTicks());
+		assertEquals(20, s.scoredCombatTicks());
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
+		assertEquals(18.0, n.clock, 1e-9);
+		// Twelve scored seconds, not eighteen, carry the gap.
+		final double expected = s.expectedDamage();
+		assertEquals(12.0 * (80 - expected) / expected, n.luck, 1e-9);
+		assertEquals(80 / 12.0, n.dps, 1e-9);
+	}
 }

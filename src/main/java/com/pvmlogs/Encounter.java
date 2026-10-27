@@ -140,6 +140,48 @@ class Encounter
 		return total;
 	}
 
+	/** Thrall damage on the scored fights only (T-025), for luck's other damage, as damage dealt is scored-only. */
+	int getScoredThrallDamage()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				total += fight.getThrallDamage();
+			}
+		}
+		return total;
+	}
+
+	/** DoT on the scored fights only (T-025); see {@link #getScoredThrallDamage()}. */
+	int getScoredDotDamage()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				total += fight.getDotDamage();
+			}
+		}
+		return total;
+	}
+
+	/** Recoil and vengeance on the scored fights only (T-025); see {@link #getScoredThrallDamage()}. */
+	int getScoredReflectDamage()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				total += fight.getReflectDamage();
+			}
+		}
+		return total;
+	}
+
 	/** What the room's targets healed while being fought. */
 	int getHealed()
 	{

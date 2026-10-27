@@ -187,6 +187,14 @@ final class LedgerRows
 		/** T-017 Part B: recoil and vengeance on the target, the player's own and luck-neutral like thrall and DoT. */
 		int reflectDamage();
 
+		/**
+		 * T-025: thrall, DoT and reflected damage on the scored fights only, luck's
+		 * other damage {@code O}: damage dealt and expected are scored-only, so a
+		 * thrall's or a burn's damage on an unscored add stays out too. The Summary's
+		 * rows keep the whole scope's ({@link #thrallDamage()} and the rest).
+		 */
+		int scoredOtherDamage();
+
 		/** Burn, poison, venom, bleed. */
 		int dotDamage();
 
@@ -266,6 +274,11 @@ final class LedgerRows
 			public int reflectDamage()
 			{
 				return room.getReflectDamage();
+			}
+
+			public int scoredOtherDamage()
+			{
+				return room.getScoredThrallDamage() + room.getScoredDotDamage() + room.getScoredReflectDamage();
 			}
 
 			public int dotDamage()
@@ -399,6 +412,11 @@ final class LedgerRows
 				return raid.getReflectDamage();
 			}
 
+			public int scoredOtherDamage()
+			{
+				return raid.getScoredOtherDamage();
+			}
+
 			public int dotDamage()
 			{
 				return raid.getDotDamage();
@@ -507,9 +525,8 @@ final class LedgerRows
 
 			public int scoredCombatTicks()
 			{
-				// The trip's damage and expected are scored-only, but its ticks count unscored fights too (the plugin's tick
-				// handler feeds them either way; T-023 leaves that to the bugs chat), so this is the best there is.
-				return trip.getCombatTicks();
+				// T-024 counts the trip's ticks on scored fights apart (T-025).
+				return trip.getScoredCombatTicks();
 			}
 
 			public int damage()
@@ -530,6 +547,13 @@ final class LedgerRows
 			public int reflectDamage()
 			{
 				return trip.getReflectDamage();
+			}
+
+			public int scoredOtherDamage()
+			{
+				// The trip's thrall, DoT and reflect are recorded behind isScored() already.
+				return Math.max(0, trip.getThrallDamage()) + Math.max(0, trip.getDotDamage())
+					+ Math.max(0, trip.getReflectDamage());
 			}
 
 			public int dotDamage()
@@ -771,8 +795,9 @@ final class LedgerRows
 			scoredClock = Math.max(0, s.scoredCombatTicks()) * SECONDS_PER_TICK;
 			damage = s.damage();
 			expected = s.expectedDamage();
-			// Recoil and vengeance are the player's too and luck-neutral, like thrall and DoT (T-023).
-			other = Math.max(0, s.thrallDamage()) + Math.max(0, s.dotDamage()) + Math.max(0, s.reflectDamage());
+			// Recoil and vengeance are the player's too and luck-neutral, like thrall and DoT (T-023); all three on the
+			// scored fights only, like the damage and expected damage (T-025).
+			other = Math.max(0, s.scoredOtherDamage());
 
 			// Rates over the time the damage and expected damage come from: the scored fights. A room with unscored fights in
 			// it (the Sire's respiratory systems, T-020) would otherwise spread the damage gap over time spent elsewhere

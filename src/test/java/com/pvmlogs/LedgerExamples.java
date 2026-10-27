@@ -22,6 +22,8 @@ final class LedgerExamples
 		double expectedDamage;
 		int thrallDamage;
 		int reflectDamage;
+		/** T-025: negative means all the thrall, DoT and reflected damage was on scored fights. */
+		int scoredOtherDamage = -1;
 		int dotDamage;
 		int healed;
 		int ticksLost;
@@ -69,6 +71,11 @@ final class LedgerExamples
 		public int reflectDamage()
 		{
 			return reflectDamage;
+		}
+
+		public int scoredOtherDamage()
+		{
+			return scoredOtherDamage < 0 ? thrallDamage + dotDamage + reflectDamage : scoredOtherDamage;
 		}
 
 		public int dotDamage()
