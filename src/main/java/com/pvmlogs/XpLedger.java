@@ -332,6 +332,37 @@ class XpLedger
 	}
 
 	/**
+	 * The tick of the attack a splat of this amount would be spent against, which
+	 * is the tick it was thrown on (its drop's): the attack this splat finishes
+	 * exactly, else the oldest with damage still to land, as {@link #spend} picks.
+	 * {@code Integer.MIN_VALUE} for none: a zero, which pays nothing, or a splat no
+	 * recent attack paid for. Read-only; asked before the splat is spent (T-021:
+	 * the throw of a shot whose projectile was never taken as mine).
+	 */
+	int attackTickFor(int amount, int tick)
+	{
+		if (amount <= 0)
+		{
+			return Integer.MIN_VALUE;
+		}
+		for (Award a : awards)
+		{
+			if (eligible(a, tick) && a.decoded() && amount >= a.remainingLow && amount <= a.remainingHigh)
+			{
+				return a.tick;
+			}
+		}
+		for (Award a : awards)
+		{
+			if (eligible(a, tick) && a.decoded())
+			{
+				return a.tick;
+			}
+		}
+		return Integer.MIN_VALUE;
+	}
+
+	/**
 	 * Spends a splat the player is taken to have dealt. {@code certain} says it
 	 * could only have been theirs, which is what the checks and the calibration
 	 * may learn from. A zero carries no damage and pays nothing, so it is left out.
