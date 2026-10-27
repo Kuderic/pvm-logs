@@ -63,6 +63,15 @@ class PvmPerformancePanel extends PluginPanel
 	// Swing's thread only.
 	private PanelSnapshot shown;
 
+	/** When this panel, and so this RuneLite session's plugin, started: History's "later" card goes by it. */
+	private final long sessionStart = System.currentTimeMillis();
+	/** The boss rules, for version names ("Post-quest"); null in tests. */
+	private final MonsterStatsProvider monsterStats;
+
+	// The trip's saved rooms, kept until the history or the trip changes (client thread).
+	private List<SidePanelHistory.KillRow> tripSaved = java.util.Collections.emptyList();
+	private List<Object> tripSavedKey;
+
 	PvmPerformancePanel(PvmPerformancePlugin plugin)
 	{
 		this(plugin, instance(plugin, PvmPerformanceConfig.class), instance(plugin, ConfigManager.class),
@@ -73,10 +82,18 @@ class PvmPerformancePanel extends PluginPanel
 	PvmPerformancePanel(PvmPerformancePlugin plugin, PvmPerformanceConfig config, ConfigManager configManager,
 		ClientThread clientThread)
 	{
+		this(plugin, config, configManager, clientThread, null);
+	}
+
+	/** {@code historySource} null: the plugin's saved fights (tests and renders pass fixtures). */
+	PvmPerformancePanel(PvmPerformancePlugin plugin, PvmPerformanceConfig config, ConfigManager configManager,
+		ClientThread clientThread, SidePanelHistoryTab.Source historySource)
+	{
 		super(false);
 		this.plugin = plugin;
 		this.config = config;
 		this.clientThread = clientThread;
+		this.monsterStats = instance(plugin, MonsterStatsProvider.class);
 
 		setBackground(SidePanelStyle.PANEL);
 		setLayout(new BorderLayout());
@@ -85,8 +102,9 @@ class PvmPerformancePanel extends PluginPanel
 			: new ConfigFolds(configManager);
 		final SidePanelFightTab.Actions actions = new Actions();
 		fightTab = new SidePanelFightTab(actions, folds);
-		historyTab = new SidePanelHistoryTab(plugin, actions);
-		tripTab = new SidePanelTripTab(actions);
+		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
+			: new HistorySource(), actions, folds);
+		tripTab = new SidePanelTripTab(actions, folds);
 
 		final JPanel display = new JPanel(new BorderLayout());
 		display.setBackground(SidePanelStyle.PANEL);
@@ -200,16 +218,17 @@ class PvmPerformancePanel extends PluginPanel
 		final Iterator<Fight> newest = history.iterator();
 		final Fight head = newest.hasNext() ? newest.next() : null;
 
+		final SessionTotals trip = plugin.getSession();
 		final List<Object> shape = Arrays.asList(fight, fight != null && fight.isEnded(), pre, room, raid, whole,
-			history.size(), head);
+			history.size(), head, trip.getStartMillis());
 		final List<Object> key = key(shape, fight, room, raid, whole, pre);
 		final boolean force = dirty;
 		if (!force && key.equals(lastKey))
 		{
 			return;
 		}
-		final boolean running = fight != null && !fight.isEnded() && !pre;
-		if (!force && running && config != null && !config.panelLive() && shape.equals(lastShape))
+		final boolean fighting = fight != null && !fight.isEnded() && !pre;
+		if (!force && fighting && config != null && !config.panelLive() && shape.equals(lastShape))
 		{
 			return;
 		}
@@ -218,7 +237,9 @@ class PvmPerformancePanel extends PluginPanel
 		lastShape = shape;
 
 		final SidePanelModel.Input in = read(fight, display, room, raid, whole, pre, history);
-		final PanelSnapshot snapshot = new PanelSnapshot(SidePanelModel.fight(in));
+		final boolean running = fight != null && !fight.isEnded() && !pre;
+		final PanelSnapshot snapshot = new PanelSnapshot(SidePanelModel.fight(in),
+			SidePanelModel.trip(readTrip(trip, history, head, running ? display : null)));
 		SwingUtilities.invokeLater(() -> apply(snapshot));
 	}
 
@@ -272,6 +293,10 @@ class PvmPerformancePanel extends PluginPanel
 					room == null ? 0 : room.getFights().size()));
 			}
 		}
+		final SessionTotals t = plugin.getSession();
+		key.addAll(Arrays.asList(t.getCombatTicks(), t.getDamageDealt(), t.getSumExpectedAverageHit(), t.getAttacksMade(),
+			t.getDamageTaken(), t.getThrallDamage(), t.getDotDamage(), t.getReflectDamage(), t.getTicksLost(), t.getKills(),
+			t.getFights()));
 		return key;
 	}
 
@@ -292,6 +317,7 @@ class PvmPerformancePanel extends PluginPanel
 			in.kind = SidePanelModel.Kind.PRE_ATTACK;
 			in.name = fight.encounterName();
 			in.maxHp = fight.getMaxHp();
+			in.version = version(java.util.Collections.singletonList(fight), in.maxHp);
 			in.warning = plugin.getStatsWarning(fight);
 			in.loadout = LoadoutOverlay.loadout(plugin);
 			in.specName = plugin.getSpecialAttack() == null ? null : plugin.getSpecialAttack().getDisplayName();
@@ -316,6 +342,7 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
+		in.version = version(room.getFights(), in.maxHp);
 		final boolean current = contains(room, fight);
 		in.ended = !current || fight.isEnded();
 		in.killed = in.ended && room.isKilled();
@@ -332,6 +359,40 @@ class PvmPerformancePanel extends PluginPanel
 			in.average = average;
 			in.luckRemoved = luckRemoved;
 		}
+		return in;
+	}
+
+	/** The boss version's name for these fights at this full HP, from the boss rules; null where they don't say. */
+	private String version(List<Fight> fights, int maxHp)
+	{
+		return monsterStats == null ? null : SidePanelModel.versionName(monsterStats.rules(), fights, maxHp);
+	}
+
+	/** The trip's figures and rooms (spec 3.3); client thread. The saved rooms are rebuilt only when the history or trip change. */
+	private SidePanelModel.Input readTrip(SessionTotals trip, List<Fight> history, Fight head, Encounter running)
+	{
+		final SidePanelModel.Input in = new SidePanelModel.Input();
+		in.kind = SidePanelModel.Kind.TRIP;
+		in.scope = LedgerRows.of(trip);
+		in.tripSince = trip.getStartMillis();
+		in.hitsTaken = trip.getHitsTaken();
+		// The trip records thrall, DoT and reflect on scored fights only (T-025), so its other damage is the scored kind too.
+		in.scoredThrall = in.thrall = Math.max(0, trip.getThrallDamage());
+		in.scoredDot = in.dot = Math.max(0, trip.getDotDamage());
+		in.scoredReflect = in.reflect = Math.max(0, trip.getReflectDamage());
+		final List<Object> key = Arrays.asList(history.size(), head, trip.getStartMillis());
+		if (!key.equals(tripSavedKey))
+		{
+			tripSavedKey = key;
+			tripSaved = SidePanelHistory.tripSaved(history, trip.getStartMillis(), System.currentTimeMillis(),
+				java.time.ZoneId.systemDefault());
+		}
+		final List<PanelSnapshot.TripRow> rows = new ArrayList<>();
+		for (SidePanelHistory.KillRow r : SidePanelHistory.tripRooms(tripSaved, running))
+		{
+			rows.add(SidePanelModel.tripRow(r));
+		}
+		in.tripRows = rows;
 		return in;
 	}
 
@@ -370,6 +431,7 @@ class PvmPerformancePanel extends PluginPanel
 	{
 		shown = snapshot;
 		fightTab.apply(snapshot.fight);
+		tripTab.apply(snapshot.trip);
 	}
 
 	PanelSnapshot shown()
@@ -385,6 +447,56 @@ class PvmPerformancePanel extends PluginPanel
 	MaterialTabGroup tabs()
 	{
 		return tabs;
+	}
+
+	SidePanelHistoryTab historyTab()
+	{
+		return historyTab;
+	}
+
+	SidePanelTripTab tripTab()
+	{
+		return tripTab;
+	}
+
+	/** The History tab's saved fights and what goes with them, from the plugin; read on Swing's thread. */
+	private final class HistorySource implements SidePanelHistoryTab.Source
+	{
+		@Override
+		public List<Fight> history()
+		{
+			return plugin.getHistory();
+		}
+
+		@Override
+		public SidePanelHistory.Versions versions()
+		{
+			return (room, maxHp) -> version(room.getFights(), maxHp);
+		}
+
+		@Override
+		public long sessionStart()
+		{
+			return sessionStart;
+		}
+
+		@Override
+		public long now()
+		{
+			return System.currentTimeMillis();
+		}
+
+		@Override
+		public java.time.ZoneId zone()
+		{
+			return java.time.ZoneId.systemDefault();
+		}
+
+		@Override
+		public void exportNpc(String name)
+		{
+			plugin.exportNpc(name);
+		}
 	}
 
 	/** The buttons' actions, passed on to the plugin. */

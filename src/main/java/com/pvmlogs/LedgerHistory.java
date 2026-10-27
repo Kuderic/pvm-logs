@@ -194,7 +194,7 @@ final class LedgerHistory
 	}
 
 	/** A kill, outside a raid, recorded by a build with a trustworthy expected side, with no warning on it. */
-	private static boolean counts(Encounter room, Set<Fight> exclude)
+	static boolean counts(Encounter room, Set<Fight> exclude)
 	{
 		boolean scored = false;
 		boolean killed = false;

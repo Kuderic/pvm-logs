@@ -21,6 +21,8 @@ final class SidePanelText extends JComponent
 	private Color colour = SidePanelStyle.VALUE;
 	private String suffix = "";
 	private Color suffixColour = SidePanelStyle.VALUE;
+	/** The second run's type: its own font, as a row's {@code (ended)} is Small beside a Body name. */
+	private SidePanelStyle.Type suffixType;
 	private SidePanelStyle.Type type;
 	private final boolean right;
 	/** A hint after a label gives way before the label does; a name's {@code (dead)} doesn't. */
@@ -50,11 +52,14 @@ final class SidePanelText extends JComponent
 	{
 		final String newSuffix = after == null ? "" : after.text;
 		final Color newSuffixColour = after == null ? suffixColour : after.colour;
-		final boolean width = !t.text.equals(text) || !newSuffix.equals(suffix) || t.type != type;
+		final SidePanelStyle.Type newSuffixType = after == null ? null : after.type;
+		final boolean width = !t.text.equals(text) || !newSuffix.equals(suffix) || t.type != type
+			|| newSuffixType != suffixType;
 		if (!width && Objects.equals(t.colour, colour) && Objects.equals(newSuffixColour, suffixColour))
 		{
 			return;
 		}
+		suffixType = newSuffixType;
 		text = t.text;
 		colour = t.colour;
 		suffix = newSuffix;
@@ -69,6 +74,12 @@ final class SidePanelText extends JComponent
 			revalidate();
 		}
 		repaint();
+	}
+
+	/** The second run's font: its own type's, or the first's when it has none or the same. */
+	private Font suffixFont()
+	{
+		return suffixType == null || suffixType == type ? getFont() : suffixType.font();
 	}
 
 	/** The second run is cut before the first: for hints, which matter less than what they follow. */
@@ -87,7 +98,7 @@ final class SidePanelText extends JComponent
 	public Dimension getPreferredSize()
 	{
 		final FontMetrics fm = getFontMetrics(getFont());
-		return new Dimension(fm.stringWidth(text) + fm.stringWidth(suffix), type.lineHeight());
+		return new Dimension(fm.stringWidth(text) + getFontMetrics(suffixFont()).stringWidth(suffix), type.lineHeight());
 	}
 
 	@Override
@@ -108,17 +119,18 @@ final class SidePanelText extends JComponent
 		final Font font = getFont();
 		g.setFont(font);
 		final FontMetrics fm = g.getFontMetrics(font);
+		final FontMetrics sm = g.getFontMetrics(suffixFont());
 		String after = suffix;
-		if (cutSuffixFirst && !after.isEmpty() && fm.stringWidth(text) + fm.stringWidth(after) > getWidth())
+		if (cutSuffixFirst && !after.isEmpty() && fm.stringWidth(text) + sm.stringWidth(after) > getWidth())
 		{
 			// The gap before a hint stays a gap: cut what follows it.
 			final String lead = after.startsWith(" ") ? " " : "";
-			final String cut = LedgerRows.cut(after.substring(lead.length()), fm::stringWidth,
-				Math.max(0, getWidth() - fm.stringWidth(text) - fm.stringWidth(lead)));
+			final String cut = LedgerRows.cut(after.substring(lead.length()), sm::stringWidth,
+				Math.max(0, getWidth() - fm.stringWidth(text) - sm.stringWidth(lead)));
 			// A hint cut to its dots says nothing: drop it.
 			after = cut.isEmpty() || cut.equals(LedgerRows.CUT) ? "" : lead + cut;
 		}
-		final int suffixWidth = fm.stringWidth(after);
+		final int suffixWidth = sm.stringWidth(after);
 		final int room = Math.max(0, getWidth() - suffixWidth);
 		final String shown = LedgerRows.cut(text, fm::stringWidth, room);
 		final int width = fm.stringWidth(shown) + suffixWidth;
@@ -129,6 +141,7 @@ final class SidePanelText extends JComponent
 		if (!after.isEmpty())
 		{
 			g.setColor(suffixColour);
+			g.setFont(suffixFont());
 			g.drawString(after, x + fm.stringWidth(shown), baseline);
 		}
 		setToolTipText(shown.equals(text) && after.equals(suffix) ? null : text + suffix);

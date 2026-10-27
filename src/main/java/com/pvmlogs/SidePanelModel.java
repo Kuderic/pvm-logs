@@ -14,7 +14,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -39,6 +38,9 @@ import java.util.Set;
 final class SidePanelModel
 {
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+	private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM HH:mm", java.util.Locale.ENGLISH);
+	static final String LATER_TEXT = "Kept only for fights since RuneLite started. Saving them with every kill is planned "
+		+ "for later.";
 	private static final String DOT = " · ";
 	static final String NO_FIGHT_TEXT = "Attack a monster and this tab fills in as you fight. The last fight stays here "
 		+ "until the next one starts.";
@@ -62,7 +64,9 @@ final class SidePanelModel
 		EMPTY,
 		PRE_ATTACK,
 		ROOM,
-		RAID
+		RAID,
+		/** The Trip tab's scope (T-034). */
+		TRIP
 	}
 
 	/** One target in the room, for the Targets list (spec 3.1). */
@@ -140,6 +144,22 @@ final class SidePanelModel
 		LastFight lastFight;
 		int historyFights;
 		ZoneId zone = ZoneId.systemDefault();
+		/** The boss version's name from the boss rules ("Post-quest"), shown in the HP's place; null for none. */
+		String version;
+		/** A saved kill opened from History (T-034): its date and "saved kill" under the name. */
+		boolean saved;
+		/** Now, for "today 15:31" against "26 Oct 21:40". */
+		long now = System.currentTimeMillis();
+		/** The "later" card in the damage rows' place (spec 3.2): a saved kill from before this RuneLite session. */
+		String later;
+		/** The trip's start (T-034). */
+		long tripSince;
+		/** The trip's rooms, newest first; the running one first. */
+		List<PanelSnapshot.TripRow> tripRows = Collections.emptyList();
+		/** The trip's whole other damage, for its "Other damage" rows. */
+		int thrall;
+		int dot;
+		int reflect;
 	}
 
 	// ---- reading the plugin's objects (client thread) ----
@@ -303,10 +323,8 @@ final class SidePanelModel
 	 * {@code T* = T + luck} (spec section 4), or null under
 	 * {@link LedgerRows#AVERAGE_FROM_KILLS}.
 	 * <p>
-	 * The kills are chosen as {@code LedgerHistory} chooses them; its filter is
-	 * private to it, so the rule is restated here and pinned against it in
-	 * {@code SidePanelModelTest}. Asked of the overlay chat (via the Orchestrator)
-	 * to share it.
+	 * The kills are chosen by {@code LedgerHistory}'s own filter
+	 * ({@link LedgerHistory#counts}), so the two can't drift apart (T-034).
 	 */
 	static LedgerHistory.Spread luckRemoved(List<Fight> history, Encounter current)
 	{
@@ -323,7 +341,7 @@ final class SidePanelModel
 		for (int i = rooms.size() - 1; i >= 0 && n < stars.length; i--)
 		{
 			final Encounter room = rooms.get(i);
-			if (!like.matches(room) || !counts(room, exclude))
+			if (!like.matches(room) || !LedgerHistory.counts(room, exclude))
 			{
 				continue;
 			}
@@ -340,30 +358,6 @@ final class SidePanelModel
 		final double[] sorted = Arrays.copyOf(stars, n);
 		Arrays.sort(sorted);
 		return LedgerHistory.Spread.of(sorted);
-	}
-
-	/** {@code LedgerHistory.counts}, restated: a kill outside a raid, from a T-010-or-later build, with no warning. */
-	static boolean counts(Encounter room, Collection<Fight> exclude)
-	{
-		boolean scored = false;
-		boolean killed = false;
-		for (Fight fight : room.getFights())
-		{
-			if (exclude.contains(fight) || fight.getRaidName() != null || fight.getStatsWarning() != null)
-			{
-				return false;
-			}
-			if (fight.isScored())
-			{
-				if (fight.getBoostSamples() <= 0)
-				{
-					return false;
-				}
-				scored = true;
-			}
-			killed |= fight.isClosedRoom() || (fight.getGroupName() == null && fight.isTargetDied());
-		}
-		return scored && killed;
 	}
 
 	// ---- the Fight tab (any thread: no client, no Swing) ----
@@ -393,9 +387,9 @@ final class SidePanelModel
 		b.state = PanelSnapshot.State.PRE_ATTACK;
 		b.wholeRaid = in.wholeRaid;
 		final List<String> sub = new ArrayList<>();
-		if (in.maxHp > 0)
+		if (in.version != null || in.maxHp > 0)
 		{
-			sub.add(hp(in.maxHp));
+			sub.add(in.version != null ? in.version : hp(in.maxHp));
 		}
 		sub.add("no attacks yet");
 		b.header = new PanelSnapshot.Header(Text.title(in.name, SidePanelStyle.VALUE), Text.NONE,
@@ -456,10 +450,19 @@ final class SidePanelModel
 			else if (!Double.isNaN(n.luck))
 			{
 				b.noCurve = NO_CURVE_TEXT;
+				b.noCurveHint = Text.title(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.of(luckColour));
 			}
 		}
 		b.execution = execution(n);
-		b.damage = damage(n, in);
+		if (in.later != null)
+		{
+			// A kill from before this session: no per-attack data, so one card says why (spec 3.2).
+			b.later = in.later;
+		}
+		else
+		{
+			b.damage = damage(n, in);
+		}
 		if (after)
 		{
 			b.details = details(s);
@@ -479,11 +482,21 @@ final class SidePanelModel
 				sub.add(time(in.startMillis, in.zone));
 			}
 		}
+		else if (in.saved)
+		{
+			suffix = in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD) : Text.title(" (ended)", SidePanelStyle.SECONDARY);
+			if (in.endMillis > 0)
+			{
+				sub.add(date(in.endMillis, in.now, in.zone));
+			}
+			sub.add("saved kill");
+		}
 		else
 		{
-			if (in.maxHp > 0)
+			// The version's name where the boss rules give one (spec 3.1), else its full HP.
+			if (in.version != null || in.maxHp > 0)
 			{
-				sub.add(hp(in.maxHp));
+				sub.add(in.version != null ? in.version : hp(in.maxHp));
 			}
 			if (in.solo != null)
 			{
@@ -510,6 +523,72 @@ final class SidePanelModel
 		return Double.isNaN(n.percentile) ? LedgerRows.luckColour(n.luck, n.clock) : LedgerRows.percentileBand(n.percentile);
 	}
 
+	// ---- the Trip tab (spec 3.3) ----
+
+	static final String NO_TRIP_FIGHTS = "No fights this trip yet.";
+
+	static PanelSnapshot.TripTab trip(Input in)
+	{
+		final LedgerRows.Scope s = in.scope;
+		final int ticks = s == null ? 0 : s.combatTicks();
+		final List<String> sub = new ArrayList<>(2);
+		if (in.tripSince > 0)
+		{
+			sub.add("since " + time(in.tripSince, in.zone));
+		}
+		sub.add("fighting time");
+		final PanelSnapshot.Header header = new PanelSnapshot.Header(Text.title("Trip", SidePanelStyle.VALUE), Text.NONE,
+			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
+			new Text(LedgerRows.clock(ticks), ticks > 0 ? SidePanelStyle.VALUE : SidePanelStyle.UNSCORED,
+				SidePanelStyle.Type.CLOCK));
+		List<Tile> tiles = null;
+		PanelSnapshot.Parts execution = null;
+		PanelSnapshot.Rows taken = null;
+		if (s != null && s.attacksMade() > 0)
+		{
+			final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
+			tiles = tiles(n, s, in, luckColour(n), false);
+			execution = execution(n);
+			taken = taken(s, in.hitsTaken);
+		}
+		int kills = 0;
+		int ended = 0;
+		for (PanelSnapshot.TripRow r : in.tripRows)
+		{
+			if (r.ended)
+			{
+				ended++;
+			}
+			else
+			{
+				kills++;
+			}
+		}
+		final String hint = in.tripRows.isEmpty() ? "" : kills + (kills == 1 ? " kill" : " kills")
+			+ (ended == 0 ? "" : DOT + ended + " ended");
+		final List<Row> other = new ArrayList<>(3);
+		if (in.thrall > 0)
+		{
+			other.add(row("thrall dmg", LedgerRows.number(in.thrall)));
+		}
+		if (in.dot > 0)
+		{
+			other.add(row("burn/poison dmg", LedgerRows.number(in.dot)));
+		}
+		if (in.reflect > 0)
+		{
+			other.add(row("recoil/veng dmg", LedgerRows.number(in.reflect)));
+		}
+		return new PanelSnapshot.TripTab(header, tiles, execution, Text.small(hint, SidePanelStyle.SECONDARY), in.tripRows,
+			taken, other.isEmpty() ? null : new PanelSnapshot.Rows(null, other));
+	}
+
+	/** A trip row from a rebuilt or running room: texts only. The running one is never "(ended)". */
+	static PanelSnapshot.TripRow tripRow(SidePanelHistory.KillRow r)
+	{
+		return new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill);
+	}
+
 	// ---- tiles ----
 
 	static List<Tile> tiles(LedgerRows.Numbers n, LedgerRows.Scope s, Input in, LedgerRows.Colour luckColour,
@@ -533,7 +612,7 @@ final class SidePanelModel
 		else if (Double.isNaN(n.percentile))
 		{
 			tiles.add(tile("Luck", Text.title(LedgerRows.fasterOrSlower(n.luck), luck),
-				Text.small("seconds only", SidePanelStyle.MUTED), edge));
+				Text.small("no percentile", SidePanelStyle.MUTED), edge));
 		}
 		else
 		{
@@ -714,21 +793,13 @@ final class SidePanelModel
 			rows.add(new BudgetRow(costing ? Fill.COST : Fill.MINOR_COST, Text.small(labels[i], SidePanelStyle.BODY),
 				null, Text.small("+" + SidePanelStyle.seconds(costs[i]), costing ? SidePanelStyle.COST : SidePanelStyle.BODY)));
 		}
-		// Luck always shows: what it added to the clock (+), or took off it (-).
+		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
+		// slower)", so a saving doesn't read like a cost.
 		final Fill luckSwatch = averageBand ? Fill.LUCK_AVERAGE : l > 0 ? Fill.LUCK_FASTER : Fill.LUCK_SLOWER;
-		final String luckValue;
-		if (!luckKnown)
-		{
-			luckValue = LedgerRows.UNKNOWN;
-		}
-		else
-		{
-			final long r = LedgerRows.roundHalfAway(-l);
-			luckValue = r == 0 ? LedgerRows.EVEN : (r > 0 ? "+" : "-") + Math.abs(r) + " s";
-		}
-		rows.add(new BudgetRow(luckSwatch, Text.small(averageBand && luckKnown ? "luck average" : "luck",
-			SidePanelStyle.BODY), null, Text.small(luckValue, luckKnown ? SidePanelStyle.of(luckColour)
-			: SidePanelStyle.VALUE)));
+		final boolean middleHalf = luckKnown && averageBand && !Double.isNaN(n.percentile);
+		rows.add(new BudgetRow(luckSwatch, Text.small(middleHalf ? "luck average" : "luck", SidePanelStyle.BODY), null,
+			Text.small(luckKnown ? LedgerRows.fasterOrSlower(l) : LedgerRows.UNKNOWN,
+				luckKnown ? SidePanelStyle.of(luckColour) : SidePanelStyle.VALUE)));
 		if (u > 0)
 		{
 			rows.add(new BudgetRow(Fill.UNSCORED, Text.small("adds, not scored", SidePanelStyle.BODY), null,
@@ -752,7 +823,8 @@ final class SidePanelModel
 			final LedgerHistory.Spread a = in.average.actual;
 			marker = a.median;
 			average.add(new Row(Text.small("your average " + LedgerRows.duration(a.median), SidePanelStyle.BODY),
-				Text.small(against(t, a.median), SidePanelStyle.of(usual(t, a)))));
+				// Never coloured (Orchestrator, T-034): the raw clock carries luck, which the Luck tile already shows.
+				Text.small(against(t, a.median), SidePanelStyle.BODY)));
 			if (in.luckRemoved != null)
 			{
 				final LedgerHistory.Spread r = in.luckRemoved;
@@ -773,7 +845,10 @@ final class SidePanelModel
 		return LedgerRows.fasterOrSlower(usual - seconds);
 	}
 
-	/** Cost above your upper quartile, Better below your lower quartile, neutral inside (spec section 2). */
+	/**
+	 * Cost above your upper quartile, Better below your lower quartile, neutral
+	 * inside (spec section 2). Only luck removed is coloured by it (T-034).
+	 */
 	static LedgerRows.Colour usual(double seconds, LedgerHistory.Spread spread)
 	{
 		if (seconds > spread.upperQuartile)
@@ -1020,6 +1095,42 @@ final class SidePanelModel
 	static String hp(int maxHp)
 	{
 		return LedgerRows.number(maxHp) + " HP";
+	}
+
+	/** {@code today 15:31}, else {@code 26 Oct 21:40} (spec 3.2's kill rows). */
+	static String date(long millis, long now, ZoneId zone)
+	{
+		final java.time.ZonedDateTime at = Instant.ofEpochMilli(millis).atZone(zone);
+		final java.time.LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
+		return at.toLocalDate().equals(today) ? "today " + TIME.format(at) : DATE.format(at);
+	}
+
+	/**
+	 * The boss version's name for a room whose full HP is {@code maxHp}: the
+	 * boss rule's variant with that HP, from any of the room's targets ("Post-quest"
+	 * for Vardorvis at 700). Null where the rules don't say.
+	 */
+	static String versionName(BossRules rules, List<Fight> fights, int maxHp)
+	{
+		if (rules == null || fights == null || maxHp <= 0)
+		{
+			return null;
+		}
+		for (Fight f : fights)
+		{
+			final BossRules.Boss boss = rules.forNpc(f.getTargetId());
+			if (boss != null && boss.variants != null)
+			{
+				for (BossRules.Variant v : boss.variants)
+				{
+					if (v.maxHp == maxHp && v.version != null)
+					{
+						return v.version;
+					}
+				}
+			}
+		}
+		return null;
 	}
 
 	static String time(long millis, ZoneId zone)

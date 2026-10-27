@@ -42,19 +42,91 @@ public final class SidePanelPictures
 		final Path out = Paths.get(args.length > 0 ? args[0] : "build/side-panel-renders");
 		Files.createDirectories(out);
 		RuneLiteLAF.setup();
-		for (Map.Entry<String, SidePanelModel.Input> e : SidePanelExamples.states().entrySet())
+		for (int scale = 1; scale <= 2; scale++)
 		{
-			for (int scale = 1; scale <= 2; scale++)
+			for (Map.Entry<String, SidePanelModel.Input> e : SidePanelExamples.states().entrySet())
 			{
-				final BufferedImage img = render(e.getValue(), scale);
-				final Path file = out.resolve(e.getKey() + "@" + scale + "x.png");
-				try (OutputStream o = Files.newOutputStream(file))
-				{
-					ImageIO.write(img, "png", o);
-				}
-				System.out.println(file + " " + img.getWidth() + "x" + img.getHeight());
+				write(out, e.getKey(), scale, render(e.getValue(), scale));
 			}
+			// T-034: states 9 to 11.
+			write(out, "9-trip", scale, renderTrip(SidePanelExamples.trip(), scale));
+			write(out, "10-history", scale, renderHistory(false, scale));
+			write(out, "11-saved-kill", scale, renderHistory(true, scale));
 		}
+	}
+
+	private static void write(Path out, String name, int scale, BufferedImage img) throws IOException
+	{
+		final Path file = out.resolve(name + "@" + scale + "x.png");
+		try (OutputStream o = Files.newOutputStream(file))
+		{
+			ImageIO.write(img, "png", o);
+		}
+		System.out.println(file + " " + img.getWidth() + "x" + img.getHeight());
+	}
+
+	/** The fixtures' saved fights, as the History tab reads them. */
+	static SidePanelHistoryTab.Source source()
+	{
+		final java.util.List<Fight> history = SidePanelHistoryExamples.history();
+		return new SidePanelHistoryTab.Source()
+		{
+			public java.util.List<Fight> history()
+			{
+				return history;
+			}
+
+			public SidePanelHistory.Versions versions()
+			{
+				// The boss rules' name for Vardorvis at 700 HP, without loading them.
+				return (room, maxHp) -> "Vardorvis".equals(room.getName()) && maxHp == 700 ? "Post-quest" : null;
+			}
+
+			public long sessionStart()
+			{
+				return SidePanelExamples.at(11, 0);
+			}
+
+			public long now()
+			{
+				return SidePanelHistoryExamples.NOW;
+			}
+
+			public java.time.ZoneId zone()
+			{
+				return SidePanelExamples.ZONE;
+			}
+
+			public void exportNpc(String name)
+			{
+			}
+		};
+	}
+
+	/** State 9: the Trip tab showing this input. */
+	static BufferedImage renderTrip(SidePanelModel.Input in, int scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), SidePanelModel.trip(in)));
+		panel.tabs().select(panel.tabs().getTab(2));
+		return draw(panel.tabs(), panel.tripTab(), scale);
+	}
+
+	/** States 10 and 11: the History tab on the fixtures, or the 26 Oct kill opened from it. */
+	static BufferedImage renderHistory(boolean savedKill, int scale)
+	{
+		final SidePanelHistoryTab.Source source = source();
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source);
+		panel.tabs().select(panel.tabs().getTab(1));
+		final SidePanelHistoryTab tab = panel.historyTab();
+		tab.refresh();
+		if (savedKill)
+		{
+			// The oldest Vardorvis kill: 26 Oct, before T-028 and before this session.
+			final java.util.List<Fight> h = source.history();
+			tab.open(h.get(h.size() - 1));
+		}
+		return draw(panel.tabs(), tab, scale);
 	}
 
 	/** The panel showing this input's snapshot, drawn at {@code scale}. */
@@ -62,9 +134,12 @@ public final class SidePanelPictures
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
-		final JComponent tabs = panel.tabs();
-		final JComponent content = panel.fightTab();
+		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
 
+	/** The tab bar across the sidebar, a tab's content under it, RuneLite's scrollbar beside it. */
+	static BufferedImage draw(JComponent tabs, JComponent content, int scale)
+	{
 		tabs.setSize(SIDEBAR, tabs.getPreferredSize().height);
 		layout(tabs);
 		final int contentWidth = SIDEBAR - SCROLLBAR;

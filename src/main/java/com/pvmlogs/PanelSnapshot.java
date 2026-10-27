@@ -19,10 +19,68 @@ import java.util.Objects;
 final class PanelSnapshot
 {
 	final FightTab fight;
+	/** The Trip tab (T-034); null when it wasn't built. */
+	final TripTab trip;
 
 	PanelSnapshot(FightTab fight)
 	{
+		this(fight, null);
+	}
+
+	PanelSnapshot(FightTab fight, TripTab trip)
+	{
 		this.fight = fight;
+		this.trip = trip;
+	}
+
+	/** One of the trip's rooms (spec 3.3): texts only, nothing that points back at the room. */
+	static final class TripRow
+	{
+		final String name;
+		final boolean ended;
+		final String clock;
+		final Text chip;
+		final Color chipFill;
+
+		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill)
+		{
+			this.name = name;
+			this.ended = ended;
+			this.clock = clock;
+			this.chip = chip;
+			this.chipFill = chipFill;
+		}
+	}
+
+	/** The Trip tab (spec 3.3): every section, null where it isn't shown. */
+	static final class TripTab
+	{
+		final Header header;
+		final List<Tile> tiles;
+		final Parts execution;
+		final Text roomsHint;
+		final List<TripRow> rooms;
+		final Rows taken;
+		final Rows other;
+
+		TripTab(Header header, List<Tile> tiles, Parts execution, Text roomsHint, List<TripRow> rooms, Rows taken,
+			Rows other)
+		{
+			this.header = header;
+			this.tiles = tiles == null ? null : list(tiles);
+			this.execution = execution;
+			this.roomsHint = roomsHint;
+			this.rooms = list(rooms);
+			this.taken = taken;
+			this.other = other;
+		}
+
+		/** As {@link FightTab#structure()}: which sections there are and how many rows each has. */
+		String structure()
+		{
+			return (tiles == null ? "" : "T") + (execution == null ? "" : "|e" + execution.parts.size()) + "|r" + rooms.size()
+				+ (taken == null ? "" : "|k" + taken.rows.size()) + (other == null ? "" : "|o" + other.rows.size());
+		}
 	}
 
 	/** Which of the spec's Fight-tab states (section 6) this is. */
@@ -430,8 +488,12 @@ final class PanelSnapshot
 		final Curve curve;
 		/** The curve's place when the spread wasn't kept (fights saved before T-028); null otherwise. */
 		final String noCurve;
+		/** The Luck header's value beside {@link #noCurve}: the seconds, in luck's colour. */
+		final Text noCurveHint;
 		final Parts execution;
 		final Sources damage;
+		/** The "later" card in the damage rows' place, for a saved kill from before this session (T-034); null for none. */
+		final String later;
 		final Rows details;
 		final Rows taken;
 		final Loadout loadout;
@@ -451,8 +513,10 @@ final class PanelSnapshot
 			tiles = b.tiles == null ? null : list(b.tiles);
 			curve = b.curve;
 			noCurve = b.noCurve;
+			noCurveHint = b.noCurveHint;
 			execution = b.execution;
 			damage = b.damage;
+			later = b.later;
 			details = b.details;
 			taken = b.taken;
 			loadout = b.loadout;
@@ -485,6 +549,7 @@ final class PanelSnapshot
 			s.append(noCurve == null ? "" : "|nc");
 			s.append(execution == null ? "" : "|e" + execution.parts.size());
 			s.append(damage == null ? "" : "|d" + damage.rows.size());
+			s.append(later == null ? "" : "|lt");
 			s.append(details == null ? "" : "|D" + details.rows.size());
 			s.append(taken == null ? "" : "|k" + taken.rows.size());
 			if (loadout != null)
@@ -512,8 +577,10 @@ final class PanelSnapshot
 		List<Tile> tiles;
 		Curve curve;
 		String noCurve;
+		Text noCurveHint;
 		Parts execution;
 		Sources damage;
+		String later;
 		Rows details;
 		Rows taken;
 		Loadout loadout;
