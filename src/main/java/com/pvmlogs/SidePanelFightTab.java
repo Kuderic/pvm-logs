@@ -1,0 +1,744 @@
+package com.pvmlogs;
+
+import com.pvmlogs.PanelSnapshot.FightTab;
+import com.pvmlogs.PanelSnapshot.Text;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.GridLayout;
+import java.awt.Insets;
+import java.awt.Rectangle;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.Scrollable;
+import javax.swing.SwingConstants;
+import javax.swing.border.EmptyBorder;
+
+/**
+ * The Fight tab (T-033; spec 3.1 and section 6). {@link #apply} is the only
+ * way in: it rebuilds the components when the snapshot's
+ * {@link FightTab#structure()} changes (a state change, a section appearing, a
+ * row more) and otherwise only copies texts and colours onto the components it
+ * has, so a tick never costs a {@code removeAll()} (spec 5.1). Swing's thread
+ * only.
+ */
+final class SidePanelFightTab extends JPanel implements Scrollable
+{
+	/** What the tab's buttons do; the panel passes them on to the plugin. */
+	interface Actions
+	{
+		void exportAll();
+
+		void newTrip();
+
+		void saveDebugLog();
+
+		void clearHistory();
+
+		/** The room/raid switch, true for Whole raid. */
+		void wholeRaid(boolean whole);
+
+		/** A room picked in the whole raid's Rooms list: This room, on it. */
+		void showRaidRoom(int index);
+	}
+
+	/** Every action a no-op, for tests and renders. */
+	static final Actions NO_ACTIONS = new Actions()
+	{
+		public void exportAll()
+		{
+		}
+
+		public void newTrip()
+		{
+		}
+
+		public void saveDebugLog()
+		{
+		}
+
+		public void clearHistory()
+		{
+		}
+
+		public void wholeRaid(boolean whole)
+		{
+		}
+
+		public void showRaidRoom(int index)
+		{
+		}
+	};
+
+	private final Actions actions;
+	private final SidePanelSection.Folds folds;
+	private final List<Consumer<FightTab>> updaters = new ArrayList<>();
+	private String structure;
+	private int builds;
+	/** The status line under the empty state's tools ("Exported 12 fights"), kept across rebuilds. */
+	private String status = "";
+	private SidePanelText statusLine;
+
+	SidePanelFightTab(Actions actions, SidePanelSection.Folds folds)
+	{
+		super(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
+		this.actions = actions;
+		this.folds = folds;
+		setBackground(SidePanelStyle.PANEL);
+		setBorder(new EmptyBorder(SidePanelStyle.BLOCK_GAP, SidePanelStyle.SIDE_BORDER, 10, SidePanelStyle.SIDE_BORDER));
+	}
+
+	/** Shows the snapshot: new components only when its structure differs from the last one's. */
+	void apply(FightTab tab)
+	{
+		final String s = tab.structure();
+		if (!s.equals(structure))
+		{
+			structure = s;
+			rebuild(tab);
+		}
+		for (Consumer<FightTab> u : updaters)
+		{
+			u.accept(tab);
+		}
+	}
+
+	/** How many times the components were built, for tests: once per structure, never per tick. */
+	int builds()
+	{
+		return builds;
+	}
+
+	void setStatus(String text)
+	{
+		status = text == null ? "" : text;
+		if (statusLine != null)
+		{
+			statusLine.set(Text.small(status, SidePanelStyle.SECONDARY));
+		}
+	}
+
+	private void rebuild(FightTab tab)
+	{
+		builds++;
+		removeAll();
+		updaters.clear();
+		statusLine = null;
+		switch (tab.state)
+		{
+			case EMPTY:
+				empty(tab);
+				break;
+			case PRE_ATTACK:
+				raidSwitch(tab);
+				header(tab);
+				banner(tab);
+				loadout(tab);
+				lastFight(tab);
+				if (tab.lastFight != null)
+				{
+					add(new SidePanelParts.Paragraph("The fight's numbers replace this once you attack.",
+						SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH));
+				}
+				break;
+			default:
+				// One order for both: the live order, with the after-fight sections slotted in (spec 3.1).
+				raidSwitch(tab);
+				header(tab);
+				banner(tab);
+				unscored(tab);
+				listSection(tab, "targets", "Targets", tab.targets, t -> t.targets, false);
+				listSection(tab, "rooms", "Rooms", tab.rooms, t -> t.rooms, true);
+				budget(tab);
+				tiles(tab);
+				curve(tab);
+				execution(tab);
+				damage(tab);
+				rowsSection(tab, "details", "Details", tab.details, t -> t.details);
+				rowsSection(tab, "taken", "Damage taken", tab.taken, t -> t.taken);
+				break;
+		}
+		revalidate();
+		repaint();
+	}
+
+	// ---- sections ----
+
+	private void raidSwitch(FightTab tab)
+	{
+		if (tab.wholeRaid == null)
+		{
+			return;
+		}
+		final JPanel row = new JPanel(new GridLayout(1, 2, 0, 0));
+		row.setOpaque(false);
+		final Segment room = new Segment("This room", () -> actions.wholeRaid(false));
+		final Segment raid = new Segment("Whole raid", () -> actions.wholeRaid(true));
+		row.add(room);
+		row.add(raid);
+		add(row);
+		updaters.add(t ->
+		{
+			final boolean whole = Boolean.TRUE.equals(t.wholeRaid);
+			raid.select(whole);
+			room.select(!whole);
+		});
+	}
+
+	/**
+	 * One side of the room/raid switch (spec 3.1): selected is {@code #3C3C3C}
+	 * with white text, the other no fill and Secondary. Drawn by the panel rather
+	 * than a look-and-feel toggle, whose own fills would win.
+	 */
+	static final class Segment extends JPanel
+	{
+		private final SidePanelText label;
+		private boolean selected;
+
+		Segment(String text, Runnable onClick)
+		{
+			super(new java.awt.GridBagLayout());
+			setBorder(new EmptyBorder(4, 4, 3, 4));
+			label = new SidePanelText(Text.small(text, SidePanelStyle.SECONDARY), false);
+			add(label);
+			setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			addMouseListener(new MouseAdapter()
+			{
+				@Override
+				public void mouseClicked(MouseEvent e)
+				{
+					if (!selected)
+					{
+						onClick.run();
+					}
+				}
+			});
+			select(false);
+		}
+
+		void select(boolean on)
+		{
+			selected = on;
+			setOpaque(on);
+			setBackground(on ? SidePanelStyle.SELECTED : SidePanelStyle.PANEL);
+			label.set(Text.small(label.getText(), on ? SidePanelStyle.VALUE : SidePanelStyle.SECONDARY));
+			repaint();
+		}
+
+		boolean isSelected()
+		{
+			return selected;
+		}
+	}
+
+	private void header(FightTab tab)
+	{
+		final JPanel header = new JPanel(new BorderLayout(6, 0));
+		header.setOpaque(false);
+		final JPanel left = SidePanelParts.stack(4);
+		final SidePanelText name = new SidePanelText(tab.header.name, false);
+		final SidePanelText sub = new SidePanelText(tab.header.sub, false);
+		left.add(name);
+		left.add(sub);
+		final SidePanelText clock = new SidePanelText(tab.header.clock, true);
+		header.add(left, BorderLayout.CENTER);
+		header.add(clock, BorderLayout.EAST);
+		add(header);
+		updaters.add(t ->
+		{
+			name.set(t.header.name, t.header.suffix);
+			sub.set(t.header.sub);
+			clock.set(t.header.clock);
+		});
+	}
+
+	private void banner(FightTab tab)
+	{
+		if (tab.banner == null)
+		{
+			return;
+		}
+		final JPanel b = SidePanelParts.banner();
+		b.add(new SidePanelText(Text.title(LedgerRows.WARNING_TEXT, SidePanelStyle.WARNING), false));
+		final SidePanelParts.Paragraph text = new SidePanelParts.Paragraph(tab.banner.text, SidePanelStyle.SECONDARY,
+			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
+		b.add(text);
+		final JButton save = button("Save debug log", SidePanelStyle.VALUE);
+		save.setToolTipText("Write the last few thousand lines of what the tracker saw to a file, with the loadout and "
+			+ "settings that produced them");
+		save.addActionListener(e -> actions.saveDebugLog());
+		b.add(save);
+		add(b);
+		updaters.add(t ->
+		{
+			text.set(t.banner.text, SidePanelStyle.SECONDARY);
+			b.setToolTipText(t.banner.reason);
+		});
+	}
+
+	private void unscored(FightTab tab)
+	{
+		if (tab.unscoredNote == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(0);
+		card.setBackground(SidePanelStyle.NOTE_CARD);
+		final SidePanelParts.Paragraph text = new SidePanelParts.Paragraph(tab.unscoredNote, SidePanelStyle.BODY,
+			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
+		card.add(text);
+		add(card);
+		updaters.add(t -> text.set(t.unscoredNote, SidePanelStyle.BODY));
+	}
+
+	private void listSection(FightTab tab, String id, String title, PanelSnapshot.ListRows rows,
+		java.util.function.Function<FightTab, PanelSnapshot.ListRows> get, boolean clickable)
+	{
+		if (rows == null)
+		{
+			return;
+		}
+		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
+		final List<SidePanelParts.ListRowView> views = new ArrayList<>();
+		for (int i = 0; i < rows.rows.size(); i++)
+		{
+			final SidePanelParts.ListRowView v = new SidePanelParts.ListRowView(rows.rows.get(i));
+			if (clickable)
+			{
+				final int index = i;
+				selectable(v, () -> actions.showRaidRoom(index));
+			}
+			views.add(v);
+			list.add(v);
+		}
+		final SidePanelSection section = new SidePanelSection(id, title, rows.hint, list, folds);
+		add(section);
+		updaters.add(t ->
+		{
+			final PanelSnapshot.ListRows now = get.apply(t);
+			section.setHint(now.hint);
+			for (int i = 0; i < views.size(); i++)
+			{
+				views.get(i).set(now.rows.get(i));
+			}
+		});
+	}
+
+	private void budget(FightTab tab)
+	{
+		if (tab.budget == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(6);
+		final SidePanelTimeBudgetBar bar = new SidePanelTimeBudgetBar(tab.budget);
+		card.add(bar);
+		final List<SidePanelParts.Swatch> swatches = new ArrayList<>();
+		final List<SidePanelParts.Line> lines = new ArrayList<>();
+		for (PanelSnapshot.BudgetRow r : tab.budget.rows)
+		{
+			final JPanel row = new JPanel(new BorderLayout(1, 0));
+			row.setOpaque(false);
+			final SidePanelParts.Swatch sw = new SidePanelParts.Swatch(r.swatch);
+			final SidePanelParts.Line line = new SidePanelParts.Line(r.label, r.value);
+			line.left.cutSuffixFirst();
+			row.add(sw, BorderLayout.WEST);
+			row.add(line, BorderLayout.CENTER);
+			swatches.add(sw);
+			lines.add(line);
+			card.add(row);
+		}
+		final List<SidePanelParts.Line> average = new ArrayList<>();
+		for (int i = 0; i < tab.budget.average.size(); i++)
+		{
+			final SidePanelParts.Line line = new SidePanelParts.Line(tab.budget.average.get(i));
+			if (i == 0)
+			{
+				line.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+					javax.swing.BorderFactory.createMatteBorder(1, 0, 0, 0, SidePanelStyle.DIVIDER), new EmptyBorder(5, 0, 0, 0)));
+			}
+			average.add(line);
+			card.add(line);
+		}
+		final SidePanelParts.Paragraph note = tab.budget.note == null ? null
+			: new SidePanelParts.Paragraph(tab.budget.note, SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL,
+			SidePanelStyle.CONTENT_WIDTH - 14);
+		if (note != null)
+		{
+			card.add(note);
+		}
+		add(new SidePanelSection("budget", "Where the time went", Text.NONE, card, folds));
+		updaters.add(t ->
+		{
+			bar.set(t.budget);
+			for (int i = 0; i < lines.size(); i++)
+			{
+				final PanelSnapshot.BudgetRow r = t.budget.rows.get(i);
+				swatches.get(i).set(r.swatch, r.swatch == PanelSnapshot.Fill.LUCK_FASTER ? t.budget.luckSavedColour : null);
+				lines.get(i).set(r.label, r.hint.isEmpty() ? null : new Text(" " + r.hint.text, r.hint.colour,
+					r.hint.type), r.value);
+			}
+			for (int i = 0; i < average.size(); i++)
+			{
+				average.get(i).set(t.budget.average.get(i));
+			}
+			if (note != null)
+			{
+				note.set(t.budget.note, SidePanelStyle.MUTED);
+			}
+		});
+	}
+
+	private void tiles(FightTab tab)
+	{
+		if (tab.tiles == null)
+		{
+			return;
+		}
+		final JPanel grid = new JPanel(new GridLayout(2, 2, SidePanelStyle.TILE_GAP, SidePanelStyle.TILE_GAP));
+		grid.setOpaque(false);
+		final List<SidePanelStatTile> views = new ArrayList<>();
+		for (PanelSnapshot.Tile t : tab.tiles)
+		{
+			final SidePanelStatTile v = new SidePanelStatTile(t);
+			views.add(v);
+			grid.add(v);
+		}
+		add(grid);
+		updaters.add(t ->
+		{
+			for (int i = 0; i < views.size(); i++)
+			{
+				views.get(i).set(t.tiles.get(i));
+			}
+		});
+	}
+
+	private void curve(FightTab tab)
+	{
+		if (tab.noCurve != null)
+		{
+			final JPanel card = SidePanelParts.card(0);
+			final SidePanelParts.Paragraph text = new SidePanelParts.Paragraph(tab.noCurve, SidePanelStyle.MUTED,
+				SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
+			card.add(text);
+			add(new SidePanelSection("curve", "Luck", Text.NONE, card, folds));
+			return;
+		}
+		if (tab.curve == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(5);
+		final SidePanelLuckCurve curve = new SidePanelLuckCurve(tab.curve.z);
+		card.add(curve);
+		final JPanel legend = new JPanel(new GridLayout(1, 3, 0, 0));
+		legend.setOpaque(false);
+		legend.add(new SidePanelText(Text.small("bottom 25%", SidePanelStyle.COST), false));
+		final SidePanelText middle = new SidePanelText(Text.small("middle half", SidePanelStyle.SECONDARY), false);
+		legend.add(centred(middle));
+		legend.add(new SidePanelText(Text.small("top 25%", SidePanelStyle.BETTER), true));
+		card.add(legend);
+		final SidePanelParts.Paragraph caption = new SidePanelParts.Paragraph(tab.curve.caption, SidePanelStyle.SECONDARY,
+			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
+		card.add(caption);
+		final SidePanelSection section = new SidePanelSection("curve", "Luck", tab.curve.headerValue, card, folds);
+		add(section);
+		updaters.add(t ->
+		{
+			curve.set(t.curve.z);
+			caption.set(t.curve.caption, SidePanelStyle.SECONDARY);
+			section.setHint(t.curve.headerValue);
+		});
+	}
+
+	/** A text centred in its cell: the curve legend's middle word. */
+	private static JComponent centred(SidePanelText text)
+	{
+		final JPanel p = new JPanel(new java.awt.GridBagLayout());
+		p.setOpaque(false);
+		p.add(text);
+		return p;
+	}
+
+	private void execution(FightTab tab)
+	{
+		if (tab.execution == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(7);
+		final List<SidePanelPartBar> bars = new ArrayList<>();
+		for (PanelSnapshot.Part p : tab.execution.parts)
+		{
+			final SidePanelPartBar bar = new SidePanelPartBar(p);
+			bars.add(bar);
+			card.add(bar);
+		}
+		final SidePanelSection section = new SidePanelSection("execution", "Execution", tab.execution.hint, card, folds);
+		add(section);
+		updaters.add(t ->
+		{
+			section.setHint(t.execution.hint);
+			for (int i = 0; i < bars.size(); i++)
+			{
+				bars.get(i).set(t.execution.parts.get(i));
+			}
+		});
+	}
+
+	private void damage(FightTab tab)
+	{
+		if (tab.damage == null)
+		{
+			return;
+		}
+		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
+		final List<SidePanelParts.SourceRowView> rows = new ArrayList<>();
+		for (PanelSnapshot.Source s : tab.damage.rows)
+		{
+			final SidePanelParts.SourceRowView v = new SidePanelParts.SourceRowView(s);
+			rows.add(v);
+			list.add(v);
+		}
+		final SidePanelSection section = new SidePanelSection("damage", "Damage", tab.damage.hint, list, folds);
+		add(section);
+		updaters.add(t ->
+		{
+			section.setHint(t.damage.hint);
+			for (int i = 0; i < rows.size(); i++)
+			{
+				rows.get(i).set(t.damage.rows.get(i));
+			}
+		});
+	}
+
+	private void rowsSection(FightTab tab, String id, String title, PanelSnapshot.Rows rows,
+		java.util.function.Function<FightTab, PanelSnapshot.Rows> get)
+	{
+		if (rows == null)
+		{
+			return;
+		}
+		final SidePanelParts.RowsCard card = new SidePanelParts.RowsCard(rows.rows, 5);
+		final SidePanelSection section = new SidePanelSection(id, title, rows.hint, card, folds);
+		add(section);
+		updaters.add(t ->
+		{
+			final PanelSnapshot.Rows now = get.apply(t);
+			section.setHint(now.hint);
+			card.set(now.rows);
+		});
+	}
+
+	private void loadout(FightTab tab)
+	{
+		if (tab.loadout == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(6);
+		final SidePanelText name = new SidePanelText(tab.loadout.name, false);
+		card.add(name);
+		final SidePanelParts.RowsCard rows = flat(tab.loadout.rows);
+		card.add(rows);
+		final SidePanelText spec;
+		final SidePanelParts.RowsCard specRows;
+		if (tab.loadout.specName != null)
+		{
+			spec = new SidePanelText(tab.loadout.specName, false);
+			final JPanel specHead = SidePanelParts.stack(0);
+			specHead.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+				javax.swing.BorderFactory.createMatteBorder(1, 0, 0, 0, SidePanelStyle.DIVIDER), new EmptyBorder(6, 0, 0, 0)));
+			specHead.add(spec);
+			card.add(specHead);
+			specRows = flat(tab.loadout.specRows);
+			card.add(specRows);
+		}
+		else
+		{
+			spec = null;
+			specRows = null;
+		}
+		add(new SidePanelSection("loadout", "Loadout", Text.NONE, card, folds));
+		updaters.add(t ->
+		{
+			name.set(t.loadout.name);
+			rows.set(t.loadout.rows);
+			if (spec != null)
+			{
+				spec.set(t.loadout.specName);
+				specRows.set(t.loadout.specRows);
+			}
+		});
+	}
+
+	/** Rows with no card of their own, inside another card. */
+	private static SidePanelParts.RowsCard flat(List<PanelSnapshot.Row> rows)
+	{
+		final SidePanelParts.RowsCard c = new SidePanelParts.RowsCard(rows, 5);
+		c.setOpaque(false);
+		c.setBorder(new EmptyBorder(0, 0, 0, 0));
+		return c;
+	}
+
+	private void lastFight(FightTab tab)
+	{
+		if (tab.lastFight == null)
+		{
+			return;
+		}
+		final SidePanelParts.ListRowView row = new SidePanelParts.ListRowView(tab.lastFight);
+		add(new SidePanelSection("lastFight", "Last fight", Text.NONE, row, folds));
+		updaters.add(t -> row.set(t.lastFight));
+	}
+
+	private void empty(FightTab tab)
+	{
+		final JPanel first = SidePanelParts.card(6);
+		first.add(new SidePanelText(Text.title("No fight yet", SidePanelStyle.VALUE), false));
+		first.add(new SidePanelParts.Paragraph(SidePanelModel.NO_FIGHT_TEXT, SidePanelStyle.SECONDARY,
+			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14));
+		add(first);
+
+		final JPanel history = SidePanelParts.card(0);
+		final SidePanelParts.Paragraph historyText = new SidePanelParts.Paragraph(tab.empty.history,
+			SidePanelStyle.SECONDARY, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
+		history.add(historyText);
+		add(new SidePanelSection("emptyHistory", "History", Text.NONE, history, folds));
+
+		final JPanel tools = SidePanelParts.stack(4);
+		final ToolButtons buttons = new ToolButtons(actions, this);
+		tools.add(buttons);
+		statusLine = new SidePanelText(Text.small(status, SidePanelStyle.SECONDARY), false);
+		tools.add(statusLine);
+		add(new SidePanelSection("tools", "Tools", Text.NONE, tools, folds));
+		updaters.add(t ->
+		{
+			historyText.set(t.empty.history, SidePanelStyle.SECONDARY);
+			buttons.setHistory(t.empty.hasHistory);
+		});
+	}
+
+	/** The Tools grid (spec 3.2): Export CSV, New trip, Save log, Clear…, the last asking first. */
+	static final class ToolButtons extends JPanel
+	{
+		private final JButton export;
+		private final JButton clear;
+
+		ToolButtons(Actions actions, Component parent)
+		{
+			super(new GridLayout(2, 2, SidePanelStyle.TILE_GAP, SidePanelStyle.TILE_GAP));
+			setOpaque(false);
+			export = button("Export CSV", SidePanelStyle.VALUE);
+			export.setToolTipText("Export every saved fight to a CSV file");
+			export.addActionListener(e -> actions.exportAll());
+			final JButton trip = button("New trip", SidePanelStyle.VALUE);
+			trip.setToolTipText("Start the trip totals over. Saved fights are untouched");
+			trip.addActionListener(e -> actions.newTrip());
+			final JButton log = button("Save log", SidePanelStyle.VALUE);
+			log.setToolTipText("Write the last few thousand lines of what the tracker saw to a file, with the loadout and "
+				+ "settings that produced them. Press it when a figure looks wrong");
+			log.addActionListener(e -> actions.saveDebugLog());
+			clear = button("Clear…", SidePanelStyle.DEAD);
+			clear.setToolTipText("Discard every saved fight");
+			clear.addActionListener(e ->
+			{
+				final int answer = JOptionPane.showConfirmDialog(parent, "Clear all saved kills? This can't be undone.",
+					"PvM Performance Tracker", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+				if (answer == JOptionPane.YES_OPTION)
+				{
+					actions.clearHistory();
+				}
+			});
+			add(export);
+			add(trip);
+			add(log);
+			add(clear);
+		}
+
+		/** Export and Clear need something saved (spec 3.2). */
+		void setHistory(boolean any)
+		{
+			export.setEnabled(any);
+			clear.setEnabled(any);
+		}
+	}
+
+	static JButton button(String text, Color colour)
+	{
+		final JButton b = new JButton(text);
+		b.setFont(SidePanelStyle.Type.SMALL.font());
+		b.setForeground(colour);
+		b.setFocusPainted(false);
+		b.setMargin(new Insets(4, 4, 3, 4));
+		return b;
+	}
+
+	/** Hover and click on a list row; the row's own fill is the card's. */
+	private static void selectable(JPanel row, Runnable onClick)
+	{
+		row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		row.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mouseEntered(MouseEvent e)
+			{
+				row.setBackground(SidePanelStyle.SELECTED);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				row.setBackground(SidePanelStyle.CARD);
+			}
+
+			@Override
+			public void mouseClicked(MouseEvent e)
+			{
+				onClick.run();
+			}
+		});
+	}
+
+	// ---- Scrollable: the tab is as wide as the scroll pane's view, never wider ----
+
+	@Override
+	public Dimension getPreferredScrollableViewportSize()
+	{
+		return getPreferredSize();
+	}
+
+	@Override
+	public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction)
+	{
+		return 16;
+	}
+
+	@Override
+	public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction)
+	{
+		return orientation == SwingConstants.VERTICAL ? visibleRect.height - 16 : visibleRect.width;
+	}
+
+	@Override
+	public boolean getScrollableTracksViewportWidth()
+	{
+		return true;
+	}
+
+	@Override
+	public boolean getScrollableTracksViewportHeight()
+	{
+		return false;
+	}
+}

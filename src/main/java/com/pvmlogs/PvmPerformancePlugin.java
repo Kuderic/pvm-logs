@@ -3494,6 +3494,12 @@ public class PvmPerformancePlugin extends Plugin
 				}
 			}
 		}
+
+		// Last, after the tick's bookings (T-033): the side panel builds its snapshot here, only while it's open.
+		if (panel != null)
+		{
+			panel.onTick();
+		}
 	}
 
 	/** Whether the player is still interacting with this NPC. */
