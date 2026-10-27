@@ -74,7 +74,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 			return null;
 		}
 		final Fight fight = plugin.getDisplayFight();
-		if (!onShow(fight, plugin, config, System.currentTimeMillis()))
+		if (!onShow(fight, config, System.currentTimeMillis()))
 		{
 			return null;
 		}
@@ -278,13 +278,24 @@ class PvmPerformanceOverlay extends OverlayPanel
 	 * can be read, until the fight timeout says the fighting is over, the same
 	 * clock that ended the fight itself; and "bosses only" hides both off a boss.
 	 */
-	static boolean onShow(Fight fight, PvmPerformancePlugin plugin, PvmPerformanceConfig config, long now)
+	static boolean onShow(Fight fight, PvmPerformanceConfig config, long now)
 	{
-		return onShow(fight, config.fightTimeoutTicks(), config.overlayBossesOnly(), fight != null && plugin.isBoss(fight),
-			now);
+		return onShow(fight, config.fightTimeoutTicks(), config.overlayBossesOnly(), isBossFight(fight), now);
 	}
 
-	/** {@link #onShow(Fight, PvmPerformancePlugin, PvmPerformanceConfig, long)} with the plugin's answers read out. */
+	/**
+	 * Whether a fight is a boss's for "bosses only": its target is on the boss
+	 * list, or its room is (T-027). A boss's adds are in the boss's room but have
+	 * names of their own: the Sire's respiratory systems hid both overlays the
+	 * moment one was hit (Eric, 2026-10-27).
+	 */
+	static boolean isBossFight(Fight fight)
+	{
+		return fight != null && (PvmPerformancePlugin.isBossName(fight.getTargetName())
+			|| PvmPerformancePlugin.isBossName(fight.encounterName()));
+	}
+
+	/** {@link #onShow(Fight, PvmPerformanceConfig, long)} with the answers read out. */
 	static boolean onShow(Fight fight, int timeoutTicks, boolean bossesOnly, boolean boss, long now)
 	{
 		if (fight == null)

@@ -59,7 +59,7 @@ class LoadoutOverlay extends OverlayPanel
 			return null;
 		}
 		final Fight fight = plugin.getDisplayFight();
-		if (!PvmPerformanceOverlay.onShow(fight, plugin, config, System.currentTimeMillis()))
+		if (!PvmPerformanceOverlay.onShow(fight, config, System.currentTimeMillis()))
 		{
 			return null;
 		}

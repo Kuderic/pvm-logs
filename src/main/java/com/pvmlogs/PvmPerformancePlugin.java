@@ -4222,7 +4222,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	boolean isBoss(Fight fight)
 	{
-		return fight != null && BOSS_NAMES.contains(normalizeName(fight.getTargetName()));
+		return fight != null && isBossName(fight.getTargetName());
+	}
+
+	/** Whether this is a boss's name on the hiscores' list (T-027: the overlays also ask it of the room's name). */
+	static boolean isBossName(String name)
+	{
+		return name != null && BOSS_NAMES.contains(normalizeName(name));
 	}
 
 	private static Set<String> buildBossNames()
