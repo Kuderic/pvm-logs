@@ -685,7 +685,7 @@ final class LedgerRows
 		top(rows, n, state, settings);
 		if (settings.details && state.ended)
 		{
-			details(rows, n, scope, state, settings);
+			details(rows, scope);
 		}
 		// The loadout at the bottom while fighting (Eric, 2026-10-26): before the first attack the panel is barely up, since
 		// the fight opens on targeting and the attack follows a tick or two later. The warning at the top covers it.
@@ -822,42 +822,36 @@ final class LedgerRows
 		rows.add(detail(label, partValue(share, cost), costing ? Colour.COST : Colour.NEUTRAL));
 	}
 
-	private static void details(List<Row> rows, Numbers n, Scope s, State state, Settings settings)
+	private static void details(List<Row> rows, Scope s)
 	{
-		rows.add(blank());
-		final String time = clock(s.combatTicks());
-		if (settings.luck)
-		{
-			// Hidden with Luck under the warning, since it is the clock plus the luck.
-			final boolean known = !Double.isNaN(n.expectedDuration) && !state.warning;
-			rows.add(body("Duration / expected", time + " / " + (known ? duration(n.expectedDuration) : UNKNOWN)));
-		}
-		else
-		{
-			rows.add(body("Duration", time));
-		}
-		// v2 (Analyzer) rows go here, under Duration / expected: " vs your average" and " luckier than", coloured by
-		// PERCENTILE_BETTER / PERCENTILE_COST. Not built in v1.
+		final List<Row> details = new ArrayList<>();
+		// No "Duration / expected" (Eric, 2026-10-26): the clock is in the title and Luck sits right under it, so the row
+		// only repeated them. A history row (this kill against your average) is planned for this spot, above the hits.
 		if (s.expectedHits() > 0)
 		{
-			rows.add(detail(" hits / expected", s.hits() + " / " + oneDecimal(s.expectedHits()), Colour.NEUTRAL));
+			details.add(detail(" hits / expected", s.hits() + " / " + oneDecimal(s.expectedHits()), Colour.NEUTRAL));
 		}
 		if (s.thrallDamage() > 0)
 		{
-			rows.add(detail(" thrall dmg", number(s.thrallDamage()), Colour.NEUTRAL));
+			details.add(detail(" thrall dmg", number(s.thrallDamage()), Colour.NEUTRAL));
 		}
 		if (s.dotDamage() > 0)
 		{
-			rows.add(detail(" burn/poison dmg", number(s.dotDamage()), Colour.NEUTRAL));
+			details.add(detail(" burn/poison dmg", number(s.dotDamage()), Colour.NEUTRAL));
 		}
 		// The boss's doing rather than the player's, so after the fight only (own-output guardrail).
 		if (s.healed() > 0)
 		{
-			rows.add(detail(" boss healed", number(s.healed()), Colour.NEUTRAL));
+			details.add(detail(" boss healed", number(s.healed()), Colour.NEUTRAL));
 		}
 		if (s.ticksLostEating() > 0)
 		{
-			rows.add(detail(" eating", plural(s.ticksLostEating(), "tick"), Colour.NEUTRAL));
+			details.add(detail(" eating", plural(s.ticksLostEating(), "tick"), Colour.NEUTRAL));
+		}
+		if (!details.isEmpty())
+		{
+			rows.add(blank());
+			rows.addAll(details);
 		}
 	}
 

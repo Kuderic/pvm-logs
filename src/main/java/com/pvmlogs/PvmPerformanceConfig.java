@@ -75,8 +75,8 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "overlayLuck",
 		name = "Show luck",
-		description = "Show how many seconds the rolls saved or cost, against your expected damage, and after "
-			+ "the fight how long the same play would have taken at average luck",
+		description = "Show how many seconds the rolls saved or cost: your damage against what your attacks were "
+			+ "expected to deal",
 		position = 3
 	)
 	default boolean overlayLuck()
@@ -99,8 +99,8 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "overlayDetails",
 		name = "Details after the fight",
-		description = "Once the fight ends, add duration against expected, hits, thrall and burn/poison damage, "
-			+ "what the boss healed and ticks spent eating",
+		description = "Once the fight ends, add hits against expected, thrall and burn/poison damage, what the "
+			+ "boss healed and ticks spent eating",
 		position = 3
 	)
 	default boolean overlayDetails()

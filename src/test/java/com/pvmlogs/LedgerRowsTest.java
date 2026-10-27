@@ -149,7 +149,6 @@ public class LedgerRowsTest
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
 			b("", ""),
-			b("Duration / expected", "2:16 / 2:02"),
 			d(" hits / expected", "32 / 30.2"),
 			d(" thrall dmg", "80"),
 			d(" boss healed", "68"),
@@ -171,7 +170,6 @@ public class LedgerRowsTest
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
 			b("", ""),
-			b("Duration / expected", "2:20 / 2:05"),
 			d(" hits / expected", "26 / 33.7"),
 			d(" burn/poison dmg", "40"),
 			d(" boss healed", "71")),
@@ -194,7 +192,6 @@ public class LedgerRowsTest
 			d(" prayer", "99% (-3 s)"),
 			d(" gear", "99% (-2 s)"),
 			b("", ""),
-			b("Duration / expected", "12:40 / 12:26"),
 			d(" hits / expected", "161 / 158.7"),
 			d(" thrall dmg", "290"),
 			d(" burn/poison dmg", "60"),
@@ -224,7 +221,6 @@ public class LedgerRowsTest
 			d(" prayer", "94% (-12 s)", COST),
 			d(" gear", "99% (-2 s)"),
 			b("", ""),
-			b("Duration / expected", "9:12 / 9:25"),
 			d(" hits / expected", "212 / 205.3"),
 			d(" thrall dmg", "410")),
 			build(LedgerExamples.raid(), State.raid("Tombs of Amascut", 3, false, false)));
@@ -260,10 +256,21 @@ public class LedgerRowsTest
 	}
 
 	@Test
-	public void statsUnreliableHidesTheExpectedDurationToo()
+	public void theDetailsHaveNoDurationRow()
 	{
-		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, true));
-		assertTrue(rows.contains(b("Duration / expected", "2:16 / —")));
+		// Eric, 2026-10-26: the clock is in the title and Luck right under it, so "Duration / expected" only repeated them.
+		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false));
+		assertFalse(rows.stream().anyMatch(row -> row.left.startsWith("Duration")));
+		assertEquals(b("", ""), rows.get(9));
+		assertEquals(d(" hits / expected", "32 / 30.2"), rows.get(10));
+	}
+
+	@Test
+	public void noDetailsToShowAddsNoBlankRow()
+	{
+		final FakeScope s = LedgerExamples.noData();
+		final List<Row> rows = build(s, State.fight("New boss", true, true, false));
+		assertEquals(d(" uptime", "95% (-2 s)", COST), rows.get(rows.size() - 1));
 	}
 
 	@Test
@@ -400,13 +407,12 @@ public class LedgerRowsTest
 	// ---- settings ----
 
 	@Test
-	public void luckOffHidesLuckAndTheExpectedDuration()
+	public void luckOffHidesLuck()
 	{
 		final Settings s = new Settings();
 		s.luck = false;
 		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false), s);
 		assertFalse(rows.stream().anyMatch(row -> row.left.equals("Luck")));
-		assertTrue(rows.contains(b("Duration", "2:16")));
 		// Damage keeps its colour: it says how the fight is going on its own.
 		assertTrue(rows.contains(emph("Damage / expected", "688 / 778", COST)));
 	}
