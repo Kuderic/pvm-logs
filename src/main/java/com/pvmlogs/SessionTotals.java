@@ -32,6 +32,8 @@ class SessionTotals
 	private int boostSamples;
 	private double sumBoostCost;
 	private double sumSwitchCost;
+	// See Fight: attacks made with a stat below its base (T-015).
+	private int attacksDrained;
 	private int ticksLostEating;
 	private int ticksLostOther;
 	private int combatTicks;
@@ -68,6 +70,7 @@ class SessionTotals
 		boostSamples = 0;
 		sumBoostCost = 0;
 		sumSwitchCost = 0;
+		attacksDrained = 0;
 		ticksLostEating = 0;
 		ticksLostOther = 0;
 		combatTicks = 0;
@@ -138,6 +141,16 @@ class SessionTotals
 	/** See {@code Fight.recordAttackMade(boolean, double)}. */
 	void recordAttackMade(boolean potted, double boostShare)
 	{
+		recordAttackMade(potted, boostShare, false);
+	}
+
+	/** See {@code Fight.recordAttackMade(boolean, double, boolean)}. */
+	void recordAttackMade(boolean potted, double boostShare, boolean drained)
+	{
+		if (drained)
+		{
+			attacksDrained++;
+		}
 		if (boostShare >= 0)
 		{
 			sumBoostShare += Math.min(1, boostShare);

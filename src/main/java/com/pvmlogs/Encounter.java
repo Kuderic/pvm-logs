@@ -299,6 +299,20 @@ class Encounter
 		return total;
 	}
 
+	/** See {@code Fight.attacksDrained}: over the scored fights. */
+	int getAttacksDrained()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				total += fight.getAttacksDrained();
+			}
+		}
+		return total;
+	}
+
 	int getAttacksPotted()
 	{
 		int total = 0;

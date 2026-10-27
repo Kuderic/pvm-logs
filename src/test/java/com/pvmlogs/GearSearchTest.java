@@ -2,11 +2,9 @@ package com.pvmlogs;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.gameval.ItemID;
 import static org.junit.Assert.assertEquals;
@@ -127,20 +125,15 @@ public class GearSearchTest
 	// Made-up figures in the shape CombatCalc gives: each item adds to the average hit, and the weapon sets the speed.
 	private static final Map<Integer, Double> HIT = new HashMap<>();
 	private static final Map<Integer, Integer> SPEED = new HashMap<>();
-	private static final Map<Integer, String> NAME = new HashMap<>();
 
 	static
 	{
 		HIT.put(TENTACLE, 15.0);
 		SPEED.put(TENTACLE, 4);
-		NAME.put(TENTACLE, "Abyssal tentacle");
 		HIT.put(ELDER_MAUL, 20.0);
 		SPEED.put(ELDER_MAUL, 6);
-		NAME.put(ELDER_MAUL, "Elder maul");
 		HIT.put(BLOOD_FURY, 0.0);
-		NAME.put(BLOOD_FURY, "Amulet of blood fury");
 		HIT.put(TORTURE, 0.4);
-		NAME.put(TORTURE, "Amulet of torture");
 	}
 
 	private static double hit(Loadout gear)
@@ -162,16 +155,6 @@ public class GearSearchTest
 	private static GearSearch.Score perTick()
 	{
 		return gear -> GearSearch.perTick(hit(gear), speed(gear));
-	}
-
-	private static String nameIn(Loadout gear, EquipmentInventorySlot slot)
-	{
-		return NAME.get(gear.id(slot));
-	}
-
-	private static Set<EquipmentInventorySlot> kept(Loadout worn, String setting)
-	{
-		return GearSearch.keptSlots(worn, GearSearch.deliberateNames(setting), slot -> nameIn(worn, slot));
 	}
 
 	private static final Loadout TENTACLE_AND_BLOOD_FURY = empty()
@@ -205,58 +188,15 @@ public class GearSearchTest
 	}
 
 	@Test
-	public void bloodFuryWornWithTortureCarriedIsNotFlaggedByDefault()
+	public void bloodFuryWornWithTortureCarriedIsFlaggedWithItsCost()
 	{
-		final String setting = new PvmPerformanceConfig()
-		{
-		}.deliberateItems();
-		final Set<EquipmentInventorySlot> kept = kept(TENTACLE_AND_BLOOD_FURY, setting);
-		assertEquals(EnumSet.of(EquipmentInventorySlot.AMULET), kept);
-		assertSame(TENTACLE_AND_BLOOD_FURY, GearSearch.best(TENTACLE_AND_BLOOD_FURY,
-			carrying(EquipmentInventorySlot.AMULET, TORTURE), false, kept, perTick()));
-	}
-
-	@Test
-	public void withTheSettingClearedBloodFuryIsFlaggedWithItsCost()
-	{
-		final Set<EquipmentInventorySlot> kept = kept(TENTACLE_AND_BLOOD_FURY, "");
-		assertTrue(kept.isEmpty());
+		// T-015 removed "Worn on purpose" (Eric: typing item names was too hard to use). Blood fury for sustain is a missed
+		// switch again, and its cost is what shows the trade is small: 0.4 of a 15 hit here.
 		final Loadout best = GearSearch.best(TENTACLE_AND_BLOOD_FURY, carrying(EquipmentInventorySlot.AMULET, TORTURE),
-			false, kept, perTick());
+			false, perTick());
 		assertNotSame(TENTACLE_AND_BLOOD_FURY, best);
 		assertEquals(TORTURE, best.id(EquipmentInventorySlot.AMULET));
-		// Small, and shown as small: 0.4 of a 15 hit.
 		assertEquals(0.4, GearSearch.switchCost(hit(TENTACLE_AND_BLOOD_FURY), 4, hit(best), speed(best)), 1e-9);
-	}
-
-	@Test
-	public void aKeptSlotLeavesTheOtherSlotsJudged()
-	{
-		final Loadout worn = TENTACLE_AND_BLOOD_FURY.with(EquipmentInventorySlot.HEAD, 100);
-		final Loadout best = GearSearch.best(worn, Arrays.asList(
-			new GearSearch.Candidate(EquipmentInventorySlot.AMULET, TORTURE),
-			new GearSearch.Candidate(EquipmentInventorySlot.HEAD, 500)),
-			false, EnumSet.of(EquipmentInventorySlot.AMULET), higherIdIsBetter());
-		assertEquals(BLOOD_FURY, best.id(EquipmentInventorySlot.AMULET));
-		assertEquals(500, best.id(EquipmentInventorySlot.HEAD));
-	}
-
-	@Test
-	public void theSettingIsCommaSeparatedNamesMatchedWithoutCase()
-	{
-		assertEquals(2, GearSearch.deliberateNames(" Amulet of Blood Fury , ring of suffering (i),, ").size());
-		assertTrue(GearSearch.deliberateNames("").isEmpty());
-		assertTrue(GearSearch.deliberateNames(null).isEmpty());
-		assertEquals(EnumSet.of(EquipmentInventorySlot.AMULET), kept(TENTACLE_AND_BLOOD_FURY, "AMULET OF BLOOD FURY"));
-		// A name has to match whole: "blood fury" alone is not the amulet.
-		assertTrue(kept(TENTACLE_AND_BLOOD_FURY, "blood fury").isEmpty());
-	}
-
-	@Test
-	public void theWeaponIsNeverKeptOrJudgedWhateverTheSettingSays()
-	{
-		// Naming the weapon changes nothing: it is pinned already.
-		assertTrue(kept(TENTACLE_AND_BLOOD_FURY, "Abyssal tentacle").isEmpty());
 	}
 
 	@Test
