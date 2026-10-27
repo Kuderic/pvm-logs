@@ -90,6 +90,9 @@ class LoadoutOverlay extends OverlayPanel
 			l.specMaxHit = plugin.getExpectedSpecMaxHit();
 			l.specAccuracy = plugin.getExpectedSpecAccuracy();
 			l.specAverage = plugin.getExpectedSpecAverageHit();
+			l.specExtra = plugin.getExpectedSpecExtra();
+			// Every extra the plugin counts today is a burn (T-030).
+			l.specExtraKind = "burn";
 		}
 		return l;
 	}
