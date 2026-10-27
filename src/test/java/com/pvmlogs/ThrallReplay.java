@@ -119,6 +119,10 @@ final class ThrallReplay
 	final List<String> reflected = new ArrayList<>();
 	private int targetId = -1;
 	private int fight;
+	/** Ticks the plugin's check would raise XP CONTRADICTS BOOKING on: an award while the weapon was booked busy. */
+	final List<Integer> contradictions = new ArrayList<>();
+	/** What the ledger took for casts that are not attacks (T-024), as its log lines. */
+	final List<String> casts = new ArrayList<>();
 	// The last thrall seen spawning or claimed, which a projectile naming no source is taken to have come from: these
 	// are solo logs, and the log does not say where a projectile started.
 	private int lastThrall = -1;
@@ -516,7 +520,16 @@ final class ThrallReplay
 			}
 		}
 		extrasThisTick.clear();
-		ledger.close(tick, targetId, formulaMultiplier, null);
+		final XpLedger.Award award = ledger.close(tick, targetId, formulaMultiplier, null);
+		if (ledger.castNote() != null)
+		{
+			casts.add(ledger.castNote());
+		}
+		// As trackThrallAndXp: the drop proves an attack thrown now, which a booking still busy contradicts.
+		if (award != null && attackDueTick != Integer.MIN_VALUE && tick < attackDueTick && targetId >= 0)
+		{
+			contradictions.add(tick);
+		}
 		notes.addAll(ledger.expire(tick));
 		thralls.tick(tick);
 		notes.addAll(thralls.drainNotes());

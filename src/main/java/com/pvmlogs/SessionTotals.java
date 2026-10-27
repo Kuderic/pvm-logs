@@ -50,6 +50,9 @@ class SessionTotals
 	private int ticksLostEating;
 	private int ticksLostOther;
 	private int combatTicks;
+	// The ticks of the trip's scored fights only (T-024): the time its damage, expected and thrall/DoT/reflect totals come
+	// from, since those are fed behind isScored(). combatTicks stays every fight's, the Sire's respiratory systems included.
+	private int scoredCombatTicks;
 	// Running totals of what each attack was expected to do, so the measured side can be compared against the sum of every
 	// weapon's own contribution.
 	private double sumExpectedAccuracy;
@@ -95,6 +98,7 @@ class SessionTotals
 		ticksLostEating = 0;
 		ticksLostOther = 0;
 		combatTicks = 0;
+		scoredCombatTicks = 0;
 		sumExpectedAccuracy = 0;
 		sumExpectedAverageHit = 0;
 	}
@@ -109,8 +113,12 @@ class SessionTotals
 		noteActivity(now);
 	}
 
-	// Books a tick that passed with the weapon off cooldown and no attack made.
-	void recordTickLost(boolean eating)
+	/**
+	 * Books a tick that passed with the weapon off cooldown and no attack made.
+	 *
+	 * @param scored whether the fight the tick was spent on is scored (T-024)
+	 */
+	void recordTickLost(boolean eating, boolean scored)
 	{
 		if (eating)
 		{
@@ -120,13 +128,22 @@ class SessionTotals
 		{
 			ticksLostOther++;
 		}
-		combatTicks++;
+		recordTick(scored);
 	}
 
-	/** A tick that passed while the weapon was still on cooldown. */
-	void recordTickSpent()
+	/** A tick that passed while the weapon was still on cooldown, or an attack on an unscored target. */
+	void recordTickSpent(boolean scored)
+	{
+		recordTick(scored);
+	}
+
+	private void recordTick(boolean scored)
 	{
 		combatTicks++;
+		if (scored)
+		{
+			scoredCombatTicks++;
+		}
 	}
 
 	/** Damage from one hitsplat; see {@code Fight.recordDamageDealt}. */
@@ -221,7 +238,8 @@ class SessionTotals
 			boostSamples++;
 		}
 		attacksMade++;
-		combatTicks++;
+		// Fed only for a scored fight's attacks; an unscored one's tick goes through recordTickSpent(false).
+		recordTick(true);
 		attempts++;
 		targets++;
 		if (potted)

@@ -161,27 +161,74 @@ class XpLedger
 	}
 
 	/**
+	 * Spells cast in fights that pay Magic experience and are not attacks
+	 * (T-024), with what each pays per cast, the likeliest first. From the OSRS
+	 * Wiki (Vengeance, Vengeance Other, Spellbook Swap, Arceuus spellbook, Death
+	 * Charge; read 2026-10-27). Eric's logs show 88 (a greater thrall, on the tick
+	 * it spawns beside him), 90 (Death Charge), 112 (Vengeance, 23:08 log tick
+	 * 2803), 130 (Spellbook Swap) and 178 (a thrall and Death Charge on one tick).
+	 * All whole numbers, so a drop reads them exactly.
+	 *
+	 * <p>A splash pays its spell's base and nothing else, so on a tick that paid
+	 * Magic alone an amount here could also be a splash. The damage spells' bases
+	 * are lower (a guess from memory: the barrages, near the top, pay about 52).
+	 * The curses are not, from the wiki's spell list: Stun pays 90 like Death
+	 * Charge, Enfeeble 83 like Ward of Arceuus, Vulnerability 76 like Vile Vigour.
+	 * Casting those on a boss is rare enough to take the cast.
+	 */
+	static final String[] CAST_NAMES = {
+		"Resurrect Greater thrall", "Death Charge", "Vengeance", "Spellbook Swap",
+		"Resurrect Superior thrall", "Resurrect Lesser thrall", "Mark of Darkness", "Ward of Arceuus",
+		"Shadow Veil", "Vile Vigour", "Lesser Corruption", "Greater Corruption", "Vengeance Other",
+		"Demonic Offering", "Sinister Offering"};
+	static final int[] CAST_XP = {
+		88, 90, 112, 130,
+		70, 55, 70, 83,
+		58, 76, 75, 95, 108,
+		175, 180};
+
+	// What the last close() took for casts rather than attacks, for the plugin's log; null when nothing.
+	private String castNote;
+
+	/**
 	 * Ends the tick: whatever it paid becomes one award against the target. A
 	 * skill that cannot report - at 200m with no fake drop - is unknown rather
 	 * than zero, so its silence is not read as a miss.
+	 *
+	 * <p>Magic paid by a cast that is not an attack is taken out first (T-024),
+	 * so it neither makes an award of its own nor reads as one: see
+	 * {@link #castMagic}. What was taken is in {@link #castNote()}.
 	 *
 	 * @return the award made, or null when nothing was paid
 	 */
 	Award close(int tick, int targetId, double formulaMultiplier, boolean[] cannotReport)
 	{
+		castNote = null;
 		boolean any = false;
 		for (boolean r : reported)
 		{
 			any |= r;
 		}
 		Award award = null;
+		final int[] g = new int[SKILLS.length];
+		for (int i = 0; any && i < g.length; i++)
+		{
+			g[i] = reported[i] ? open[i] : cannotReport != null && cannotReport[i] ? XpDecoder.UNKNOWN : 0;
+		}
+		final String cast = any ? castMagic(g) : null;
+		if (cast != null)
+		{
+			castNote = String.format("CAST not an attack on %d: %s (+%d Magic)", tick, cast, g[MAGIC]);
+			g[MAGIC] = 0;
+			// What is left is the attack's, if there was one; a tick that paid the cast alone makes no award.
+			any = false;
+			for (int gain : g)
+			{
+				any |= gain > 0;
+			}
+		}
 		if (any)
 		{
-			final int[] g = new int[SKILLS.length];
-			for (int i = 0; i < g.length; i++)
-			{
-				g[i] = reported[i] ? open[i] : cannotReport != null && cannotReport[i] ? XpDecoder.UNKNOWN : 0;
-			}
 			// For calibration: a single combat skill at four a point is the sharpest, hitpoints the fallback.
 			int calGain = -1;
 			double calRate = 0;
@@ -207,6 +254,79 @@ class XpLedger
 		java.util.Arrays.fill(open, 0);
 		java.util.Arrays.fill(reported, false);
 		return award;
+	}
+
+	/** What the last {@link #close} took for casts that are not attacks, as a log line; null when nothing. */
+	String castNote()
+	{
+		return castNote;
+	}
+
+	/**
+	 * Whether the Magic in one tick's gains was paid by casts that are not
+	 * attacks, and which: their names, or null when it is (or may be) an attack's.
+	 * Two cases, read from the gains alone:
+	 * <ul>
+	 * <li>Melee or ranged paid on the same tick. Neither ever pays Magic, and one
+	 * tick holds one attack, so the Magic is a cast's whatever its amount: named
+	 * when the amount is one in {@link #CAST_XP}, else "a spell". (A defensive
+	 * cast pays Defence beside Magic, which is why Defence alone does not count.)
+	 * Seen in the logs: Spellbook Swap's 130 beside a blowpipe's Ranged, a thrall's
+	 * 88 or Death Charge's 90 beside a melee hit.</li>
+	 * <li>Magic alone, with hitpoints reporting nothing, in an amount one cast or
+	 * two together pay. A splash pays only its spell's base, never this much.</li>
+	 * </ul>
+	 * Not caught: a magic attack and a cast on one tick, whose Magic adds up. The
+	 * attack's damage still decodes from hitpoints, so its award is right; only
+	 * the cast goes unnamed.
+	 */
+	static String castMagic(int[] gains)
+	{
+		final int magic = gains[MAGIC];
+		if (magic <= 0)
+		{
+			return null;
+		}
+		final String named = castsPaying(magic);
+		if (gains[ATTACK] > 0 || gains[STRENGTH] > 0 || gains[RANGED] > 0)
+		{
+			return named != null ? named : "a spell";
+		}
+		final boolean magicAlone = gains[ATTACK] == 0 && gains[STRENGTH] == 0 && gains[DEFENCE] == 0
+			&& gains[RANGED] == 0 && gains[HITPOINTS] == 0;
+		return magicAlone ? named : null;
+	}
+
+	/**
+	 * The cast, or two casts on one tick, that pay exactly this much Magic; null
+	 * when none. Casts paying the same are named together ("or"); of two casts,
+	 * the likeliest pair in {@link #CAST_XP}'s order.
+	 */
+	static String castsPaying(int magic)
+	{
+		final StringBuilder one = new StringBuilder();
+		for (int i = 0; i < CAST_XP.length; i++)
+		{
+			if (CAST_XP[i] == magic)
+			{
+				one.append(one.length() == 0 ? "" : " or ").append(CAST_NAMES[i]);
+			}
+		}
+		if (one.length() > 0)
+		{
+			return one.toString();
+		}
+		for (int i = 0; i < CAST_XP.length; i++)
+		{
+			for (int j = i; j < CAST_XP.length; j++)
+			{
+				if (CAST_XP[i] + CAST_XP[j] == magic)
+				{
+					return CAST_NAMES[i] + " and " + CAST_NAMES[j];
+				}
+			}
+		}
+		return null;
 	}
 
 	/** Settles awards whose damage can no longer be arriving: checks them, and calibrates from the clean ones. */
