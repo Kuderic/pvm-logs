@@ -355,6 +355,25 @@ public class PvmPerformancePlugin extends Plugin
 	// The weapon held at the end of each recent tick, so an attack's splats are counted for the weapon that threw it: a
 	// special is thrown with the claws, which are usually swapped out again before their splats land.
 	private final Map<Integer, Integer> weaponByTick = new HashMap<>();
+	// This tick's splats counted beyond their attack's splats, logged once the tick's re-judging is done.
+	private final List<ExtraSplat> extrasThisTick = new ArrayList<>();
+
+	/** A splat counted beyond what its attack deals, waiting for the tick's re-judging before it is logged. */
+	private static final class ExtraSplat
+	{
+		final AttackSplats.Burst burst;
+		final String npcName;
+		final int amount;
+		final int tick;
+
+		ExtraSplat(AttackSplats.Burst burst, String npcName, int amount, int tick)
+		{
+			this.burst = burst;
+			this.npcName = npcName;
+			this.amount = amount;
+			this.tick = tick;
+		}
+	}
 	// Whether the goal prayer was up during each recent tick. A history rather than a slot, because the tick an attack
 	// goes out on is not the tick it is booked on, and the gap differs by style.
 	private final Map<Integer, Boolean> prayerUpByTick = new HashMap<>();
@@ -551,6 +570,7 @@ public class PvmPerformancePlugin extends Plugin
 		specEnergy = -1;
 		recentSpecDrops.clear();
 		weaponByTick.clear();
+		extrasThisTick.clear();
 		lastHitsplatTick.clear();
 		burstLanded.clear();
 		bursts.clear();
@@ -732,7 +752,7 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				recordAttackObserved(false, npc.getId(), bookingLag);
 			}
-			countSplat(npc, tick, booked ? tick - bookingLag : Integer.MIN_VALUE, flight);
+			countSplat(npc, tick, hitsplat.getAmount(), booked ? tick - bookingLag : Integer.MIN_VALUE, flight);
 			// What the player's path made of it, kept for this tick in case the thrall's projectile says otherwise.
 			if (splatInFlight != null && splatInFlight.npcIndex == npc.getIndex())
 			{
@@ -859,15 +879,16 @@ public class PvmPerformancePlugin extends Plugin
 	 * Counts a splat the player's path kept against the attack it belongs to
 	 * (T-017). A booked blow or a projectile arriving starts an attack's count;
 	 * a splat beside it on its tick, or on the next, is one more of its splats,
-	 * and one beyond what the weapon deals is logged as an extra. Without our
-	 * thrall out, that extra is still the player's for now: T-017 Part B
-	 * (recoil, vengeance) decides where those go.
+	 * and one beyond what the weapon deals is logged as an extra (once the
+	 * tick's re-judging is done, see reportExtras). Without our thrall out, that
+	 * extra is still the player's for now: T-017 Part B (recoil, vengeance)
+	 * decides where those go.
 	 *
 	 * @param bookedThrownTick the tick a blow this splat booked was thrown on,
 	 *                         or {@code Integer.MIN_VALUE} if it booked none
 	 * @param flight           the projectile attack this splat arrived as, or null
 	 */
-	private void countSplat(NPC npc, int tick, int bookedThrownTick, PendingHit flight)
+	private void countSplat(NPC npc, int tick, int amount, int bookedThrownTick, PendingHit flight)
 	{
 		final int index = npc.getIndex();
 		if (flight != null)
@@ -893,8 +914,7 @@ public class PvmPerformancePlugin extends Plugin
 		refreshSpecial(burst);
 		if (!burst.give(tick))
 		{
-			debug.log("EXTRA SPLAT on %s: %s hits %d, this is %d%s", npc.getName(), burst.weapon(),
-				burst.splats().count, burst.given(), burst.isSpecial() ? " (special)" : "");
+			extrasThisTick.add(new ExtraSplat(burst, npc.getName(), amount, tick));
 		}
 	}
 
@@ -1100,6 +1120,42 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			playerSplatsThisTick.clear();
 			splatInFlight = null;
+			reportExtras();
+		}
+	}
+
+	/**
+	 * Logs the tick's splats counted beyond their attack's splats (T-017), once
+	 * the re-judging above is done: when the thrall's 0 lands ahead of the
+	 * player's 45, the 0 takes the blow's place and the 45 reads as an extra
+	 * until the thrall's unclaimed projectile hands the 0 back. Only the extras
+	 * still standing are logged.
+	 */
+	private void reportExtras()
+	{
+		if (extrasThisTick.isEmpty())
+		{
+			return;
+		}
+		final Map<AttackSplats.Burst, List<ExtraSplat>> byAttack = new LinkedHashMap<>();
+		for (ExtraSplat extra : extrasThisTick)
+		{
+			byAttack.computeIfAbsent(extra.burst, k -> new ArrayList<>()).add(extra);
+		}
+		extrasThisTick.clear();
+		for (Map.Entry<AttackSplats.Burst, List<ExtraSplat>> attack : byAttack.entrySet())
+		{
+			final AttackSplats.Burst burst = attack.getKey();
+			final List<ExtraSplat> extras = attack.getValue();
+			final int count = burst.splats().count;
+			final int standing = Math.min(extras.size(), burst.given() - count);
+			for (int i = extras.size() - standing; i < extras.size(); i++)
+			{
+				final ExtraSplat extra = extras.get(i);
+				debug.log("EXTRA SPLAT on %s: %s hits %d, this is %d%s (a %d on tick %d)", extra.npcName, burst.weapon(),
+					count, count + standing - (extras.size() - i) + 1, burst.isSpecial() ? " (special)" : "", extra.amount,
+					extra.tick);
+			}
 		}
 	}
 

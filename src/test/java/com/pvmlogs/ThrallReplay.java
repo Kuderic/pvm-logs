@@ -124,8 +124,13 @@ final class ThrallReplay
 	final Map<Integer, List<Integer>> cleanHits = new HashMap<>();
 	/** Per fight, the first tick the ledger reported itself trusted, if it did. */
 	final Map<Integer, Integer> trustedFrom = new HashMap<>();
-	/** Splats the player kept beyond what their attack deals, as "tick: amount" (the plugin's EXTRA SPLAT lines). */
+	/**
+	 * Splats the player kept beyond what their attack deals, as "tick: amount": the plugin's EXTRA SPLAT lines, settled
+	 * once the tick's re-judging is done.
+	 */
 	final List<String> extras = new ArrayList<>();
+	// This tick's, before the re-judging: {tick, amount} against the attack each was counted on.
+	private final Map<AttackSplats.Burst, List<int[]>> extrasThisTick = new java.util.LinkedHashMap<>();
 	final List<String> notes = new ArrayList<>();
 
 	ThrallReplay(double formulaMultiplier, double playerAccuracy, int playerMaxHit, int weaponSpeed)
@@ -345,7 +350,7 @@ final class ThrallReplay
 			final AttackSplats.Burst burst = bursts.get(index);
 			if (burst != null && burst.belongsOn(tick) && !burst.give(tick))
 			{
-				extras.add(tick + ": " + amount);
+				extrasThisTick.computeIfAbsent(burst, k -> new ArrayList<>()).add(new int[]{tick, amount});
 			}
 		}
 		playerSplatsThisTick.add(new int[]{judgedAt, index, amount, booked ? 1 : 0,
@@ -417,6 +422,17 @@ final class ThrallReplay
 			rejudge(tick);
 		}
 		playerSplatsThisTick.clear();
+		// As the plugin's reportExtras: only the extras still standing once a splat may have been handed back.
+		for (Map.Entry<AttackSplats.Burst, List<int[]>> attack : extrasThisTick.entrySet())
+		{
+			final List<int[]> counted = attack.getValue();
+			final int standing = Math.min(counted.size(), attack.getKey().given() - attack.getKey().splats().count);
+			for (int i = counted.size() - standing; i < counted.size(); i++)
+			{
+				extras.add(counted.get(i)[0] + ": " + counted.get(i)[1]);
+			}
+		}
+		extrasThisTick.clear();
 		ledger.close(tick, targetId, formulaMultiplier, null);
 		notes.addAll(ledger.expire(tick));
 		thralls.tick(tick);
