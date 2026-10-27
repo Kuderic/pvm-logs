@@ -54,6 +54,10 @@ class Fight
 	// Splats of a type this plugin does not know, counted against the target's health and logged by type so they can be
 	// identified. Never the player's.
 	private int unclassifiedDamage;
+	// The player's damage that landed on something other than hitpoints - a shield, an armour, a totem's charge, a
+	// warden's poise - by kind. Still in damage dealt, since it is the attack's outcome and the expected side scores it;
+	// kept out of the target's health. Null until there is any, which is what a fight from an older history reads as.
+	private java.util.Map<String, Integer> notHitpoints;
 	// Why this fight's expected side should not be trusted, or null: the target's stats carried a warning, or the attacks
 	// that landed were too far from the expected count to be luck. See StatsCheck.
 	private String statsWarning;
@@ -189,6 +193,30 @@ class Fight
 	void recordDotDamage(int amount)
 	{
 		dotDamage += Math.max(0, amount);
+	}
+
+	/** One of the player's splats that landed on something other than hitpoints. See notHitpoints. */
+	void recordNotHitpoints(String kind, int amount)
+	{
+		if (notHitpoints == null)
+		{
+			notHitpoints = new java.util.LinkedHashMap<>();
+		}
+		notHitpoints.merge(kind, Math.max(0, amount), Integer::sum);
+	}
+
+	/** All of the player's damage that landed on something other than hitpoints. */
+	int notHitpointsTotal()
+	{
+		int total = 0;
+		if (notHitpoints != null)
+		{
+			for (int v : notHitpoints.values())
+			{
+				total += v;
+			}
+		}
+		return total;
 	}
 
 	/** A heal splat on the target. */

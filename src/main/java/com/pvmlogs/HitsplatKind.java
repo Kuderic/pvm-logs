@@ -20,14 +20,39 @@ import net.runelite.api.HitsplatID;
  * non-damage ones mean is the wiki's Hitsplat page: disease drains stats but never
  * hitpoints, prayer drain is Phantom Muspah's prayer shield, sanity is the
  * Whisperer's, poise is the wardens' phase two. None of those touch the target's
- * hitpoints. CYAN_UP and CYAN_DOWN are taken, from their names, to be the wiki's
- * charge and uncharge splats (the Nightmare's totems); that pairing is not
- * verified, so each one is still logged by type.
+ * hitpoints.
+ *
+ * <p><b>The coloured damage types.</b> RuneLite names them by colour only
+ * (cyan, orange, yellow, white), each with a mine, an others' and a max-hit
+ * variant. The wiki's Hitsplat page lists exactly four other splat families that
+ * come in those three variants and are not hitpoints: shield, armour, charge and
+ * uncharge. Matched by the colour of the wiki's own images (measured
+ * 2026-10-26): shield is cyan, armour orange, charge yellow, uncharge grey-white.
+ * So cyan is shield damage (the Hueycoatl, Kephri, Verzik, the Nightmare,
+ * Tempoross), orange is armour (Zalcano, the Smorks), yellow and white are the
+ * Nightmare's totems being charged and uncharged, and the poise types are the
+ * wardens'. This pairing is an inference from names and colours, not yet seen in
+ * a log; every such splat is logged with its type so a fight can confirm it.
+ * CYAN_UP and CYAN_DOWN, with no mine/others/max variants, are taken to be the
+ * wiki's "alt charge" and "alt uncharge" (Kephri's scarab shield, the Palm of
+ * Resourcefulness; alt charge also restores the Chambers' Vasa Nistirio, which
+ * would be a heal - unverified, so they are logged and left out of the count).
+ *
+ * <p>The player's own shield, armour, charge and poise splats are the player's
+ * attacks landing, and the expected side scores those attacks, so they stay the
+ * player's weapon damage (Eric, 2026-10-26, T-011 item 3); they are kept out of
+ * the target's hitpoints only.
  */
 enum HitsplatKind
 {
-	/** The player's own weapon or spell (or our thrall, which shares the type). */
+	/** The player's own weapon or spell landing on hitpoints (or our thrall, which shares the type). */
 	PLAYER,
+	/**
+	 * The player's attack landing on something other than hitpoints: a shield, an
+	 * armour, a totem's charge, a warden's poise. Still the player's attack and its
+	 * weapon damage; not the target's hitpoints. See the class notes.
+	 */
+	PLAYER_NOT_HITPOINTS,
 	/** Burn, poison, venom, bleed: damage over time with no owner on the splat. */
 	DAMAGE_OVER_TIME,
 	/** The NPC healing. */
@@ -47,7 +72,11 @@ enum HitsplatKind
 	{
 		if (mine)
 		{
-			return PLAYER;
+			return notHitpoints(type) ? PLAYER_NOT_HITPOINTS : PLAYER;
+		}
+		if (notHitpoints(type))
+		{
+			return NO_HEALTH_EFFECT;
 		}
 		switch (type)
 		{
@@ -65,10 +94,35 @@ enum HitsplatKind
 			case HitsplatID.PRAYER_DRAIN:
 			case HitsplatID.SANITY_DRAIN:
 			case HitsplatID.SANITY_RESTORE:
-			case HitsplatID.DAMAGE_OTHER_POISE:
 				return NO_HEALTH_EFFECT;
 			default:
 				return others ? OTHER_PLAYER : UNCLASSIFIED;
+		}
+	}
+
+	/** Shield, armour, charge, uncharge and poise, in every variant: see the class notes. */
+	static boolean notHitpoints(int type)
+	{
+		switch (type)
+		{
+			case HitsplatID.DAMAGE_ME_CYAN:
+			case HitsplatID.DAMAGE_OTHER_CYAN:
+			case HitsplatID.DAMAGE_MAX_ME_CYAN:
+			case HitsplatID.DAMAGE_ME_ORANGE:
+			case HitsplatID.DAMAGE_OTHER_ORANGE:
+			case HitsplatID.DAMAGE_MAX_ME_ORANGE:
+			case HitsplatID.DAMAGE_ME_YELLOW:
+			case HitsplatID.DAMAGE_OTHER_YELLOW:
+			case HitsplatID.DAMAGE_MAX_ME_YELLOW:
+			case HitsplatID.DAMAGE_ME_WHITE:
+			case HitsplatID.DAMAGE_OTHER_WHITE:
+			case HitsplatID.DAMAGE_MAX_ME_WHITE:
+			case HitsplatID.DAMAGE_ME_POISE:
+			case HitsplatID.DAMAGE_OTHER_POISE:
+			case HitsplatID.DAMAGE_MAX_ME_POISE:
+				return true;
+			default:
+				return false;
 		}
 	}
 
@@ -98,9 +152,9 @@ enum HitsplatKind
 			case HitsplatID.DISEASE_BLOCKED:
 				return "disease blocked";
 			case HitsplatID.CYAN_UP:
-				return "charge up";
+				return "alt charge";
 			case HitsplatID.CYAN_DOWN:
-				return "charge down";
+				return "alt uncharge";
 			case HitsplatID.PRAYER_DRAIN:
 				return "prayer drain";
 			case HitsplatID.SANITY_DRAIN:
@@ -109,6 +163,29 @@ enum HitsplatKind
 				return "sanity restore";
 			case HitsplatID.DAMAGE_OTHER_POISE:
 				return "others' poise";
+			case HitsplatID.DAMAGE_ME_CYAN:
+			case HitsplatID.DAMAGE_MAX_ME_CYAN:
+				return "shield";
+			case HitsplatID.DAMAGE_OTHER_CYAN:
+				return "others' shield";
+			case HitsplatID.DAMAGE_ME_ORANGE:
+			case HitsplatID.DAMAGE_MAX_ME_ORANGE:
+				return "armour";
+			case HitsplatID.DAMAGE_OTHER_ORANGE:
+				return "others' armour";
+			case HitsplatID.DAMAGE_ME_YELLOW:
+			case HitsplatID.DAMAGE_MAX_ME_YELLOW:
+				return "charge";
+			case HitsplatID.DAMAGE_OTHER_YELLOW:
+				return "others' charge";
+			case HitsplatID.DAMAGE_ME_WHITE:
+			case HitsplatID.DAMAGE_MAX_ME_WHITE:
+				return "uncharge";
+			case HitsplatID.DAMAGE_OTHER_WHITE:
+				return "others' uncharge";
+			case HitsplatID.DAMAGE_ME_POISE:
+			case HitsplatID.DAMAGE_MAX_ME_POISE:
+				return "poise";
 			default:
 				return "type " + type;
 		}

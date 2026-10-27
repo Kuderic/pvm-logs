@@ -626,11 +626,23 @@ public class PvmPerformancePlugin extends Plugin
 			// two ticks, which the burst logic already books as the single attack it is. A thrall, a bleed, poison and a max
 			// hit all carry their own type, and telling those apart from a real hit of the player's is the whole question
 			// whenever measured damage and attacks disagree.
-			debug.log("hitsplat %d type %d on %s (npc %d, index %d), landedAttack=%b, fromFlight=%b",
+			// Shield, armour, charge and poise splats are the player's attack landing on something that is not hitpoints:
+			// still the attack and its weapon damage, which the expected side scores, but not the target's health. See
+			// HitsplatKind.
+			final boolean onHitpoints = HitsplatKind.of(true, false, hitsplat.getHitsplatType()) == HitsplatKind.PLAYER;
+			debug.log("hitsplat %d type %d on %s (npc %d, index %d), landedAttack=%b, fromFlight=%b%s",
 				hitsplat.getAmount(), hitsplat.getHitsplatType(), current.getTargetName(), npc.getId(), npc.getIndex(),
-				landedAttack, arrivedFromFlight);
-			damageByIndex.merge(npc.getIndex(), hitsplat.getAmount(), Integer::sum);
-			health.damage(npc.getIndex(), npc.getId(), hitsplat.getAmount(), tick);
+				landedAttack, arrivedFromFlight,
+				onHitpoints ? "" : ", NOT HITPOINTS (" + HitsplatKind.typeName(hitsplat.getHitsplatType()) + ")");
+			if (onHitpoints)
+			{
+				damageByIndex.merge(npc.getIndex(), hitsplat.getAmount(), Integer::sum);
+				health.damage(npc.getIndex(), npc.getId(), hitsplat.getAmount(), tick);
+			}
+			else
+			{
+				current.recordNotHitpoints(HitsplatKind.typeName(hitsplat.getHitsplatType()), hitsplat.getAmount());
+			}
 			current.recordDamageDealt(hitsplat.getAmount(), now, landedAttack);
 			if (current.isScored())
 			{
@@ -2862,10 +2874,12 @@ public class PvmPerformancePlugin extends Plugin
 		final int counted = health.damageCounted(index);
 		final int healed = health.healed(index);
 		final int net = counted - healed;
-		debug.log("RECONCILE %s (npc %d)%s: weapon %d + thrall %d + dot %d + others %d + unclassified %d, healed %d; on the "
-				+ "target %d - %d = %d against %d full hp (%s)%s; bar last read %d, now %d left (%s)",
+		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + dot %d + others %d + "
+				+ "unclassified %d, healed %d; on the target %d - %d = %d against %d full hp (%s)%s; bar last read %d, now "
+				+ "%d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
-			current.getDamageDealt(), current.getThrallDamage(), current.getDotDamage(), current.getOthersDamage(),
+			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getDotDamage(),
+			current.getOthersDamage(),
 			current.getUnclassifiedDamage(), current.getHealed(), counted, healed, net, full, fullFrom,
 			died && full > 0 ? String.format(", diff %+d (%.1f%%)", net - full, 100.0 * (net - full) / full) : "",
 			health.lastHudHp(index), health.remaining(index, tick), health.source(index, tick));
