@@ -42,6 +42,8 @@ final class LedgerRows
 	static final String UNKNOWN = "—";
 	/** U+00B7, also in the fonts. */
 	private static final String DOT = " · ";
+	/** Luck, or this kill against your average, that rounds to no seconds either way. */
+	static final String EVEN = "even";
 	/** The stat boost row's figure when more than half the attacks were below base (T-016). */
 	static final String DRAINED = "drained";
 
@@ -834,7 +836,7 @@ final class LedgerRows
 		final boolean noData = n.expected <= 0;
 		if (settings.luck && !state.warning)
 		{
-			rows.add(row("Luck", Double.isNaN(n.luck) ? UNKNOWN : seconds(n.luck),
+			rows.add(row("Luck", Double.isNaN(n.luck) ? UNKNOWN : fasterOrSlower(n.luck),
 				FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
 		}
 		if (state.warning)
@@ -951,8 +953,9 @@ final class LedgerRows
 	 * " vs your average 1:56 | 7 s faster": this kill's expected time against
 	 * the median of your recent kills' (spec section 5, brought forward from
 	 * v2). Both sides have the luck taken out, so what's left is how you played.
-	 * Better or Cost only outside your middle half; inside it, "= average".
-	 * After a kill only, outside a raid, and not under the warning.
+	 * The seconds always show; Better or Cost only outside your middle half, so
+	 * an ordinary kill reads neutral (Eric, 2026-10-26: "= average" was
+	 * confusing). After a kill only, outside a raid, and not under the warning.
 	 */
 	static Row average(Numbers n, State state)
 	{
@@ -963,9 +966,8 @@ final class LedgerRows
 			return null;
 		}
 		final double mine = n.expectedDuration;
-		final long seconds = roundHalfAway(Math.abs(mine - a.median));
-		final boolean usual = (mine >= a.lowerQuartile && mine <= a.upperQuartile) || seconds == 0;
-		final String verdict = usual ? "= average" : seconds + " s " + (mine < a.median ? "faster" : "slower");
+		final String verdict = fasterOrSlower(a.median - mine);
+		final boolean usual = (mine >= a.lowerQuartile && mine <= a.upperQuartile) || verdict.equals(EVEN);
 		final Colour colour = usual ? Colour.NEUTRAL : mine < a.median ? Colour.BETTER : Colour.COST;
 		return detail(" vs your average " + duration(a.median), verdict, colour);
 	}
@@ -1022,15 +1024,20 @@ final class LedgerRows
 		return secs >= 1 ? figure + " (-" + secs + " s)" : figure;
 	}
 
-	/** {@code +14 s}, {@code -8 s}, {@code 0 s}: rounded half away from zero, never {@code -0 s}. */
-	static String seconds(double seconds)
+	/**
+	 * Seconds saved or lost, in words: {@code 10 s faster}, {@code 14 s slower},
+	 * {@code even}. A sign on a time was ambiguous (Eric, 2026-10-26): "+10 s"
+	 * read as ten seconds added to the kill, when it meant the rolls saved ten.
+	 * Positive is time saved. Rounded half away from zero.
+	 */
+	static String fasterOrSlower(double secondsSaved)
 	{
-		final long r = roundHalfAway(seconds);
+		final long r = roundHalfAway(secondsSaved);
 		if (r == 0)
 		{
-			return "0 s";
+			return EVEN;
 		}
-		return (r > 0 ? "+" : "-") + Math.abs(r) + " s";
+		return Math.abs(r) + " s " + (r > 0 ? "faster" : "slower");
 	}
 
 	static long roundHalfAway(double v)

@@ -134,7 +134,7 @@ public class LedgerRowsTest
 		// is under 2% of 73.2 s and stays white.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "-8 s", COST),
+			emph("Luck", "8 s slower", COST),
 			emph("Damage / expected", "370 / 418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -152,7 +152,7 @@ public class LedgerRowsTest
 		// Eric's kill. 688 + thrall 80 - healed 68 = 700, the boss's HP.
 		assertRows(Arrays.asList(
 			r("Vardorvis (dead)", "2:16", EMPHASIS, EMPHASIS, DEAD, NEUTRAL),
-			emph("Luck", "-14 s", COST),
+			emph("Luck", "14 s slower", COST),
 			emph("Damage / expected", "688 / 778", COST),
 			main("DPS", "5.0"),
 			main("Execution", "84%"),
@@ -174,7 +174,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis (ended)", "2:20"),
-			emph("Luck", "-15 s", COST),
+			emph("Luck", "15 s slower", COST),
 			emph("Damage / expected", "721 / 812", COST),
 			main("DPS", "5.1"),
 			main("Execution", "93%"),
@@ -197,7 +197,7 @@ public class LedgerRowsTest
 		// The trip keeps no heal (only thrall and DoT were added for it), so there's no "boss healed" row.
 		assertRows(Arrays.asList(
 			title("Trip · 6 kills", "12:40"),
-			emph("Luck", "-14 s", NEUTRAL),
+			emph("Luck", "14 s slower", NEUTRAL),
 			emph("Damage / expected", "4,120 / 4,201", NEUTRAL),
 			main("DPS", "5.4"),
 			main("Execution", "92%"),
@@ -227,7 +227,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("ToA · 3 rooms", "9:12"),
-			emph("Luck", "+13 s", BETTER),
+			emph("Luck", "13 s faster", BETTER),
 			emph("Damage / expected", "8,410 / 8,200", BETTER),
 			main("DPS", "15.2"),
 			main("Execution", "86%"),
@@ -422,7 +422,7 @@ public class LedgerRowsTest
 	public void insideYourMiddleHalfIsAverage()
 	{
 		assertTrue(deadWith(new LedgerHistory.Average(124, 120, 128, 20))
-			.contains(d(" vs your average 2:04", "= average", NEUTRAL)));
+			.contains(d(" vs your average 2:04", "2 s faster", NEUTRAL)));
 	}
 
 	@Test
@@ -468,7 +468,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "-8 s", COST),
+			emph("Luck", "8 s slower", COST),
 			emph("Damage / expected", "370 / 418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -486,7 +486,7 @@ public class LedgerRowsTest
 		// Eric, 2026-10-26: the panel only comes up once the fight does, so the loadout goes under the fight's rows.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "-8 s", COST),
+			emph("Luck", "8 s slower", COST),
 			emph("Damage / expected", "370 / 418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -857,20 +857,21 @@ public class LedgerRowsTest
 	}
 
 	@Test
-	public void secondsRoundHalfAwayFromZeroAndNeverReadMinusZero()
+	public void luckAndTheAverageReadInWordsNotSigns()
 	{
-		assertEquals("+14 s", LedgerRows.seconds(14.4));
-		assertEquals("-14 s", LedgerRows.seconds(-14.35));
-		assertEquals("-8 s", LedgerRows.seconds(-7.54));
-		assertEquals("+13 s", LedgerRows.seconds(13.46));
-		assertEquals("+3 s", LedgerRows.seconds(2.5));
-		assertEquals("-3 s", LedgerRows.seconds(-2.5));
-		assertEquals("+1 s", LedgerRows.seconds(0.5));
-		assertEquals("-1 s", LedgerRows.seconds(-0.5));
-		assertEquals("0 s", LedgerRows.seconds(0.49));
-		assertEquals("0 s", LedgerRows.seconds(-0.49));
-		assertEquals("0 s", LedgerRows.seconds(-0.0));
-		assertEquals("0 s", LedgerRows.seconds(0));
+		// Eric, 2026-10-26: "+10 s" read as ten seconds added to the kill. Positive is time saved.
+		assertEquals("14 s faster", LedgerRows.fasterOrSlower(14.4));
+		assertEquals("14 s slower", LedgerRows.fasterOrSlower(-14.35));
+		assertEquals("8 s slower", LedgerRows.fasterOrSlower(-7.54));
+		assertEquals("13 s faster", LedgerRows.fasterOrSlower(13.46));
+		// Half away from zero.
+		assertEquals("3 s faster", LedgerRows.fasterOrSlower(2.5));
+		assertEquals("3 s slower", LedgerRows.fasterOrSlower(-2.5));
+		assertEquals("1 s faster", LedgerRows.fasterOrSlower(0.5));
+		assertEquals("1 s slower", LedgerRows.fasterOrSlower(-0.5));
+		assertEquals("even", LedgerRows.fasterOrSlower(0.49));
+		assertEquals("even", LedgerRows.fasterOrSlower(-0.49));
+		assertEquals("even", LedgerRows.fasterOrSlower(-0.0));
 	}
 
 	@Test
