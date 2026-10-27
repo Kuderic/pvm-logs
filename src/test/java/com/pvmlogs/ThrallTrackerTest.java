@@ -217,30 +217,53 @@ public class ThrallTrackerTest
 	{
 		// A 4-tick weapon thrown on 196 is next due on 200; its blow lands the tick after it is thrown.
 		final int due = 200;
+		final AttackSplats.State none = AttackSplats.State.NONE;
 		assertEquals(ThrallTracker.PlayerSplat.IN_COOLDOWN,
-			ThrallTracker.classifyPlayer(false, false, false, true, 199, due, false));
+			ThrallTracker.classifyPlayer(none, false, true, 199, due, false));
 		assertEquals(ThrallTracker.PlayerSplat.IN_COOLDOWN,
-			ThrallTracker.classifyPlayer(false, false, false, true, 200, due, false));
+			ThrallTracker.classifyPlayer(none, false, true, 200, due, false));
 		assertEquals(ThrallTracker.PlayerSplat.ON_CADENCE,
-			ThrallTracker.classifyPlayer(false, false, false, true, 201, due, false));
+			ThrallTracker.classifyPlayer(none, false, true, 201, due, false));
 		assertEquals(ThrallTracker.PlayerSplat.LATE,
-			ThrallTracker.classifyPlayer(false, false, false, true, 205, due, false));
+			ThrallTracker.classifyPlayer(none, false, true, 205, due, false));
 		assertEquals(ThrallTracker.PlayerSplat.LATE,
-			ThrallTracker.classifyPlayer(false, false, false, true, 202, due, false));
+			ThrallTracker.classifyPlayer(none, false, true, 202, due, false));
 		// A projectile's own tick is a tick less exact.
 		assertEquals(ThrallTracker.PlayerSplat.ON_CADENCE,
-			ThrallTracker.classifyPlayer(false, false, false, true, 201, due, true));
+			ThrallTracker.classifyPlayer(none, false, true, 201, due, true));
 		assertEquals(ThrallTracker.PlayerSplat.ON_CADENCE,
-			ThrallTracker.classifyPlayer(false, false, false, true, 200, due, true));
+			ThrallTracker.classifyPlayer(none, false, true, 200, due, true));
 		// What the player has in flight, or already landing, comes first.
 		assertEquals(ThrallTracker.PlayerSplat.SAME_TICK_BURST,
-			ThrallTracker.classifyPlayer(true, false, true, true, 199, due, false));
+			ThrallTracker.classifyPlayer(AttackSplats.State.ROOM_THIS_TICK, true, true, 199, due, false));
 		assertEquals(ThrallTracker.PlayerSplat.PROJECTILE_DUE,
-			ThrallTracker.classifyPlayer(false, false, true, true, 199, due, false));
+			ThrallTracker.classifyPlayer(none, true, true, 199, due, false));
 		assertEquals(ThrallTracker.PlayerSplat.UNEXPLAINED,
-			ThrallTracker.classifyPlayer(false, false, false, false, 205, due, false));
+			ThrallTracker.classifyPlayer(none, false, false, 205, due, false));
 		assertEquals(ThrallTracker.PlayerSplat.MELEE_POSSIBLE,
-			ThrallTracker.classifyPlayer(false, false, false, true, 205, Integer.MIN_VALUE, false));
+			ThrallTracker.classifyPlayer(none, false, true, 205, Integer.MIN_VALUE, false));
+	}
+
+	@Test
+	public void aSplatBeyondWhatTheAttackDealsIsNotItsOwn()
+	{
+		// T-017. 19:34 log, 439: the tentacle's blow thrown on 438 landed, and a second 0 beside it read as on cadence,
+		// because that blow is only booked once the tick ends.
+		final int due = 438;
+		assertEquals(ThrallTracker.PlayerSplat.EXTRA_SPLAT,
+			ThrallTracker.classifyPlayer(AttackSplats.State.SPENT_THIS_TICK, false, true, 439, due, false));
+		assertEquals(ThrallTracker.PlayerSplat.ON_CADENCE,
+			ThrallTracker.classifyPlayer(AttackSplats.State.NONE, false, true, 439, due, false));
+		// Another attack's projectile can still be due beside it.
+		assertEquals(ThrallTracker.PlayerSplat.PROJECTILE_DUE,
+			ThrallTracker.classifyPlayer(AttackSplats.State.SPENT_THIS_TICK, true, true, 439, due, false));
+		// The tick after: splats known to come late are due, a special's may be.
+		assertEquals(ThrallTracker.PlayerSplat.LATE_SPLAT_DUE,
+			ThrallTracker.classifyPlayer(AttackSplats.State.LATE_DUE, false, true, 440, 442, false));
+		assertEquals(ThrallTracker.PlayerSplat.BURST_CONTINUING,
+			ThrallTracker.classifyPlayer(AttackSplats.State.LATE_MAYBE, false, true, 440, 442, false));
+		// An extra is as unlikely to be the player's as a blow inside the cooldown.
+		assertEquals(ThrallTracker.PlayerSplat.IN_COOLDOWN.rate, ThrallTracker.PlayerSplat.EXTRA_SPLAT.rate, 0);
 	}
 
 	@Test

@@ -1664,6 +1664,23 @@ class CombatCalc
 	}
 
 	/**
+	 * The hitsplats one attack by this weapon puts on this target (T-017): the
+	 * weapon's own count or its special's, the target's size for a scythe, the
+	 * spell for the twinflame staff. What attributes splats to the attack; the
+	 * expected damage is worked out elsewhere.
+	 */
+	AttackSplats splatsPerAttack(int npcId, boolean special, int weaponId)
+	{
+		return AttackSplats.of(weaponId, special, targetSize(npcId), activeSpell());
+	}
+
+	/** An item's name for the debug log. */
+	String itemLabel(int itemId)
+	{
+		return itemId < 0 ? "Unarmed" : itemManager.getItemComposition(itemId).getName();
+	}
+
+	/**
 	 * A scythe swing against a target this many tiles across: three hits from
 	 * 3x3 up, two against a 2x2, one against anything smaller.
 	 */

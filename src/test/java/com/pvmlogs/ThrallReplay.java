@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.runelite.api.Skill;
+import net.runelite.api.gameval.ItemID;
 
 /**
  * Replays a debug log through the thrall and experience logic, the way the
@@ -24,6 +26,13 @@ import net.runelite.api.Skill;
  * weapon speed. The log does not record where a projectile left from, so every
  * thrall projectile is taken to have left from beside ours - true in a solo
  * fight, which is what these logs are.
+ *
+ * <p>How many splats an attack puts down (T-017) is given rather than read: the
+ * log names no weapon per attack. Eric's logs are a one-hit weapon with burning
+ * claws for the special, which is the default. Which attacks were specials is
+ * read from the log's own "scored as a SPECIAL" lines, written at the booking on
+ * the attack's first tick; the plugin knows it from the energy, ahead of the
+ * splats.
  */
 final class ThrallReplay
 {
@@ -40,7 +49,7 @@ final class ThrallReplay
 	private static final Pattern RAW = Pattern.compile("^hitsplat (\\d+) type (\\d+) on .*index (\\d+)\\)");
 	private static final Pattern SPECIAL = Pattern.compile("^ +scored as a SPECIAL");
 	private static final Pattern START = Pattern.compile("^fight START .*\\(npc (\\d+),");
-	private static final Set<Integer> NON_ATTACK_ANIMATIONS = new HashSet<>(java.util.Arrays.asList(
+	private static final Set<Integer> NON_ATTACK_ANIMATIONS = new HashSet<>(Arrays.asList(
 		-1, 9047, 9048, 13683, 11595, 13674));
 
 	/** One splat as the replay judged it. */
@@ -79,6 +88,8 @@ final class ThrallReplay
 	private final double playerAccuracy;
 	private final int playerMaxHit;
 	private final int weaponSpeed;
+	private final AttackSplats ordinarySplats;
+	private final AttackSplats specialSplats;
 
 	// What the replay drives: the real classes.
 	final ThrallTracker thralls = new ThrallTracker();
@@ -88,6 +99,7 @@ final class ThrallReplay
 	private int attackDueTick = Integer.MIN_VALUE;
 	private final Map<Integer, Integer> lastHitsplatTick = new HashMap<>();
 	private final Set<Integer> burstBooked = new HashSet<>();
+	private final Map<Integer, AttackSplats.Burst> bursts = new HashMap<>();
 	private int bookOnTick = Integer.MIN_VALUE;
 	// This tick's player splats, as the plugin keeps them for re-judging: {judged index or -1, npc, amount, booked,
 	// previous seen tick or MIN}.
@@ -99,9 +111,8 @@ final class ThrallReplay
 	// The last thrall seen spawning or claimed, which a projectile naming no source is taken to have come from: these
 	// are solo logs, and the log does not say where a projectile started.
 	private int lastThrall = -1;
-	// The tick the player's last special went out, from the log's own "scored as a SPECIAL" (the spec energy, which
-	// nothing here depends on).
-	private int specialTick = Integer.MIN_VALUE;
+	// The ticks an attack booked as a special began landing on, from the log's own "scored as a SPECIAL" lines.
+	private final Set<Integer> specialStarts = new HashSet<>();
 
 	// Outputs.
 	final List<Judged> judged = new ArrayList<>();
@@ -113,135 +124,166 @@ final class ThrallReplay
 	final Map<Integer, List<Integer>> cleanHits = new HashMap<>();
 	/** Per fight, the first tick the ledger reported itself trusted, if it did. */
 	final Map<Integer, Integer> trustedFrom = new HashMap<>();
+	/** Splats the player kept beyond what their attack deals, as "tick: amount" (the plugin's EXTRA SPLAT lines). */
+	final List<String> extras = new ArrayList<>();
 	final List<String> notes = new ArrayList<>();
 
 	ThrallReplay(double formulaMultiplier, double playerAccuracy, int playerMaxHit, int weaponSpeed)
+	{
+		// Eric's logs: a one-hit weapon, burning claws for the special.
+		this(formulaMultiplier, playerAccuracy, playerMaxHit, weaponSpeed, AttackSplats.ONE,
+			AttackSplats.of(ItemID.BONE_CLAWS, true, 2, null));
+	}
+
+	ThrallReplay(double formulaMultiplier, double playerAccuracy, int playerMaxHit, int weaponSpeed,
+		AttackSplats ordinarySplats, AttackSplats specialSplats)
 	{
 		this.formulaMultiplier = formulaMultiplier;
 		this.playerAccuracy = playerAccuracy;
 		this.playerMaxHit = playerMaxHit;
 		this.weaponSpeed = weaponSpeed;
+		this.ordinarySplats = ordinarySplats;
+		this.specialSplats = specialSplats;
 	}
 
 	ThrallReplay run(String resource) throws IOException
 	{
-		int tick = Integer.MIN_VALUE;
-		int[] pendingJudged = null;
+		final List<String> lines = new ArrayList<>();
 		try (BufferedReader in = new BufferedReader(new InputStreamReader(
 			ThrallReplay.class.getResourceAsStream(resource), StandardCharsets.UTF_8)))
 		{
 			String line;
 			while ((line = in.readLine()) != null)
 			{
-				final Matcher m = LINE.matcher(line);
-				if (!m.matches())
+				lines.add(line);
+			}
+		}
+		return run(lines);
+	}
+
+	/** Replays log lines written out in a test. */
+	ThrallReplay run(List<String> lines)
+	{
+		for (String line : lines)
+		{
+			final Matcher m = LINE.matcher(line);
+			if (m.matches() && SPECIAL.matcher(m.group(2)).find())
+			{
+				specialStarts.add(Integer.parseInt(m.group(1)));
+			}
+		}
+		int tick = Integer.MIN_VALUE;
+		int[] pendingJudged = null;
+		for (String line : lines)
+		{
+			final Matcher m = LINE.matcher(line);
+			if (!m.matches())
+			{
+				continue;
+			}
+			final int t = Integer.parseInt(m.group(1));
+			final String body = m.group(2);
+			if (t != tick)
+			{
+				if (tick != Integer.MIN_VALUE)
 				{
+					endTick(tick);
+				}
+				tick = t;
+			}
+			Matcher e;
+			if (SPECIAL.matcher(body).find())
+			{
+				continue; // read up front
+			}
+			else if ((e = START.matcher(body)).find())
+			{
+				fight++;
+				targetId = Integer.parseInt(e.group(1));
+			}
+			else if (body.startsWith("fight END"))
+			{
+				targetId = -1;
+				attackDueTick = Integer.MIN_VALUE;
+				lastHitsplatTick.clear();
+				burstBooked.clear();
+				bursts.clear();
+			}
+			else if ((e = XP.matcher(body)).find())
+			{
+				ledger.add(Skill.valueOf(e.group(1)), Integer.parseInt(e.group(2)));
+			}
+			else if ((e = CLAIMED.matcher(body)).find())
+			{
+				// A log saved without file logging has no spawn lines, only the claim at the end of its tick.
+				final int index = Integer.parseInt(e.group(2));
+				lastThrall = index;
+				if (thralls.ownedIndex() != index)
+				{
+					thralls.onThrallSpawned(index, Integer.parseInt(e.group(1)), 1, t);
+					thralls.onResurrectionVarbit(true, t);
+				}
+			}
+			else if ((e = SPAWN.matcher(body)).find())
+			{
+				final int distance = Integer.parseInt(e.group(3));
+				lastThrall = Integer.parseInt(e.group(2));
+				thralls.onThrallSpawned(Integer.parseInt(e.group(2)), Integer.parseInt(e.group(1)), distance, t);
+				// The plugin polls the varbit each tick; the log shows the claim on the spawn tick itself.
+				if (distance <= ThrallTracker.SPAWN_RADIUS)
+				{
+					thralls.onResurrectionVarbit(true, t);
+				}
+			}
+			else if ((e = RELEASED.matcher(body)).find())
+			{
+				thralls.onThrallDespawned(Integer.parseInt(e.group(1)), t);
+			}
+			else if ((e = VARBIT.matcher(body)).find())
+			{
+				final boolean active = "1".equals(e.group(1));
+				if (active != thralls.varbitActive())
+				{
+					thralls.onResurrectionVarbit(active, t);
+				}
+			}
+			else if ((e = ANIMATION.matcher(body)).find())
+			{
+				final int animation = Integer.parseInt(e.group(1));
+				if (!NON_ATTACK_ANIMATIONS.contains(animation))
+				{
+					thralls.onThrallAttackAnimation(Integer.parseInt(e.group(2)), -1, t);
+				}
+			}
+			else if ((e = PROJECTILE.matcher(body)).find())
+			{
+				final int source = e.group(2) == null ? lastThrall : Integer.parseInt(e.group(2));
+				thralls.onThrallProjectile(source, Integer.parseInt(e.group(3)), t);
+				thrallProjectiles.computeIfAbsent(fight, k -> new ArrayList<>()).add(t);
+			}
+			else if ((e = JUDGED.matcher(body)).find())
+			{
+				final int amount = Integer.parseInt(e.group(1));
+				final int index = Integer.parseInt(e.group(2));
+				splat(t, amount, index);
+				pendingJudged = new int[]{t, amount};
+			}
+			else if ((e = RAW.matcher(body)).find())
+			{
+				final int amount = Integer.parseInt(e.group(1));
+				// The plugin logged a judged line and then, for a splat it gave the player, this one: the same splat.
+				if (pendingJudged != null && pendingJudged[0] == t && pendingJudged[1] == amount)
+				{
+					pendingJudged = null;
 					continue;
 				}
-				final int t = Integer.parseInt(m.group(1));
-				final String body = m.group(2);
-				if (t != tick)
-				{
-					if (tick != Integer.MIN_VALUE)
-					{
-						endTick(tick);
-					}
-					tick = t;
-				}
-				Matcher e;
-				if (SPECIAL.matcher(body).find())
-				{
-					// Logged at the booking, the tick after it was thrown.
-					specialTick = t - 1;
-				}
-				else if ((e = START.matcher(body)).find())
-				{
-					fight++;
-					targetId = Integer.parseInt(e.group(1));
-				}
-				else if (body.startsWith("fight END"))
-				{
-					targetId = -1;
-					attackDueTick = Integer.MIN_VALUE;
-					lastHitsplatTick.clear();
-					burstBooked.clear();
-				}
-				else if ((e = XP.matcher(body)).find())
-				{
-					ledger.add(Skill.valueOf(e.group(1)), Integer.parseInt(e.group(2)));
-				}
-				else if ((e = CLAIMED.matcher(body)).find())
-				{
-					// A log saved without file logging has no spawn lines, only the claim at the end of its tick.
-					final int index = Integer.parseInt(e.group(2));
-					lastThrall = index;
-					if (thralls.ownedIndex() != index)
-					{
-						thralls.onThrallSpawned(index, Integer.parseInt(e.group(1)), 1, t);
-						thralls.onResurrectionVarbit(true, t);
-					}
-				}
-				else if ((e = SPAWN.matcher(body)).find())
-				{
-					final int distance = Integer.parseInt(e.group(3));
-					lastThrall = Integer.parseInt(e.group(2));
-					thralls.onThrallSpawned(Integer.parseInt(e.group(2)), Integer.parseInt(e.group(1)), distance, t);
-					// The plugin polls the varbit each tick; the log shows the claim on the spawn tick itself.
-					if (distance <= ThrallTracker.SPAWN_RADIUS)
-					{
-						thralls.onResurrectionVarbit(true, t);
-					}
-				}
-				else if ((e = RELEASED.matcher(body)).find())
-				{
-					thralls.onThrallDespawned(Integer.parseInt(e.group(1)), t);
-				}
-				else if ((e = VARBIT.matcher(body)).find())
-				{
-					final boolean active = "1".equals(e.group(1));
-					if (active != thralls.varbitActive())
-					{
-						thralls.onResurrectionVarbit(active, t);
-					}
-				}
-				else if ((e = ANIMATION.matcher(body)).find())
-				{
-					final int animation = Integer.parseInt(e.group(1));
-					if (!NON_ATTACK_ANIMATIONS.contains(animation))
-					{
-						thralls.onThrallAttackAnimation(Integer.parseInt(e.group(2)), -1, t);
-					}
-				}
-				else if ((e = PROJECTILE.matcher(body)).find())
-				{
-					final int source = e.group(2) == null ? lastThrall : Integer.parseInt(e.group(2));
-					thralls.onThrallProjectile(source, Integer.parseInt(e.group(3)), t);
-					thrallProjectiles.computeIfAbsent(fight, k -> new ArrayList<>()).add(t);
-				}
-				else if ((e = JUDGED.matcher(body)).find())
-				{
-					final int amount = Integer.parseInt(e.group(1));
-					final int index = Integer.parseInt(e.group(2));
-					splat(t, amount, index);
-					pendingJudged = new int[]{t, amount};
-				}
-				else if ((e = RAW.matcher(body)).find())
-				{
-					final int amount = Integer.parseInt(e.group(1));
-					// The plugin logged a judged line and then, for a splat it gave the player, this one: the same splat.
-					if (pendingJudged != null && pendingJudged[0] == t && pendingJudged[1] == amount)
-					{
-						pendingJudged = null;
-						continue;
-					}
-					pendingJudged = null;
-					splat(t, amount, Integer.parseInt(e.group(3)));
-				}
+				pendingJudged = null;
+				splat(t, amount, Integer.parseInt(e.group(3)));
 			}
-			if (tick != Integer.MIN_VALUE)
-			{
-				endTick(tick);
-			}
+		}
+		if (tick != Integer.MIN_VALUE)
+		{
+			endTick(tick);
 		}
 		return this;
 	}
@@ -250,14 +292,13 @@ final class ThrallReplay
 	{
 		if (thralls.hasThrall() && amount <= thralls.maxHit())
 		{
-			final Integer seen = lastHitsplatTick.get(index);
 			final ThrallTracker.Evidence ev = new ThrallTracker.Evidence();
 			ev.amount = amount;
 			ev.tick = tick;
 			ev.targetIndex = index;
-			ev.player = ThrallTracker.classifyPlayer(seen != null && seen == tick && burstBooked.contains(index),
-				seen != null && seen == tick - 1 && burstBooked.contains(index) && specialTick != Integer.MIN_VALUE
-					&& tick - specialTick <= 3, false, true, tick, attackDueTick, false);
+			final AttackSplats.Burst burst = bursts.get(index);
+			ev.player = ThrallTracker.classifyPlayer(burst == null ? AttackSplats.State.NONE : burst.stateOn(tick),
+				false, true, tick, attackDueTick, false);
 			ev.xp = ledger.coverage(amount, tick);
 			ev.xpTrusted = ledger.trusted();
 			ev.playerAccuracy = playerAccuracy;
@@ -296,6 +337,16 @@ final class ThrallReplay
 		if (booked)
 		{
 			bookOnTick = tick;
+			bursts.put(index, new AttackSplats.Burst(tick - 1, tick, ordinarySplats, specialSplats,
+				specialStarts.contains(tick), "replay"));
+		}
+		else
+		{
+			final AttackSplats.Burst burst = bursts.get(index);
+			if (burst != null && burst.belongsOn(tick) && !burst.give(tick))
+			{
+				extras.add(tick + ": " + amount);
+			}
 		}
 		playerSplatsThisTick.add(new int[]{judgedAt, index, amount, booked ? 1 : 0,
 			seen == null ? Integer.MIN_VALUE : seen});
@@ -330,13 +381,22 @@ final class ThrallReplay
 			{
 				other |= o != pick && o[1] == target;
 			}
-			if (!other)
+			if (other)
+			{
+				final AttackSplats.Burst burst = bursts.get(target);
+				if (burst != null)
+				{
+					burst.takeBack();
+				}
+			}
+			else
 			{
 				if (pick[3] == 1 && bookOnTick == tick)
 				{
 					bookOnTick = Integer.MIN_VALUE;
 				}
 				burstBooked.remove(target);
+				bursts.remove(target);
 				if (pick[4] == Integer.MIN_VALUE)
 				{
 					lastHitsplatTick.remove(target);

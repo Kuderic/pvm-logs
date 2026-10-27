@@ -47,14 +47,26 @@ class ThrallTracker
 	{
 		/** A projectile the player fired is due to land on this npc now. */
 		PROJECTILE_DUE(0.9),
-		/** The player's own burst already landed on this npc this tick: a scythe, a claw special. */
+		/**
+		 * The player's own attack already landed on this npc this tick and has splats still to come: a scythe's second and
+		 * third, a claw special. Only while it has (T-017): a tentacle hits once.
+		 */
 		SAME_TICK_BURST(0.9),
 		/**
-		 * A special's burst landed on this npc last tick and may still be landing: a burning claws special puts its third
-		 * splat a tick after the first two (Vardorvis 2300, 2392, 2730, 4487). Only a special: an ordinary blow is one
-		 * splat, and the tick after it is inside its cooldown (16:08 log, 171).
+		 * The attack that landed on this npc last tick puts its remaining splats down now: the dual macuahuitl's second
+		 * hit, the twinflame staff's second spell, burning claws' third (Vardorvis 2300, 2392, 2730, 4487).
+		 */
+		LATE_SPLAT_DUE(0.9),
+		/**
+		 * A multi-hit attack landed on this npc last tick and may still be landing: a special whose timing is not known.
+		 * An ordinary single blow is one splat, and the tick after it is inside its cooldown (16:08 log, 171).
 		 */
 		BURST_CONTINUING(0.6),
+		/**
+		 * The attack landing on this npc now has already put down every splat it can (T-017): a second splat on a tick a
+		 * tentacle's blow landed (19:34 log, 439). As impossible as a blow inside the cooldown.
+		 */
+		EXTRA_SPLAT(0.003),
 		/** Melee in hand, and this is the first tick a blow thrown the moment the weapon came off cooldown lands. */
 		ON_CADENCE(0.9),
 		/**
@@ -545,17 +557,18 @@ class ThrallTracker
 	 * What the player could have done to put a splat on this npc now. Pure, so
 	 * the plugin and the replay tests judge the player's side identically.
 	 *
-	 * @param burstLastTick   whether the player's special landed a burst on this
-	 *                        npc last tick, so its last splat may still come
+	 * @param burst           where this splat stands against the player's attack
+	 *                        landing on this npc: its splats still to come this
+	 *                        tick or the next, or all of them already down
 	 * @param attackDueTick   the tick the weapon came off cooldown after the last
 	 *                        attack booked, or {@code Integer.MIN_VALUE} for none
 	 * @param lastFromProjectile whether that attack was booked from a projectile,
 	 *                        whose own tick is known a tick less exactly
 	 */
-	static PlayerSplat classifyPlayer(boolean sameTickBurst, boolean burstLastTick, boolean projectileDue,
-		boolean melee, int tick, int attackDueTick, boolean lastFromProjectile)
+	static PlayerSplat classifyPlayer(AttackSplats.State burst, boolean projectileDue, boolean melee, int tick,
+		int attackDueTick, boolean lastFromProjectile)
 	{
-		if (sameTickBurst)
+		if (burst == AttackSplats.State.ROOM_THIS_TICK)
 		{
 			return PlayerSplat.SAME_TICK_BURST;
 		}
@@ -563,8 +576,18 @@ class ThrallTracker
 		{
 			return PlayerSplat.PROJECTILE_DUE;
 		}
+		// The attack on this tick has put all its splats down, and no other attack can land beside it: the cadence below
+		// would call it on time, because this tick's blow is not booked until the tick ends.
+		if (burst == AttackSplats.State.SPENT_THIS_TICK)
+		{
+			return PlayerSplat.EXTRA_SPLAT;
+		}
 		// Inside the cooldown by definition, so asked before it.
-		if (burstLastTick)
+		if (burst == AttackSplats.State.LATE_DUE)
+		{
+			return PlayerSplat.LATE_SPLAT_DUE;
+		}
+		if (burst == AttackSplats.State.LATE_MAYBE)
 		{
 			return PlayerSplat.BURST_CONTINUING;
 		}
