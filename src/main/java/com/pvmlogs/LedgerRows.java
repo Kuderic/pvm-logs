@@ -45,6 +45,8 @@ final class LedgerRows
 	static final String UNKNOWN = "—";
 	/** U+00B7, also in the fonts. */
 	private static final String DOT = " · ";
+	/** Heads the Ledger in Luck's place, and the loadout overlay, when the boss's data can't be believed. */
+	static final String WARNING_TEXT = "! Boss data unsure";
 	/** The main row the details sit under once the fight is over (Eric, 2026-10-26). */
 	static final String SUMMARY = "Summary";
 	/** What a name cut to fit ends with: U+2026, which all three RuneScape fonts have (checked with Font.canDisplay). */
@@ -589,10 +591,11 @@ final class LedgerRows
 	/** What the overlay is showing. */
 	enum View
 	{
-		/** A fight is open on the target and nothing has been thrown in its room yet: the loadout against it. */
+		/**
+		 * A fight is open on the target and nothing has been thrown in its room yet:
+		 * the title alone, as the loadout overlay carries the figures (T-022).
+		 */
 		PRE_ATTACK,
-		/** The "Loadout only" setting: the pre-attack rows, always. */
-		LOADOUT_ONLY,
 		/** The room or fight on show, while it runs and once it ends. */
 		FIGHT,
 		/** "Overlay: whole trip". */
@@ -632,18 +635,11 @@ final class LedgerRows
 		final boolean killed;
 		/** {@code getStatsWarning(fight) != null}: the expected side can't be believed. */
 		final boolean warning;
-		final Loadout loadout;
 		/** Your usual kill on this boss, or null with too few kills to say. */
 		final LedgerHistory.Average average;
 
 		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
-			Loadout loadout)
-		{
-			this(view, name, count, ended, killed, warning, loadout, null);
-		}
-
-		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
-			Loadout loadout, LedgerHistory.Average average)
+			LedgerHistory.Average average)
 		{
 			this.view = view;
 			this.name = name == null ? "" : name;
@@ -651,29 +647,12 @@ final class LedgerRows
 			this.ended = ended;
 			this.killed = killed;
 			this.warning = warning;
-			this.loadout = loadout == null ? new Loadout() : loadout;
 			this.average = average;
 		}
 
-		static State preAttack(String name, Loadout loadout)
+		static State preAttack(String name)
 		{
-			return preAttack(name, loadout, false);
-		}
-
-		/** With the warning on, the loadout's figures are flagged: the accuracy is exactly what bad boss data gets wrong. */
-		static State preAttack(String name, Loadout loadout, boolean warning)
-		{
-			return new State(View.PRE_ATTACK, name, 0, false, false, warning, loadout);
-		}
-
-		static State loadoutOnly(String name, Loadout loadout)
-		{
-			return loadoutOnly(name, loadout, false);
-		}
-
-		static State loadoutOnly(String name, Loadout loadout, boolean warning)
-		{
-			return new State(View.LOADOUT_ONLY, name, 0, false, false, warning, loadout);
+			return new State(View.PRE_ATTACK, name, 0, false, false, false, null);
 		}
 
 		static State fight(String name, boolean ended, boolean killed, boolean warning)
@@ -691,24 +670,16 @@ final class LedgerRows
 			return new State(View.RAID, raidName, rooms, !fightRunning, false, warning, null);
 		}
 
-		/** The same state with the loadout's figures, shown at the bottom while a fight runs. */
-		State withLoadout(Loadout loadout)
-		{
-			return new State(view, name, count, ended, killed, warning, loadout, average);
-		}
-
 		/** The same state with your usual time on the boss, for the details after a kill. */
 		State withAverage(LedgerHistory.Average average)
 		{
-			return new State(view, name, count, ended, killed, warning, loadout, average);
+			return new State(view, name, count, ended, killed, warning, average);
 		}
 	}
 
 	/** The overlay's settings (spec section 7), so the rows don't read the config themselves. */
 	static final class Settings
 	{
-		/** The loadout before the first attack, and at the bottom while a fight runs. */
-		boolean showLoadout = true;
 		boolean luck = true;
 		ExecutionParts parts = ExecutionParts.ALL;
 		boolean details = true;
@@ -819,17 +790,8 @@ final class LedgerRows
 		switch (state.view)
 		{
 			case PRE_ATTACK:
+				// The title alone: the loadout overlay carries the figures (T-022).
 				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL));
-				if (settings.showLoadout)
-				{
-					loadoutWarning(rows, state);
-					rows.addAll(loadout(state.loadout));
-				}
-				return rows;
-			case LOADOUT_ONLY:
-				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL));
-				loadoutWarning(rows, state);
-				rows.addAll(loadout(state.loadout));
 				return rows;
 			default:
 				break;
@@ -841,15 +803,7 @@ final class LedgerRows
 		final Numbers n = new Numbers(scope);
 		rows.add(title(state, scope.combatTicks()));
 		top(rows, n, scope, state, settings);
-		// The loadout under the fight's rows (Eric, 2026-10-26): before the first attack the panel is barely up, since the
-		// fight opens on targeting and the attack follows a tick or two later. Kept once the boss is dead, with the details
-		// below it (Eric: "details at the bottom after the kill"). The warning at the top covers its accuracy.
-		final List<Row> loadout = settings.showLoadout ? loadout(state.loadout) : Collections.<Row>emptyList();
-		if (!loadout.isEmpty())
-		{
-			rows.add(blank());
-			rows.addAll(loadout);
-		}
+		// No loadout here: it's an overlay of its own (Eric, 2026-10-27; T-022).
 		if (settings.details && state.ended)
 		{
 			details(rows, n, scope, state);
@@ -857,16 +811,24 @@ final class LedgerRows
 		return rows;
 	}
 
-	/** The warning above the loadout's own rows, where no fight block above them carries it. */
-	private static void loadoutWarning(List<Row> rows, State state)
+	/**
+	 * The loadout overlay's rows (T-022): {@code ! Boss data unsure} on top when
+	 * the warning applies, as the accuracy is what bad boss data gets wrong, then
+	 * the loadout. Nothing at all when none of the figures is known.
+	 */
+	static List<Row> loadout(Loadout l, boolean warning)
 	{
-		if (state.warning)
+		final List<Row> figures = loadout(l);
+		if (figures.isEmpty() || !warning)
 		{
-			rows.add(row("! Boss data unsure", "", FontRole.BODY, FontRole.BODY, Colour.WARNING, Colour.NEUTRAL));
+			return figures;
 		}
+		final List<Row> rows = new ArrayList<>(figures.size() + 1);
+		rows.add(row(WARNING_TEXT, "", FontRole.BODY, FontRole.BODY, Colour.WARNING, Colour.NEUTRAL));
+		rows.addAll(figures);
+		return rows;
 	}
 
-	/** Max hit, accuracy, expected DPS and the spec, each only when known. */
 	/**
 	 * The attack's name as a main row, with max hit, accuracy, expected DPS and
 	 * the spec under it as sub-rows (Eric, 2026-10-26), each only when known.
@@ -980,7 +942,7 @@ final class LedgerRows
 		}
 		if (state.warning)
 		{
-			rows.add(row("! Boss data unsure", "", FontRole.BODY, FontRole.BODY, Colour.WARNING, Colour.NEUTRAL));
+			rows.add(row(WARNING_TEXT, "", FontRole.BODY, FontRole.BODY, Colour.WARNING, Colour.NEUTRAL));
 			rows.add(detail(" luck hidden until it's fixed", "", Colour.NEUTRAL));
 		}
 		if (!state.warning && !noData)

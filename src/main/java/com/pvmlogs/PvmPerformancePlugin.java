@@ -184,6 +184,9 @@ public class PvmPerformancePlugin extends Plugin
 	private PvmPerformanceOverlay overlay;
 
 	@Inject
+	private LoadoutOverlay loadoutOverlay;
+
+	@Inject
 	private PvmPerformanceConfig config;
 
 	@Inject
@@ -522,7 +525,9 @@ public class PvmPerformancePlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		LoadoutOverlay.migrateLoadoutOnly(LoadoutOverlay.Settings.of(configManager));
 		overlayManager.add(overlay);
+		overlayManager.add(loadoutOverlay);
 
 		panel = new PvmPerformancePanel(this);
 		final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/com/pvmlogs/panel_icon.png");
@@ -566,6 +571,7 @@ public class PvmPerformancePlugin extends Plugin
 	protected void shutDown()
 	{
 		overlayManager.remove(overlay);
+		overlayManager.remove(loadoutOverlay);
 		clientToolbar.removeNavigation(navButton);
 		panel = null;
 		navButton = null;
