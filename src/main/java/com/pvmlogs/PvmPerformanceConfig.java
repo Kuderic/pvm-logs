@@ -3,6 +3,7 @@ package com.pvmlogs;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
 
 @ConfigGroup(PvmPerformanceConfig.GROUP)
 public interface PvmPerformanceConfig extends Config
@@ -148,14 +149,36 @@ public interface PvmPerformanceConfig extends Config
 		return false;
 	}
 
-	// The side panel spec's key and default (side-panel-design.md §7). Added by T-035 ahead of T-033, which puts it in its
-	// "Side panel" section beside panelLive; the key stays.
+	// The side panel's settings (side-panel-design.md §7, T-033). Folded sections are remembered under hidden
+	// "panelFold.<id>" keys in this group, which the settings panel doesn't list.
+	@ConfigSection(
+		name = "Side panel",
+		description = "The side panel's Fight, History and Trip tabs",
+		position = 13
+	)
+	String SIDE_PANEL_SECTION = "sidePanel";
+
+	@ConfigItem(
+		keyName = "panelLive",
+		name = "Update during fights",
+		description = "Update the side panel every tick while you fight. Off: the Fight tab fills in when the fight "
+			+ "ends, for slower PCs",
+		position = 1,
+		section = SIDE_PANEL_SECTION
+	)
+	default boolean panelLive()
+	{
+		return true;
+	}
+
+	// Added by T-035 ahead of T-033; the key stays.
 	@ConfigItem(
 		keyName = "panelCharts",
 		name = "Charts",
 		description = "The side panel's damage chart and tick strip. Off: they are not shown, and nothing is recorded for "
 			+ "them either",
-		position = 13
+		position = 2,
+		section = SIDE_PANEL_SECTION
 	)
 	default boolean panelCharts()
 	{

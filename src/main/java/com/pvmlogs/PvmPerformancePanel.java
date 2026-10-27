@@ -1,297 +1,490 @@
 package com.pvmlogs;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.GridLayout;
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 import javax.swing.JComponent;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JTextField;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.PluginPanel;
-import net.runelite.client.util.QuantityFormatter;
+import net.runelite.client.ui.components.materialtabs.MaterialTab;
+import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 
+/**
+ * The side panel (T-033, {@code claude/specs/side-panel-design.md} rev 1): tabs
+ * Fight · History · Trip. History and Trip are interim until T-034.
+ * <p>
+ * The snapshot pipeline (spec 5.1): the plugin calls {@link #onTick()} at the
+ * end of every {@code onGameTick}, on the client thread. Only while the panel
+ * is open, and only when something on show changed, it reads the plugin into a
+ * {@link SidePanelModel.Input}, builds an immutable {@link PanelSnapshot}, and
+ * hands it to Swing's thread, which updates the components it has. Nothing here
+ * reads the scope classes from Swing's thread.
+ */
 class PvmPerformancePanel extends PluginPanel
 {
-	private static final String ALL_NPCS = "All NPCs";
+	/** The settings key prefix a folded section is remembered under (spec section 7). */
+	static final String FOLD_KEY = "panelFold.";
 
 	private final PvmPerformancePlugin plugin;
+	private final PvmPerformanceConfig config;
+	private final ClientThread clientThread;
 
-	private final JCheckBox bossOnly = new JCheckBox("Boss only");
-	private final JTextField search = new JTextField();
-	private final JComboBox<String> bossSelect = new JComboBox<>();
-	private final JLabel status = new JLabel(" ");
-	private final JPanel list = new JPanel();
+	private final SidePanelFightTab fightTab;
+	private final SidePanelHistoryTab historyTab;
+	private final SidePanelTripTab tripTab;
+	private final MaterialTabGroup tabs;
+
+	// Swing's thread writes these, the client thread reads them.
+	private volatile boolean active;
+	private volatile boolean dirty = true;
+	/** The room/raid switch as the player left it; null until they touch it, so the overlay's setting decides. */
+	private volatile Boolean wholeRaid;
+	/** A room picked in the whole raid's list, by index, and the raid's room count when it was picked; -1 for none. */
+	private volatile int raidRoom = -1;
+	private volatile int raidRoomsAtPick = -1;
+
+	// Client thread only.
+	private List<Object> lastKey;
+	private List<Object> lastShape;
+	private Encounter averageRoom;
+	private int averageHistorySize = -1;
+	private Fight averageHistoryHead;
+	private LedgerHistory.Average average;
+	private LedgerHistory.Spread luckRemoved;
+
+	// Swing's thread only.
+	private PanelSnapshot shown;
 
 	PvmPerformancePanel(PvmPerformancePlugin plugin)
 	{
+		this(plugin, instance(plugin, PvmPerformanceConfig.class), instance(plugin, ConfigManager.class),
+			instance(plugin, ClientThread.class));
+	}
+
+	/** With every dependency given: tests and renders pass nulls and drive {@link #apply} themselves. */
+	PvmPerformancePanel(PvmPerformancePlugin plugin, PvmPerformanceConfig config, ConfigManager configManager,
+		ClientThread clientThread)
+	{
 		super(false);
 		this.plugin = plugin;
+		this.config = config;
+		this.clientThread = clientThread;
 
-		setBorder(new EmptyBorder(10, 10, 10, 10));
-		setBackground(ColorScheme.DARK_GRAY_COLOR);
-		setLayout(new BorderLayout(0, 8));
+		setBackground(SidePanelStyle.PANEL);
+		setLayout(new BorderLayout());
 
-		add(buildHeader(), BorderLayout.NORTH);
+		final SidePanelSection.Folds folds = configManager == null ? new SidePanelSection.MemoryFolds()
+			: new ConfigFolds(configManager);
+		final SidePanelFightTab.Actions actions = new Actions();
+		fightTab = new SidePanelFightTab(actions, folds);
+		historyTab = new SidePanelHistoryTab(plugin, actions);
+		tripTab = new SidePanelTripTab(actions);
 
-		list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
-		list.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		final JPanel wrap = new JPanel(new BorderLayout());
-		wrap.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		wrap.add(list, BorderLayout.NORTH);
-		final JScrollPane scroll = new JScrollPane(wrap,
-			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+		final JPanel display = new JPanel(new BorderLayout());
+		display.setBackground(SidePanelStyle.PANEL);
+		tabs = new MaterialTabGroup(display);
+		tabs.setBorder(new EmptyBorder(4, SidePanelStyle.SIDE_BORDER, 0, SidePanelStyle.SIDE_BORDER));
+		tabs.setBackground(SidePanelStyle.PANEL);
+		final MaterialTab fight = new MaterialTab("Fight", tabs, scroll(fightTab));
+		final MaterialTab history = new MaterialTab("History", tabs, scroll(historyTab));
+		final MaterialTab trip = new MaterialTab("Trip", tabs, scroll(tripTab));
+		history.setOnSelectEvent(() ->
+		{
+			historyTab.refresh();
+			return true;
+		});
+		tabs.addTab(fight);
+		tabs.addTab(history);
+		tabs.addTab(trip);
+		// Opens on Fight, and never switches on its own (spec 3).
+		tabs.select(fight);
+
+		add(tabs, BorderLayout.NORTH);
+		add(display, BorderLayout.CENTER);
+
+		// Until the first snapshot arrives: the empty state, so the tab is never blank.
+		apply(new PanelSnapshot(SidePanelModel.fight(new SidePanelModel.Input())));
+	}
+
+	private static <T> T instance(PvmPerformancePlugin plugin, Class<T> type)
+	{
+		return plugin == null || plugin.getInjector() == null ? null : plugin.getInjector().getInstance(type);
+	}
+
+	/** A tab's content in its own scroll pane, vertical as needed and never horizontal (spec section 1). */
+	private static JScrollPane scroll(JComponent view)
+	{
+		final JScrollPane scroll = new JScrollPane(view, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
 			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scroll.setBorder(new EmptyBorder(0, 0, 0, 0));
 		scroll.getVerticalScrollBar().setUnitIncrement(16);
-		scroll.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
-		add(scroll, BorderLayout.CENTER);
-
-		refresh();
+		scroll.getViewport().setBackground(SidePanelStyle.PANEL);
+		return scroll;
 	}
 
-	private JPanel buildHeader()
+	// ---- open and closed ----
+
+	@Override
+	public void onActivate()
 	{
-		final JPanel header = new JPanel();
-		header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
-		header.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-		final JLabel title = new JLabel("PvM Performance");
-		title.setFont(FontManager.getRunescapeBoldFont());
-		title.setForeground(Color.WHITE);
-		title.setAlignmentX(LEFT_ALIGNMENT);
-		header.add(title);
-		header.add(Box.createVerticalStrut(8));
-
-		search.setToolTipText("Filter the list by NPC name");
-		search.getDocument().addDocumentListener(new DocumentListener()
+		active = true;
+		dirty = true;
+		// One full snapshot now rather than at the next tick, which never comes on the login screen.
+		if (clientThread != null)
 		{
-			@Override
-			public void insertUpdate(DocumentEvent e)
-			{
-				refresh();
-			}
-
-			@Override
-			public void removeUpdate(DocumentEvent e)
-			{
-				refresh();
-			}
-
-			@Override
-			public void changedUpdate(DocumentEvent e)
-			{
-				refresh();
-			}
-		});
-		fullWidth(header, search);
-		header.add(Box.createVerticalStrut(6));
-
-		bossSelect.addItem(ALL_NPCS);
-		for (String boss : plugin.getBossDisplayNames())
-		{
-			bossSelect.addItem(boss);
+			clientThread.invokeLater(this::onTick);
 		}
-		bossSelect.setToolTipText("Jump to a boss (shows its stats, or 'no data' if not fought)");
-		bossSelect.addActionListener(e -> refresh());
-		fullWidth(header, bossSelect);
-		header.add(Box.createVerticalStrut(6));
-
-		final JButton exportAll = new JButton("Export all");
-		exportAll.setToolTipText("Export every tracked fight to a CSV file");
-		exportAll.addActionListener(e -> plugin.exportAll(bossOnly.isSelected()));
-
-		final JButton clear = new JButton("Clear");
-		clear.setToolTipText("Discard the tracked fight history");
-		clear.addActionListener(e ->
-		{
-			plugin.clearHistory();
-			refresh();
-		});
-
-		final JButton resetTrip = new JButton("New trip");
-		resetTrip.setToolTipText("Start the whole-trip overlay totals over. "
-			+ "Tracked fight history is untouched");
-		resetTrip.addActionListener(e -> plugin.resetSession());
-
-		// Its own row rather than a fourth column: four buttons across a side panel leaves each of them too narrow to read,
-		// and this one is pressed after something looked wrong rather than as part of the routine.
-		final JButton saveLog = new JButton("Save debug log");
-		saveLog.setToolTipText("Write the last few thousand lines of what the tracker saw to a file, "
-			+ "with the loadout and settings that produced them. Press it when a figure looks wrong");
-		saveLog.addActionListener(e -> plugin.saveDebugLog());
-
-		final JPanel buttons = new JPanel(new GridLayout(1, 3, 6, 0));
-		buttons.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		buttons.add(exportAll);
-		buttons.add(resetTrip);
-		buttons.add(clear);
-		fullWidth(header, buttons);
-		header.add(Box.createVerticalStrut(4));
-		fullWidth(header, saveLog);
-		header.add(Box.createVerticalStrut(4));
-
-		bossOnly.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		bossOnly.setForeground(Color.WHITE);
-		bossOnly.setToolTipText("Show and export only NPCs above the boss HP threshold");
-		bossOnly.addActionListener(e -> refresh());
-		fullWidth(header, bossOnly);
-
-		status.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		status.setAlignmentX(LEFT_ALIGNMENT);
-		header.add(status);
-
-		return header;
+		historyTab.refresh();
 	}
 
-	private static void fullWidth(JPanel box, JComponent c)
+	@Override
+	public void onDeactivate()
 	{
-		c.setAlignmentX(LEFT_ALIGNMENT);
-		c.setMaximumSize(new Dimension(Integer.MAX_VALUE, c.getPreferredSize().height));
-		box.add(c);
+		active = false;
+	}
+
+	boolean isActive()
+	{
+		return active;
+	}
+
+	// ---- the plugin's calls ----
+
+	/**
+	 * Called by the plugin after a fight is saved, history is loaded or cleared:
+	 * the next snapshot is built whatever its key says, and the History tab reads
+	 * the list again.
+	 */
+	void refresh()
+	{
+		dirty = true;
+		SwingUtilities.invokeLater(historyTab::refresh);
 	}
 
 	void setStatus(String text)
 	{
 		SwingUtilities.invokeLater(() ->
 		{
-			status.setText(text);
-			status.setToolTipText(text);
-		});
-	}
-
-	void refresh()
-	{
-		SwingUtilities.invokeLater(() ->
-		{
-			list.removeAll();
-
-			// A specific boss picked in the selector focuses the panel on it.
-			final Object selected = bossSelect.getSelectedItem();
-			if (selected != null && !ALL_NPCS.equals(selected))
-			{
-				final String bossName = selected.toString();
-				NpcStats match = null;
-				for (NpcStats s : plugin.getNpcStats(false))
-				{
-					if (s.getName().equalsIgnoreCase(bossName))
-					{
-						match = s;
-						break;
-					}
-				}
-				if (match != null)
-				{
-					list.add(buildRow(match));
-				}
-				else
-				{
-					final JLabel none = new JLabel("<html>No data for <b>" + bossName + "</b> yet.</html>");
-					none.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-					none.setBorder(new EmptyBorder(4, 2, 4, 2));
-					list.add(none);
-				}
-				list.revalidate();
-				list.repaint();
-				return;
-			}
-
-			final String query = search.getText().trim().toLowerCase();
-			int shown = 0;
-			for (NpcStats s : plugin.getNpcStats(bossOnly.isSelected()))
-			{
-				if (!query.isEmpty() && !s.getName().toLowerCase().contains(query))
-				{
-					continue;
-				}
-				list.add(buildRow(s));
-				list.add(Box.createVerticalStrut(4));
-				shown++;
-			}
-			if (shown == 0)
-			{
-				final JLabel empty = new JLabel(query.isEmpty()
-					? "<html>No fights tracked yet. Fight an NPC and it will show up here.</html>"
-					: "<html>No tracked NPC matches that name.</html>");
-				empty.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-				empty.setBorder(new EmptyBorder(4, 2, 4, 2));
-				list.add(empty);
-			}
-			list.revalidate();
-			list.repaint();
+			fightTab.setStatus(text);
+			historyTab.setStatus(text);
 		});
 	}
 
 	/**
-	 * The efficiency and tick loss line, left off entirely when neither was
-	 * measured: an empty pair of dashes reads as a bad score rather than none.
+	 * The end of {@code onGameTick}, on the client thread (spec 5.1 step 1). Does
+	 * nothing while the panel is closed, or when nothing on show changed this
+	 * tick; with "Update during fights" off, a running fight's figures wait for
+	 * its end.
 	 */
-	private static String quality(NpcStats s)
+	void onTick()
 	{
-		final double efficiency = s.efficiency();
-		final double lost = s.ticksLostShare();
-		if (efficiency < 0 && lost < 0)
+		if (!active || plugin == null)
 		{
-			return "";
+			return;
 		}
-		final StringBuilder line = new StringBuilder("<br><font color='#a0a0a0'>");
-		if (efficiency >= 0)
+		final Fight fight = plugin.getDisplayFight();
+		final Encounter display = plugin.getDisplayEncounter();
+		final Raid raid = plugin.getCurrentRaid();
+		final boolean whole = raid != null && wholeRaid();
+		final Encounter room = roomOnShow(display, raid, whole);
+		final boolean pre = fight != null && PvmPerformanceOverlay.isBeforeFirstAttack(fight, display);
+		final List<Fight> history = plugin.getHistory();
+		final Iterator<Fight> newest = history.iterator();
+		final Fight head = newest.hasNext() ? newest.next() : null;
+
+		final List<Object> shape = Arrays.asList(fight, fight != null && fight.isEnded(), pre, room, raid, whole,
+			history.size(), head);
+		final List<Object> key = key(shape, fight, room, raid, whole, pre);
+		final boolean force = dirty;
+		if (!force && key.equals(lastKey))
 		{
-			line.append(String.format("%.0f%% efficiency", efficiency * 100));
+			return;
 		}
-		if (lost >= 0)
+		final boolean running = fight != null && !fight.isEnded() && !pre;
+		if (!force && running && config != null && !config.panelLive() && shape.equals(lastShape))
 		{
-			if (efficiency >= 0)
-			{
-				line.append(" &middot; ");
-			}
-			line.append(String.format("%.0f%% ticks lost", lost * 100));
+			return;
 		}
-		return line.append("</font>").toString();
+		dirty = false;
+		lastKey = key;
+		lastShape = shape;
+
+		final SidePanelModel.Input in = read(fight, display, room, raid, whole, pre, history);
+		final PanelSnapshot snapshot = new PanelSnapshot(SidePanelModel.fight(in));
+		SwingUtilities.invokeLater(() -> apply(snapshot));
 	}
 
-	private JPanel buildRow(NpcStats s)
+	/** Whether the switch reads Whole raid: the player's last choice, else the overlay's raid-scope setting. */
+	private boolean wholeRaid()
 	{
-		final JPanel row = new JPanel(new BorderLayout(6, 0));
-		row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		row.setBorder(new EmptyBorder(6, 8, 6, 8));
+		final Boolean choice = wholeRaid;
+		if (choice != null)
+		{
+			return choice;
+		}
+		return config != null && config.raidScope() == RaidScope.RAID;
+	}
 
-		// Two lines: what was fought, then how well. Efficiency and lost ticks say where to improve, so they go where the eye
-		// lands after the totals.
-		final String info = String.format(
-			"<html><b>%s</b><br><font color='#a0a0a0'>%d fights &middot; %d kills &middot; "
-				+ "%.2f avg hit &middot; %.0f%% acc &middot; %s dmg</font>%s</html>",
-			s.getName(), s.getFights(), s.getKills(), s.avgHit(), s.accuracy() * 100,
-			QuantityFormatter.formatNumber(s.getTotalDamageDealt()),
-			quality(s));
-		final JLabel label = new JLabel(info);
-		label.setForeground(Color.WHITE);
-		row.add(label, BorderLayout.CENTER);
+	/** The room the Fight tab is about: a room picked from the raid's list while it's still the raid on show, else the display room. */
+	private Encounter roomOnShow(Encounter display, Raid raid, boolean whole)
+	{
+		final int pick = raidRoom;
+		if (raid == null || whole || pick < 0)
+		{
+			return display;
+		}
+		final List<Encounter> rooms = raid.getEncounters();
+		// A new room starting puts the panel back on it.
+		if (rooms.size() != raidRoomsAtPick || pick >= rooms.size())
+		{
+			raidRoom = -1;
+			return display;
+		}
+		return rooms.get(pick);
+	}
 
-		final JButton export = new JButton("CSV");
-		export.setToolTipText("Export " + s.getName() + " fights to CSV");
-		export.setMargin(new java.awt.Insets(2, 6, 2, 6));
-		export.addActionListener(e -> plugin.exportNpc(s.getName()));
-		row.add(export, BorderLayout.EAST);
+	/** Everything that can change what the Fight tab shows; a running fight's clock changes it every tick. */
+	private List<Object> key(List<Object> shape, Fight fight, Encounter room, Raid raid, boolean whole, boolean pre)
+	{
+		final List<Object> key = new ArrayList<>(shape);
+		key.add(fight == null ? null : plugin.getStatsWarning(fight));
+		if (pre)
+		{
+			final LedgerRows.Loadout l = LoadoutOverlay.loadout(plugin);
+			key.addAll(Arrays.asList(l.attack, l.maxHit, l.accuracy, l.dps, l.specMaxHit, l.specAccuracy, l.specAverage,
+				l.specExtra));
+		}
+		else
+		{
+			final LedgerRows.Scope s = whole ? LedgerRows.of(raid) : room == null ? null : LedgerRows.of(room);
+			if (s != null)
+			{
+				key.addAll(Arrays.asList(s.combatTicks(), s.damage(), s.expectedDamage(), s.thrallDamage(), s.dotDamage(),
+					s.reflectDamage(), s.damageTaken(), s.dotTaken(), s.attacksMade(), s.ticksLost(), s.healed(),
+					room == null ? 0 : room.getFights().size()));
+			}
+		}
+		return key;
+	}
 
-		// Height capped only now that the row holds something. Asked before the label and the button went in, the preferred
-		// height is an empty panel's - the border and nothing else - and the row is pinned to twelve pixels with its contents
-		// clipped away.
-		row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
-		return row;
+	/** The plugin's state as the model's input; client thread only. */
+	private SidePanelModel.Input read(Fight fight, Encounter display, Encounter room, Raid raid, boolean whole, boolean pre,
+		List<Fight> history)
+	{
+		final SidePanelModel.Input in = new SidePanelModel.Input();
+		in.historyFights = history.size();
+		in.wholeRaid = raid == null ? null : whole;
+		if (fight == null)
+		{
+			in.kind = SidePanelModel.Kind.EMPTY;
+			return in;
+		}
+		if (pre)
+		{
+			in.kind = SidePanelModel.Kind.PRE_ATTACK;
+			in.name = fight.encounterName();
+			in.maxHp = fight.getMaxHp();
+			in.warning = plugin.getStatsWarning(fight);
+			in.loadout = LoadoutOverlay.loadout(plugin);
+			in.specName = plugin.getSpecialAttack() == null ? null : plugin.getSpecialAttack().getDisplayName();
+			if (display != null && !contains(display, fight))
+			{
+				in.lastFight = SidePanelModel.lastFight(display, true);
+			}
+			return in;
+		}
+		if (whole)
+		{
+			in.kind = SidePanelModel.Kind.RAID;
+			SidePanelModel.fillRaid(in, raid);
+			in.ended = fight.isEnded();
+			in.warning = plugin.getStatsWarning(fight);
+			return in;
+		}
+		if (room == null)
+		{
+			in.kind = SidePanelModel.Kind.EMPTY;
+			return in;
+		}
+		in.kind = SidePanelModel.Kind.ROOM;
+		SidePanelModel.fillRoom(in, room);
+		final boolean current = contains(room, fight);
+		in.ended = !current || fight.isEnded();
+		in.killed = in.ended && room.isKilled();
+		in.warning = current ? plugin.getStatsWarning(fight) : room.getStatsWarning();
+		long end = 0;
+		for (Fight f : room.getFights())
+		{
+			end = Math.max(end, f.getEndMillis());
+		}
+		in.endMillis = end;
+		if (in.killed && room.getRaid() == null && in.warning == null)
+		{
+			averages(history, room);
+			in.average = average;
+			in.luckRemoved = luckRemoved;
+		}
+		return in;
+	}
+
+	/** Your average and luck removed on this room, worked out again only when the room or the history changes. */
+	private void averages(List<Fight> history, Encounter room)
+	{
+		final Iterator<Fight> newest = history.iterator();
+		final Fight head = newest.hasNext() ? newest.next() : null;
+		if (room != averageRoom || history.size() != averageHistorySize || head != averageHistoryHead)
+		{
+			averageRoom = room;
+			averageHistorySize = history.size();
+			averageHistoryHead = head;
+			final List<Fight> copy = new ArrayList<>(history);
+			average = LedgerHistory.of(copy, room);
+			luckRemoved = average == null ? null : SidePanelModel.luckRemoved(copy, room);
+		}
+	}
+
+	private static boolean contains(Encounter room, Fight fight)
+	{
+		for (Fight f : room.getFights())
+		{
+			if (f == fight)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// ---- Swing's thread ----
+
+	/** Shows a snapshot (spec 5.1 step 2). Swing's thread only. */
+	void apply(PanelSnapshot snapshot)
+	{
+		shown = snapshot;
+		fightTab.apply(snapshot.fight);
+	}
+
+	PanelSnapshot shown()
+	{
+		return shown;
+	}
+
+	SidePanelFightTab fightTab()
+	{
+		return fightTab;
+	}
+
+	MaterialTabGroup tabs()
+	{
+		return tabs;
+	}
+
+	/** The buttons' actions, passed on to the plugin. */
+	private final class Actions implements SidePanelFightTab.Actions
+	{
+		@Override
+		public void exportAll()
+		{
+			if (plugin != null)
+			{
+				plugin.exportAll(historyTab.bossesOnly());
+			}
+		}
+
+		@Override
+		public void newTrip()
+		{
+			if (plugin != null)
+			{
+				plugin.resetSession();
+				dirty = true;
+			}
+		}
+
+		@Override
+		public void saveDebugLog()
+		{
+			if (plugin != null)
+			{
+				plugin.saveDebugLog();
+			}
+		}
+
+		@Override
+		public void clearHistory()
+		{
+			if (plugin != null)
+			{
+				plugin.clearHistory();
+			}
+			refresh();
+		}
+
+		@Override
+		public void wholeRaid(boolean whole)
+		{
+			wholeRaid = whole;
+			raidRoom = -1;
+			dirty = true;
+			poke();
+		}
+
+		@Override
+		public void showRaidRoom(int index)
+		{
+			final Raid raid = plugin == null ? null : plugin.getCurrentRaid();
+			raidRoomsAtPick = raid == null ? -1 : raid.getEncounters().size();
+			raidRoom = index;
+			wholeRaid = false;
+			dirty = true;
+			poke();
+		}
+
+		/** A choice made between ticks shows at once rather than on the next tick. */
+		private void poke()
+		{
+			if (clientThread != null)
+			{
+				clientThread.invokeLater(PvmPerformancePanel.this::onTick);
+			}
+		}
+	}
+
+	/** Folded sections, kept in the settings group under hidden keys (spec section 7). */
+	private static final class ConfigFolds implements SidePanelSection.Folds
+	{
+		private final ConfigManager configManager;
+
+		ConfigFolds(ConfigManager configManager)
+		{
+			this.configManager = configManager;
+		}
+
+		@Override
+		public boolean isFolded(String id)
+		{
+			return "true".equals(configManager.getConfiguration(PvmPerformanceConfig.GROUP, FOLD_KEY + id));
+		}
+
+		@Override
+		public void setFolded(String id, boolean folded)
+		{
+			if (folded)
+			{
+				configManager.setConfiguration(PvmPerformanceConfig.GROUP, FOLD_KEY + id, "true");
+			}
+			else
+			{
+				configManager.unsetConfiguration(PvmPerformanceConfig.GROUP, FOLD_KEY + id);
+			}
+		}
 	}
 }
