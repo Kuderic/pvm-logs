@@ -147,7 +147,7 @@ public class LedgerRowsTest
 		// is under 2% of 73.2 s and stays white.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "89% (8 s slower)", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -165,7 +165,7 @@ public class LedgerRowsTest
 		// Eric's kill. 688 + thrall 80 - healed 68 = 700, the boss's HP.
 		assertRows(Arrays.asList(
 			r("Vardorvis (dead)", "2:16", EMPHASIS, EMPHASIS, DEAD, NEUTRAL),
-			emph("Luck", "14 s slower", COST),
+			emph("Luck", "88% (14 s slower)", COST),
 			damage("688/778", COST),
 			main("DPS", "5.0"),
 			main("Execution", "84%"),
@@ -179,7 +179,7 @@ public class LedgerRowsTest
 			d(" hits/expected", "32/30.2"),
 			d(" thrall dmg", "80"),
 			d(" boss healed", "68"),
-			d(" eating", "7 ticks")),
+			d(" eating time", "4 s")),
 			build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false)));
 	}
 
@@ -188,7 +188,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis (ended)", "2:20"),
-			emph("Luck", "15 s slower", COST),
+			emph("Luck", "89% (15 s slower)", COST),
 			damage("721/812", COST),
 			main("DPS", "5.1"),
 			main("Execution", "93%"),
@@ -212,7 +212,7 @@ public class LedgerRowsTest
 		// The trip keeps no heal (only thrall and DoT were added for it), so there's no "boss healed" row.
 		assertRows(Arrays.asList(
 			title("Trip · 6 kills", "12:40"),
-			emph("Luck", "14 s slower", NEUTRAL),
+			emph("Luck", "98% (14 s slower)", NEUTRAL),
 			damage("4,120/4,201", NEUTRAL),
 			main("DPS", "5.4"),
 			main("Execution", "92%"),
@@ -226,7 +226,7 @@ public class LedgerRowsTest
 			d(" hits/expected", "161/158.7"),
 			d(" thrall dmg", "290"),
 			d(" burn/poison dmg", "60"),
-			d(" eating", "11 ticks")),
+			d(" eating time", "7 s")),
 			build(LedgerExamples.trip(), State.trip(6, false, false)));
 	}
 
@@ -243,7 +243,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("ToA · 3 rooms", "9:12"),
-			emph("Luck", "13 s faster", BETTER),
+			emph("Luck", "103% (13 s faster)", BETTER),
 			damage("8,410/8,200", BETTER),
 			main("DPS", "15.2"),
 			main("Execution", "86%"),
@@ -419,66 +419,36 @@ public class LedgerRowsTest
 		return build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false).withAverage(average));
 	}
 
-	/** Your average: the clock's median and quartiles, then the same with the luck taken out. */
-	private static LedgerHistory.Average average(double clock, double clockLow, double clockHigh,
-		double adjusted, double adjustedLow, double adjustedHigh)
+	/** Your average: the clock's median and quartiles. */
+	private static LedgerHistory.Average average(double clock, double clockLow, double clockHigh)
 	{
-		return new LedgerHistory.Average(new LedgerHistory.Spread(clock, clockLow, clockHigh),
-			new LedgerHistory.Spread(adjusted, adjustedLow, adjustedHigh), 12);
+		return new LedgerHistory.Average(new LedgerHistory.Spread(clock, clockLow, clockHigh), 12);
 	}
 
 	@Test
-	public void yourAverageThenThisKillThenWithTheLuckRemoved()
+	public void yourAverageHeadsTheSummary()
 	{
-		// Eric, 2026-10-26: " vs your average 1:59" made no sense as a heading. This kill: 136.8 s on the clock (2:16),
-		// 122.45 s with its luck taken out. Your clock's median 1:59, middle half 1:55 to 2:05: 17 s slower, outside it.
-		// With the luck taken out your median is 2:10, middle half 2:05 to 2:15: 8 s faster, outside that too.
-		final List<Row> rows = deadWith(average(119, 115, 125, 130, 125, 135));
+		// Eric, 2026-10-26: " vs your average 1:59" made no sense as a heading; 2026-10-27: no " this kill",
+		// " luck removed" or " luckier than" with it. The median clock, cut to whole seconds like the title's.
+		final List<Row> rows = deadWith(average(119.9, 115, 125));
 		assertEquals(b("", ""), rows.get(10));
 		assertEquals(main("Summary", ""), rows.get(11));
 		assertEquals(d(" your average", "1:59"), rows.get(12));
-		assertEquals(d(" this kill", "17 s slower", COST), rows.get(13));
-		assertEquals(d(" luck removed", "8 s faster", BETTER), rows.get(14));
-		assertEquals(d(" hits/expected", "32/30.2"), rows.get(15));
-	}
-
-	@Test
-	public void thisKillIsTheGapBetweenTheTwoClocksOnShow()
-	{
-		// 2:16 (136.8 s) against a median of 1:58.9: both read in whole seconds, so it's the 18 s between 2:16 and 1:58,
-		// not the 17.9 the fractions give, nor 19.
-		assertTrue(deadWith(average(118.9, 115, 125, 130, 125, 135)).contains(d(" this kill", "18 s slower", COST)));
-		assertTrue(deadWith(average(119, 115, 125, 130, 125, 135)).contains(d(" your average", "1:59")));
-		// The same whole second reads even.
-		assertTrue(deadWith(average(136.9, 130, 140, 130, 125, 135)).contains(d(" this kill", "even")));
-	}
-
-	@Test
-	public void slowerThanYourAverageWithTheLuckRemoved()
-	{
-		// 122.45 against 1:50: 12 s slower. The clock, 2:16 against 2:20, is 4 s faster but inside your middle half.
-		final List<Row> rows = deadWith(average(140, 135, 145, 110, 105, 115));
-		assertTrue(rows.contains(d(" luck removed", "12 s slower", COST)));
-		assertTrue(rows.contains(d(" this kill", "4 s faster", NEUTRAL)));
-	}
-
-	@Test
-	public void insideYourMiddleHalfReadsNeutral()
-	{
-		assertTrue(deadWith(average(119, 115, 125, 124, 120, 128)).contains(d(" luck removed", "2 s faster", NEUTRAL)));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(13));
+		assertFalse(rows.stream().anyMatch(row -> row.left.equals(" this kill") || row.left.equals(" luck removed")
+			|| row.left.equals(" luckier than")));
 	}
 
 	@Test
 	public void theAverageOnlyFollowsAKill()
 	{
-		final LedgerHistory.Average a = average(119, 115, 125, 130, 125, 135);
+		final LedgerHistory.Average a = average(119, 115, 125);
 		final List<Row> ended = build(LedgerExamples.kill(), State.fight("Vardorvis", true, false, false).withAverage(a));
 		final List<Row> warned = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, true).withAverage(a));
 		final List<Row> running = build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false).withAverage(a));
 		for (List<Row> rows : Arrays.asList(ended, warned, running, deadWith(null)))
 		{
-			assertFalse(rows.stream().anyMatch(row -> row.left.equals(" your average") || row.left.equals(" this kill")
-				|| row.left.equals(" luck removed")));
+			assertFalse(rows.stream().anyMatch(row -> row.left.equals(" your average")));
 		}
 	}
 
@@ -512,7 +482,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "89% (8 s slower)", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -530,7 +500,7 @@ public class LedgerRowsTest
 		// Eric, 2026-10-26: the panel only comes up once the fight does, so the loadout goes under the fight's rows.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "89% (8 s slower)", COST),
 			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
@@ -568,7 +538,7 @@ public class LedgerRowsTest
 		assertEquals(b("", ""), rows.get(15));
 		assertEquals(main("Summary", ""), rows.get(16));
 		assertEquals(d(" hits/expected", "32/30.2"), rows.get(17));
-		assertEquals(d(" eating", "7 ticks"), rows.get(rows.size() - 1));
+		assertEquals(d(" eating time", "4 s"), rows.get(rows.size() - 1));
 	}
 
 	@Test
@@ -968,11 +938,14 @@ public class LedgerRowsTest
 	}
 
 	@Test
-	public void eatingCountsOneTickSingular()
+	public void eatingTimeIsInSeconds()
 	{
+		// Eric, 2026-10-27: in seconds, like everything else. One tick is 0.6 s, rounded half away from zero.
 		final FakeScope s = LedgerExamples.kill();
 		s.ticksLostEating = 1;
-		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating", "1 tick")));
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating time", "1 s")));
+		s.ticksLostEating = 7;
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating time", "4 s")));
 	}
 
 	@Test
@@ -1045,5 +1018,29 @@ public class LedgerRowsTest
 		// None while the fight runs.
 		assertFalse(build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false))
 			.contains(main("Summary", "")));
+	}
+
+	// ---- the luck % (Eric, 2026-10-27: "add back in the luck %") ----
+
+	@Test
+	public void theLuckPercentNeverContradictsItsSide()
+	{
+		assertEquals("89%", LedgerRows.luckPercent(370, 418));
+		assertEquals("103%", LedgerRows.luckPercent(8410, 8200));
+		// 99.6% and 100.4% would round to 100%, which reads as no luck either way.
+		assertEquals("99%", LedgerRows.luckPercent(996, 1000));
+		assertEquals("101%", LedgerRows.luckPercent(1004, 1000));
+		assertEquals("100%", LedgerRows.luckPercent(1000, 1000.2));
+	}
+
+	@Test
+	public void luckShowsThePercentThenTheSeconds()
+	{
+		assertEquals("88% (14 s slower)", LedgerRows.luckFigure(new LedgerRows.Numbers(LedgerExamples.kill())));
+		// No bracket when the seconds round to none.
+		final FakeScope close = LedgerExamples.midFight();
+		close.damage = 417;
+		assertEquals("99%", LedgerRows.luckFigure(new LedgerRows.Numbers(close)));
+		assertEquals("\u2014", LedgerRows.luckFigure(new LedgerRows.Numbers(LedgerExamples.noData())));
 	}
 }

@@ -1,7 +1,6 @@
 package com.pvmlogs;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -580,7 +579,7 @@ final class LedgerRows
 		/** {@code getStatsWarning(fight) != null}: the expected side can't be believed. */
 		final boolean warning;
 		final Loadout loadout;
-		/** Your usual expected time on this boss, or null with too few kills to say. */
+		/** Your usual kill on this boss, or null with too few kills to say. */
 		final LedgerHistory.Average average;
 
 		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
@@ -923,8 +922,7 @@ final class LedgerRows
 		final boolean noData = n.expected <= 0;
 		if (settings.luck && !state.warning)
 		{
-			rows.add(row("Luck", Double.isNaN(n.luck) ? UNKNOWN : fasterOrSlower(n.luck),
-				FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
+			rows.add(row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
 		}
 		if (state.warning)
 		{
@@ -1026,7 +1024,9 @@ final class LedgerRows
 		}
 		if (s.ticksLostEating() > 0)
 		{
-			details.add(detail(" eating", plural(s.ticksLostEating(), "tick"), Colour.NEUTRAL));
+			// In seconds like everything else (Eric, 2026-10-27), not ticks.
+			details.add(detail(" eating time", roundHalfAway(s.ticksLostEating() * SECONDS_PER_TICK) + " s",
+				Colour.NEUTRAL));
 		}
 		if (!details.isEmpty())
 		{
@@ -1038,18 +1038,12 @@ final class LedgerRows
 	}
 
 	/**
-	 * This kill against your usual (spec section 5, brought forward from v2), as
-	 * three rows (Eric, 2026-10-26: " vs your average 1:59" made no sense as a
-	 * heading):
-	 * <pre>
-	 *  your average   1:59           the median clock of your recent kills
-	 *  this kill      17 s slower    this clock against it
-	 *  luck removed   5 s faster     this clock less its luck, against your
-	 *                                kills' clocks less theirs
-	 * </pre>
-	 * Each compares like with like, so the last is how you played. The seconds
-	 * always show; Better or Cost only outside that row's own middle half.
-	 * After a kill only, outside a raid, and not under the warning.
+	 * " your average 1:59": the median clock of your recent like kills, to set
+	 * against the title's (spec section 5, brought forward from v2). Eric made it
+	 * a row of its own on 2026-10-26, then on 2026-10-27 dropped the comparisons
+	 * under it (" this kill", " luck removed") and " luckier than", which read as
+	 * the average's luck. After a kill only, outside a raid, and not under the
+	 * warning.
 	 */
 	static List<Row> average(Numbers n, State state)
 	{
@@ -1059,29 +1053,8 @@ final class LedgerRows
 		{
 			return Collections.emptyList();
 		}
-		return Arrays.asList(
-			detail(" your average", duration(a.actual.median), Colour.NEUTRAL),
-			against(" this kill", n.clock, a.actual, true),
-			against(" luck removed", n.expectedDuration, a.adjusted, false));
+		return Collections.singletonList(detail(" your average", duration(a.actual.median), Colour.NEUTRAL));
 	}
-
-	/**
-	 * {@code mine} against {@code usual}: faster or slower, coloured only outside
-	 * the middle half. {@code onShow} when both times are on the panel in whole
-	 * seconds (the title's clock and " your average" both drop the fraction), so
-	 * the gap is the one the player can work out from them: 2:16 against 1:59 is
-	 * 17 s, not the 18 the fractions would round to.
-	 */
-	private static Row against(String label, double mine, LedgerHistory.Spread usual, boolean onShow)
-	{
-		final String verdict = fasterOrSlower(onShow ? Math.floor(usual.median) - Math.floor(mine) : usual.median - mine);
-		final boolean inside = (mine >= usual.lowerQuartile && mine <= usual.upperQuartile) || verdict.equals(EVEN);
-		final Colour colour = inside ? Colour.NEUTRAL : mine < usual.median ? Colour.BETTER : Colour.COST;
-		return detail(label, verdict, colour);
-	}
-
-
-	// ---- colour rules ----
 
 	/** Better at +1 s and +2% of the clock, Cost at -1 s and -2%, else neutral. */
 	static Colour luckColour(double luck, double clock)
@@ -1131,6 +1104,42 @@ final class LedgerRows
 	{
 		final long secs = Double.isNaN(costSeconds) ? 0 : roundHalfAway(costSeconds);
 		return secs >= 1 ? figure + " (-" + secs + " s)" : figure;
+	}
+
+	/**
+	 * {@code 88% (14 s slower)}: the damage your rolls dealt against what your
+	 * attacks should average, then what that cost or saved on the clock (Eric,
+	 * 2026-10-27: "add back in the luck %", next to Execution's). No bracket when
+	 * the seconds round to none; a dash when there's nothing to compare.
+	 * <p>
+	 * The ratio reads a little high on average over kills (metrics spec 1.3: on a
+	 * kill the damage is fixed and the expected side varies, about +2.5%), which
+	 * is why the seconds, not the percentage, set the colour.
+	 */
+	static String luckFigure(Numbers n)
+	{
+		if (Double.isNaN(n.luck))
+		{
+			return UNKNOWN;
+		}
+		final String percent = luckPercent(n.damage, n.expected);
+		final String seconds = fasterOrSlower(n.luck);
+		return seconds.equals(EVEN) ? percent : percent + " (" + seconds + ")";
+	}
+
+	/**
+	 * Damage against expected as a whole percentage that never contradicts its
+	 * side: under expected reads 99% at most, over it 101% at least, and 100%
+	 * only when they're equal to the damage point.
+	 */
+	static String luckPercent(double damage, double expected)
+	{
+		final long rounded = Math.round(damage / expected * 100);
+		if (Math.round(damage) == Math.round(expected))
+		{
+			return "100%";
+		}
+		return (damage < expected ? Math.min(99, rounded) : Math.max(101, rounded)) + "%";
 	}
 
 	/**
@@ -1187,17 +1196,14 @@ final class LedgerRows
 	/**
 	 * Every clock: whole seconds, {@code m:ss}, {@code h:mm:ss} past an hour,
 	 * counted up like a stopwatch. No tenths once the fight ends either (Eric,
-	 * 2026-10-26), so it reads like the expected time beside it.
+	 * 2026-10-26).
 	 */
 	static String clock(int ticks)
 	{
 		return hms(Math.max(0, (long) ticks) * 6 / 10);
 	}
 
-	/**
-	 * An expected time: whole seconds, cut down like the clock beside it, so the
-	 * gap between the two reads as the luck does (12:40 against 12:26 for 13.5 s).
-	 */
+	/** A time in seconds, e.g. your average: whole seconds, cut down like the clock in the title. */
 	static String duration(double seconds)
 	{
 		return hms((long) Math.floor(Math.max(0, seconds)));

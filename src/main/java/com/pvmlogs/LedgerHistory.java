@@ -9,10 +9,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Your usual time on a boss, for the overlay's average rows: the median
- * clock of your recent kills of it, and their median expected time (the clock
- * with the luck taken out). Worked out from the saved fights with the same formulas as the rows,
- * so it compares like with like. No client in here.
+ * Your usual time on a boss, for the overlay's Summary: the median clock of
+ * your recent kills of it, worked out from the saved fights with the same
+ * formulas as the rows. No client in here.
  * <p>
  * Only kills recorded by a build whose expected side can be trusted count
  * (Eric, 2026-10-26: "from new kills only"). Older history has its expected
@@ -101,21 +100,15 @@ final class LedgerHistory
 		}
 	}
 
-	/**
-	 * Your usual kill, both ways, over the same kills: {@code actual} is the
-	 * clock, {@code adjusted} the clock with the luck taken out. Each is
-	 * compared only with its own kind (Eric, 2026-10-26: one row for each).
-	 */
+	/** Your usual kill: the clock's median and quartiles over your recent like kills. */
 	static final class Average
 	{
 		final Spread actual;
-		final Spread adjusted;
 		final int kills;
 
-		Average(Spread actual, Spread adjusted, int kills)
+		Average(Spread actual, int kills)
 		{
 			this.actual = actual;
-			this.adjusted = adjusted;
 			this.kills = kills;
 		}
 	}
@@ -145,22 +138,20 @@ final class LedgerHistory
 			exclude.addAll(current);
 		}
 		final double[] clocks = new double[LedgerRows.AVERAGE_OF_LAST];
-		final double[] times = new double[LedgerRows.AVERAGE_OF_LAST];
 		int n = 0;
 		final List<Encounter> rooms = rooms(history, like.name);
-		for (int i = rooms.size() - 1; i >= 0 && n < times.length; i--)
+		for (int i = rooms.size() - 1; i >= 0 && n < clocks.length; i--)
 		{
 			final Encounter room = rooms.get(i);
 			if (!like.matches(room) || !counts(room, exclude))
 			{
 				continue;
 			}
-			// Only kills with both, so the two averages are over the same kills.
+			// Kills whose luck is known, as before: the same kills the expected side could be trusted on.
 			final LedgerRows.Numbers numbers = new LedgerRows.Numbers(LedgerRows.of(room));
-			if (!Double.isNaN(numbers.expectedDuration))
+			if (!Double.isNaN(numbers.luck))
 			{
-				clocks[n] = numbers.clock;
-				times[n++] = numbers.expectedDuration;
+				clocks[n++] = numbers.clock;
 			}
 		}
 		if (n < LedgerRows.AVERAGE_FROM_KILLS)
@@ -168,10 +159,8 @@ final class LedgerHistory
 			return null;
 		}
 		final double[] actual = Arrays.copyOf(clocks, n);
-		final double[] adjusted = Arrays.copyOf(times, n);
 		Arrays.sort(actual);
-		Arrays.sort(adjusted);
-		return new Average(Spread.of(actual), Spread.of(adjusted), n);
+		return new Average(Spread.of(actual), n);
 	}
 
 	/**

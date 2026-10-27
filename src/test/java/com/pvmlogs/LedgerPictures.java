@@ -38,11 +38,9 @@ public final class LedgerPictures
 		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis", tentacle), all));
 		s.put("2-mid", LedgerRows.build(LedgerExamples.midFight(),
 			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
-		// Illustrative average over 12 kills: the clock's median 1:59 (middle half 1:55 to 2:05); with the luck taken out,
-		// 2:10 (2:05 to 2:15).
+		// Illustrative average: the clock's median 1:59 over 10 kills.
 		s.put("3-dead", LedgerRows.build(LedgerExamples.kill(), LedgerRows.State.fight("Vardorvis", true, true, false)
-			.withLoadout(tentacle).withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125),
-				new LedgerHistory.Spread(130, 125, 135), 12)), all));
+			.withLoadout(tentacle).withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
 		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
 			LedgerRows.State.fight("Vardorvis", true, false, false), all));
 		s.put("5-trip", LedgerRows.build(LedgerExamples.trip(), LedgerRows.State.trip(6, false, false), all));
