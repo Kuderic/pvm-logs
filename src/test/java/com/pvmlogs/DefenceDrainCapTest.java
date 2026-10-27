@@ -44,4 +44,33 @@ public class DefenceDrainCapTest
 		assertEquals(10, DefenceDrainCap.maxDrain(NpcIds.DOOM, 10));
 		assertEquals(0, DefenceDrainCap.floor(NpcIds.DOOM, 10));
 	}
+
+	/**
+	 * The DPS calculator floors Verzik's defence at its current value, like
+	 * Vardorvis's (weirdgloop/osrs-dps-calc@c446f2e, DefenceReduction.ts, VERZIK_IDS
+	 * in constants.ts). Every one of its ids is immune here, except the three
+	 * phase transitions, which cannot be attacked.
+	 */
+	@Test
+	public void verzikMatchesTheCalculatorsFloor()
+	{
+		final int[] calc = {10830, 10831, 10832, 8369, 8370, 8371, 10847, 10848, 10849, 10833, 10834, 10835, 8372, 8373,
+			8374, 10850, 10851, 10852};
+		final java.util.Set<Integer> transitions = new java.util.HashSet<>(java.util.Arrays.asList(
+			net.runelite.api.gameval.NpcID.VERZIK_PHASE1_TO2_TRANSITION,
+			net.runelite.api.gameval.NpcID.VERZIK_PHASE2_TO3_TRANSITION,
+			net.runelite.api.gameval.NpcID.VERZIK_PHASE1_TO2_TRANSITION_STORY,
+			net.runelite.api.gameval.NpcID.VERZIK_PHASE2_TO3_TRANSITION_STORY,
+			net.runelite.api.gameval.NpcID.VERZIK_PHASE1_TO2_TRANSITION_HARD,
+			net.runelite.api.gameval.NpcID.VERZIK_PHASE2_TO3_TRANSITION_HARD));
+		for (int id : calc)
+		{
+			if (!transitions.contains(id))
+			{
+				assertTrue("npc " + id, DefenceDrainCap.isImmune(id));
+				assertEquals(200, DefenceDrainCap.floor(id, 200));
+			}
+		}
+		assertEquals(6, transitions.size());
+	}
 }

@@ -61,13 +61,38 @@ public class HitsplatKindTest
 		}
 	}
 
+	/** Block, damage and max hit: the player's attack on hitpoints. */
 	@Test
-	public void everyMineTypeIsThePlayers()
+	public void thePlayersRedSplatsAreHitpoints()
 	{
-		for (int type : MINE)
+		for (int type : new int[]{HitsplatID.BLOCK_ME, HitsplatID.DAMAGE_ME, HitsplatID.DAMAGE_MAX_ME})
 		{
 			assertEquals(HitsplatKind.PLAYER, kindOf(type));
+			assertTrue(kindOf(type).damagesTarget());
 		}
+	}
+
+	/**
+	 * Shield (cyan), armour (orange), charge (yellow), uncharge (white) and poise:
+	 * still the player's, but not the target's hitpoints. Every mine type is one or
+	 * the other.
+	 */
+	@Test
+	public void thePlayersColouredSplatsAreTheirsButNotHitpoints()
+	{
+		for (int type : new int[]{18, 20, 22, 24, 44, 45, 46, 47, 53, 55})
+		{
+			assertEquals("type " + type, HitsplatKind.PLAYER_NOT_HITPOINTS, kindOf(type));
+			assertFalse(kindOf(type).damagesTarget());
+		}
+		for (int type : MINE)
+		{
+			final HitsplatKind kind = kindOf(type);
+			assertTrue(kind == HitsplatKind.PLAYER || kind == HitsplatKind.PLAYER_NOT_HITPOINTS);
+		}
+		assertEquals("shield", HitsplatKind.typeName(HitsplatID.DAMAGE_ME_CYAN));
+		assertEquals("armour", HitsplatKind.typeName(HitsplatID.DAMAGE_MAX_ME_ORANGE));
+		assertEquals("poise", HitsplatKind.typeName(HitsplatID.DAMAGE_ME_POISE));
 	}
 
 	@Test
@@ -91,10 +116,15 @@ public class HitsplatKindTest
 	@Test
 	public void otherPlayersHitsAreTheirs()
 	{
-		for (int type : new int[]{13, 17, 19, 21, 23, 25})
+		for (int type : new int[]{HitsplatID.BLOCK_OTHER, HitsplatID.DAMAGE_OTHER})
 		{
 			assertEquals(HitsplatKind.OTHER_PLAYER, kindOf(type));
 			assertTrue(kindOf(type).damagesTarget());
+		}
+		// Their shield, armour, charge, uncharge and poise splats are no more hitpoints than the player's.
+		for (int type : new int[]{19, 21, 23, 25, 54})
+		{
+			assertEquals("type " + type, HitsplatKind.NO_HEALTH_EFFECT, kindOf(type));
 		}
 	}
 

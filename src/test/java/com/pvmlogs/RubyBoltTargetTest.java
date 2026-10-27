@@ -80,4 +80,19 @@ public class RubyBoltTargetTest
 		// PvM rates, which are the only ones this plugin scores.
 		assertEquals(0.06, EnchantedBolt.RUBY.chance(false), 1e-9);
 	}
+
+	/** Exact hitpoints from TargetHealth beat the overhead bar's thirtieths, which beat full health. */
+	@Test
+	public void exactHitpointsBeatTheBarsBuckets()
+	{
+		// Vardorvis on 137 of 700: the overhead bar at 6/30 reads 140.
+		assertEquals(137, CombatCalc.currentHp(137, 700, 6, 30));
+		assertEquals(140, CombatCalc.currentHp(-1, 700, 6, 30));
+		assertEquals(700, CombatCalc.currentHp(-1, 700, -1, -1));
+		assertEquals(0, CombatCalc.currentHp(0, 700, 6, 30));
+		// Never above full, and with no full hitpoints only an exact figure is any use.
+		assertEquals(700, CombatCalc.currentHp(900, 700, -1, -1));
+		assertEquals(42, CombatCalc.currentHp(42, 0, -1, -1));
+		assertEquals(0, CombatCalc.currentHp(-1, 0, 6, 30));
+	}
 }

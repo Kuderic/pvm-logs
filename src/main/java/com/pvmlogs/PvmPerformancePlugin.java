@@ -622,11 +622,23 @@ public class PvmPerformancePlugin extends Plugin
 			// two ticks, which the burst logic already books as the single attack it is. A thrall, a bleed, poison and a max
 			// hit all carry their own type, and telling those apart from a real hit of the player's is the whole question
 			// whenever measured damage and attacks disagree.
-			debug.log("hitsplat %d type %d on %s (npc %d, index %d), landedAttack=%b, fromFlight=%b",
+			// Shield, armour, charge and poise splats are the player's attack landing on something that is not hitpoints:
+			// still the attack and its weapon damage, which the expected side scores, but not the target's health. See
+			// HitsplatKind.
+			final boolean onHitpoints = HitsplatKind.of(true, false, hitsplat.getHitsplatType()) == HitsplatKind.PLAYER;
+			debug.log("hitsplat %d type %d on %s (npc %d, index %d), landedAttack=%b, fromFlight=%b%s",
 				hitsplat.getAmount(), hitsplat.getHitsplatType(), current.getTargetName(), npc.getId(), npc.getIndex(),
-				landedAttack, arrivedFromFlight);
-			damageByIndex.merge(npc.getIndex(), hitsplat.getAmount(), Integer::sum);
-			health.damage(npc.getIndex(), npc.getId(), hitsplat.getAmount(), tick);
+				landedAttack, arrivedFromFlight,
+				onHitpoints ? "" : ", NOT HITPOINTS (" + HitsplatKind.typeName(hitsplat.getHitsplatType()) + ")");
+			if (onHitpoints)
+			{
+				damageByIndex.merge(npc.getIndex(), hitsplat.getAmount(), Integer::sum);
+				health.damage(npc.getIndex(), npc.getId(), hitsplat.getAmount(), tick);
+			}
+			else
+			{
+				current.recordNotHitpoints(HitsplatKind.typeName(hitsplat.getHitsplatType()), hitsplat.getAmount());
+			}
 			current.recordDamageDealt(hitsplat.getAmount(), now, landedAttack);
 			if (current.isScored())
 			{
@@ -2878,10 +2890,12 @@ public class PvmPerformancePlugin extends Plugin
 		final int counted = health.damageCounted(index);
 		final int healed = health.healed(index);
 		final int net = counted - healed;
-		debug.log("RECONCILE %s (npc %d)%s: weapon %d + thrall %d + dot %d + others %d + unclassified %d, healed %d; on the "
-				+ "target %d - %d = %d against %d full hp (%s)%s; bar last read %d, now %d left (%s)",
+		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + dot %d + others %d + "
+				+ "unclassified %d, healed %d; on the target %d - %d = %d against %d full hp (%s)%s; bar last read %d, now "
+				+ "%d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
-			current.getDamageDealt(), current.getThrallDamage(), current.getDotDamage(), current.getOthersDamage(),
+			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getDotDamage(),
+			current.getOthersDamage(),
 			current.getUnclassifiedDamage(), current.getHealed(), counted, healed, net, full, fullFrom,
 			died && full > 0 ? String.format(", diff %+d (%.1f%%)", net - full, 100.0 * (net - full) / full) : "",
 			health.lastHudHp(index), health.remaining(index, tick), health.source(index, tick));
@@ -2914,21 +2928,62 @@ public class PvmPerformancePlugin extends Plugin
 		final int liveId = target == null ? -1 : target.getId();
 		final NPCComposition composition = target == null ? null : target.getComposition();
 		final int compositionId = composition == null ? -1 : composition.getId();
-		final boolean ours = !disabled && target != null && target.getIndex() == index
+		final boolean named = !disabled && target != null && target.getIndex() == index
 			&& healthBarNames(barNpc, compositionId, liveId);
+		// The bar names an id, not an npc. With adds of the target's id about, it may be showing one of them: then it is
+		// only believed while it agrees with the count, and the count carries on otherwise.
+		final int sameId = named ? npcsWithId(barNpc) : 0;
+		final int counted = health.countedRemaining(index);
+		final boolean ours = named && TargetHealth.barIsTarget(sameId, hp, base, counted);
 		final long reading = ((long) (barNpc & 0xFFFFF) << 40) | ((long) (hp & 0xFFFFF) << 20) | (base & 0xFFFFF)
-			| (disabled ? 1L << 62 : 0) | (ours ? 1L << 61 : 0);
+			| (disabled ? 1L << 62 : 0) | (ours ? 1L << 61 : 0) | (named ? 1L << 60 : 0);
 		if (reading != lastHealthBarReading)
 		{
 			lastHealthBarReading = reading;
 			debug.log("health bar: npc varp %d, hp %d / %d%s; target index %d, id %d, composition %d -> %s",
 				barNpc, hp, base, disabled ? ", boss bar turned off" : "", index, liveId, compositionId,
-				ours ? "OURS" : "not ours");
+				ours ? (sameId > 1 ? "OURS (" + sameId + " npcs with this id; agrees with the count, " + counted + ")"
+					: "OURS")
+					: named ? "AMBIGUOUS: " + sameId + " npcs with this id and the count says " + counted
+						+ ", so the count is used" : "not ours");
 		}
 		if (ours)
 		{
+			// A new full hitpoints on the bar mid-fight is a phase with its own pool (or a different version than the one
+			// guessed). The bar copes, but the count does not: it carries the old pool's damage into the new one. Logged so a
+			// real fight can say which bosses do this before anything is built for it (T-011 item 6).
+			final int previousFull = health.lastHudMax(index);
+			if (previousFull > 0 && previousFull != base)
+			{
+				debug.log("health bar: FULL HITPOINTS CHANGED %d -> %d mid-fight on %s (npc %d, index %d); counted would "
+						+ "read %d left, the bar says %d",
+					previousFull, base, current.getTargetName(), liveId, index, health.countedRemaining(index), hp);
+			}
 			health.hud(index, liveId, hp, base, client.getTickCount());
 		}
+	}
+
+	/** How many npcs in the scene wear this id, by composition or as they stand. */
+	private int npcsWithId(int npcId)
+	{
+		if (client.getTopLevelWorldView() == null)
+		{
+			return 0;
+		}
+		int n = 0;
+		for (NPC npc : client.getTopLevelWorldView().npcs())
+		{
+			if (npc == null)
+			{
+				continue;
+			}
+			final NPCComposition c = npc.getComposition();
+			if (npc.getId() == npcId || (c != null && c.getId() == npcId))
+			{
+				n++;
+			}
+		}
+		return n;
 	}
 
 	/** Whether the bar's npc varp names this npc. -1 is no bar at all. */
