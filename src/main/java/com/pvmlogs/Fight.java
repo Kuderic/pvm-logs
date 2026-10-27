@@ -61,7 +61,16 @@ class Fight
 	// Why this fight's expected side should not be trusted, or null: the target's stats carried a warning, or the attacks
 	// that landed were too far from the expected count to be luck. See StatsCheck.
 	private String statsWarning;
+	// What the player took (T-018). damageTaken is hitpoints lost to hits only: before T-018 it was every splat on the
+	// player, heals and prayer drains included, and fights saved then keep that total. Damage over time on the player
+	// is beside it, not in it. All of these read 0 on a fight from an older history.
 	private int damageTaken;
+	private int dotTaken;
+	// Hit splats on the player, 0s included, and the largest of them.
+	private int hitsTaken;
+	private int biggestHitTaken;
+	// The part of damageTaken taken with no protection prayer up (DamageTaken.PROTECTION), by the server's varbits.
+	private int damageTakenUnprotected;
 	// One attempt per attack thrown, and a hit for each attack that landed anything. accuracy = hits / attempts.
 	private int attempts;
 	private int hits;
@@ -286,9 +295,41 @@ class Fight
 		lastActivityMillis = now;
 	}
 
+	/**
+	 * A hit on the player during this fight: an attack's damage or its 0 (see
+	 * {@link HitsplatKind#onPlayer}). Like the player's own damage, it keeps the
+	 * fight open.
+	 *
+	 * @param unprotected whether no protection prayer was up as it landed
+	 */
+	void recordHitTaken(int amount, boolean unprotected, long now)
+	{
+		final int hit = Math.max(0, amount);
+		damageTaken += hit;
+		hitsTaken++;
+		biggestHitTaken = Math.max(biggestHitTaken, hit);
+		if (unprotected)
+		{
+			damageTakenUnprotected += hit;
+		}
+		touch(now);
+	}
+
+	/** A hit taken with no word on the prayer, so it is not counted as unprotected. See recordHitTaken. */
 	void recordDamageTaken(int amount, long now)
 	{
-		damageTaken += amount;
+		recordHitTaken(amount, false, now);
+	}
+
+	/** Poison, venom, burn or bleed on the player during this fight. Kept out of damageTaken; keeps the fight open. */
+	void recordDotTaken(int amount, long now)
+	{
+		dotTaken += Math.max(0, amount);
+		touch(now);
+	}
+
+	private void touch(long now)
+	{
 		if (now > lastActivityMillis)
 		{
 			lastActivityMillis = now;

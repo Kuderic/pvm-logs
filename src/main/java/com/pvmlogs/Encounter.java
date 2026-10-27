@@ -176,6 +176,50 @@ class Encounter
 		return total;
 	}
 
+	/** Damage over time on the player across the fights (T-018). */
+	int getDotTaken()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getDotTaken();
+		}
+		return total;
+	}
+
+	/** Hit splats on the player, 0s included (T-018). */
+	int getHitsTaken()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getHitsTaken();
+		}
+		return total;
+	}
+
+	/** The biggest hit on the player in any of the fights (T-018). */
+	int getBiggestHitTaken()
+	{
+		int biggest = 0;
+		for (Fight fight : fights)
+		{
+			biggest = Math.max(biggest, fight.getBiggestHitTaken());
+		}
+		return biggest;
+	}
+
+	/** Hit damage on the player with no protection prayer up (T-018). */
+	int getDamageTakenUnprotected()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getDamageTakenUnprotected();
+		}
+		return total;
+	}
+
 	/**
 	 * Attacks that got an answer. One nulled by the kill has no outcome to be
 	 * right or wrong about, and left in here it reads as a miss that dealt
