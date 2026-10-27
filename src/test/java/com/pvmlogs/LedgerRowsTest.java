@@ -583,6 +583,21 @@ public class LedgerRowsTest
 	}
 
 	@Test
+	public void executionNeverRoundsUpToAHundredEither()
+	{
+		// Eric, 2026-10-26: one tick lost in 300 is 99.7% uptime, so Execution reads 99%, not 100%.
+		final FakeScope s = LedgerExamples.kill();
+		s.combatTicks = 300;
+		s.ticksLost = 1;
+		s.setup(1, 1, 0, 0);
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(b("Execution", "99%")));
+		final FakeScope clean = LedgerExamples.kill();
+		clean.ticksLost = 0;
+		clean.setup(1, 1, 0, 0);
+		assertTrue(build(clean, State.fight("Vardorvis", false, false, false)).contains(b("Execution", "100%")));
+	}
+
+	@Test
 	public void secondsRoundHalfAwayFromZeroAndNeverReadMinusZero()
 	{
 		assertEquals("+14 s", LedgerRows.seconds(14.4));

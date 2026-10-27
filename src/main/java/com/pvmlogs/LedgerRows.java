@@ -777,7 +777,7 @@ final class LedgerRows
 			}
 		}
 		rows.add(body("DPS", Double.isNaN(n.dps) ? UNKNOWN : oneDecimal(n.dps)));
-		rows.add(body("Execution", Double.isNaN(n.execution) ? UNKNOWN : percent(n.execution)));
+		rows.add(body("Execution", Double.isNaN(n.execution) ? UNKNOWN : partPercent(n.execution)));
 		if (settings.parts != ExecutionParts.OFF)
 		{
 			parts(rows, n, settings.parts == ExecutionParts.COSTING);
@@ -930,8 +930,9 @@ final class LedgerRows
 	}
 
 	/**
-	 * A part's share: rounded, but never up to 100% unless it is 100%, so a part
-	 * that cost something doesn't read as perfect (Orchestrator, PR #14 review).
+	 * Execution's or a part's share: rounded, but never up to 100% unless it is
+	 * 100%, so a fight that cost something doesn't read as perfect (parts:
+	 * Orchestrator, PR #14 review; Execution: Eric, 2026-10-26).
 	 */
 	static String partPercent(double share)
 	{
