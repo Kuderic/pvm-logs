@@ -174,4 +174,19 @@ public class SpecialAttackTableTest
 		assertTrue(SpecialAttack.SEERCULL.alwaysHits());
 		assertTrue(!SpecialAttack.ARMADYL_GODSWORD.alwaysHits());
 	}
+
+	@Test
+	public void aVariantOfASpecWeaponHasItsBasesSpecial()
+	{
+		// Eric, 2026-10-26: the tentacle (or) showed no spec. 26484 is its id; RuneLite's variant table maps it to 12006.
+		assertEquals(SpecialAttack.ABYSSAL_TENTACLE, SpecialAttack.forItem(26484));
+		// Ornament kits, poisons: AGS (or), dragon claws (or), abyssal dagger (p++).
+		assertEquals(SpecialAttack.ARMADYL_GODSWORD, SpecialAttack.forItem(20368));
+		assertEquals(SpecialAttack.DRAGON_CLAWS, SpecialAttack.forItem(26708));
+		assertEquals(SpecialAttack.ABYSSAL_DAGGER, SpecialAttack.forItem(13271));
+		// A weapon with no spec still has none, and a variant whose group has no spec weapon at its base stays without:
+		// the twisted bow, a Gauntlet halberd (its group's base, 13082, isn't in the table).
+		assertNull(SpecialAttack.forItem(20997));
+		assertNull(SpecialAttack.forItem(23897));
+	}
 }

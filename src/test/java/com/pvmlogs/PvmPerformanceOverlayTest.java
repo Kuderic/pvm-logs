@@ -203,4 +203,70 @@ public class PvmPerformanceOverlayTest
 		assertEquals(0, trip.getThrallDamage());
 		assertEquals(0, trip.getDotDamage());
 	}
+
+	// ---- fitting the attack's name to a width the player saved (Eric, 2026-10-26) ----
+
+	private static LedgerRows.Row name(String left, String shortLeft)
+	{
+		return new LedgerRows.Row(left, "5.5 DPS", LedgerRows.FontRole.EMPHASIS, LedgerRows.FontRole.EMPHASIS,
+			LedgerRows.Colour.NEUTRAL, LedgerRows.Colour.NEUTRAL, shortLeft);
+	}
+
+	/** 7 px a character. */
+	private static int sevens(String text)
+	{
+		return text.length() * 7;
+	}
+
+	@Test
+	public void aNameThatFitsIsLeftAlone()
+	{
+		final LedgerRows.Row row = name("Abyssal tentacle", "Abyssal tentacle");
+		// 112 + 49 + the 6 px gap + the 8 px border = 175.
+		assertSame(row, PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 175));
+	}
+
+	@Test
+	public void aNameTooWideForTheSavedWidthIsCutRatherThanWrapped()
+	{
+		final LedgerRows.Row row = name("Abyssal tentacle", "Abyssal tentacle");
+		assertEquals("Abyssal tent\u2026", PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 154).left);
+		// Only the name changes.
+		assertEquals("5.5 DPS", PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 154).right);
+	}
+
+	@Test
+	public void aStaffAndSpellFallsBackToTheSpellBeforeItsCut()
+	{
+		final LedgerRows.Row row = name("Harmonised nightmare staff (Fire Surge)", "Fire Surge");
+		assertEquals("Fire Surge", PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 175).left);
+		assertEquals("Fire\u2026", PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 98).left);
+	}
+
+	@Test
+	public void aRowWithNoShortFormIsLeftToRuneLite()
+	{
+		final LedgerRows.Row row = new LedgerRows.Row(" thrall dmg", "80", LedgerRows.FontRole.DETAIL,
+			LedgerRows.FontRole.DETAIL, LedgerRows.Colour.NEUTRAL, LedgerRows.Colour.NEUTRAL);
+		assertSame(row, PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 14, 60));
+	}
+
+	@Test
+	public void damageExpectedFallsBackToDamageRatherThanRunIntoItsFigures()
+	{
+		// One word, so RuneLite can't wrap it: it would draw over "688/778".
+		final LedgerRows.Row row = new LedgerRows.Row("Damage/expected", "688/778", LedgerRows.FontRole.EMPHASIS,
+			LedgerRows.FontRole.EMPHASIS, LedgerRows.Colour.NEUTRAL, LedgerRows.Colour.COST, "Damage");
+		// 105 + 49 + 6 + 8 = 168 fits; one pixel less and it reads "Damage".
+		assertSame(row, PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 168));
+		assertEquals("Damage", PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 167).left);
+	}
+
+	@Test
+	public void withNoSavedWidthTheCapIsTheLimit()
+	{
+		assertEquals(PvmPerformanceOverlay.MAX_WIDTH, PvmPerformanceOverlay.savedWidth(null));
+		assertEquals(PvmPerformanceOverlay.MAX_WIDTH, PvmPerformanceOverlay.savedWidth(new java.awt.Dimension(0, 0)));
+		assertEquals(180, PvmPerformanceOverlay.savedWidth(new java.awt.Dimension(180, 0)));
+	}
 }

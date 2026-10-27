@@ -38,9 +38,11 @@ public final class LedgerPictures
 		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis", tentacle), all));
 		s.put("2-mid", LedgerRows.build(LedgerExamples.midFight(),
 			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
-		// Illustrative average: a median of 2:10 over 12 kills, middle half 2:05 to 2:15.
+		// Illustrative average over 12 kills: the clock's median 1:59 (middle half 1:55 to 2:05); with the luck taken out,
+		// 2:10 (2:05 to 2:15).
 		s.put("3-dead", LedgerRows.build(LedgerExamples.kill(), LedgerRows.State.fight("Vardorvis", true, true, false)
-			.withLoadout(tentacle).withAverage(new LedgerHistory.Average(130, 125, 135, 12)), all));
+			.withLoadout(tentacle).withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125),
+				new LedgerHistory.Spread(130, 125, 135), 12)), all));
 		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
 			LedgerRows.State.fight("Vardorvis", true, false, false), all));
 		s.put("5-trip", LedgerRows.build(LedgerExamples.trip(), LedgerRows.State.trip(6, false, false), all));
@@ -64,7 +66,21 @@ public final class LedgerPictures
 		brewed.setup(0.95, 0.0, 3.36, 0);
 		s.put("11-drained", LedgerRows.build(brewed,
 			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
+		// A panel the player dragged narrower than a long attack's name (Eric, 2026-10-26): drawn at SAVED_WIDTH, the
+		// name falls back to the spell rather than wrapping.
+		final LedgerRows.Loadout staff = LedgerExamples.loadout();
+		staff.attack = "Harmonised nightmare staff (Fire Surge)";
+		s.put("12-saved-width", LedgerRows.build(LedgerExamples.midFight(),
+			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(staff), all));
 		return s;
+	}
+
+	/** States drawn at a width the player saved rather than the panel's own. */
+	static final Map<String, Integer> SAVED_WIDTH = new LinkedHashMap<>();
+
+	static
+	{
+		SAVED_WIDTH.put("12-saved-width", 160);
 	}
 
 	public static void main(String[] args) throws IOException
@@ -91,15 +107,30 @@ public final class LedgerPictures
 			for (Map.Entry<String, Font> font : fonts.entrySet())
 			{
 				final PvmPerformanceOverlay.FontRoles roles = PvmPerformanceOverlay.FontRoles.of(font.getValue());
+				final Integer saved = SAVED_WIDTH.get(state.getKey());
+				final List<LedgerRows.Row> rows = new ArrayList<>();
+				for (LedgerRows.Row row : state.getValue())
+				{
+					if (saved == null)
+					{
+						rows.add(row);
+						continue;
+					}
+					// As the overlay fits it, with the same font metrics.
+					final java.awt.FontMetrics left = METRICS.getFontMetrics(roles.get(row.leftFont));
+					final java.awt.FontMetrics right = METRICS.getFontMetrics(roles.get(row.rightFont));
+					rows.add(PvmPerformanceOverlay.fit(row, left::stringWidth, right.stringWidth(row.right), saved));
+				}
 				for (Map.Entry<String, String> scene : scenes.entrySet())
 				{
 					final String name = state.getKey() + "-" + font.getKey() + "-" + scene.getKey();
 					final List<String> lines = new ArrayList<>();
 					lines.add("@ font=" + font.getKey() + " bg=70,61,50,156"
 						+ (scene.getValue() == null ? "" : " scene=" + scene.getValue())
-						+ " x=6 y=6 pad=6 width=auto padding=" + PvmPerformanceOverlay.PADDING
+						+ " x=6 y=6 pad=6 width=" + (saved == null ? "auto" : String.valueOf(saved))
+						+ " padding=" + PvmPerformanceOverlay.PADDING
 						+ " out=" + out.resolve(name + ".png"));
-					for (LedgerRows.Row row : state.getValue())
+					for (LedgerRows.Row row : rows)
 					{
 						lines.add(row.isBlank() ? "G" : String.format("L|%s|%s|lf=%s rf=%s lc=%06X rc=%06X",
 							row.left, row.right, roleName(roles.get(row.leftFont)), roleName(roles.get(row.rightFont)),
@@ -110,6 +141,10 @@ public final class LedgerPictures
 			}
 		}
 	}
+
+	/** Font metrics for fitting, off a scratch image. */
+	private static final java.awt.Graphics2D METRICS =
+		new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB).createGraphics();
 
 	/** The harness's name for one of the three RuneScape fonts. */
 	private static String roleName(Font f)

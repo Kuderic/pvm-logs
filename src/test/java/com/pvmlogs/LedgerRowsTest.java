@@ -10,6 +10,7 @@ import static com.pvmlogs.LedgerRows.FontRole.DETAIL;
 import static com.pvmlogs.LedgerRows.FontRole.EMPHASIS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.pvmlogs.LedgerExamples.FakeScope;
@@ -66,7 +67,19 @@ public class LedgerRowsTest
 	}
 
 	/** The loadout's main row: the attack's name and its expected DPS beside it. */
-	private static final Row TENTACLE = main("Abyssal tentacle", "5.5 DPS");
+	private static final Row TENTACLE = attack("Abyssal tentacle", "5.5 DPS", "Abyssal tentacle");
+
+	/** "Damage/expected", which falls back to "Damage" on a panel too narrow for it. */
+	private static Row damage(String figures, Colour rc)
+	{
+		return new Row("Damage/expected", figures, EMPHASIS, EMPHASIS, NEUTRAL, rc, "Damage");
+	}
+
+	/** The loadout's main row: the attack's name, its DPS, and the short form the overlay may fall back to. */
+	private static Row attack(String name, String dps, String shortName)
+	{
+		return new Row(name, dps, EMPHASIS, EMPHASIS, NEUTRAL, NEUTRAL, shortName);
+	}
 
 	private static List<Row> build(LedgerRows.Scope scope, State state)
 	{
@@ -135,7 +148,7 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
 			emph("Luck", "8 s slower", COST),
-			emph("Damage / expected", "370 / 418", COST),
+			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
 			d(" uptime", "92% (-6 s)", COST),
@@ -153,7 +166,7 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			r("Vardorvis (dead)", "2:16", EMPHASIS, EMPHASIS, DEAD, NEUTRAL),
 			emph("Luck", "14 s slower", COST),
-			emph("Damage / expected", "688 / 778", COST),
+			damage("688/778", COST),
 			main("DPS", "5.0"),
 			main("Execution", "84%"),
 			d(" uptime", "86% (-19 s)", COST),
@@ -162,7 +175,8 @@ public class LedgerRowsTest
 			d(" stat boost", "85% (-2 s)"),
 			d(" damage taken", "248"),
 			b("", ""),
-			d(" hits / expected", "32 / 30.2"),
+			main("Summary", ""),
+			d(" hits/expected", "32/30.2"),
 			d(" thrall dmg", "80"),
 			d(" boss healed", "68"),
 			d(" eating", "7 ticks")),
@@ -175,7 +189,7 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis (ended)", "2:20"),
 			emph("Luck", "15 s slower", COST),
-			emph("Damage / expected", "721 / 812", COST),
+			damage("721/812", COST),
 			main("DPS", "5.1"),
 			main("Execution", "93%"),
 			d(" uptime", "94% (-8 s)", COST),
@@ -184,7 +198,8 @@ public class LedgerRowsTest
 			d(" stat boost", "95% (-1 s)"),
 			d(" damage taken", "310"),
 			b("", ""),
-			d(" hits / expected", "26 / 33.7"),
+			main("Summary", ""),
+			d(" hits/expected", "26/33.7"),
 			d(" burn/poison dmg", "40"),
 			d(" boss healed", "71")),
 			build(LedgerExamples.ended(), State.fight("Vardorvis", true, false, false)));
@@ -198,7 +213,7 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Trip · 6 kills", "12:40"),
 			emph("Luck", "14 s slower", NEUTRAL),
-			emph("Damage / expected", "4,120 / 4,201", NEUTRAL),
+			damage("4,120/4,201", NEUTRAL),
 			main("DPS", "5.4"),
 			main("Execution", "92%"),
 			d(" uptime", "95% (-38 s)", COST),
@@ -207,7 +222,8 @@ public class LedgerRowsTest
 			d(" stat boost", "88% (-17 s)", COST),
 			d(" damage taken", "1,404"),
 			b("", ""),
-			d(" hits / expected", "161 / 158.7"),
+			main("Summary", ""),
+			d(" hits/expected", "161/158.7"),
 			d(" thrall dmg", "290"),
 			d(" burn/poison dmg", "60"),
 			d(" eating", "11 ticks")),
@@ -228,7 +244,7 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("ToA · 3 rooms", "9:12"),
 			emph("Luck", "13 s faster", BETTER),
-			emph("Damage / expected", "8,410 / 8,200", BETTER),
+			damage("8,410/8,200", BETTER),
 			main("DPS", "15.2"),
 			main("Execution", "86%"),
 			d(" uptime", "90% (-55 s)", COST),
@@ -237,7 +253,8 @@ public class LedgerRowsTest
 			d(" stat boost", "97% (-6 s)"),
 			d(" damage taken", "980"),
 			b("", ""),
-			d(" hits / expected", "212 / 205.3"),
+			main("Summary", ""),
+			d(" hits/expected", "212/205.3"),
 			d(" thrall dmg", "410")),
 			build(LedgerExamples.raid(), State.raid("Tombs of Amascut", 3, false, false)));
 	}
@@ -279,7 +296,8 @@ public class LedgerRowsTest
 		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false));
 		assertFalse(rows.stream().anyMatch(row -> row.left.startsWith("Duration")));
 		assertEquals(b("", ""), rows.get(10));
-		assertEquals(d(" hits / expected", "32 / 30.2"), rows.get(11));
+		assertEquals(main("Summary", ""), rows.get(11));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(12));
 	}
 
 	// ---- gear (Eric, 2026-10-26) ----
@@ -401,40 +419,66 @@ public class LedgerRowsTest
 		return build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false).withAverage(average));
 	}
 
-	@Test
-	public void fasterThanYourAverage()
+	/** Your average: the clock's median and quartiles, then the same with the luck taken out. */
+	private static LedgerHistory.Average average(double clock, double clockLow, double clockHigh,
+		double adjusted, double adjustedLow, double adjustedHigh)
 	{
-		// This kill at average luck: 122.45 s. Your median 2:10, middle half 2:05 to 2:15: 8 s faster, outside it.
-		final List<Row> rows = deadWith(new LedgerHistory.Average(130, 125, 135, 12));
+		return new LedgerHistory.Average(new LedgerHistory.Spread(clock, clockLow, clockHigh),
+			new LedgerHistory.Spread(adjusted, adjustedLow, adjustedHigh), 12);
+	}
+
+	@Test
+	public void yourAverageThenThisKillThenWithTheLuckRemoved()
+	{
+		// Eric, 2026-10-26: " vs your average 1:59" made no sense as a heading. This kill: 136.8 s on the clock (2:16),
+		// 122.45 s with its luck taken out. Your clock's median 1:59, middle half 1:55 to 2:05: 17 s slower, outside it.
+		// With the luck taken out your median is 2:10, middle half 2:05 to 2:15: 8 s faster, outside that too.
+		final List<Row> rows = deadWith(average(119, 115, 125, 130, 125, 135));
 		assertEquals(b("", ""), rows.get(10));
-		assertEquals(d(" vs your average 2:10", "8 s faster", BETTER), rows.get(11));
-		assertEquals(d(" hits / expected", "32 / 30.2"), rows.get(12));
+		assertEquals(main("Summary", ""), rows.get(11));
+		assertEquals(d(" your average", "1:59"), rows.get(12));
+		assertEquals(d(" this kill", "17 s slower", COST), rows.get(13));
+		assertEquals(d(" luck removed", "8 s faster", BETTER), rows.get(14));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(15));
 	}
 
 	@Test
-	public void slowerThanYourAverage()
+	public void thisKillIsTheGapBetweenTheTwoClocksOnShow()
 	{
-		assertTrue(deadWith(new LedgerHistory.Average(110, 105, 115, 5))
-			.contains(d(" vs your average 1:50", "12 s slower", COST)));
+		// 2:16 (136.8 s) against a median of 1:58.9: both read in whole seconds, so it's the 18 s between 2:16 and 1:58,
+		// not the 17.9 the fractions give, nor 19.
+		assertTrue(deadWith(average(118.9, 115, 125, 130, 125, 135)).contains(d(" this kill", "18 s slower", COST)));
+		assertTrue(deadWith(average(119, 115, 125, 130, 125, 135)).contains(d(" your average", "1:59")));
+		// The same whole second reads even.
+		assertTrue(deadWith(average(136.9, 130, 140, 130, 125, 135)).contains(d(" this kill", "even")));
 	}
 
 	@Test
-	public void insideYourMiddleHalfIsAverage()
+	public void slowerThanYourAverageWithTheLuckRemoved()
 	{
-		assertTrue(deadWith(new LedgerHistory.Average(124, 120, 128, 20))
-			.contains(d(" vs your average 2:04", "2 s faster", NEUTRAL)));
+		// 122.45 against 1:50: 12 s slower. The clock, 2:16 against 2:20, is 4 s faster but inside your middle half.
+		final List<Row> rows = deadWith(average(140, 135, 145, 110, 105, 115));
+		assertTrue(rows.contains(d(" luck removed", "12 s slower", COST)));
+		assertTrue(rows.contains(d(" this kill", "4 s faster", NEUTRAL)));
+	}
+
+	@Test
+	public void insideYourMiddleHalfReadsNeutral()
+	{
+		assertTrue(deadWith(average(119, 115, 125, 124, 120, 128)).contains(d(" luck removed", "2 s faster", NEUTRAL)));
 	}
 
 	@Test
 	public void theAverageOnlyFollowsAKill()
 	{
-		final LedgerHistory.Average a = new LedgerHistory.Average(130, 125, 135, 12);
+		final LedgerHistory.Average a = average(119, 115, 125, 130, 125, 135);
 		final List<Row> ended = build(LedgerExamples.kill(), State.fight("Vardorvis", true, false, false).withAverage(a));
 		final List<Row> warned = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, true).withAverage(a));
 		final List<Row> running = build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false).withAverage(a));
 		for (List<Row> rows : Arrays.asList(ended, warned, running, deadWith(null)))
 		{
-			assertFalse(rows.stream().anyMatch(row -> row.left.startsWith(" vs your average")));
+			assertFalse(rows.stream().anyMatch(row -> row.left.equals(" your average") || row.left.equals(" this kill")
+				|| row.left.equals(" luck removed")));
 		}
 	}
 
@@ -469,7 +513,7 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
 			emph("Luck", "8 s slower", COST),
-			emph("Damage / expected", "370 / 418", COST),
+			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
 			d(" uptime", "92% (-6 s)", COST),
@@ -487,7 +531,7 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
 			emph("Luck", "8 s slower", COST),
-			emph("Damage / expected", "370 / 418", COST),
+			damage("370/418", COST),
 			main("DPS", "5.1"),
 			main("Execution", "90%"),
 			d(" uptime", "92% (-6 s)", COST),
@@ -522,7 +566,8 @@ public class LedgerRowsTest
 		assertEquals(b("", ""), rows.get(10));
 		assertEquals(TENTACLE, rows.get(11));
 		assertEquals(b("", ""), rows.get(15));
-		assertEquals(d(" hits / expected", "32 / 30.2"), rows.get(16));
+		assertEquals(main("Summary", ""), rows.get(16));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(17));
 		assertEquals(d(" eating", "7 ticks"), rows.get(rows.size() - 1));
 	}
 
@@ -542,7 +587,7 @@ public class LedgerRowsTest
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.attack = "Purging staff (Fire Surge)";
 		l.dps = 6.1;
-		assertEquals(Arrays.asList(title("Vardorvis", ""), main("Purging staff (Fire Surge)", "6.1 DPS")),
+		assertEquals(Arrays.asList(title("Vardorvis", ""), attack("Purging staff (Fire Surge)", "6.1 DPS", "Fire Surge")),
 			build(null, State.preAttack("Vardorvis", l)));
 		final LedgerRows.Loadout claws = new LedgerRows.Loadout();
 		claws.attack = "Burning claws";
@@ -665,7 +710,7 @@ public class LedgerRowsTest
 		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false), s);
 		assertFalse(rows.stream().anyMatch(row -> row.left.equals("Luck")));
 		// Damage keeps its colour: it says how the fight is going on its own.
-		assertTrue(rows.contains(emph("Damage / expected", "688 / 778", COST)));
+		assertTrue(rows.contains(damage("688/778", COST)));
 	}
 
 	@Test
@@ -919,7 +964,7 @@ public class LedgerRowsTest
 	{
 		final FakeScope s = LedgerExamples.trip();
 		s.expectedDamage = 4200.5;
-		assertTrue(build(s, State.trip(6, true, false)).contains(emph("Damage / expected", "4,120 / 4,201", NEUTRAL)));
+		assertTrue(build(s, State.trip(6, true, false)).contains(damage("4,120/4,201", NEUTRAL)));
 	}
 
 	@Test
@@ -940,5 +985,65 @@ public class LedgerRowsTest
 	public void unknownGlyphIsTheEmDash()
 	{
 		assertEquals("—", LedgerRows.UNKNOWN);
+	}
+
+	// ---- the attack's name (Eric, 2026-10-26: "Abyssal tentacle (or)" made the panel wrap) ----
+
+	@Test
+	public void theAttacksNameDropsTheItemsVariantTag()
+	{
+		assertEquals("Abyssal tentacle", LedgerRows.attackLabel("Abyssal tentacle (or)"));
+		assertEquals("Bow of faerdhinen", LedgerRows.attackLabel("Bow of faerdhinen (c)"));
+		assertEquals("Dragon dagger", LedgerRows.attackLabel("Dragon dagger (p++)"));
+		assertEquals("Trident of the swamp", LedgerRows.attackLabel("Trident of the swamp (e)"));
+		// A spell is capitalised, so it stays; a variant tag before it still goes.
+		assertEquals("Purging staff (Fire Surge)", LedgerRows.attackLabel("Purging staff (Fire Surge)"));
+		assertEquals("Kodai wand (Ice Barrage)", LedgerRows.attackLabel("Kodai wand (or) (Ice Barrage)"));
+		assertEquals("Twisted bow", LedgerRows.attackLabel("Twisted bow"));
+		assertNull(LedgerRows.attackLabel(null));
+		assertNull(LedgerRows.attackLabel(" (or)"));
+	}
+
+	@Test
+	public void theLoadoutRowShowsTheCleanName()
+	{
+		final LedgerRows.Loadout l = new LedgerRows.Loadout();
+		l.attack = "Abyssal tentacle (or)";
+		l.dps = 5.5;
+		assertEquals(Arrays.asList(title("Vardorvis", ""), TENTACLE), build(null, State.preAttack("Vardorvis", l)));
+	}
+
+	@Test
+	public void theShortFormOfAStaffAndSpellIsTheSpell()
+	{
+		assertEquals("Fire Surge", LedgerRows.spellOr("Harmonised nightmare staff (Fire Surge)"));
+		assertEquals("Sanguine scythe of vitur", LedgerRows.spellOr("Sanguine scythe of vitur"));
+	}
+
+	@Test
+	public void aNameIsCutWithAnEllipsisUntilItFits()
+	{
+		// 7 px a character, the ellipsis included.
+		final java.util.function.ToIntFunction<String> width = t -> t.length() * 7;
+		assertEquals("Sanguine scythe of vitur", LedgerRows.cut("Sanguine scythe of vitur", width, 168));
+		assertEquals("Sanguine scythe\u2026", LedgerRows.cut("Sanguine scythe of vitur", width, 112));
+		// No space left before the ellipsis.
+		assertEquals("Sanguine\u2026", LedgerRows.cut("Sanguine scythe of vitur", width, 69));
+		assertEquals("\u2026", LedgerRows.cut("Sanguine scythe of vitur", width, 7));
+		assertEquals("", LedgerRows.cut("Sanguine scythe of vitur", width, 6));
+	}
+
+	// ---- Summary (Eric, 2026-10-26) ----
+
+	@Test
+	public void theDetailsSitUnderSummary()
+	{
+		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false));
+		final int summary = rows.indexOf(main("Summary", ""));
+		assertEquals(b("", ""), rows.get(summary - 1));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(summary + 1));
+		// None while the fight runs.
+		assertFalse(build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false))
+			.contains(main("Summary", "")));
 	}
 }

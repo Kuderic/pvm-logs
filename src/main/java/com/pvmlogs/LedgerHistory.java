@@ -9,9 +9,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Your usual time on a boss, for the overlay's " vs your average" row: the
- * median expected time (the clock with the luck taken out) of your recent kills
- * of it. Worked out from the saved fights with the same formulas as the rows,
+ * Your usual time on a boss, for the overlay's average rows: the median
+ * clock of your recent kills of it, and their median expected time (the clock
+ * with the luck taken out). Worked out from the saved fights with the same formulas as the rows,
  * so it compares like with like. No client in here.
  * <p>
  * Only kills recorded by a build whose expected side can be trusted count
@@ -81,19 +81,41 @@ final class LedgerHistory
 		}
 	}
 
-	/** The median and quartiles of the sample's expected times, in seconds. */
-	static final class Average
+	/** A median and the quartiles round it, in seconds. */
+	static final class Spread
 	{
 		final double median;
 		final double lowerQuartile;
 		final double upperQuartile;
-		final int kills;
 
-		Average(double median, double lowerQuartile, double upperQuartile, int kills)
+		Spread(double median, double lowerQuartile, double upperQuartile)
 		{
 			this.median = median;
 			this.lowerQuartile = lowerQuartile;
 			this.upperQuartile = upperQuartile;
+		}
+
+		static Spread of(double[] sorted)
+		{
+			return new Spread(quantile(sorted, 0.5), quantile(sorted, 0.25), quantile(sorted, 0.75));
+		}
+	}
+
+	/**
+	 * Your usual kill, both ways, over the same kills: {@code actual} is the
+	 * clock, {@code adjusted} the clock with the luck taken out. Each is
+	 * compared only with its own kind (Eric, 2026-10-26: one row for each).
+	 */
+	static final class Average
+	{
+		final Spread actual;
+		final Spread adjusted;
+		final int kills;
+
+		Average(Spread actual, Spread adjusted, int kills)
+		{
+			this.actual = actual;
+			this.adjusted = adjusted;
 			this.kills = kills;
 		}
 	}
@@ -122,6 +144,7 @@ final class LedgerHistory
 		{
 			exclude.addAll(current);
 		}
+		final double[] clocks = new double[LedgerRows.AVERAGE_OF_LAST];
 		final double[] times = new double[LedgerRows.AVERAGE_OF_LAST];
 		int n = 0;
 		final List<Encounter> rooms = rooms(history, like.name);
@@ -132,19 +155,23 @@ final class LedgerHistory
 			{
 				continue;
 			}
-			final double expected = new LedgerRows.Numbers(LedgerRows.of(room)).expectedDuration;
-			if (!Double.isNaN(expected))
+			// Only kills with both, so the two averages are over the same kills.
+			final LedgerRows.Numbers numbers = new LedgerRows.Numbers(LedgerRows.of(room));
+			if (!Double.isNaN(numbers.expectedDuration))
 			{
-				times[n++] = expected;
+				clocks[n] = numbers.clock;
+				times[n++] = numbers.expectedDuration;
 			}
 		}
 		if (n < LedgerRows.AVERAGE_FROM_KILLS)
 		{
 			return null;
 		}
-		final double[] sorted = Arrays.copyOf(times, n);
-		Arrays.sort(sorted);
-		return new Average(quantile(sorted, 0.5), quantile(sorted, 0.25), quantile(sorted, 0.75), n);
+		final double[] actual = Arrays.copyOf(clocks, n);
+		final double[] adjusted = Arrays.copyOf(times, n);
+		Arrays.sort(actual);
+		Arrays.sort(adjusted);
+		return new Average(Spread.of(actual), Spread.of(adjusted), n);
 	}
 
 	/**
