@@ -1043,4 +1043,63 @@ public class LedgerRowsTest
 		assertEquals("99%", LedgerRows.luckFigure(new LedgerRows.Numbers(close)));
 		assertEquals("\u2014", LedgerRows.luckFigure(new LedgerRows.Numbers(LedgerExamples.noData())));
 	}
+
+	// ---- damage taken, after the fight (T-019) ----
+
+	@Test
+	public void theSummaryBreaksDownTheDamageTaken()
+	{
+		final FakeScope s = LedgerExamples.kill();
+		s.dotTaken = 27;
+		s.biggestHitTaken = 41;
+		s.damageTakenUnprotected = 85;
+		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
+		final int healed = rows.indexOf(d(" boss healed", "68"));
+		assertEquals(Arrays.asList(d(" burn/poison taken", "27"), d(" biggest hit taken", "41"),
+			d(" without protection", "85"), d(" eating time", "4 s")), rows.subList(healed + 1, healed + 5));
+		// The live total under Execution reads as before: hits only since T-018.
+		assertTrue(rows.contains(d(" damage taken", "248")));
+	}
+
+	@Test
+	public void eachDamageTakenRowShowsOnlyWhenAboveNothing()
+	{
+		final FakeScope s = LedgerExamples.kill();
+		s.biggestHitTaken = 10;
+		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
+		assertTrue(rows.contains(d(" biggest hit taken", "10")));
+		assertFalse(rows.stream().anyMatch(row -> row.left.equals(" burn/poison taken")
+			|| row.left.equals(" without protection")));
+		// Never while the fight runs.
+		s.dotTaken = 27;
+		s.damageTakenUnprotected = 85;
+		assertFalse(build(s, State.fight("Vardorvis", false, false, false)).stream()
+			.anyMatch(row -> row.left.endsWith(" taken") && !row.left.equals(" damage taken")
+				|| row.left.equals(" without protection")));
+	}
+
+	@Test
+	public void roomRaidAndTripScopesAllCarryTheDamageTakenBreakdown()
+	{
+		final Fight f = new Fight("Zebak", NpcIds.GOBLIN, 1, 700, 0L, RaidType.TOMBS_OF_AMASCUT, 1);
+		f.recordAttackMade(false, 1.0);
+		f.recordHitTaken(31, true, 1L);
+		f.recordHitTaken(12, false, 2L);
+		f.recordDotTaken(6, 3L);
+		final Encounter room = new Encounter("Zebak", RaidType.TOMBS_OF_AMASCUT, 0L);
+		room.add(f);
+		final Raid raid = new Raid(RaidType.TOMBS_OF_AMASCUT, 1, 0L);
+		raid.add(room);
+		final SessionTotals trip = new SessionTotals(0L);
+		trip.recordHitTaken(31, true);
+		trip.recordHitTaken(12, false);
+		trip.recordDotTaken(6);
+		for (LedgerRows.Scope scope : Arrays.asList(LedgerRows.of(room), LedgerRows.of(raid), LedgerRows.of(trip)))
+		{
+			assertEquals(43, scope.damageTaken());
+			assertEquals(6, scope.dotTaken());
+			assertEquals(31, scope.biggestHitTaken());
+			assertEquals(31, scope.damageTakenUnprotected());
+		}
+	}
 }

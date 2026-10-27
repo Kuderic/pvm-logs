@@ -39,7 +39,12 @@ public final class LedgerPictures
 		s.put("2-mid", LedgerRows.build(LedgerExamples.midFight(),
 			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
 		// Illustrative average: the clock's median 1:59 over 10 kills.
-		s.put("3-dead", LedgerRows.build(LedgerExamples.kill(), LedgerRows.State.fight("Vardorvis", true, true, false)
+		// T-019: illustrative damage taken after the fight.
+		final LedgerExamples.FakeScope dead = LedgerExamples.kill();
+		dead.dotTaken = 27;
+		dead.biggestHitTaken = 41;
+		dead.damageTakenUnprotected = 85;
+		s.put("3-dead", LedgerRows.build(dead, LedgerRows.State.fight("Vardorvis", true, true, false)
 			.withLoadout(tentacle).withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
 		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
 			LedgerRows.State.fight("Vardorvis", true, false, false), all));

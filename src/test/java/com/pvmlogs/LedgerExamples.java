@@ -32,6 +32,9 @@ final class LedgerExamples
 		int attacksSwitched;
 		int attacksDrained;
 		int damageTaken;
+		int dotTaken;
+		int biggestHitTaken;
+		int damageTakenUnprotected;
 		int hits;
 		double expectedHits;
 
@@ -118,6 +121,21 @@ final class LedgerExamples
 		public int damageTaken()
 		{
 			return damageTaken;
+		}
+
+		public int dotTaken()
+		{
+			return dotTaken;
+		}
+
+		public int biggestHitTaken()
+		{
+			return biggestHitTaken;
+		}
+
+		public int damageTakenUnprotected()
+		{
+			return damageTakenUnprotected;
 		}
 
 		public int hits()

@@ -203,8 +203,17 @@ final class LedgerRows
 		/** T-015: attacks made with any stat the style rolls on below its base (drained or brewed down). */
 		int attacksDrained();
 
-		/** The damage the player took (T-016). */
+		/** The damage the player took (T-016): hits only since T-018. */
 		int damageTaken();
+
+		/** T-018: what poison, venom, burn and bleed took from the player. */
+		int dotTaken();
+
+		/** T-018: the biggest single hit the player took. */
+		int biggestHitTaken();
+
+		/** T-018: hit damage taken with no protection prayer up. */
+		int damageTakenUnprotected();
 
 		int hits();
 
@@ -300,6 +309,21 @@ final class LedgerRows
 			public int damageTaken()
 			{
 				return room.getDamageTaken();
+			}
+
+			public int dotTaken()
+			{
+				return room.getDotTaken();
+			}
+
+			public int biggestHitTaken()
+			{
+				return room.getBiggestHitTaken();
+			}
+
+			public int damageTakenUnprotected()
+			{
+				return room.getDamageTakenUnprotected();
 			}
 
 			public int hits()
@@ -408,6 +432,21 @@ final class LedgerRows
 				return raid.getDamageTaken();
 			}
 
+			public int dotTaken()
+			{
+				return raid.getDotTaken();
+			}
+
+			public int biggestHitTaken()
+			{
+				return raid.getBiggestHitTaken();
+			}
+
+			public int damageTakenUnprotected()
+			{
+				return raid.getDamageTakenUnprotected();
+			}
+
 			public int hits()
 			{
 				return raid.getHits();
@@ -513,6 +552,21 @@ final class LedgerRows
 			public int damageTaken()
 			{
 				return trip.getDamageTaken();
+			}
+
+			public int dotTaken()
+			{
+				return trip.getDotTaken();
+			}
+
+			public int biggestHitTaken()
+			{
+				return trip.getBiggestHitTaken();
+			}
+
+			public int damageTakenUnprotected()
+			{
+				return trip.getDamageTakenUnprotected();
 			}
 
 			public int hits()
@@ -1002,8 +1056,7 @@ final class LedgerRows
 	{
 		final List<Row> details = new ArrayList<>();
 		// No "Duration / expected" (Eric, 2026-10-26): the clock is in the title and Luck sits right under it, so the row
-		// only repeated them. In its place, this kill against your usual (Eric, the same evening). v2's " luckier than"
-		// goes under it, coloured by PERCENTILE_BETTER / PERCENTILE_COST.
+		// only repeated them. In its place, your average (Eric, the same evening).
 		details.addAll(average(n, state));
 		if (s.expectedHits() > 0)
 		{
@@ -1021,6 +1074,21 @@ final class LedgerRows
 		if (s.healed() > 0)
 		{
 			details.add(detail(" boss healed", number(s.healed()), Colour.NEUTRAL));
+		}
+		// What the player took, beyond the live total under Execution (T-019). Nothing on which attack or style hit them:
+		// that needs per-boss data, and would be after the fight only too.
+		if (s.dotTaken() > 0)
+		{
+			// Burn and bleed count too; named to match " burn/poison dmg" above (Eric, 2026-10-27).
+			details.add(detail(" burn/poison taken", number(s.dotTaken()), Colour.NEUTRAL));
+		}
+		if (s.biggestHitTaken() > 0)
+		{
+			details.add(detail(" biggest hit taken", number(s.biggestHitTaken()), Colour.NEUTRAL));
+		}
+		if (s.damageTakenUnprotected() > 0)
+		{
+			details.add(detail(" without protection", number(s.damageTakenUnprotected()), Colour.NEUTRAL));
 		}
 		if (s.ticksLostEating() > 0)
 		{
