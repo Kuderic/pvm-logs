@@ -101,9 +101,17 @@ enum Spell
 			|| name.endsWith(" wave") || name.endsWith(" surge"));
 	}
 
-	/** The max hit at this magic level. Only the elemental spells move. */
+	/**
+	 * The max hit at this magic level. The elemental spells move with the level,
+	 * and so does Magic Dart: {@code floor(Magic / 10) + 10} (wiki, Magic Dart),
+	 * where this used to read a flat 10.
+	 */
 	int maxHitAt(int magicLevel)
 	{
+		if (this == MAGIC_DART)
+		{
+			return magicLevel / 10 + 10;
+		}
 		final int[] levels;
 		final int[] hits;
 		final String name = displayName;
@@ -145,6 +153,61 @@ enum Spell
 			}
 		}
 		return best;
+	}
+
+	/**
+	 * The element of a standard spellbook elemental spell - "air", "water",
+	 * "earth" or "fire" - or null for everything else. The tomes, sunfire runes
+	 * and elemental weakness all turn on this, and on nothing wider: Iban Blast,
+	 * Flames of Zamorak and the demonbane spells cost fire runes and are not fire
+	 * spells (wiki, Tome of Fire).
+	 */
+	String element()
+	{
+		if (spellbook != Spellbook.STANDARD || !isElemental(displayName))
+		{
+			return null;
+		}
+		final String first = displayName.substring(0, displayName.indexOf(' ')).toLowerCase(Locale.ROOT);
+		return "wind".equals(first) ? "air" : first;
+	}
+
+	/** A standard elemental bolt spell, which the chaos gauntlets add 3 to (wiki, Chaos gauntlets). */
+	boolean isBolt()
+	{
+		return element() != null && displayName.endsWith(" Bolt");
+	}
+
+	/**
+	 * Whether the twinflame staff fires this spell twice: the elemental bolts,
+	 * blasts and waves, "excluding Strike and Surge" (wiki, Twinflame staff).
+	 */
+	boolean twinflameFiresTwice()
+	{
+		return element() != null
+			&& (displayName.endsWith(" Bolt") || displayName.endsWith(" Blast") || displayName.endsWith(" Wave"));
+	}
+
+	/**
+	 * Magic Dart from a slayer's staff (e) at the player's slayer task:
+	 * {@code floor(Magic / 6) + 13} (wiki, Slayer's staff (e)). Off task the
+	 * ordinary formula applies.
+	 */
+	static int enchantedSlayerStaffDart(int magicLevel)
+	{
+		return magicLevel / 6 + 13;
+	}
+
+	/** Inferior, Superior or Dark Demonbane. */
+	boolean isDemonbane()
+	{
+		return this == INFERIOR_DEMONBANE || this == SUPERIOR_DEMONBANE || this == DARK_DEMONBANE;
+	}
+
+	/** The three Mage Arena god spells, which Charge empowers with the matching cape. */
+	boolean isGodSpell()
+	{
+		return this == SARADOMIN_STRIKE || this == CLAWS_OF_GUTHIX || this == FLAMES_OF_ZAMORAK;
 	}
 
 	// Wind, Water, Earth and Fire only. Saradomin Strike and the god spells share the suffixes but not the mechanic.

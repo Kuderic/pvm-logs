@@ -1649,5 +1649,249 @@
   },
   "is_slayer_monster": true,
   "weakness": null
+ },
+ {
+  "id": 16665,
+  "name": "Dreadnoth the Jellied",
+  "version": "",
+  "level": 888,
+  "speed": 4,
+  "style": [
+   "Melee",
+   "Ranged"
+  ],
+  "size": 5,
+  "max_hit": 0,
+  "skills": {
+   "atk": 280,
+   "def": 125,
+   "hp": 2100,
+   "magic": 220,
+   "ranged": 250,
+   "str": 285
+  },
+  "offensive": {
+   "atk": 185,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 180,
+   "ranged_str": 20,
+   "str": 35
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 5,
+   "magic": 20,
+   "heavy": 80,
+   "standard": 80,
+   "light": 100,
+   "slash": 20,
+   "stab": 15
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "fire",
+   "severity": 85
+  }
+ },
+ {
+  "id": 7584,
+  "name": "Ice demon",
+  "version": "Normal",
+  "level": 0,
+  "speed": 3,
+  "style": [
+   "Ranged",
+   "Magic"
+  ],
+  "size": 2,
+  "max_hit": "Varies",
+  "skills": {
+   "atk": 1,
+   "def": 160,
+   "hp": 140,
+   "magic": 390,
+   "ranged": 390,
+   "str": 1
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 110,
+   "magic": 40,
+   "heavy": 140,
+   "standard": 140,
+   "light": 140,
+   "slash": 70,
+   "stab": 70
+  },
+  "attributes": [
+   "demon",
+   "xerician"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "fire",
+   "severity": 150
+  }
+ },
+ {
+  "id": 14179,
+  "name": "Void Flare",
+  "version": "Fire",
+  "level": 130,
+  "speed": 4,
+  "style": [
+   "Melee"
+  ],
+  "size": 2,
+  "max_hit": "45 (Phase 1-2)",
+  "skills": {
+   "atk": 1,
+   "def": 100,
+   "hp": 140,
+   "magic": 200,
+   "ranged": 1,
+   "str": 1
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 0,
+   "magic": 0,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 0,
+   "stab": 0
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 14179,
+  "name": "Void Flare",
+  "version": "Shadow",
+  "level": 130,
+  "speed": 4,
+  "style": [
+   "Melee"
+  ],
+  "size": 2,
+  "max_hit": "45 (Phase 1-2)",
+  "skills": {
+   "atk": 1,
+   "def": 100,
+   "hp": 140,
+   "magic": 200,
+   "ranged": 1,
+   "str": 1
+  },
+  "offensive": {
+   "atk": 0,
+   "magic": 0,
+   "magic_str": 0,
+   "ranged": 0,
+   "ranged_str": 0,
+   "str": 0
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 0,
+   "magic": 0,
+   "heavy": 0,
+   "standard": 0,
+   "light": 0,
+   "slash": 0,
+   "stab": 0
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": null
+ },
+ {
+  "id": 16684,
+  "name": "Xarth",
+  "version": "",
+  "level": 912,
+  "speed": 4,
+  "style": [
+   "Magic",
+   "Ranged",
+   "Melee"
+  ],
+  "size": 3,
+  "max_hit": 0,
+  "skills": {
+   "atk": 250,
+   "def": 170,
+   "hp": 2600,
+   "magic": 350,
+   "ranged": 220,
+   "str": 225
+  },
+  "offensive": {
+   "atk": 150,
+   "magic": 250,
+   "magic_str": 350,
+   "ranged": 250,
+   "ranged_str": 0,
+   "str": 225
+  },
+  "defensive": {
+   "flat_armour": 0,
+   "crush": 20,
+   "magic": 205,
+   "heavy": 155,
+   "standard": 230,
+   "light": 125,
+   "slash": 105,
+   "stab": 115
+  },
+  "attributes": [
+   "demon"
+  ],
+  "immunities": {
+   "burn": null
+  },
+  "is_slayer_monster": false,
+  "weakness": {
+   "element": "water",
+   "severity": 85
+  }
  }
 ]
