@@ -50,6 +50,7 @@ public final class LedgerPictures
 			LedgerRows.State.fight("Vardorvis", false, false, true).withLoadout(tentacle), all));
 		// Without monster data there is no accuracy to show; the max hit is known.
 		final LedgerRows.Loadout noAccuracy = new LedgerRows.Loadout();
+		noAccuracy.attack = "Osmumten's fang";
 		noAccuracy.maxHit = 44;
 		s.put("8-nodata", LedgerRows.build(LedgerExamples.noData(),
 			LedgerRows.State.fight("New boss", false, false, false).withLoadout(noAccuracy), all));
@@ -57,6 +58,12 @@ public final class LedgerPictures
 			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
 		s.put("10-pre-unsure", LedgerRows.build(null,
 			LedgerRows.State.preAttack("Vardorvis", tentacle, true), all));
+		// T-016: brewed down for most of the fight. The word stands in for 0%, the seconds carry the cost.
+		final LedgerExamples.FakeScope brewed = LedgerExamples.midFight();
+		brewed.attacksDrained = 12;
+		brewed.setup(0.95, 0.0, 3.36, 0);
+		s.put("11-drained", LedgerRows.build(brewed,
+			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
 		return s;
 	}
 

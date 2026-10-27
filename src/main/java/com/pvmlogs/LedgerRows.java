@@ -42,6 +42,8 @@ final class LedgerRows
 	static final String UNKNOWN = "—";
 	/** U+00B7, also in the fonts. */
 	private static final String DOT = " · ";
+	/** The stat boost row's figure when more than half the attacks were below base (T-016). */
+	static final String DRAINED = "drained";
 
 	private LedgerRows()
 	{
@@ -165,6 +167,9 @@ final class LedgerRows
 
 		int attacksSwitched();
 
+		/** T-015: attacks made with any stat the style rolls on below its base (drained or brewed down). */
+		int attacksDrained();
+
 		int hits();
 
 		double expectedHits();
@@ -249,6 +254,11 @@ final class LedgerRows
 			public int attacksSwitched()
 			{
 				return room.getAttacksSwitched();
+			}
+
+			public int attacksDrained()
+			{
+				return room.getAttacksDrained();
 			}
 
 			public int hits()
@@ -345,6 +355,11 @@ final class LedgerRows
 			public int attacksSwitched()
 			{
 				return raid.getAttacksSwitched();
+			}
+
+			public int attacksDrained()
+			{
+				return raid.getAttacksDrained();
 			}
 
 			public int hits()
@@ -444,6 +459,11 @@ final class LedgerRows
 				return trip.getAttacksSwitched();
 			}
 
+			public int attacksDrained()
+			{
+				return trip.getAttacksDrained();
+			}
+
 			public int hits()
 			{
 				return trip.getHits();
@@ -479,6 +499,8 @@ final class LedgerRows
 	/** The loadout's figures against the target, as the plugin works them out. Unknown values are 0 or negative. */
 	static final class Loadout
 	{
+		/** What the figures are for: the weapon, and the spell when one is cast (T-016). Null reads as "Loadout". */
+		String attack;
 		int maxHit;
 		double accuracy = -1;
 		double dps = -1;
@@ -610,6 +632,8 @@ final class LedgerRows
 		final double setupCost;
 		/** Whether T-010's split exists for this scope; without it the setup shows as one row. */
 		final boolean split;
+		/** More than half the attacks were made below base (T-016): the stat boost row says so in words. */
+		final boolean drained;
 		final double boostShare;
 		final double boostCost;
 		final double prayerShare;
@@ -664,11 +688,13 @@ final class LedgerRows
 				boostShare = Math.min(1, s.boostShare());
 				prayerShare = (double) s.attacksPrayed() / made;
 				gearShare = (double) s.attacksSwitched() / made;
+				drained = (long) s.attacksDrained() * 2 > made;
 			}
 			else
 			{
 				boostCost = gearCost = prayerCost = Double.NaN;
 				boostShare = prayerShare = gearShare = Double.NaN;
+				drained = false;
 			}
 		}
 	}
@@ -727,25 +753,34 @@ final class LedgerRows
 	}
 
 	/** Max hit, accuracy, expected DPS and the spec, each only when known. */
+	/**
+	 * The attack's name as a main row, with max hit, accuracy, expected DPS and
+	 * the spec under it as sub-rows (Eric, 2026-10-26), each only when known.
+	 * Nothing at all when none of the figures is.
+	 */
 	private static List<Row> loadout(Loadout l)
 	{
 		final List<Row> rows = new ArrayList<>();
 		if (l.maxHit > 0)
 		{
-			rows.add(body("Max hit", String.valueOf(l.maxHit)));
+			rows.add(detail(" max hit", String.valueOf(l.maxHit), Colour.NEUTRAL));
 		}
 		if (l.accuracy >= 0)
 		{
-			rows.add(body("Accuracy", percent(l.accuracy)));
+			rows.add(detail(" accuracy", percent(l.accuracy), Colour.NEUTRAL));
 		}
 		if (l.dps >= 0)
 		{
-			rows.add(body("Expected DPS", oneDecimal(l.dps)));
+			rows.add(detail(" expected DPS", oneDecimal(l.dps), Colour.NEUTRAL));
 		}
 		if (l.specMaxHit > 0)
 		{
 			rows.add(detail(" spec", l.specMaxHit + " max" + (l.specAccuracy >= 0 ? DOT + percent(l.specAccuracy) : ""),
 				Colour.NEUTRAL));
+		}
+		if (!rows.isEmpty())
+		{
+			rows.add(0, main(l.attack == null || l.attack.isEmpty() ? "Loadout" : l.attack, ""));
 		}
 		return rows;
 	}
@@ -775,7 +810,7 @@ final class LedgerRows
 		if (settings.luck && !state.warning)
 		{
 			rows.add(row("Luck", Double.isNaN(n.luck) ? UNKNOWN : seconds(n.luck),
-				FontRole.BODY, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
+				FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
 		}
 		if (state.warning)
 		{
@@ -785,18 +820,19 @@ final class LedgerRows
 		if (!state.warning && !noData)
 		{
 			rows.add(row("Damage / expected", number(n.damage) + " / " + number(Math.round(n.expected)),
-				FontRole.BODY, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
+				FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
 		}
 		else
 		{
-			rows.add(row("Damage", number(n.damage), FontRole.BODY, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL));
+			rows.add(row("Damage", number(n.damage), FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL));
 			if (!state.warning)
 			{
 				rows.add(detail(" no monster data yet", "", Colour.NEUTRAL));
 			}
 		}
-		rows.add(body("DPS", Double.isNaN(n.dps) ? UNKNOWN : oneDecimal(n.dps)));
-		rows.add(body("Execution", Double.isNaN(n.execution) ? UNKNOWN : partPercent(n.execution)));
+		// The main rows' labels are bold (Eric, 2026-10-26); their sub-rows stay in the detail font.
+		rows.add(main("DPS", Double.isNaN(n.dps) ? UNKNOWN : oneDecimal(n.dps)));
+		rows.add(main("Execution", Double.isNaN(n.execution) ? UNKNOWN : partPercent(n.execution)));
 		if (settings.parts != ExecutionParts.OFF)
 		{
 			parts(rows, n, settings.parts == ExecutionParts.COSTING);
@@ -808,21 +844,24 @@ final class LedgerRows
 		final int before = rows.size();
 		if (!Double.isNaN(n.uptime))
 		{
-			part(rows, " uptime", n.uptime, n.uptimeCost, n.clock, costingOnly);
+			part(rows, " uptime", partPercent(n.uptime), n.uptimeCost, n.clock, costingOnly);
 		}
 		// Without the setup figure (no monster data) only uptime can be priced; the canvas shows uptime alone there.
 		if (!Double.isNaN(n.setupCost))
 		{
 			if (n.split)
 			{
-				part(rows, " stat boost", n.boostShare, n.boostCost, n.clock, costingOnly);
-				part(rows, " prayer", n.prayerShare, n.prayerCost, n.clock, costingOnly);
-				part(rows, " gear", n.gearShare, n.gearCost, n.clock, costingOnly);
+				// Eric, 2026-10-26 (option A): the share stays 0-100%, the seconds carry the whole cost, drains included.
+				// Mostly below base reads as the word, so it isn't taken for a plain 0%.
+				part(rows, " stat boost", n.drained ? DRAINED : partPercent(n.boostShare), n.boostCost, n.clock,
+					costingOnly);
+				part(rows, " prayer", partPercent(n.prayerShare), n.prayerCost, n.clock, costingOnly);
+				part(rows, " gear", partPercent(n.gearShare), n.gearCost, n.clock, costingOnly);
 			}
 			else
 			{
 				// A scope with no boost share read: fights from before T-010. One row stands in for the three.
-				part(rows, " setup", n.efficiency, n.setupCost, n.clock, costingOnly);
+				part(rows, " setup", partPercent(n.efficiency), n.setupCost, n.clock, costingOnly);
 			}
 		}
 		if (costingOnly && rows.size() == before)
@@ -831,14 +870,14 @@ final class LedgerRows
 		}
 	}
 
-	private static void part(List<Row> rows, String label, double share, double cost, double clock, boolean costingOnly)
+	private static void part(List<Row> rows, String label, String figure, double cost, double clock, boolean costingOnly)
 	{
 		final boolean costing = isCosting(cost, clock);
 		if (costingOnly && !costing)
 		{
 			return;
 		}
-		rows.add(detail(label, partValue(share, cost), costing ? Colour.COST : Colour.NEUTRAL));
+		rows.add(detail(label, withSeconds(figure, cost), costing ? Colour.COST : Colour.NEUTRAL));
 	}
 
 	private static void details(List<Row> rows, Numbers n, Scope s, State state)
@@ -945,9 +984,14 @@ final class LedgerRows
 	/** {@code NN%}, then {@code (-N s)} when the cost rounds to at least a second. */
 	static String partValue(double share, double costSeconds)
 	{
-		final String pct = Double.isNaN(share) ? UNKNOWN : partPercent(share);
+		return withSeconds(partPercent(share), costSeconds);
+	}
+
+	/** A part's figure ({@code NN%} or {@code drained}), then {@code (-N s)} when the cost rounds to at least a second. */
+	static String withSeconds(String figure, double costSeconds)
+	{
 		final long secs = Double.isNaN(costSeconds) ? 0 : roundHalfAway(costSeconds);
-		return secs >= 1 ? pct + " (-" + secs + " s)" : pct;
+		return secs >= 1 ? figure + " (-" + secs + " s)" : figure;
 	}
 
 	/** {@code +14 s}, {@code -8 s}, {@code 0 s}: rounded half away from zero, never {@code -0 s}. */
@@ -978,6 +1022,10 @@ final class LedgerRows
 	 */
 	static String partPercent(double share)
 	{
+		if (Double.isNaN(share))
+		{
+			return UNKNOWN;
+		}
 		final long p = Math.round(share * 100);
 		return (p >= 100 && share < 1 - 1e-9 ? 99 : p) + "%";
 	}
@@ -1053,6 +1101,12 @@ final class LedgerRows
 	private static Row body(String left, String right)
 	{
 		return row(left, right, FontRole.BODY, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
+	}
+
+	/** A main row: its label bold, its value in the body font. */
+	private static Row main(String left, String right)
+	{
+		return row(left, right, FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
 	}
 
 	private static Row detail(String left, String right, Colour rightColour)

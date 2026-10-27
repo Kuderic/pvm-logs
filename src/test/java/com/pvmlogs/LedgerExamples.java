@@ -30,6 +30,7 @@ final class LedgerExamples
 		int attacksMade;
 		int attacksPrayed;
 		int attacksSwitched;
+		int attacksDrained;
 		int hits;
 		double expectedHits;
 
@@ -106,6 +107,11 @@ final class LedgerExamples
 		public int attacksSwitched()
 		{
 			return attacksSwitched;
+		}
+
+		public int attacksDrained()
+		{
+			return attacksDrained;
 		}
 
 		public int hits()
@@ -259,6 +265,7 @@ final class LedgerExamples
 	static LedgerRows.Loadout loadout()
 	{
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
+		l.attack = "Abyssal tentacle";
 		l.maxHit = 49;
 		l.accuracy = 0.539;
 		l.dps = 5.5;
