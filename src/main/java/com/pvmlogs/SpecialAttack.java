@@ -75,6 +75,7 @@ enum SpecialAttack
 	// ---------------------------------------------------------------------
 
 	// Melee
+	// Blood Sacrifice's delayed 25 is added by CombatCalc.withExtraSplat, and AttackSplats.Delayed takes its splat (T-037).
 	ANCIENT_GODSWORD(ItemID.ANCIENT_GODSWORD, "Blood Sacrifice", 2, 1, 1.10),
 	ARKAN_BLADE(ItemID.ARKAN_BLADE, "Flames of Ralos", 3, 2, 1.50),
 	BRINE_SABRE(ItemID.OLAF2_BRINE_SABRE, "Liquify", 2, 1, 1.0),
@@ -91,8 +92,8 @@ enum SpecialAttack
 	// Brand (wiki, read 2026-10-27; T-032): four hits in quick succession, +25% accuracy and max, the damage "split
 	// across the hits that pass accuracy" - see splitsAcrossSuccesses. Was missing, so a Brand was scored as a swing.
 	INFERNAL_TECPATL(ItemID.INFERNAL_TECPATL, "Brand", 5, 4, 1.25),
-	// The melee hit only; Saradomin's Lightning also splashes for magic damage that is not a multiple of this max hit and
-	// is not counted.
+	// The melee hit; Saradomin's Lightning's 1-16 Magic damage on a landed hit is not a multiple of this max, so
+	// CombatCalc.withExtraSplat adds it to the expected damage (T-037).
 	SARADOMIN_SWORD(ItemID.SARADOMIN_SWORD, "Saradomin's Lightning", 1, 1, 1.10),
 	THE_DOGSWORD(ItemID.ECHO_GODSWORD, "Echo slash", 2, 1, 1.375),
 	// "Roll (up to max roll -5) + 5", so the max is unchanged and the floor is a flat five rather than a share - see

@@ -43,12 +43,100 @@ import net.runelite.api.gameval.ItemID;
  * </ul>
  *
  * <p>Left out, each a splat that could still be logged as an extra: Karil's
- * crossbow with its set (a 25% chance of a second hit), the ancient godsword's
- * delayed 25 and the ursine chainmace's Bear Down damage (both arrive ticks
- * after the attack, outside any burst), and recoil and vengeance (Part B).
+ * crossbow with its set (a 25% chance of a second hit), the ursine chainmace's
+ * Bear Down damage (arriving ticks after the attack, outside any burst), and
+ * recoil and vengeance (Part B). The ancient godsword's delayed 25 has its own
+ * window: {@link Delayed} (T-037).
  */
 final class AttackSplats
 {
+	/**
+	 * Blood Sacrifice (ancient godsword, T-037; wiki, read 2026-10-27): "25
+	 * typeless" damage once the target has had "eight ticks (4.8 seconds) to
+	 * move at least five tiles away" after a successful hit. Here counted from
+	 * the tick the special was booked, its hit's tick.
+	 */
+	static final int BLOOD_SACRIFICE_TICKS = 8;
+	static final int BLOOD_SACRIFICE_DAMAGE = 25;
+	/**
+	 * How far either side of its due tick the delayed splat is taken. A guess
+	 * until a log shows one: the wiki gives the delay, not the tick the client
+	 * sees the splat on.
+	 */
+	static final int DELAYED_WINDOW_TICKS = 1;
+
+	/** The ticks after its hit a special's delayed splat lands, or -1 for a special without one. */
+	static int delayedSplatTicks(SpecialAttack special)
+	{
+		return special == SpecialAttack.ANCIENT_GODSWORD ? BLOOD_SACRIFICE_TICKS : -1;
+	}
+
+	/**
+	 * Splats a special puts down long after its own (T-037): the ancient
+	 * godsword's 25, eight ticks on. It is the special's damage, so it must not
+	 * open a burst and book an attack, be reported as an extra, or be weighed as
+	 * the thrall's. Pure, so the plugin and the replay tests agree.
+	 *
+	 * <p>Taken only at its full amount: a delayed hit cut short by the target's
+	 * last hitpoints is not recognised (a known gap; the target dies either way).
+	 */
+	static final class Delayed
+	{
+		// Per npc index: {due tick, amount, thrown tick} for each delayed splat still to come.
+		private final java.util.Map<Integer, java.util.List<int[]>> due = new java.util.HashMap<>();
+
+		void expect(int npcIndex, int dueTick, int amount, int thrownTick)
+		{
+			due.computeIfAbsent(npcIndex, k -> new java.util.ArrayList<>()).add(new int[]{dueTick, amount, thrownTick});
+		}
+
+		/**
+		 * Claims a splat landing now on this npc as a special's delayed splat, once.
+		 *
+		 * @return the tick the special was thrown on, or {@code Integer.MIN_VALUE} for none
+		 */
+		int claim(int npcIndex, int tick, int amount)
+		{
+			final java.util.List<int[]> pending = due.get(npcIndex);
+			if (pending == null || amount <= 0)
+			{
+				return Integer.MIN_VALUE;
+			}
+			for (java.util.Iterator<int[]> it = pending.iterator(); it.hasNext(); )
+			{
+				final int[] d = it.next();
+				if (amount == d[1] && Math.abs(tick - d[0]) <= DELAYED_WINDOW_TICKS)
+				{
+					it.remove();
+					return d[2];
+				}
+			}
+			return Integer.MIN_VALUE;
+		}
+
+		/** Forgets those whose window has passed. */
+		void prune(int tick)
+		{
+			due.values().forEach(list -> list.removeIf(d -> tick - d[0] > DELAYED_WINDOW_TICKS));
+			due.values().removeIf(java.util.List::isEmpty);
+		}
+
+		int size()
+		{
+			int n = 0;
+			for (java.util.List<int[]> list : due.values())
+			{
+				n += list.size();
+			}
+			return n;
+		}
+
+		void clear()
+		{
+			due.clear();
+		}
+	}
+
 	/** An attack that puts one splat on its target, which is nearly all of them. */
 	static final AttackSplats ONE = new AttackSplats(1, 1, false);
 
