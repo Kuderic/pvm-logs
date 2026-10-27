@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "portedFrom": {
     "repo": "weirdgloop/osrs-dps-calc",
     "paths": ["src/lib/scaling", "src/lib/constants.ts"],
@@ -27,6 +27,20 @@
       "name": "Yama",
       "npcIds": [14176],
       "unmodelled": "Magic defence bonus is +60 while the tank uses magic and -30 otherwise, outside phase 3 (DPS calc scaling/Phases.ts). The tank's style is not tracked."
+    },
+    {
+      "name": "Abyssal Sire",
+      "npcIds": [5886, 5887, 5888, 5889, 5890, 5891, 5908],
+      "versionByNpcId": {
+        "5886": "Phase 1", "5887": "Phase 1", "5888": "Phase 1",
+        "5889": "Phase 2", "5890": "Phase 2",
+        "5891": "Phase 3 (stage 1)",
+        "5908": "Phase 3 (stage 2)"
+      },
+      "hpRestoredOnLeaving": [5886, 5887, 5888],
+      "countedHpMargin": 30,
+      "xpBonus": 1.125,
+      "notes": "Ids per version from the wiki's Abyssal Sire page (id1 = 5886,5887,5888; id2 = 5889,5890; id3 = 5891; id4 = 5908); the DPS calc's data lists only 5886, 5889, 5891 and 5908. Stage 2 has half the defence bonuses. Phase 1: any damage only counts towards disorienting it, and it is restored to full health by the end of the phase (wiki, Abyssal Sire/Strategies); in Eric's 10 kills of 2026-10-27 everything after phase 1 came to 425-452 whatever phase 1 took (0-100). The 0-27 over 425 is not explained (not the 50% transition reduction, not damage taken); the margin covers it so the last attacks are not capped short. Not modelled: if it reaches 0 before phase 2 it starts at 40%, before phase 3 at 20% (wiki). XP: all 42 clean melee drops on stage 2 decode at x1.125 to the splats they paid for, as on the other phases; 25 of them do not at the x1.100 the formula gives on stage 2's stats."
     },
     {
       "name": "Bork",

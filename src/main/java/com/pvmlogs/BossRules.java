@@ -46,11 +46,25 @@ import net.runelite.client.util.Filepath;
  * hitpoints (the boss health bar's full hitpoints picks between them); stats that
  * scale linearly with remaining hitpoints; that defence cannot be drained; and, for
  * anything not yet modelled, a plain description that is surfaced as a warning.
+ *
+ * <p>Schema 2 (T-020, the Abyssal Sire) adds four optional fields, so a schema-1
+ * file still reads the same:
+ * <ul>
+ * <li>{@code versionByNpcId}: which version of the monster data each id is, for a
+ * boss that changes id with its phases. Without it an id the data does not list
+ * resolves by name and takes whichever version comes first.</li>
+ * <li>{@code hpRestoredOnLeaving}: ids whose damage the boss heals back when it
+ * changes out of them, so the count of what it has left starts again at full.</li>
+ * <li>{@code countedHpMargin}: how far the counted hitpoints are known to run low,
+ * which the overkill cap allows above the count.</li>
+ * <li>{@code xpBonus}: the experience bonus the game pays on this boss, where the
+ * wiki formula on a version's stats says otherwise.</li>
+ * </ul>
  */
 @Slf4j
 class BossRules
 {
-	static final int SCHEMA_VERSION = 1;
+	static final int SCHEMA_VERSION = 2;
 
 	static final class Variant
 	{
@@ -77,6 +91,14 @@ class BossRules
 		/** What about this boss is known and not modelled. Shown as a warning against its expected figures. */
 		String unmodelled;
 		String notes;
+		/** Schema 2: npc id (as a string, JSON's keys are) -> the version of the monster data that id is. */
+		Map<String, String> versionByNpcId;
+		/** Schema 2: ids whose damage is healed back when the boss changes out of them into an id not listed. */
+		int[] hpRestoredOnLeaving;
+		/** Schema 2: how many hitpoints the count is known to run low by; the overkill cap allows this much above it. */
+		int countedHpMargin;
+		/** Schema 2: the experience bonus the game pays on every version, where the formula disagrees. 0 means none. */
+		double xpBonus;
 	}
 
 	static final class PortedFrom
@@ -231,6 +253,34 @@ class BossRules
 			}
 		}
 		return boss.variants.get(0);
+	}
+
+	/** The version of the monster data this id is, by the rule, or null where the rule does not say. */
+	static String versionFor(Boss boss, int npcId)
+	{
+		return boss == null || boss.versionByNpcId == null ? null : boss.versionByNpcId.get(Integer.toString(npcId));
+	}
+
+	/**
+	 * Whether changing from one id to another heals back the damage taken so far:
+	 * the old id is one the rule restores on leaving and the new one is not. The
+	 * Abyssal Sire is restored to full by the end of its first phase, whatever was
+	 * dealt to it while it slept.
+	 */
+	static boolean restoresOnLeaving(Boss boss, int fromId, int toId)
+	{
+		if (boss == null || boss.hpRestoredOnLeaving == null || fromId == toId)
+		{
+			return false;
+		}
+		boolean from = false;
+		boolean to = false;
+		for (int id : boss.hpRestoredOnLeaving)
+		{
+			from |= id == fromId;
+			to |= id == toId;
+		}
+		return from && !to;
 	}
 
 	/** The rule's variant with this version name, or null. */

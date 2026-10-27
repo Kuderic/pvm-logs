@@ -564,8 +564,9 @@ class CombatCalc
 	private int overkillCap(int npcId)
 	{
 		// The boss health bar where the game is drawing one for this target, else every splat on it counted, heals
-		// included - see TargetHealth. Both beat the count below, which saw only the player's and the thrall's damage.
-		final int known = targetIndex < 0 ? -1 : health.remaining(targetIndex, client.getTickCount());
+		// included - see TargetHealth. Both beat the count below, which saw only the player's and the thrall's damage. The
+		// count carries a boss rule's margin where it is known to run low (T-020, the Abyssal Sire).
+		final int known = targetIndex < 0 ? -1 : health.capRemaining(targetIndex, client.getTickCount());
 		if (known > 0)
 		{
 			return known;

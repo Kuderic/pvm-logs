@@ -120,4 +120,31 @@ public class EncounterGroupTest
 		assertFalse(EncounterGroup.isIgnored(net.runelite.api.gameval.NpcID.HUEY_HEAD));
 		assertFalse(EncounterGroup.isIgnored(net.runelite.api.gameval.NpcID.HUEY_BODY_PART));
 	}
+
+	/** T-020: the Sire's forms, its respiratory systems and its minions are one room; only the Sire scores. */
+	@Test
+	public void theAbyssalSireIsOneRoomAndOnlyTheSireScores()
+	{
+		final int[] forms = {5886, 5887, 5888, 5889, 5890, 5891, 5908};
+		for (int id : forms)
+		{
+			assertEquals("npc " + id, "Abyssal Sire", EncounterGroup.of(id));
+			assertFalse("npc " + id, EncounterGroup.isUnscored(id));
+			assertFalse("npc " + id, EncounterGroup.isUnattackable(id));
+		}
+		// Respiratory systems, spawns and scions, and each of them dying.
+		for (int id : new int[]{5914, 5915, 5916, 5917, 5918, 6177})
+		{
+			assertEquals("npc " + id, "Abyssal Sire", EncounterGroup.of(id));
+			assertTrue("npc " + id, EncounterGroup.isUnscored(id));
+			assertTrue(EncounterGroup.sameGroup(id, 5908));
+		}
+		assertTrue(EncounterGroup.isUnattackable(5915));
+		assertTrue(EncounterGroup.isUnattackable(5917));
+		assertTrue(EncounterGroup.isUnattackable(6177));
+		assertFalse(EncounterGroup.isUnattackable(5914));
+		// The tentacles are never attacked and stay out; the pet is not the boss.
+		assertNull(EncounterGroup.of(5912));
+		assertNull(EncounterGroup.of(5884));
+	}
 }

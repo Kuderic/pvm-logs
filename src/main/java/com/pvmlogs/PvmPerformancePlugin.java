@@ -396,6 +396,8 @@ public class PvmPerformancePlugin extends Plugin
 	// Issue #1: the player's damage counted from the experience it paid, and our thrall, so the thrall's hitsplats can
 	// be told from the player's. See XpLedger and ThrallTracker.
 	private final XpLedger xpLedger = new XpLedger();
+	// The id the fight's target wore on each recent tick, so an attack is judged by the phase it was thrown at (T-020).
+	private final TargetIdHistory targetIds = new TargetIdHistory();
 	private final ThrallTracker thralls = new ThrallTracker();
 	// Each combat skill's experience as last seen, so a StatChanged can be read as a gain.
 	private final int[] lastSkillXp = new int[XpLedger.SKILLS.length];
@@ -592,6 +594,7 @@ public class PvmPerformancePlugin extends Plugin
 		health.clear();
 		thralls.clear();
 		xpLedger.clear();
+		targetIds.clear();
 		java.util.Arrays.fill(lastSkillXp, 0);
 		nightmareBoss = null;
 		targetNpc = null;
@@ -728,15 +731,6 @@ public class PvmPerformancePlugin extends Plugin
 				hitsplat.getAmount(), hitsplat.getHitsplatType(), current.getTargetName(), npc.getId(), npc.getIndex(),
 				landedAttack, arrivedFromFlight,
 				onHitpoints ? "" : ", NOT HITPOINTS (" + HitsplatKind.typeName(hitsplat.getHitsplatType()) + ")");
-			if (onHitpoints)
-			{
-				damageByIndex.merge(npc.getIndex(), hitsplat.getAmount(), Integer::sum);
-				health.damage(npc.getIndex(), npc.getId(), hitsplat.getAmount(), tick);
-			}
-			else
-			{
-				current.recordNotHitpoints(HitsplatKind.typeName(hitsplat.getHitsplatType()), hitsplat.getAmount());
-			}
 			current.recordDamageDealt(hitsplat.getAmount(), now, landedAttack);
 			if (current.isScored())
 			{
@@ -764,6 +758,18 @@ public class PvmPerformancePlugin extends Plugin
 			if (booked)
 			{
 				recordAttackObserved(false, npc.getId(), bookingLag);
+			}
+			// Counted against what the target has left only now, after the attack it books was judged: the overkill cap reads
+			// that count, and with the blow's own damage already in it a 39 on a Sire with 42 left was judged against 3 - an
+			// expected 2.16 - and the blow after it, with the count at 0, against no cap at all (T-020).
+			if (onHitpoints)
+			{
+				damageByIndex.merge(npc.getIndex(), hitsplat.getAmount(), Integer::sum);
+				health.damage(npc.getIndex(), npc.getId(), hitsplat.getAmount(), tick);
+			}
+			else
+			{
+				current.recordNotHitpoints(HitsplatKind.typeName(hitsplat.getHitsplatType()), hitsplat.getAmount());
 			}
 			countSplat(npc, tick, hitsplat.getAmount(), booked ? tick - bookingLag : Integer.MIN_VALUE, flight);
 			// What the player's path made of it, kept for this tick in case the thrall's projectile says otherwise.
@@ -1859,8 +1865,9 @@ public class PvmPerformancePlugin extends Plugin
 		// for the same reason the prayer is: booking happens a tick or two later, and a trident attack judged at its booking
 		// was judged against the whip switched to by then. Cheap: the search is held until the weapon, style, target or
 		// carried items change.
-		switchedByTick.put(client.getTickCount(),
-			combatCalc.switchCheck(shown != null ? shown.getTargetId() : -1));
+		// The id the shown fight's target wears now, not the one the fight opened on: a boss's phases are different stats.
+		final int shownId = shown == null ? -1 : targetIdOn(shown, client.getTickCount());
+		switchedByTick.put(client.getTickCount(), combatCalc.switchCheck(shownId));
 		if (client.getTickCount() % 5 == 0)
 		{
 			switchedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
@@ -1886,14 +1893,14 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			combatCalc.noteTargetDamageTaken(damageByIndex.getOrDefault(shown.getTargetIndex(), 0));
 			// Pass the target so salve, dragon hunter and the rest can apply.
-			expectedMaxHit = combatCalc.maxHit(shown.getTargetId());
-			expectedAccuracy = combatCalc.hitChance(shown.getTargetId());
-			expectedAverageHit = combatCalc.averageHit(shown.getTargetId());
-			expectedDps = combatCalc.expectedDps(shown.getTargetId());
-			expectedSpecMaxHit = combatCalc.specialAttackMaxHit(shown.getTargetId());
-			expectedSpecAccuracy = combatCalc.specialAttackLandChance(shown.getTargetId());
-			expectedSpecAverageHit = combatCalc.specialAttackAverageHit(shown.getTargetId());
-			expectedForNpcId = shown.getTargetId();
+			expectedMaxHit = combatCalc.maxHit(shownId);
+			expectedAccuracy = combatCalc.hitChance(shownId);
+			expectedAverageHit = combatCalc.averageHit(shownId);
+			expectedDps = combatCalc.expectedDps(shownId);
+			expectedSpecMaxHit = combatCalc.specialAttackMaxHit(shownId);
+			expectedSpecAccuracy = combatCalc.specialAttackLandChance(shownId);
+			expectedSpecAverageHit = combatCalc.specialAttackAverageHit(shownId);
+			expectedForNpcId = shownId;
 			final double[] row = new double[EXP_WIDTH];
 			row[EXP_MAX] = expectedMaxHit;
 			row[EXP_ACCURACY] = expectedAccuracy;
@@ -2015,7 +2022,8 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void sampleExpected(Fight fight)
 	{
-		final int targetId = fight.getTargetId();
+		// The id the target wore when the attack left, which the tick cache's rows are keyed by too (T-020).
+		final int targetId = targetIdOn(fight, attackOriginTick);
 		int maxHit = expectedMaxHit;
 		double accuracy = expectedAccuracy;
 		double averageHit = expectedAverageHit;
@@ -2268,6 +2276,9 @@ public class PvmPerformancePlugin extends Plugin
 		if (current.getTargetIndex() == npc.getIndex())
 		{
 			targetLiveId = npc.getId();
+			// A boss that heals a phase back starts its count again the moment it changes (T-020), not at the next tick's
+			// bar reading, which an attack landing this tick would be judged before.
+			health.noteId(npc.getIndex(), npc.getId(), client.getTickCount());
 			// Anything of mine still in the air was nulled by the change, and a cast waiting on damage that will never arrive is
 			// not a splash: left in place it resolves as one and arms the gauntlets against an enemy that never dodged anything.
 			// Only the pending cast is fooled - the experience is paid whether the damage lands or is nulled.
@@ -2432,6 +2443,8 @@ public class PvmPerformancePlugin extends Plugin
 		// the kill stays on the overlay to read.
 		if (currentEncounter != null && !currentEncounter.isEnded() && currentEncounter.holds(npc.getId()))
 		{
+			debug.log("LOOT from %s (npc %d, index %d): room '%s' closed with %d fights", npc.getName(), npc.getId(),
+				npc.getIndex(), currentEncounter.getName(), currentEncounter.getFights().size());
 			currentEncounter.end(now);
 			// The export rebuilds its rooms from the fights alone, so the fight the kill closed on carries the boundary into the
 			// file.
@@ -2470,8 +2483,11 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		// A boss made of several NPCs does not die on the one being hit: the Hueycoatl is killed at its head while the fight
 		// is open on a body segment, so the death despawns an index the fight never heard of. Only a death, and only within
-		// the group, so an add dying beside a boss cannot claim it.
-		if (npc.isDead() && EncounterGroup.sameGroup(npc.getId(), current.getTargetId()))
+		// the group, so an add dying beside a boss cannot claim it - nor one of the group's own adds: an unscored npc is
+		// never the boss. With the Abyssal Sire's spawns in its group, every spawn that died would otherwise have ended the
+		// fight on the Sire as a kill (T-020).
+		if (npc.isDead() && EncounterGroup.sameGroup(npc.getId(), current.getTargetId())
+			&& !EncounterGroup.isUnscored(npc.getId()))
 		{
 			finalizeFight(true, System.currentTimeMillis(), "another part of the same boss died");
 		}
@@ -2515,8 +2531,9 @@ public class PvmPerformancePlugin extends Plugin
 				debug.log("ATTACK thrown tick %d belongs to a fight that is gone: counted nowhere", attackTick);
 				return;
 			}
-			// Read on the attack tick: this is when the prayers and boosts are the ones the attack actually rolled with.
-			final int targetId = attacker.getTargetId();
+			// Read on the attack tick: this is when the prayers and boosts are the ones the attack actually rolled with. And
+			// the target's id then, which is the phase the attack was rolled against (T-020).
+			final int targetId = targetIdOn(attacker, attackTick);
 			final boolean prayed = Boolean.TRUE.equals(prayerUpByTick.get(attackTick));
 			final boolean potted = attackObservedPotted;
 			final double boostShare = attackObservedBoostShare;
@@ -2927,6 +2944,11 @@ public class PvmPerformancePlugin extends Plugin
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
 		trackRaid(System.currentTimeMillis());
 		startFightOnTarget();
+		// After any fight this tick opened, before anything is judged against the target: what it wears now.
+		if (current != null && !current.isEnded())
+		{
+			targetIds.record(client.getTickCount(), current.getTargetIndex(), targetLiveId);
+		}
 		// Both before the attack is booked. The expected figures must describe the loadout that threw it, and the cast
 		// verdict must be on screen the moment the miss is known - safe ahead of the booking because a cast is never judged
 		// on its own tick.
@@ -3048,6 +3070,7 @@ public class PvmPerformancePlugin extends Plugin
 			drain.clear();
 			thralls.clear();
 			xpLedger.clear();
+			targetIds.clear();
 			if (state == GameState.LOGIN_SCREEN)
 			{
 				// Possibly another account next: its experience is not a gain on this one's.
@@ -3117,6 +3140,20 @@ public class PvmPerformancePlugin extends Plugin
 			return;
 		}
 		startFight(npc, System.currentTimeMillis());
+	}
+
+	/**
+	 * The id this fight's target wore on a tick: the phase an attack thrown then
+	 * was rolled against. A fight keeps the id it opened on, which for a boss that
+	 * changes id with its phases is the wrong set of stats for the rest of it - every
+	 * attack on the Abyssal Sire was judged as its first phase, and its last stage
+	 * has half the defences (T-020).
+	 */
+	private int targetIdOn(Fight fight, int tick)
+	{
+		final int fallback = fight == current && !fight.isEnded() && targetLiveId >= 0 ? targetLiveId
+			: fight.getTargetId();
+		return targetIds.idOn(tick, fight.getTargetIndex(), fallback);
 	}
 
 	/**
@@ -3258,9 +3295,10 @@ public class PvmPerformancePlugin extends Plugin
 		// and the overlay would quietly become a running total of the trip.
 		final String name = fight.encounterName();
 		// An ended room takes nothing more. It is left on show so the kill can be read, and this is what stops the fight
-		// after it being added to it.
-		if (currentEncounter == null || currentEncounter.isEnded()
-			|| fight.getGroupName() == null || !currentEncounter.accepts(name))
+		// after it being added to it. Nor does one nothing was thrown in: a fight opens on merely looking at an npc, and a
+		// grouped room opened by a look carried on into the next kill with the gap counted as its time - one Abyssal Sire
+		// room would have run from a glance at 4191 to a kill at 4896, twice the 351 ticks of the kill (T-020).
+		if (opensRoom(currentEncounter, fight))
 		{
 			if (currentEncounter != null)
 			{
@@ -3283,6 +3321,17 @@ public class PvmPerformancePlugin extends Plugin
 		log.debug("PvM Logs: fight on {} (npc {}) -> room '{}' group={} fights={}",
 			fight.getTargetName(), fight.getTargetId(), currentEncounter.getName(),
 			fight.getGroupName(), currentEncounter.getFights().size());
+	}
+
+	/**
+	 * Whether this fight starts a room of its own rather than joining the one open:
+	 * it does unless that room is open, has had something thrown in it, and is the
+	 * same grouped encounter. See {@link #openEncounterFor}.
+	 */
+	static boolean opensRoom(Encounter room, Fight fight)
+	{
+		return room == null || room.isEnded() || !room.hasAttempts() || fight.getGroupName() == null
+			|| !room.accepts(fight.encounterName());
 	}
 
 	/**
@@ -3418,6 +3467,16 @@ public class PvmPerformancePlugin extends Plugin
 		final int liveId = target == null ? -1 : target.getId();
 		final NPCComposition composition = target == null ? null : target.getComposition();
 		final int compositionId = composition == null ? -1 : composition.getId();
+		// The id it wears now, whether or not a bar is drawn: a boss that heals a phase back restarts its count on the
+		// change (T-020, the Abyssal Sire), and that has to happen before the next attack is judged against it.
+		if (target != null && target.getIndex() == index)
+		{
+			health.noteId(index, liveId, client.getTickCount());
+		}
+		for (String note : health.drainNotes())
+		{
+			debug.log(note);
+		}
 		final boolean named = !disabled && target != null && target.getIndex() == index
 			&& healthBarNames(barNpc, compositionId, liveId);
 		// The bar names an id, not an npc. With adds of the target's id about, it may be showing one of them: then it is

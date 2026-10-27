@@ -1,7 +1,10 @@
 package com.pvmlogs;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.inject.Singleton;
@@ -30,6 +33,11 @@ import javax.inject.Singleton;
  * reuses an index only after the npc has despawned, which the plugin reports with
  * {@link #forget}.
  *
+ * <p>The exception is a boss whose rule says it heals back what it took in a phase
+ * ({@code hpRestoredOnLeaving}, T-020): leaving that phase restarts its count at
+ * full. The Abyssal Sire is restored to full by the end of its first phase, so the
+ * damage dealt while it slept read as 100 off a 425 that was never down.
+ *
  * <p>Pure bookkeeping with no client access, so it can be tested on its own; the
  * plugin feeds it splats and bar readings, all on the client thread.
  */
@@ -53,14 +61,74 @@ class TargetHealth
 	}
 
 	private final Map<Integer, Entry> byIndex = new HashMap<>();
+	// The boss rules in force, for the bosses that heal a phase back and the ones whose count is known to run low. Set by
+	// MonsterStatsProvider when it publishes the data those rules were read with.
+	private volatile BossRules rules = BossRules.empty();
+	// What changed in the bookkeeping that a debug log should say, until the plugin takes it.
+	private static final int MAX_NOTES = 32;
+	private final List<String> notes = new ArrayList<>();
+
+	void setRules(BossRules rules)
+	{
+		this.rules = rules == null ? BossRules.empty() : rules;
+	}
 
 	private Entry entry(int index, int npcId, int tick)
 	{
 		final Entry e = byIndex.computeIfAbsent(index, i -> new Entry());
+		if (e.npcId != 0 && e.npcId != npcId)
+		{
+			transformed(index, e, npcId, tick);
+		}
 		e.npcId = npcId;
 		e.ids.add(npcId);
 		e.lastTouchedTick = Math.max(e.lastTouchedTick, tick);
 		return e;
+	}
+
+	/** The npc on this index now wears another id; a rule may say the damage so far was healed back. */
+	private void transformed(int index, Entry e, int toId, int tick)
+	{
+		final BossRules.Boss boss = rules.forNpc(e.npcId);
+		if (!BossRules.restoresOnLeaving(boss, e.npcId, toId))
+		{
+			return;
+		}
+		// Bounded: the plugin takes them only while a fight is open, and a splat outside one can still change an id.
+		if (notes.size() < MAX_NOTES)
+		{
+			notes.add(String.format("HP RESTORED: npc index %d went %d -> %d on tick %d; %s heals back the %d taken "
+				+ "(%d healed) before, so the count starts again at full", index, e.npcId, toId, tick, boss.name, e.damage,
+				e.healed));
+		}
+		e.damage = 0;
+		e.healed = 0;
+	}
+
+	/**
+	 * The id the npc on this index wears now, seen without a splat or a bar reading -
+	 * the plugin says it each tick - so a rule that restores a phase's damage acts on
+	 * the tick of the change, before the next attack is judged against the count.
+	 * Ignored for an index nothing has been recorded against.
+	 */
+	void noteId(int index, int npcId, int tick)
+	{
+		if (npcId > 0 && byIndex.containsKey(index))
+		{
+			entry(index, npcId, tick);
+		}
+	}
+
+	/** What changed since last asked, for the debug log. */
+	List<String> drainNotes()
+	{
+		if (notes.isEmpty())
+		{
+			return Collections.emptyList();
+		}
+		final List<String> out = new ArrayList<>(notes);
+		notes.clear();
+		return out;
 	}
 
 	/** Full hitpoints from the tables, used until the bar says otherwise. Ignored when not positive. */
@@ -169,6 +237,26 @@ class TargetHealth
 	static int barTolerance(int barBase)
 	{
 		return Math.max(2, barBase / 50);
+	}
+
+	/**
+	 * What is left, for capping an attack's expected damage: {@link #remaining}, and
+	 * where that was counted for a boss whose count is known to run low, its rule's
+	 * margin on top (never past full). The Abyssal Sire took up to 27 more than 425
+	 * after its first phase in Eric's 10 kills of 2026-10-27, so a cap at the count
+	 * cut its last attacks to a few points when it still had twenty or more.
+	 */
+	int capRemaining(int index, int tick)
+	{
+		final int left = remaining(index, tick);
+		final Entry e = byIndex.get(index);
+		if (left < 0 || e == null || hudFresh(e, tick))
+		{
+			return left;
+		}
+		final BossRules.Boss boss = rules.forNpc(e.npcId);
+		final int margin = boss == null ? 0 : Math.max(0, boss.countedHpMargin);
+		return margin == 0 ? left : Math.min(fullHp(e), left + margin);
 	}
 
 	/** Which source {@link #remaining} answered from: "bar", "counted" or "unknown". */

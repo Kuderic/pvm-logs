@@ -257,6 +257,13 @@ class MonsterStatsProvider
 
 	private Choice resolve(Parsed d, int npcId)
 	{
+		// A boss that changes id with its phases says which version each id is (T-020: the Abyssal Sire). The data lists
+		// some of its ids and not others, and an unlisted one resolved by name to whichever version came first.
+		final Choice ruled = byRuleVersion(d, npcId);
+		if (ruled != null)
+		{
+			return ruled;
+		}
 		final List<MonsterStats> exact = d.versionsById.get(npcId);
 		if (exact != null && !exact.isEmpty())
 		{
@@ -301,6 +308,38 @@ class MonsterStatsProvider
 			}
 		}
 		return named == null || named.isEmpty() ? null : pickVersion(d, npcId, named);
+	}
+
+	/**
+	 * The version a boss rule names for this id, found among the entries the data
+	 * lists under any of the rule's ids. Null when the rule names none, or the data
+	 * has no such version (then the usual lookup goes on, and the miss shows in the
+	 * debug log as the name lookup it falls to).
+	 */
+	static Choice byRuleVersion(Parsed d, int npcId)
+	{
+		final BossRules.Boss boss = d.rules.forNpc(npcId);
+		final String version = BossRules.versionFor(boss, npcId);
+		if (version == null)
+		{
+			return null;
+		}
+		for (int id : boss.npcIds)
+		{
+			final List<MonsterStats> listed = d.versionsById.get(id);
+			if (listed == null)
+			{
+				continue;
+			}
+			for (MonsterStats s : listed)
+			{
+				if (version.equalsIgnoreCase(s.getVersion()))
+				{
+					return new Choice(s, "boss rule: npc " + npcId + " is '" + version + "'");
+				}
+			}
+		}
+		return null;
 	}
 
 	/** Which version is in use, and in a few words why. */
@@ -602,6 +641,11 @@ class MonsterStatsProvider
 	void publish(Parsed parsed)
 	{
 		data = parsed;
+		// What the target has left follows the same rules: a boss that heals back a phase's damage restarts its count.
+		if (health != null)
+		{
+			health.setRules(parsed.rules);
+		}
 	}
 
 	/**
@@ -670,7 +714,7 @@ class MonsterStatsProvider
 				m.attributes == null
 					? Collections.emptySet()
 					: new HashSet<>(Arrays.asList(m.attributes)),
-				xpMultiplier(m, variant),
+				xpMultiplier(m, variant, boss),
 				m.version == null ? "" : m.version,
 				boss != null && boss.defenceDrainImmune,
 				warningFor(m, boss, variant));
@@ -796,12 +840,17 @@ class MonsterStatsProvider
 	 * x1.55 on every hit of a kill, which is the formula on his 270 strength and 215
 	 * defence, and nothing like the x1.375 the zeros give.
 	 */
-	private static double xpMultiplier(MonsterJson m, BossRules.Variant variant)
+	private static double xpMultiplier(MonsterJson m, BossRules.Variant variant, BossRules.Boss boss)
 	{
 		final double fixed = XpDecoder.overrideFor(m.name);
 		if (fixed > 0)
 		{
 			return fixed;
+		}
+		// What the game pays, where a rule has it from real drops and the formula on a version's stats disagrees.
+		if (boss != null && boss.xpBonus > 0)
+		{
+			return boss.xpBonus;
 		}
 		final BossRules.ScaleWithHp scaled = variant == null ? null : variant.scaleWithHp;
 		final int strength = scaled != null && scaled.strength != null ? scaled.strength[0] : m.skills.strength;
