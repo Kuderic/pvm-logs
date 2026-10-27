@@ -687,7 +687,10 @@ final class LedgerRows
 				prayerCost = prayer * perShare;
 				boostShare = Math.min(1, s.boostShare());
 				prayerShare = (double) s.attacksPrayed() / made;
-				gearShare = (double) s.attacksSwitched() / made;
+				// Your gear's damage against the best gear on hand, not the share of attacks with nothing better to switch
+				// to (Eric, 2026-10-26): blood fury worn over a torture flagged nearly every attack, so it read 6% while
+				// costing 2 s. The seconds beside it were right all along.
+				gearShare = Math.max(0, 1 - Math.max(0, s.switchCostShare()));
 				drained = (long) s.attacksDrained() * 2 > made;
 			}
 			else

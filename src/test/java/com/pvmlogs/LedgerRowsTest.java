@@ -276,6 +276,27 @@ public class LedgerRowsTest
 		assertEquals(d(" hits / expected", "32 / 30.2"), rows.get(10));
 	}
 
+	// ---- gear (Eric, 2026-10-26) ----
+
+	@Test
+	public void gearIsTheDamageShareOfTheBestGearOnHandNotACountOfAttacks()
+	{
+		// Blood fury worn over a carried torture: 46 of 49 attacks could have switched, which read "6%". What it cost was
+		// 2 s of a 2:16 kill, about 1.7% of the damage the setup could have dealt.
+		final FakeScope s = LedgerExamples.kill();
+		s.attacksSwitched = 3;
+		s.setup(0.98, 0.85, 0.352, 2.0);
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" gear", "98% (-2 s)")));
+	}
+
+	@Test
+	public void gearReadsAHundredOnlyWithNothingLost()
+	{
+		final FakeScope s = LedgerExamples.kill();
+		s.attacksSwitched = 0;
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" gear", "100%")));
+	}
+
 	// ---- drained (T-016, Eric's option A) ----
 
 	@Test
