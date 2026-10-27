@@ -791,7 +791,7 @@ class CombatCalc
 		// A scythe swing is several hits, each rolling its own accuracy and damage, so one attack is expected to deal their
 		// sum. Each max is half the one before ROUNDED DOWN, which is why this walks them rather than multiplying by 1.75: a
 		// 51 max is 51, 25, 12, which is 88 and not 89.25.
-		final DamageMoments ordinary = ordinaryMoments(averageMax, accuracy, hitsPerAttack(npcId), cap);
+		final DamageMoments ordinary = shapeMoments(ordinaryShape(), averageMax, accuracy, hitsPerAttack(npcId), cap);
 
 		final EnchantedBolt bolt = loadedBolt(npcId);
 		if (bolt == null)
@@ -812,6 +812,178 @@ class CombatCalc
 			default:
 				// Onyx leeches from damage actually dealt, so it needs a hit first.
 				return onyxMoments(procChance, ordinary);
+		}
+	}
+
+	/**
+	 * How an ordinary attack's hitsplats roll (T-032), from the OSRS Wiki (Multi-hit
+	 * weapons and each weapon's page, read 2026-10-27). Before this, every weapon
+	 * but the scythe was one roll from 0 to the max: a dark bow expected half its
+	 * two arrows and the charged tonalztics two thirds of their two throws, so both
+	 * read as luck; the dual macuahuitl, whose second hit needs its first, expected
+	 * too much.
+	 */
+	enum OrdinaryShape
+	{
+		/** One hit from 0 to the max: nearly everything. */
+		ONE,
+		/** The scythe: up to three hits by the target's size, each half the one before, rounded down. */
+		SCYTHE,
+		/** Two independently rolled hits splitting the max, ⌊M/2⌋ and the rest: Torag's hammers, the blades, temotli, tecpatls. */
+		SPLIT,
+		/** The dual macuahuitl: the max split ⌊M/2⌋ then the rest, the second's accuracy roll failing whenever the first did. */
+		MACUAHUITL,
+		/**
+		 * The dark bow: two arrows, each its own accuracy roll ("roll independent
+		 * accuracy checks") and the full max. The full max per arrow is read from
+		 * the special, which rolls each arrow "up to the player's maximum Ranged
+		 * hit" and which this table already had at 1.5 per arrow; the pages read
+		 * give no split for the ordinary shot.
+		 */
+		TWO_FULL,
+		/** The charged tonalztics of Ralos: two throws, each its own accuracy roll, each 0 to 75% of the max. */
+		TWO_THREE_QUARTERS,
+		/** The uncharged tonalztics: one throw, 0 to 75% of the max. */
+		THREE_QUARTERS
+	}
+
+	/** The ordinary attack's shape for the weapon in hand and the style it attacks with. */
+	OrdinaryShape ordinaryShape()
+	{
+		final int weapon = weaponItemId();
+		final AttackType type = attackStyle().getAttackType();
+		if (type.isMelee())
+		{
+			if (isScytheEquipped())
+			{
+				return OrdinaryShape.SCYTHE;
+			}
+			if (AttackSplats.isMacuahuitl(weapon))
+			{
+				return OrdinaryShape.MACUAHUITL;
+			}
+			if (AttackSplats.splitsMaxInTwo(weapon))
+			{
+				return OrdinaryShape.SPLIT;
+			}
+			return OrdinaryShape.ONE;
+		}
+		if (type == AttackType.RANGED)
+		{
+			if (SpecialAttack.forItem(weapon) == SpecialAttack.DARK_BOW)
+			{
+				return OrdinaryShape.TWO_FULL;
+			}
+			if (weapon == ItemID.TONALZTICS_OF_RALOS_CHARGED)
+			{
+				return OrdinaryShape.TWO_THREE_QUARTERS;
+			}
+			if (weapon == ItemID.TONALZTICS_OF_RALOS_UNCHARGED)
+			{
+				return OrdinaryShape.THREE_QUARTERS;
+			}
+		}
+		return OrdinaryShape.ONE;
+	}
+
+	/**
+	 * One ordinary attack's damage as moments, by its shape. The max may carry a
+	 * fraction (a chance-based bonus folded in as its average), kept wherever the
+	 * roll is uncapped as {@link #ordinaryMoments} keeps it; each hitsplat is held
+	 * to the cap on its own, as the scythe's always have been.
+	 *
+	 * @param scytheHits the scythe's hits on this target; read by {@link OrdinaryShape#SCYTHE} alone
+	 */
+	static DamageMoments shapeMoments(OrdinaryShape shape, double averageMax, double accuracy, int scytheHits, int cap)
+	{
+		switch (shape)
+		{
+			case SCYTHE:
+				return ordinaryMoments(averageMax, accuracy, scytheHits, cap);
+			case SPLIT:
+			{
+				final double first = Math.floor(averageMax / 2.0);
+				return roll(first, cap).landing(accuracy).plus(roll(averageMax - first, cap).landing(accuracy));
+			}
+			case MACUAHUITL:
+			{
+				// The second lands only if the first did and its own roll passes: B1 (Y1 + B2 Y2).
+				final double first = Math.floor(averageMax / 2.0);
+				return roll(first, cap).plus(roll(averageMax - first, cap).landing(accuracy)).landing(accuracy);
+			}
+			case TWO_FULL:
+			{
+				final DamageMoments arrow = roll(averageMax, cap).landing(accuracy);
+				return arrow.plus(arrow);
+			}
+			case TWO_THREE_QUARTERS:
+			{
+				final DamageMoments thrown = roll(averageMax * 0.75, cap).landing(accuracy);
+				return thrown.plus(thrown);
+			}
+			case THREE_QUARTERS:
+				return roll(averageMax * 0.75, cap).landing(accuracy);
+			default:
+				return ordinaryMoments(averageMax, accuracy, 1, cap);
+		}
+	}
+
+	// One hitsplat's damage roll from 0 to this max: keeping its fraction uncapped, whole under a cap.
+	private static DamageMoments roll(double max, int cap)
+	{
+		return cap == Integer.MAX_VALUE ? DamageMoments.uniform(max) : DamageMoments.capped((int) max, cap);
+	}
+
+	/**
+	 * The most each of an ordinary attack's hitsplats can deal, by its shape,
+	 * from the first's max: what {@link #maxHit} adds up.
+	 */
+	static int[] shapeMaxima(OrdinaryShape shape, int max, int scytheHits)
+	{
+		switch (shape)
+		{
+			case SCYTHE:
+			{
+				final int[] maxima = new int[Math.max(1, scytheHits)];
+				int hit = max;
+				for (int i = 0; i < maxima.length; i++)
+				{
+					maxima[i] = hit;
+					hit = nextScytheMax(hit);
+				}
+				return maxima;
+			}
+			case SPLIT:
+			case MACUAHUITL:
+				return new int[]{max / 2, max - max / 2};
+			case TWO_FULL:
+				return new int[]{max, max};
+			case TWO_THREE_QUARTERS:
+				return new int[]{(int) (max * 0.75), (int) (max * 0.75)};
+			case THREE_QUARTERS:
+				return new int[]{(int) (max * 0.75)};
+			default:
+				return new int[]{max};
+		}
+	}
+
+	/**
+	 * The chance one ordinary attack lands anything at this accuracy: two
+	 * independent rolls land with 1 − (1 − a)², the dual macuahuitl only with
+	 * its first.
+	 */
+	static double shapeLandChance(OrdinaryShape shape, double accuracy, int scytheHits)
+	{
+		switch (shape)
+		{
+			case SCYTHE:
+				return landChance(accuracy, scytheHits);
+			case SPLIT:
+			case TWO_FULL:
+			case TWO_THREE_QUARTERS:
+				return landChance(accuracy, 2);
+			default:
+				return landChance(accuracy, 1);
 		}
 	}
 
@@ -1685,12 +1857,11 @@ class CombatCalc
 		final int cap = damageCap(npcId);
 		// The most ONE ATTACK can deal, which for a scythe is all its hits: a 51 max against a 3x3 is 51 + 25 + 12, since the
 		// halving rounds down at every step. The cap is per hit, being a limit on what one blow may land.
+		// The other multi-hit weapons too (T-032): a dark bow's two arrows, the split hits, the tonalztics' throws.
 		int total = 0;
-		int max = first;
-		for (int hit = 0; hit < hitsPerAttack(npcId); hit++)
+		for (int max : shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId)))
 		{
 			total += Math.min(cap, max);
-			max = nextScytheMax(max);
 		}
 		if (weaponStyle() == Style.MAGIC)
 		{
@@ -1739,7 +1910,13 @@ class CombatCalc
 		{
 			return accuracy;
 		}
-		return landChance(accuracy, hitsPerAttack(npcId));
+		return attackLandChance(accuracy, npcId);
+	}
+
+	/** {@link #landChance(int)} at a given accuracy: the weapon's ordinary shape decides how its rolls combine (T-032). */
+	double attackLandChance(double accuracy, int npcId)
+	{
+		return accuracy < 0 ? accuracy : shapeLandChance(ordinaryShape(), accuracy, hitsPerAttack(npcId));
 	}
 
 	static double landChance(double accuracy, int hits)
@@ -1769,7 +1946,13 @@ class CombatCalc
 	 */
 	AttackSplats splatsPerAttack(int npcId, boolean special, int weaponId)
 	{
-		return AttackSplats.of(weaponId, special, targetSize(npcId), activeSpell());
+		return AttackSplats.of(weaponId, special, targetSize(npcId), activeSpell(), inMulticombat());
+	}
+
+	/** Whether the player stands in a multicombat area, which Dinh's bulwark's special hits twice in (T-032). */
+	private boolean inMulticombat()
+	{
+		return client.getVarbitValue(VarbitID.MULTIWAY_INDICATOR) == 1;
 	}
 
 	/** An item's name for the debug log. */
@@ -2041,6 +2224,18 @@ class CombatCalc
 		final SpecialAttack spec = specialAttack();
 		// The unmitigated hit: the caller applies mitigation, and taking it from maxHit() as well would apply Olm's third
 		// twice over.
+		if (spec == SpecialAttack.DARK_BOW)
+		{
+			// Two arrows at the special's own multiplier, a dragon arrow held to 48 (T-032).
+			final boolean dragon = firesDragonArrows();
+			final int arrow = (int) (unmitigatedMaxHit(npcId)
+				* (dragon ? DARK_BOW_DRAGON_MULTIPLIER : DARK_BOW_OTHER_MULTIPLIER));
+			return 2 * (dragon ? Math.min(DARK_BOW_DRAGON_CAP, arrow) : arrow);
+		}
+		if (spec == SpecialAttack.DINHS_BULWARK && inMulticombat())
+		{
+			return 2 * spec.maxTotal(unmitigatedMaxHit(npcId));
+		}
 		return spec == null ? 0 : spec.maxTotal(unmitigatedMaxHit(npcId));
 	}
 
@@ -2058,7 +2253,7 @@ class CombatCalc
 		final SpecialAttack spec = specialAttack();
 		if (spec == null)
 		{
-			return landChance(hitChance(npcId), hitsPerAttack(npcId));
+			return attackLandChance(hitChance(npcId), npcId);
 		}
 		if (spec.alwaysHits())
 		{
@@ -2072,6 +2267,16 @@ class CombatCalc
 		if (spec.sharedAccuracyRoll())
 		{
 			return accuracy;
+		}
+		if (spec == SpecialAttack.DARK_BOW)
+		{
+			// Each arrow deals its minimum on a miss (T-032), so an activation always puts damage down.
+			return 1.0;
+		}
+		if (spec == SpecialAttack.DINHS_BULWARK)
+		{
+			// The target is hit twice in multicombat, once outside it (T-032).
+			return landChance(accuracy, inMulticombat() ? 2 : 1);
 		}
 		// One roll per hitsplat either way. A cascade stops at its first success and the others all roll independently, but
 		// "at least one connected" is the same arithmetic for both, so the count is all this needs.
@@ -2150,8 +2355,70 @@ class CombatCalc
 		final int base = spec.hasDamageMultipliers()
 			? unmitigatedMaxHit(npcId)
 			: unmitigatedSpecialAttackMaxHit(npcId);
-		return specMoments(spec.hitMaxima((int) (base * scale)), accuracy, spec.minFraction(),
-			spec.flatMinimum(), cap, spec.sharedAccuracyRoll());
+		// The specials whose hits are not one roll each of the table's maxima (T-032).
+		if (spec == SpecialAttack.DARK_BOW)
+		{
+			final boolean dragon = firesDragonArrows();
+			return darkBowSpecMoments((int) (base * scale), accuracy, dragon, cap);
+		}
+		final int[] maxima = spec.hitMaxima((int) (base * scale));
+		if (spec.splitsMaxInTwo())
+		{
+			return specMoments(new int[]{maxima[0] / 2, maxima[0] - maxima[0] / 2}, accuracy, 0, 0, cap, false);
+		}
+		if (spec.splitsAcrossSuccesses())
+		{
+			return DamageMoments.capped(maxima[0], cap).landing(landChance(accuracy, spec.hits()));
+		}
+		if (spec == SpecialAttack.DINHS_BULWARK && inMulticombat())
+		{
+			return specMoments(new int[]{maxima[0], maxima[0]}, accuracy, 0, 0, cap, false);
+		}
+		return specMoments(maxima, accuracy, spec.minFraction(), spec.flatMinimum(), cap, spec.sharedAccuracyRoll());
+	}
+
+	// Dragon arrows in the quiver, seeking ones included: Descent of Dragons rather than of Darkness (wiki, Dark bow).
+	private boolean firesDragonArrows()
+	{
+		final int ammo = equippedItemId(EquipmentInventorySlot.AMMO);
+		return ammo == ItemID.DRAGON_ARROW || ammo == ItemID.DRAGON_ARROW_P || ammo == ItemID.DRAGON_ARROW_P_
+			|| ammo == ItemID.DRAGON_ARROW_P__ || ammo == ItemID.SEEKING_DRAGON_ARROW;
+	}
+
+	/** Descent of Dragons' and of Darkness's damage multipliers, minimums and Dragons' per-arrow cap (wiki, Dark bow). */
+	static final double DARK_BOW_DRAGON_MULTIPLIER = 1.5;
+	static final double DARK_BOW_OTHER_MULTIPLIER = 1.3;
+	static final int DARK_BOW_DRAGON_MINIMUM = 8;
+	static final int DARK_BOW_OTHER_MINIMUM = 5;
+	static final int DARK_BOW_DRAGON_CAP = 48;
+
+	/**
+	 * The dark bow's special (T-032; wiki, Dark bow, read 2026-10-27): two arrows,
+	 * each with its own accuracy roll. Each deals at least its minimum, 8 with
+	 * dragon arrows and 5 with others, "passing the regular accuracy check is
+	 * required to deal damage above that minimum"; a hit rolls up to the max
+	 * raised 50% (dragon) or 30%, and a dragon arrow is held to 48.
+	 *
+	 * @param normalMaxHit the bow's ordinary max, before the special's multiplier
+	 * @param cap          the target's per-hitsplat cap, or Integer.MAX_VALUE
+	 */
+	static DamageMoments darkBowSpecMoments(int normalMaxHit, double accuracy, boolean dragon, int cap)
+	{
+		final int top = (int) (normalMaxHit * (dragon ? DARK_BOW_DRAGON_MULTIPLIER : DARK_BOW_OTHER_MULTIPLIER));
+		final int ceiling = Math.min(cap, dragon ? DARK_BOW_DRAGON_CAP : Integer.MAX_VALUE);
+		final int minimum = Math.min(ceiling, dragon ? DARK_BOW_DRAGON_MINIMUM : DARK_BOW_OTHER_MINIMUM);
+		double mean = 0;
+		double second = 0;
+		for (int rolled = 0; rolled <= Math.max(0, top); rolled++)
+		{
+			final int dealt = Math.min(ceiling, Math.max(minimum, rolled));
+			mean += dealt;
+			second += (double) dealt * dealt;
+		}
+		final int rolls = Math.max(0, top) + 1;
+		final DamageMoments hit = new DamageMoments(mean / rolls, second / rolls);
+		final DamageMoments arrow = hit.weighted(accuracy).or(DamageMoments.fixed(minimum).weighted(1.0 - accuracy));
+		return arrow.plus(arrow);
 	}
 
 	/**
