@@ -9,6 +9,7 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import net.runelite.client.util.Filepath;
 import org.junit.Test;
 
 // The bundled boss rules, checked against the DPS calculator they were ported from (weirdgloop/osrs-dps-calc@c446f2e,
@@ -114,7 +115,7 @@ public class BossRulesTest
 			+ "{\"name\":\"vardorvis\",\"npcIds\":[12223],\"variants\":[{\"version\":\"Post-quest\",\"maxHp\":700,"
 			+ "\"default\":true,\"scaleWithHp\":{\"defence\":[200,100]}}]},"
 			+ "{\"name\":\"New Boss\",\"npcIds\":[99999],\"unmodelled\":\"not yet\"}]}").getBytes(StandardCharsets.UTF_8));
-		final BossRules rules = BossRules.load(GSON, file);
+		final BossRules rules = BossRules.load(GSON, at(file));
 		final BossRules.Variant v = BossRules.choose(rules.forNpc(12223), -1);
 		assertEquals(200, BossRules.scaleWithHp(v.scaleWithHp.defence, 700, 700));
 		// The whole boss is replaced, so ids only the bundled rule listed are no longer Vardorvis's.
@@ -133,7 +134,7 @@ public class BossRulesTest
 		final Path file = dir.resolve("boss-rules.json");
 		Files.write(file, ("{\"schemaVersion\":2,\"bosses\":[{\"name\":\"Vardorvis\",\"npcIds\":[12223]}]}")
 			.getBytes(StandardCharsets.UTF_8));
-		final BossRules rules = BossRules.load(GSON, file);
+		final BossRules rules = BossRules.load(GSON, at(file));
 		assertNotNull(BossRules.variantNamed(rules.forNpc(12223), "Awakened"));
 	}
 
@@ -143,15 +144,23 @@ public class BossRulesTest
 		final Path dir = Files.createTempDirectory("boss-rules");
 		final Path file = dir.resolve("boss-rules.json");
 		Files.write(file, "{ not json".getBytes(StandardCharsets.UTF_8));
-		assertNotNull(BossRules.load(GSON, file).forNpc(12223));
+		assertNotNull(BossRules.load(GSON, at(file)).forNpc(12223));
 	}
 
-	/** The hotfix file lives in the plugin's one data folder (T-004), whatever that is called. */
+	/** The hotfix file sits in the plugin's data folder (RuneLite's plugin-data folder since T-009), beside the cache. */
 	@Test
-	public void theOverrideSitsInTheDataFolder()
+	public void theOverrideSitsInTheDataFolder() throws Exception
 	{
-		final Path file = MonsterStatsProvider.rulesOverrideFile();
-		assertEquals("boss-rules.json", file.getFileName().toString());
-		assertEquals(PvmPerformanceConfig.DATA_DIR, file.getParent().getFileName().toString());
+		final Filepath data = Filepath.Unchecked.getRooted(Files.createTempDirectory("plugin-data"));
+		final Filepath file = MonsterStatsProvider.rulesOverrideFile(data);
+		assertEquals("boss-rules.json", file.getFileName());
+		assertEquals(data, file.getParent());
+		assertNull(MonsterStatsProvider.rulesOverrideFile(null));
+	}
+
+	/** A test-only way in: the plugin gets its Filepath from RuneLite, never from Filepath.Unchecked. */
+	private static Filepath at(Path file)
+	{
+		return Filepath.Unchecked.getRooted(file.getParent()).joinSegment(file.getFileName().toString());
 	}
 }

@@ -7,8 +7,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -16,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.util.Filepath;
 
 /**
  * Bosses whose stats the monster data cannot describe on its own, as data.
@@ -23,15 +22,21 @@ import lombok.extern.slf4j.Slf4j;
  * <p>The monster data is the DPS calculator's, and some of what the calculator
  * does is not in that data but in its code: Vardorvis's strength and defence move
  * with his hitpoints and are stored as 0; Araxxor, Yama and Bork change with phases
- * the data does not carry. Each such case lives here, ported by hand from the
- * calculator's {@code src/lib/scaling} at the commit recorded in the file, so a new
- * boss is a data change rather than a code change.
+ * the data does not carry. Each such case lives here as data, so a new boss is a
+ * data change rather than a code change.
+ *
+ * <p>The <em>numbers</em> in a rule (stat ranges, phase bonuses, npc ids) are game
+ * facts read from the calculator's {@code src/lib/scaling} and
+ * {@code src/lib/constants.ts}; the file's {@code portedFrom} names the repo and
+ * commit they came from. The code that applies them is our own. The calculator (weirdgloop/osrs-dps-calc)
+ * is GPL-3, so none of its code may be copied into this BSD-2 plugin; its
+ * {@code monsters.json} data and the game numbers are fine with credit.
  *
  * <p>Three layers, later ones winning by boss name:
  * <ol>
  * <li>{@code boss-rules.json} bundled with the plugin;</li>
  * <li>{@code boss-rules.json} in the plugin's data folder
- * ({@code ~/.runelite/<PvmPerformanceConfig.DATA_DIR>/}), if present - a fix can be
+ * ({@code ~/.runelite/plugin-data/<PvmPerformanceConfig.INTERNAL_NAME>/}), if present - a fix can be
  * tried without waiting for a release;</li>
  * <li>nothing else. A boss with no rule falls back to the monster data and to the
  * checks in MonsterStatsProvider and StatsCheck, which flag rather than guess.</li>
@@ -104,7 +109,7 @@ class BossRules
 	}
 
 	/** The bundled rules, overlaid by the user's file where it exists and parses. Never throws. */
-	static BossRules load(Gson gson, Path userOverride)
+	static BossRules load(Gson gson, Filepath userOverride)
 	{
 		RulesFile bundled = null;
 		try (InputStream in = BossRules.class.getResourceAsStream("boss-rules.json"))
@@ -119,9 +124,9 @@ class BossRules
 			log.warn("PvM Logs: bundled boss rules unreadable", e);
 		}
 		RulesFile user = null;
-		if (userOverride != null && Files.isRegularFile(userOverride))
+		if (userOverride != null && userOverride.isFile())
 		{
-			try (Reader r = Files.newBufferedReader(userOverride, StandardCharsets.UTF_8))
+			try (Reader r = userOverride.openBufferedReader())
 			{
 				user = read(gson, r);
 			}

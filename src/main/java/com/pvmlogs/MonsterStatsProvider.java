@@ -2,13 +2,10 @@ package com.pvmlogs;
 
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,8 +23,8 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.gameval.NpcID;
-import net.runelite.client.RuneLite;
 import net.runelite.client.game.NPCManager;
+import net.runelite.client.util.Filepath;
 import net.runelite.client.util.Text;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -59,6 +56,8 @@ class MonsterStatsProvider
 	// The rules as last loaded, waiting for the monster data they are applied to. Loaded first, since the XP bonus and the
 	// warnings are worked out from both; only ever read through a snapshot. See BossRules.
 	private volatile BossRules loadedRules = BossRules.empty();
+	/** The plugin's data folder, from {@code Plugin.getPluginDirectory}; null if RuneLite could not give one. */
+	private volatile Filepath dataDirectory;
 
 	// The monster data, the rules it was read with, and every cache built from the two, published as one. A lookup reads
 	// this once and works from that snapshot to the end, so nothing it caches can outlive a reload: a scaled copy made from
@@ -85,8 +84,10 @@ class MonsterStatsProvider
 		return data.rules;
 	}
 
-	void startUp()
+	/** Loads the rules and the monster data, caching it in {@code dataDirectory} (which may be null: no cache). */
+	void startUp(Filepath dataDirectory)
 	{
+		this.dataDirectory = dataDirectory;
 		executor.execute(this::loadOrFetch);
 	}
 
@@ -501,31 +502,32 @@ class MonsterStatsProvider
 		return name == null ? "" : Text.removeTags(name).toLowerCase().trim();
 	}
 
-	private Path cacheFile()
+	private Filepath cacheFile()
 	{
-		return new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR), "monsters.json").toPath();
+		final Filepath dir = dataDirectory;
+		return dir == null ? null : dir.joinSegment("monsters.json");
 	}
 
 	/**
 	 * Where a user can drop a boss-rules.json that overrides the bundled one, boss by
-	 * boss: the plugin's data folder, beside the cached monster data.
+	 * boss: the plugin's data folder, beside the cached monster data. Null without one.
 	 */
-	static Path rulesOverrideFile()
+	static Filepath rulesOverrideFile(Filepath dataDirectory)
 	{
-		return new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR), "boss-rules.json").toPath();
+		return dataDirectory == null ? null : dataDirectory.joinSegment("boss-rules.json");
 	}
 
 	private void loadOrFetch()
 	{
-		loadedRules = BossRules.load(gson, rulesOverrideFile());
+		loadedRules = BossRules.load(gson, rulesOverrideFile(dataDirectory));
 		log.debug("PvM Logs: {} boss rule ids from {}", loadedRules.size(), loadedRules.provenance());
-		final Path cache = cacheFile();
+		final Filepath cache = cacheFile();
 		try
 		{
-			if (Files.exists(cache))
+			if (cache != null && cache.exists())
 			{
-				parse(Files.newBufferedReader(cache, StandardCharsets.UTF_8));
-				final long age = System.currentTimeMillis() - Files.getLastModifiedTime(cache).toMillis();
+				parse(cache.openBufferedReader());
+				final long age = System.currentTimeMillis() - cache.getLastModifiedTime().toMillis();
 				if (age < MAX_AGE_MILLIS)
 				{
 					return; // fresh enough
@@ -564,9 +566,12 @@ class MonsterStatsProvider
 						return;
 					}
 					final byte[] bytes = r.body().bytes();
-					final Path cache = cacheFile();
-					Files.createDirectories(cache.getParent());
-					Files.write(cache, bytes);
+					final Filepath cache = cacheFile();
+					if (cache != null)
+					{
+						cache.getParent().createDirectories();
+						cache.write(bytes);
+					}
 					parse(new InputStreamReader(new java.io.ByteArrayInputStream(bytes), StandardCharsets.UTF_8));
 				}
 				catch (Exception e)

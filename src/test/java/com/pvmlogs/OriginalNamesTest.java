@@ -40,6 +40,20 @@ public class OriginalNamesTest
 		assertEquals(DATA_DIR, PvmPerformanceConfig.DATA_DIR);
 	}
 
+	/**
+	 * Since T-009 the plugin's files live in RuneLite's {@code ~/.runelite/plugin-data/<internalName>/}. RuneLite moves
+	 * the old {@code ~/.runelite/pvm-performance-tracker/} there once, but only because the descriptor names it as the
+	 * legacy folder. Dropping that would leave every existing user's history behind.
+	 */
+	@Test
+	public void theOldFolderIsMigrated()
+	{
+		final PluginDescriptor descriptor = PvmPerformancePlugin.class.getAnnotation(PluginDescriptor.class);
+		assertEquals(DATA_DIR, descriptor.legacyDataDirectory());
+		assertEquals(DATA_DIR, descriptor.internalName());
+		assertEquals(DATA_DIR, PvmPerformanceConfig.INTERNAL_NAME);
+	}
+
 	@Test
 	public void displayNameIsTheOriginal() throws IOException
 	{
