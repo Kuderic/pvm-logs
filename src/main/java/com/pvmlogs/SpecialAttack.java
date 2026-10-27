@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import lombok.Getter;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.client.game.ItemVariationMapping;
 
 // Weapons whose special attack changes the max hit, and by how much.
 //
@@ -380,10 +381,19 @@ enum SpecialAttack
 		return this == ABYSSAL_DAGGER;
 	}
 
-	/** The spec for an equipped weapon, or null if it has none that changes the max hit. */
+	/**
+	 * The spec for an equipped weapon, or null if it has none that changes the
+	 * max hit. An id not in the table is looked up again as its base item, by
+	 * RuneLite's own variant table: ornament kits, poisons and the Bounty Hunter
+	 * and league copies share the base weapon's special. Without it the
+	 * tentacle (or) had no spec at all (Eric, 2026-10-26), and the godswords,
+	 * claws and warhammer with their (or) kits, and the poisoned abyssal
+	 * daggers, were scored as if no special had been used.
+	 */
 	static SpecialAttack forItem(int itemId)
 	{
-		return BY_ITEM.get(itemId);
+		final SpecialAttack spec = BY_ITEM.get(itemId);
+		return spec != null ? spec : BY_ITEM.get(ItemVariationMapping.map(itemId));
 	}
 
 	int hits()

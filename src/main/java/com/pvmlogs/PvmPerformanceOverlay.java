@@ -3,6 +3,7 @@ package com.pvmlogs;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,6 +12,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 import javax.inject.Inject;
 import net.runelite.api.Client;
 import net.runelite.client.ui.FontManager;
@@ -35,6 +37,10 @@ class PvmPerformanceOverlay extends OverlayPanel
 	static final int MAX_WIDTH = 400;
 	/** The panel's 4 px border each side plus a 12 px gap between the columns. RuneLite's +14 left only 6. */
 	static final int PADDING = 20;
+	/** PanelComponent's border, both sides together: a line gets the panel's width less this. */
+	static final int BORDER = 8;
+	/** The least gap a shortened name keeps before the figure beside it. */
+	static final int MIN_GAP = 6;
 
 	private final PvmPerformancePlugin plugin;
 	private final PvmPerformanceConfig config;
@@ -87,11 +93,12 @@ class PvmPerformanceOverlay extends OverlayPanel
 		final Encounter room = plugin.getDisplayEncounter();
 		final Font font = graphics.getFont();
 		// Everything that can change what's on show. The tick covers the loadout, the warning and the clock; the fight's
-		// own totals cover a projectile booked or a splat landed between ticks; the rest are the player's choices.
+		// own totals cover a projectile booked or a splat landed between ticks; the rest are the player's choices. The
+		// saved width goes in as a number: RuneLite may resize the Dimension it hands back in place.
 		final List<Object> key = Arrays.asList(client.getTickCount(), fight, fight.isEnded(), fight.getAttacksMade(),
 			fight.getDamageDealt(), fight.getThrallDamage(), fight.getDotDamage(), fight.getHealed(), room,
 			config.overlayExpectedOnly(), config.overlaySessionTotals(), config.raidScope(), config.overlayShowLoadout(),
-			config.overlayLuck(), config.overlayParts(), config.overlayDetails(), font);
+			config.overlayLuck(), config.overlayParts(), config.overlayDetails(), font, savedWidth(getPreferredSize()));
 		final Lines built = lines.get(key, () -> build(graphics, fight, room));
 		if (built == null)
 		{
@@ -166,13 +173,21 @@ class PvmPerformanceOverlay extends OverlayPanel
 		}
 		final FontRoles fonts = FontRoles.of(graphics.getFont());
 		final List<LineComponent> components = new ArrayList<>(rows.size());
+		// A width the player dragged the panel to wins over ours (OverlayPanel.render), and a row wider than it wraps
+		// onto a second line, so the panel grows taller (Eric, 2026-10-26, "Abyssal tentacle (or)"). The attack's name
+		// is shortened to fit instead.
+		final int panelWidth = savedWidth(getPreferredSize());
 		int widest = 0;
-		for (LedgerRows.Row row : rows)
+		for (LedgerRows.Row given : rows)
 		{
-			final Font left = fonts.get(row.leftFont);
-			final Font right = fonts.get(row.rightFont);
-			widest = Math.max(widest, graphics.getFontMetrics(left).stringWidth(Text.removeTags(row.left))
-				+ graphics.getFontMetrics(right).stringWidth(Text.removeTags(row.right)));
+			final Font left = fonts.get(given.leftFont);
+			final Font right = fonts.get(given.rightFont);
+			final FontMetrics leftMetrics = graphics.getFontMetrics(left);
+			final FontMetrics rightMetrics = graphics.getFontMetrics(right);
+			final LedgerRows.Row row = fit(given, t -> leftMetrics.stringWidth(Text.removeTags(t)),
+				rightMetrics.stringWidth(Text.removeTags(given.right)), panelWidth);
+			widest = Math.max(widest, leftMetrics.stringWidth(Text.removeTags(row.left))
+				+ rightMetrics.stringWidth(Text.removeTags(row.right)));
 			components.add(LineComponent.builder()
 				.left(row.left)
 				.right(row.right)
@@ -231,6 +246,31 @@ class PvmPerformanceOverlay extends OverlayPanel
 			average = LedgerHistory.of(new ArrayList<>(history), room);
 		}
 		return average;
+	}
+
+	/** The width the player saved for the panel, or {@link #MAX_WIDTH} when they haven't resized it. */
+	static int savedWidth(Dimension saved)
+	{
+		return saved == null || saved.width <= 0 ? MAX_WIDTH : saved.width;
+	}
+
+	/**
+	 * The row as it fits a panel {@code panelWidth} wide. A row with a short
+	 * form (the attack's name) that's too wide tries the short form, then cuts it
+	 * with "…"; any other row is left to RuneLite, which wraps it.
+	 */
+	static LedgerRows.Row fit(LedgerRows.Row row, ToIntFunction<String> leftWidth, int rightWidth, int panelWidth)
+	{
+		final int room = panelWidth - BORDER - rightWidth - (row.right.isEmpty() ? 0 : MIN_GAP);
+		if (row.shortLeft == null || leftWidth.applyAsInt(row.left) <= room)
+		{
+			return row;
+		}
+		if (leftWidth.applyAsInt(row.shortLeft) <= room)
+		{
+			return row.withLeft(row.shortLeft);
+		}
+		return row.withLeft(LedgerRows.cut(row.shortLeft, leftWidth, room));
 	}
 
 	/** The widest row's two sides plus the padding, held to the standard width and the cap. */

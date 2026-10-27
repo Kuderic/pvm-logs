@@ -63,9 +63,13 @@ public class LedgerHistoryTest
 			newestFirst(kill(110), kill(120), kill(115), kill(130), kill(125)), LIKE, null);
 		assertNotNull(a);
 		assertEquals(5, a.kills);
-		assertEquals(120, a.median, 0.7);
-		assertEquals(115, a.lowerQuartile, 0.7);
-		assertEquals(125, a.upperQuartile, 0.7);
+		assertEquals(120, a.adjusted.median, 0.7);
+		assertEquals(115, a.adjusted.lowerQuartile, 0.7);
+		assertEquals(125, a.adjusted.upperQuartile, 0.7);
+		// Every roll as expected, so the clock's average is the same.
+		assertEquals(120, a.actual.median, 0.7);
+		assertEquals(115, a.actual.lowerQuartile, 0.7);
+		assertEquals(125, a.actual.upperQuartile, 0.7);
 	}
 
 	@Test
@@ -83,7 +87,7 @@ public class LedgerHistoryTest
 			kill(110), kill(120), kill(115), kill(130));
 		assertNull(LedgerHistory.of(history, LIKE, null));
 		history.add(0, kill(125));
-		assertEquals(120, LedgerHistory.of(history, LIKE, null).median, 0.7);
+		assertEquals(120, LedgerHistory.of(history, LIKE, null).adjusted.median, 0.7);
 	}
 
 	@Test
@@ -101,7 +105,7 @@ public class LedgerHistoryTest
 		final LedgerHistory.Average a = LedgerHistory.of(newestFirst(kill(110), died, kill(120), other, kill(115), raid,
 			kill(130), warned, kill(125)), LIKE, null);
 		assertEquals(5, a.kills);
-		assertEquals(120, a.median, 0.7);
+		assertEquals(120, a.adjusted.median, 0.7);
 	}
 
 	@Test
@@ -111,7 +115,7 @@ public class LedgerHistoryTest
 		final List<Fight> history = newestFirst(kill(110), kill(120), kill(115), kill(130), kill(125), now);
 		final LedgerHistory.Average a = LedgerHistory.of(history, LIKE, Collections.singletonList(now));
 		assertEquals(5, a.kills);
-		assertEquals(120, a.median, 0.7);
+		assertEquals(120, a.adjusted.median, 0.7);
 	}
 
 	@Test
@@ -128,7 +132,7 @@ public class LedgerHistoryTest
 		}
 		final LedgerHistory.Average a = LedgerHistory.of(newestFirst(oldestFirst.toArray(new Fight[0])), LIKE, null);
 		assertEquals(20, a.kills);
-		assertEquals(120, a.upperQuartile, 0.7);
+		assertEquals(120, a.adjusted.upperQuartile, 0.7);
 	}
 
 	@Test
@@ -152,7 +156,10 @@ public class LedgerHistoryTest
 			f.end(true, 2L);
 			lucky.add(f);
 		}
-		assertEquals(144, LedgerHistory.of(lucky, LIKE, null).median, 0.01);
+		final LedgerHistory.Average a = LedgerHistory.of(lucky, LIKE, null);
+		assertEquals(144, a.adjusted.median, 0.01);
+		// The clock's own average keeps the luck in: 200 ticks.
+		assertEquals(120, a.actual.median, 0.01);
 	}
 
 	@Test
@@ -188,7 +195,7 @@ public class LedgerHistoryTest
 		final List<Fight> history = newestFirst(oldestFirst.toArray(new Fight[0]));
 		assertEquals(5, LedgerHistory.rooms(history, name).size());
 		// Two fights of 100 ticks each: 120 s a kill.
-		assertEquals(120, LedgerHistory.of(history, new LedgerHistory.Like(name, 2400, true), null).median, 0.01);
+		assertEquals(120, LedgerHistory.of(history, new LedgerHistory.Like(name, 2400, true), null).adjusted.median, 0.01);
 	}
 
 	@Test
@@ -199,7 +206,7 @@ public class LedgerHistoryTest
 			awakened(60));
 		assertNull(LedgerHistory.of(history, LIKE, null));
 		history.add(0, kill(125));
-		assertEquals(120, LedgerHistory.of(history, LIKE, null).median, 0.7);
+		assertEquals(120, LedgerHistory.of(history, LIKE, null).adjusted.median, 0.7);
 		assertNull(LedgerHistory.of(history, new LedgerHistory.Like(BOSS, 1400, true), null));
 	}
 
@@ -209,7 +216,7 @@ public class LedgerHistoryTest
 		final List<Fight> history = newestFirst(kill(110), kill(120), kill(115), kill(130), duo(60), duo(60));
 		assertNull(LedgerHistory.of(history, LIKE, null));
 		history.add(0, kill(125));
-		assertEquals(120, LedgerHistory.of(history, LIKE, null).median, 0.7);
+		assertEquals(120, LedgerHistory.of(history, LIKE, null).adjusted.median, 0.7);
 		assertNull(LedgerHistory.of(history, new LedgerHistory.Like(BOSS, 700, false), null));
 	}
 
@@ -225,7 +232,7 @@ public class LedgerHistoryTest
 		final List<Fight> history = newestFirst(duo(100), duo(110), duo(120), duo(130), duo(140), kill(30), now);
 		final LedgerHistory.Average a = LedgerHistory.of(history, room);
 		assertEquals(5, a.kills);
-		assertEquals(120, a.median, 0.7);
+		assertEquals(120, a.adjusted.median, 0.7);
 	}
 
 	private static Fight awakened(double seconds)

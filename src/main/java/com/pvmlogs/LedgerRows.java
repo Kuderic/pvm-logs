@@ -1,10 +1,14 @@
 package com.pvmlogs;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.ToIntFunction;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.runelite.client.util.QuantityFormatter;
 
 /**
@@ -16,7 +20,7 @@ import net.runelite.client.util.QuantityFormatter;
  * <p>
  * The design is "Ledger", {@code claude/specs/overlay-design.md} rev 4 in the
  * project: a top block that keeps its shape from the first attack to the kill
- * (title and clock, Luck, Damage / expected, DPS, Execution and its parts),
+ * (title and clock, Luck, Damage/expected, DPS, Execution and its parts),
  * then a details block once the fight is over.
  */
 final class LedgerRows
@@ -42,6 +46,14 @@ final class LedgerRows
 	static final String UNKNOWN = "—";
 	/** U+00B7, also in the fonts. */
 	private static final String DOT = " · ";
+	/** The main row the details sit under once the fight is over (Eric, 2026-10-26). */
+	static final String SUMMARY = "Summary";
+	/** What a name cut to fit ends with: U+2026, which all three RuneScape fonts have (checked with Font.canDisplay). */
+	static final String CUT = "…";
+	/** An item's variant tag: a space and a bracketed word in lower case, like " (or)" or " (uncharged)". */
+	private static final Pattern VARIANT_TAG = Pattern.compile("\\s*\\([a-z][^()]*\\)");
+	/** {@code weapon (Spell)}, from {@link CombatCalc#attackName(String, String)}; group 1 is the spell. */
+	private static final Pattern SPELL = Pattern.compile(".+ \\(([A-Z][^()]*)\\)");
 	/** Luck, or this kill against your average, that rounds to no seconds either way. */
 	static final String EVEN = "even";
 	/** The stat boost row's figure when more than half the attacks were below base (T-016). */
@@ -88,8 +100,21 @@ final class LedgerRows
 		final FontRole rightFont;
 		final Colour leftColour;
 		final Colour rightColour;
+		/**
+		 * For a left side that may be shortened to fit the panel, the shortest
+		 * form worth showing before it's cut; null for a row RuneLite may wrap.
+		 * The attack's name has one, as its length isn't ours to choose, and so
+		 * does "Damage/expected", one word RuneLite can't wrap.
+		 */
+		final String shortLeft;
 
 		Row(String left, String right, FontRole leftFont, FontRole rightFont, Colour leftColour, Colour rightColour)
+		{
+			this(left, right, leftFont, rightFont, leftColour, rightColour, null);
+		}
+
+		Row(String left, String right, FontRole leftFont, FontRole rightFont, Colour leftColour, Colour rightColour,
+			String shortLeft)
 		{
 			this.left = left == null ? "" : left;
 			this.right = right == null ? "" : right;
@@ -97,6 +122,13 @@ final class LedgerRows
 			this.rightFont = rightFont;
 			this.leftColour = leftColour;
 			this.rightColour = rightColour;
+			this.shortLeft = shortLeft;
+		}
+
+		/** This row with its left side swapped, e.g. for a shortened name; the rest as it was. */
+		Row withLeft(String newLeft)
+		{
+			return new Row(newLeft, right, leftFont, rightFont, leftColour, rightColour, shortLeft);
 		}
 
 		boolean isBlank()
@@ -113,13 +145,13 @@ final class LedgerRows
 			}
 			final Row r = (Row) o;
 			return left.equals(r.left) && right.equals(r.right) && leftFont == r.leftFont && rightFont == r.rightFont
-				&& leftColour == r.leftColour && rightColour == r.rightColour;
+				&& leftColour == r.leftColour && rightColour == r.rightColour && Objects.equals(shortLeft, r.shortLeft);
 		}
 
 		@Override
 		public int hashCode()
 		{
-			return Objects.hash(left, right, leftFont, rightFont, leftColour, rightColour);
+			return Objects.hash(left, right, leftFont, rightFont, leftColour, rightColour, shortLeft);
 		}
 
 		@Override
@@ -806,10 +838,65 @@ final class LedgerRows
 		if (!rows.isEmpty() || l.dps >= 0)
 		{
 			// The expected DPS beside the attack's name rather than under it (Eric, 2026-10-26).
-			rows.add(0, main(l.attack == null || l.attack.isEmpty() ? "Loadout" : l.attack,
-				l.dps >= 0 ? oneDecimal(l.dps) + " DPS" : ""));
+			final String name = attackLabel(l.attack);
+			final String dps = l.dps >= 0 ? oneDecimal(l.dps) + " DPS" : "";
+			rows.add(0, name == null
+				? main("Loadout", dps)
+				: new Row(name, dps, FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL, spellOr(name)));
 		}
 		return rows;
+	}
+
+	/**
+	 * The attack's name as the loadout row shows it: the plugin's
+	 * {@code weapon (Spell)} without the item's variant tags, the bracketed
+	 * lower-case words like {@code (or)}, {@code (i)}, {@code (e)} or
+	 * {@code (uncharged)} that ornament kits and charges add. They don't change
+	 * the attack and widened the panel until the row wrapped (Eric, 2026-10-26:
+	 * "Abyssal tentacle (or)"). A spell's name is capitalised, so it stays. Null
+	 * when there's no name yet.
+	 */
+	static String attackLabel(String attack)
+	{
+		if (attack == null)
+		{
+			return null;
+		}
+		final String label = VARIANT_TAG.matcher(attack).replaceAll("").trim();
+		return label.isEmpty() ? null : label;
+	}
+
+	/**
+	 * The shortest form of the attack's name worth showing before it's cut: the
+	 * spell alone for {@code staff (Spell)}, as the spell is the attack;
+	 * otherwise the name itself.
+	 */
+	static String spellOr(String label)
+	{
+		final Matcher m = SPELL.matcher(label);
+		return m.matches() ? m.group(1) : label;
+	}
+
+	/**
+	 * {@code text} cut from the end, with {@link #CUT} added, until it fits
+	 * {@code room} by {@code width}; whole when it already fits, empty when not
+	 * even the dots do.
+	 */
+	static String cut(String text, ToIntFunction<String> width, int room)
+	{
+		if (width.applyAsInt(text) <= room)
+		{
+			return text;
+		}
+		for (int end = text.length() - 1; end > 0; end--)
+		{
+			final String shorter = text.substring(0, end).trim() + CUT;
+			if (width.applyAsInt(shorter) <= room)
+			{
+				return shorter;
+			}
+		}
+		return width.applyAsInt(CUT) <= room ? CUT : "";
 	}
 
 	private static Row title(State state, int ticks)
@@ -846,8 +933,11 @@ final class LedgerRows
 		}
 		if (!state.warning && !noData)
 		{
-			rows.add(row("Damage / expected", number(n.damage) + " / " + number(Math.round(n.expected)),
-				FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour));
+			// No spaces round the slashes (Eric, 2026-10-26): they only widened the panel. Without them the label is one word,
+			// which RuneLite can't wrap, so on a panel saved too narrow it would run into the figures: it falls back to
+			// "Damage" instead, as the figures still read damage against expected.
+			rows.add(new Row("Damage/expected", number(n.damage) + "/" + number(Math.round(n.expected)),
+				FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour, "Damage"));
 		}
 		else
 		{
@@ -916,14 +1006,10 @@ final class LedgerRows
 		// No "Duration / expected" (Eric, 2026-10-26): the clock is in the title and Luck sits right under it, so the row
 		// only repeated them. In its place, this kill against your usual (Eric, the same evening). v2's " luckier than"
 		// goes under it, coloured by PERCENTILE_BETTER / PERCENTILE_COST.
-		final Row average = average(n, state);
-		if (average != null)
-		{
-			details.add(average);
-		}
+		details.addAll(average(n, state));
 		if (s.expectedHits() > 0)
 		{
-			details.add(detail(" hits / expected", s.hits() + " / " + oneDecimal(s.expectedHits()), Colour.NEUTRAL));
+			details.add(detail(" hits/expected", s.hits() + "/" + oneDecimal(s.expectedHits()), Colour.NEUTRAL));
 		}
 		if (s.thrallDamage() > 0)
 		{
@@ -944,33 +1030,56 @@ final class LedgerRows
 		}
 		if (!details.isEmpty())
 		{
+			// Under a main row of their own (Eric, 2026-10-26), as the parts sit under Execution.
 			rows.add(blank());
+			rows.add(main(SUMMARY, ""));
 			rows.addAll(details);
 		}
 	}
 
 	/**
-	 * " vs your average 1:56 | 7 s faster": this kill's expected time against
-	 * the median of your recent kills' (spec section 5, brought forward from
-	 * v2). Both sides have the luck taken out, so what's left is how you played.
-	 * The seconds always show; Better or Cost only outside your middle half, so
-	 * an ordinary kill reads neutral (Eric, 2026-10-26: "= average" was
-	 * confusing). After a kill only, outside a raid, and not under the warning.
+	 * This kill against your usual (spec section 5, brought forward from v2), as
+	 * three rows (Eric, 2026-10-26: " vs your average 1:59" made no sense as a
+	 * heading):
+	 * <pre>
+	 *  your average   1:59           the median clock of your recent kills
+	 *  this kill      17 s slower    this clock against it
+	 *  luck removed   5 s faster     this clock less its luck, against your
+	 *                                kills' clocks less theirs
+	 * </pre>
+	 * Each compares like with like, so the last is how you played. The seconds
+	 * always show; Better or Cost only outside that row's own middle half.
+	 * After a kill only, outside a raid, and not under the warning.
 	 */
-	static Row average(Numbers n, State state)
+	static List<Row> average(Numbers n, State state)
 	{
 		final LedgerHistory.Average a = state.average;
 		if (a == null || state.view != View.FIGHT || !state.killed || state.warning
 			|| Double.isNaN(n.expectedDuration))
 		{
-			return null;
+			return Collections.emptyList();
 		}
-		final double mine = n.expectedDuration;
-		final String verdict = fasterOrSlower(a.median - mine);
-		final boolean usual = (mine >= a.lowerQuartile && mine <= a.upperQuartile) || verdict.equals(EVEN);
-		final Colour colour = usual ? Colour.NEUTRAL : mine < a.median ? Colour.BETTER : Colour.COST;
-		return detail(" vs your average " + duration(a.median), verdict, colour);
+		return Arrays.asList(
+			detail(" your average", duration(a.actual.median), Colour.NEUTRAL),
+			against(" this kill", n.clock, a.actual, true),
+			against(" luck removed", n.expectedDuration, a.adjusted, false));
 	}
+
+	/**
+	 * {@code mine} against {@code usual}: faster or slower, coloured only outside
+	 * the middle half. {@code onShow} when both times are on the panel in whole
+	 * seconds (the title's clock and " your average" both drop the fraction), so
+	 * the gap is the one the player can work out from them: 2:16 against 1:59 is
+	 * 17 s, not the 18 the fractions would round to.
+	 */
+	private static Row against(String label, double mine, LedgerHistory.Spread usual, boolean onShow)
+	{
+		final String verdict = fasterOrSlower(onShow ? Math.floor(usual.median) - Math.floor(mine) : usual.median - mine);
+		final boolean inside = (mine >= usual.lowerQuartile && mine <= usual.upperQuartile) || verdict.equals(EVEN);
+		final Colour colour = inside ? Colour.NEUTRAL : mine < usual.median ? Colour.BETTER : Colour.COST;
+		return detail(label, verdict, colour);
+	}
+
 
 	// ---- colour rules ----
 
