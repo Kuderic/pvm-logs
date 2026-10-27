@@ -35,6 +35,7 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Hitsplat;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
@@ -63,7 +64,6 @@ import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.gameval.InventoryID;
-import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
@@ -72,6 +72,7 @@ import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.NPCManager;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.hiscore.HiscoreSkillType;
@@ -97,15 +98,6 @@ public class PvmPerformancePlugin extends Plugin
 	// combat NPC, so they fall out here and are handled separately.
 	private static final Set<String> BOSS_NAMES = buildBossNames();
 	private static final List<String> BOSS_DISPLAY_NAMES = buildBossDisplayNames();
-	// Eating and drinking, the one thing worth telling apart from idle time. Getting it wrong only mislabels the
-	// breakdown; the total is measured from the attacks themselves.
-	private static final Set<Integer> CONSUME_ANIMATIONS = Collections.unmodifiableSet(new HashSet<>(
-		Arrays.asList(AnimationID.HUMAN_EAT, AnimationID.HUMAN_KILLERWATT_ELECTRICSHOCK)));
-	// How long an eat holds the attack back. Delays stack within a tick, so a shark chased with a karambwan is three plus
-	// two.
-	private static final int EAT_TICKS = 3;
-	// A combo food adds its own delay on top of the food it chases.
-	private static final int KARAMBWAN_TICKS = 2;
 	// How long a click on an NPC vouches for a projectile aimed at it. A cast is five ticks, so this covers the attack the
 	// click ordered and lapses before the next would be thrown without a further click.
 	private static final int CLICK_ATTRIBUTION_TICKS = 5;
@@ -197,6 +189,10 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Inject
 	private NPCManager npcManager;
+
+	// Only for the names in the EAT debug lines.
+	@Inject
+	private ItemManager itemManager;
 
 	@Inject
 	private ScheduledExecutorService executor;
@@ -347,10 +343,10 @@ public class PvmPerformancePlugin extends Plugin
 	// The attack speed in force on each recent tick, so the wait after an attack is the throwing weapon's and not that of
 	// whatever replaced it.
 	private final Map<Integer, Integer> speedByTick = new HashMap<>();
-	// The tick an eat was last seen on, so the pause it causes is credited to it rather than only the one tick its
-	// animation shows for.
-	private int lastConsumeTick;
-	private int consumeDelay;
+	// Eating, the one thing worth telling apart from idle time: each eat while an attack is pending holds it back by the
+	// food's delay, and the lost ticks inside that delay are the eat's (T-012). Getting it wrong only mislabels the
+	// breakdown; the total is measured from the attacks themselves.
+	private final FoodDelay foodDelay = new FoodDelay();
 
 	// Issue #1: the player's damage counted from the experience it paid, and our thrall, so the thrall's hitsplats can
 	// be told from the player's. See XpLedger and ThrallTracker.
@@ -2098,6 +2094,8 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			attackDueTick = Integer.MIN_VALUE;
 			lastAttackFromProjectile = false;
+			// Nothing pending to hold back, so nothing eaten out of a fight carries into the next one.
+			foodDelay.reset();
 			return;
 		}
 		if (attacked)
@@ -2116,7 +2114,8 @@ public class PvmPerformancePlugin extends Plugin
 			if (attacker == null)
 			{
 				// Thrown during a fight that has since been discarded. The cooldown still has to advance or every tick after
-				// this reads as lost.
+				// this reads as lost, and the eats before it were spent waiting for it.
+				logEats(foodDelay.attackThrown(attackTick, attackDueTick));
 				attackDueTick = attackTick + combatCalc.attackSpeedTicks();
 				lastAttackFromProjectile = attackObservedFromProjectile;
 				combatCalc.noteAttackKind(true);
@@ -2153,9 +2152,10 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				combatCalc.noteMagicResolved(attacker.getTargetIndex(), !dealtDamageOn(attackTick));
 			}
-			// The pause an eat caused is over the moment an attack goes out.
-			lastConsumeTick = 0;
-			consumeDelay = 0;
+			// The pause an eat caused is over the moment an attack goes out. Eats on or before this attack's tick were spent
+			// waiting for it; one after it already belongs to the next cooldown, so it is kept. Settled against the due tick
+			// this attack was waiting on, before it moves.
+			logEats(foodDelay.attackThrown(attackTick, attackDueTick));
 			attacker.recordAttackMade(potted);
 			// The room remembers it too. From here every fight under it counts its ticks from the first one, rather than each
 			// waiting to be attacked in its own right.
@@ -2223,6 +2223,9 @@ public class PvmPerformancePlugin extends Plugin
 		// attack's booking being waited for: holding a trident to the whip's one-tick lag booked a lost tick on every switch
 		// into a projectile.
 		final int lag = pendingBookingLag(lastAttackFromProjectile, combatCalc.isMeleeEquipped());
+		// Eats the bookings can no longer change - on or before the attack tick this one judges - are logged with what they
+		// did to the due tick.
+		logEats(foodDelay.settle(client.getTickCount() - lag, attackDueTick));
 		if (!attackOverdue(client.getTickCount(), attackDueTick, lag))
 		{
 			current.recordTickSpent(roomEngaged);
@@ -2233,7 +2236,10 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("tick SPENT: on cooldown, due %d + lag %d, attacking=%b", attackDueTick, lag, counts);
 			return;
 		}
-		final boolean eating = isConsuming();
+		// Overdue against the weapon's own due tick, so lost either way; the eat's while it is inside the delay the eats
+		// added, idle after it.
+		final int added = foodDelay.added(attackDueTick);
+		final boolean eating = FoodDelay.isEatingTick(client.getTickCount(), attackDueTick, lag, added);
 		current.recordTickLost(eating, roomEngaged);
 		if (counts)
 		{
@@ -2241,11 +2247,14 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		// Only booked once the fight has an attack in it, so a lost tick that is NOT counted says so - that gap is what a
 		// safespot report looks like from here.
-		debug.log("tick LOST%s: overdue since %d + lag %d%s", eating ? " (eating)" : "", attackDueTick, lag,
-			counts ? "" : ", NOT COUNTED - no attack made in this fight yet");
+		debug.log("tick LOST%s: overdue since %d + lag %d%s",
+			eating ? String.format(" (eating %d/%d)",
+				FoodDelay.eatingTickNumber(client.getTickCount(), attackDueTick, lag), added) : "",
+			attackDueTick, lag, counts ? "" : ", NOT COUNTED - no attack made in this fight yet");
 	}
 
-	// Notices food and drink going down, from the click rather than the animation.
+	// Notes a click on food or drink. It counts once the inventory shows it eaten: a click can be refused, and two on one
+	// food in a tick eat it once.
 	private void noteConsumed(MenuOptionClicked event)
 	{
 		final String option = event.getMenuOption();
@@ -2253,33 +2262,37 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
-		final int tick = client.getTickCount();
-		if (tick != lastConsumeTick)
-		{
-			// A new pause rather than a second helping added to the last one.
-			lastConsumeTick = tick;
-			consumeDelay = 0;
-		}
-		consumeDelay += isComboFood(event.getItemId()) ? KARAMBWAN_TICKS : EAT_TICKS;
+		final ItemContainer inventory = client.getItemContainer(InventoryID.INV);
+		foodDelay.clicked(client.getTickCount(), event.getItemId(), option,
+			inventory == null ? 0 : inventory.count(event.getItemId()));
 	}
 
-	private static boolean isComboFood(int itemId)
+	// One line per eat once it is settled: what it was, its delay, and what it did to the attack it came during.
+	private void logEats(List<FoodDelay.Eat> eats)
 	{
-		return itemId == ItemID.TBWT_COOKED_KARAMBWAN || itemId == ItemID.BR_TBWT_COOKED_KARAMBWAN;
-	}
-
-	// Whether this lost tick was spent eating.
-	private boolean isConsuming()
-	{
-		final Player me = client.getLocalPlayer();
-		if (me != null && CONSUME_ANIMATIONS.contains(me.getAnimation()) && consumeDelay == 0)
+		for (FoodDelay.Eat eat : eats)
 		{
-			// Nothing was clicked that this knows about, a wine, a cake, an unfamiliar option. The animation is the weaker
-			// signal but it is better than calling the tick idle.
-			lastConsumeTick = client.getTickCount();
-			consumeDelay = EAT_TICKS;
+			final String name = itemManager.getItemComposition(eat.itemId).getName();
+			if (eat.delay == 0)
+			{
+				debug.log("EAT %s (delay 0) on tick %d, clicked %d: a potion, no delay", name, eat.tick, eat.clickTick);
+			}
+			else if (eat.dueBefore == Integer.MIN_VALUE)
+			{
+				debug.log("EAT %s (delay %d) on tick %d, clicked %d: no attack due, no delay", name, eat.delay, eat.tick,
+					eat.clickTick);
+			}
+			else if (eat.pending)
+			{
+				debug.log("EAT %s (delay %d) on tick %d, clicked %d: attack pending, due %d -> %d", name, eat.delay,
+					eat.tick, eat.clickTick, eat.dueBefore, eat.dueAfter);
+			}
+			else
+			{
+				debug.log("EAT %s (delay %d) on tick %d, clicked %d: weapon ready (due %d), no delay", name, eat.delay,
+					eat.tick, eat.clickTick, eat.dueBefore);
+			}
 		}
-		return lastConsumeTick > 0 && client.getTickCount() - lastConsumeTick < consumeDelay;
 	}
 
 	/**
@@ -2353,6 +2366,9 @@ public class PvmPerformancePlugin extends Plugin
 			// What could have been switched into may have changed. Eating and every switch fire this too, which is why nothing
 			// is counted here - the next attack decides whether anything wearable was gained or lost.
 			combatCalc.invalidateInventory();
+			// A clicked food gone, or bitten, is the eat: this tick is when the game processed it.
+			final ItemContainer inventory = event.getItemContainer();
+			foodDelay.inventoryChanged(client.getTickCount(), inventory::count);
 		}
 	}
 
