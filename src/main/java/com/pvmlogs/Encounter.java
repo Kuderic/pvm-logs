@@ -118,6 +118,17 @@ class Encounter
 		return total;
 	}
 
+	/** Recoil and vengeance across the room's fights, which damage dealt leaves out (T-017 Part B). */
+	int getReflectDamage()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getReflectDamage();
+		}
+		return total;
+	}
+
 	/** Burn, poison, venom and bleed across the room's fights, which damage dealt leaves out. */
 	int getDotDamage()
 	{

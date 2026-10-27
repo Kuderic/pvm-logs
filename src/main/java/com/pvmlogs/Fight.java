@@ -43,6 +43,10 @@ class Fight
 	// Our thrall's damage on this fight's npcs (issue #1). Real damage, so it takes the target's health down, but none of
 	// it is the player's: it is kept out of damage dealt, the hits and everything they feed.
 	private int thrallDamage;
+	// Damage the player reflected onto this fight's target: a recoil ring's and vengeance's (T-017 Part B). Real damage
+	// that takes the target's health down, but no attack threw it, so it is kept out of damage dealt, the hits and the
+	// attacks, like the thrall's. Luck-neutral: nothing expects it and nothing marks it down.
+	private int reflectDamage;
 	// Damage over time on this fight's target: burn (burning claws), poison, venom, bleed. The splat names no owner, so
 	// solo it is the player's and in a group it may be anyone's; either way it is kept out of damage dealt and the hits,
 	// which are the weapon's, and shown on its own.
@@ -208,6 +212,12 @@ class Fight
 	void recordThrallDamage(int amount)
 	{
 		thrallDamage += amount;
+	}
+
+	/** A recoil or vengeance splat on the target. See reflectDamage. */
+	void recordReflectDamage(int amount)
+	{
+		reflectDamage += Math.max(0, amount);
 	}
 
 	/** A burn, poison, venom or bleed splat on the target. See dotDamage. */
