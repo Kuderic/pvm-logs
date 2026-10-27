@@ -366,6 +366,17 @@ class Raid
 		return total;
 	}
 
+	/** Thrall, DoT and reflected damage on the scored fights only (T-025); see {@link Encounter#getScoredThrallDamage()}. */
+	int getScoredOtherDamage()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getScoredThrallDamage() + encounter.getScoredDotDamage() + encounter.getScoredReflectDamage();
+		}
+		return total;
+	}
+
 	/** The ticks of the scored fights only (T-023); see {@link Encounter#getScoredCombatTicks()}. */
 	int getScoredCombatTicks()
 	{
