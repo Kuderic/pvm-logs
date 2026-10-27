@@ -198,6 +198,28 @@ class Raid
 		return total;
 	}
 
+	/** The rooms' damage variance, summed (T-028); -1 when any room's is unknown, or none has one. */
+	double sumExpectedDamageVariance()
+	{
+		double total = 0;
+		boolean any = false;
+		for (Encounter encounter : encounters)
+		{
+			if (encounter.sumExpectedAverageHit() <= 0)
+			{
+				continue;
+			}
+			final double variance = encounter.sumExpectedDamageVariance();
+			if (variance < 0)
+			{
+				return -1;
+			}
+			total += variance;
+			any = true;
+		}
+		return any ? total : -1;
+	}
+
 	double sumExpectedAverageHit()
 	{
 		double total = 0;

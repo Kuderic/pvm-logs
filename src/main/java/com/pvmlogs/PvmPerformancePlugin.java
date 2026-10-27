@@ -257,6 +257,9 @@ public class PvmPerformancePlugin extends Plugin
 	private int expectedSpecMaxHit;
 	private double expectedSpecAccuracy = -1;
 	private double expectedSpecAverageHit = -1;
+	// The variance of each one's damage (T-028), from the same distributions as the averages.
+	private double expectedVariance = -1;
+	private double expectedSpecVariance = -1;
 	private double expectedDps = -1;
 	private SpecialAttack specialAttack;
 	// What the loadout's figures are for, named for the overlay (T-016): weapon, and spell when one is cast.
@@ -332,6 +335,8 @@ public class PvmPerformancePlugin extends Plugin
 	private int attackObservedSpecMaxHit;
 	private double attackObservedSpecAccuracy = -1;
 	private double attackObservedSpecAverageHit = -1;
+	private double attackObservedVariance = -1;
+	private double attackObservedSpecVariance = -1;
 	// The expected figures as they stood on each of the last few ticks, so an attack can be scored with the loadout that
 	// actually threw it. Each row carries the ordinary figures AND the special's, because which of the two an attack needs
 	// is not known until it is booked - see sampleExpected.
@@ -342,7 +347,9 @@ public class PvmPerformancePlugin extends Plugin
 	private static final int EXP_SPEC_MAX = 4;
 	private static final int EXP_SPEC_ACCURACY = 5;
 	private static final int EXP_SPEC_AVERAGE = 6;
-	private static final int EXP_WIDTH = 7;
+	private static final int EXP_VARIANCE = 7;
+	private static final int EXP_SPEC_VARIANCE = 8;
+	private static final int EXP_WIDTH = 9;
 	private final Map<Integer, double[]> expectedByTick = new HashMap<>();
 	// The tick the special attack energy last fell, which is the tick a special went out on. Read back at the booking
 	// rather than at the sample: the varp can arrive after the tick's onGameTick has already run. How long after the
@@ -2137,11 +2144,16 @@ public class PvmPerformancePlugin extends Plugin
 			// Pass the target so salve, dragon hunter and the rest can apply.
 			expectedMaxHit = combatCalc.maxHit(shownId);
 			expectedAccuracy = combatCalc.hitChance(shownId);
-			expectedAverageHit = combatCalc.averageHit(shownId);
+			// Each average and its variance from one working (T-028).
+			final DamageMoments ordinary = combatCalc.averageHitMoments(shownId);
+			final DamageMoments special = combatCalc.specialAttackMoments(shownId);
+			expectedAverageHit = meanOf(ordinary);
 			expectedDps = combatCalc.expectedDps(shownId);
 			expectedSpecMaxHit = combatCalc.specialAttackMaxHit(shownId);
 			expectedSpecAccuracy = combatCalc.specialAttackLandChance(shownId);
-			expectedSpecAverageHit = combatCalc.specialAttackAverageHit(shownId);
+			expectedSpecAverageHit = meanOf(special);
+			expectedVariance = varianceOf(ordinary);
+			expectedSpecVariance = varianceOf(special);
 			expectedForNpcId = shownId;
 			final double[] row = new double[EXP_WIDTH];
 			row[EXP_MAX] = expectedMaxHit;
@@ -2151,6 +2163,8 @@ public class PvmPerformancePlugin extends Plugin
 			row[EXP_SPEC_MAX] = expectedSpecMaxHit;
 			row[EXP_SPEC_ACCURACY] = expectedSpecAccuracy;
 			row[EXP_SPEC_AVERAGE] = expectedSpecAverageHit;
+			row[EXP_VARIANCE] = expectedVariance;
+			row[EXP_SPEC_VARIANCE] = expectedSpecVariance;
 			expectedByTick.put(client.getTickCount(), row);
 			expectedByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
 			// Once per target, and again whenever the version in use changes or the defence has moved (Vardorvis's follows his
@@ -2190,6 +2204,8 @@ public class PvmPerformancePlugin extends Plugin
 			expectedSpecMaxHit = combatCalc.specialAttackMaxHit(-1);
 			expectedSpecAccuracy = -1;
 			expectedSpecAverageHit = -1;
+			expectedVariance = -1;
+			expectedSpecVariance = -1;
 			expectedForNpcId = -1;
 		}
 	}
@@ -2262,6 +2278,17 @@ public class PvmPerformancePlugin extends Plugin
 		return attackOriginTick - specFiredTick <= SPEC_BOOKING_WINDOW_TICKS;
 	}
 
+	// The expected average and its variance from one working (T-028); -1 for each where the target has no stats.
+	private static double meanOf(DamageMoments moments)
+	{
+		return moments == null ? -1 : moments.mean;
+	}
+
+	private static double varianceOf(DamageMoments moments)
+	{
+		return moments == null ? -1 : moments.variance();
+	}
+
 	private void sampleExpected(Fight fight)
 	{
 		// The id the target wore when the attack left, which the tick cache's rows are keyed by too (T-020).
@@ -2272,6 +2299,8 @@ public class PvmPerformancePlugin extends Plugin
 		int specMaxHit = expectedSpecMaxHit;
 		double specLandChance = expectedSpecAccuracy;
 		double specAverageHit = expectedSpecAverageHit;
+		double variance = expectedVariance;
+		double specVariance = expectedSpecVariance;
 		// Prefer the figures from the tick the attack left on. A slow projectile surfaces a tick late, and scoring it with
 		// the loadout held by then credited a shadow's attack to the whip switched to mid-flight.
 		final double[] atOrigin = expectedByTick.get(attackOriginTick);
@@ -2293,6 +2322,8 @@ public class PvmPerformancePlugin extends Plugin
 			specMaxHit = (int) atOrigin[EXP_SPEC_MAX];
 			specLandChance = atOrigin[EXP_SPEC_ACCURACY];
 			specAverageHit = atOrigin[EXP_SPEC_AVERAGE];
+			variance = atOrigin[EXP_VARIANCE];
+			specVariance = atOrigin[EXP_SPEC_VARIANCE];
 		}
 		else if (attackObservedNpcId == targetId && attackObservedAccuracy >= 0)
 		{
@@ -2302,6 +2333,8 @@ public class PvmPerformancePlugin extends Plugin
 			specMaxHit = attackObservedSpecMaxHit;
 			specLandChance = attackObservedSpecAccuracy;
 			specAverageHit = attackObservedSpecAverageHit;
+			variance = attackObservedVariance;
+			specVariance = attackObservedSpecVariance;
 		}
 		else if (atOrigin != null && (int) atOrigin[EXP_NPC_ID] == targetId)
 		{
@@ -2311,6 +2344,8 @@ public class PvmPerformancePlugin extends Plugin
 			specMaxHit = (int) atOrigin[EXP_SPEC_MAX];
 			specLandChance = atOrigin[EXP_SPEC_ACCURACY];
 			specAverageHit = atOrigin[EXP_SPEC_AVERAGE];
+			variance = atOrigin[EXP_VARIANCE];
+			specVariance = atOrigin[EXP_SPEC_VARIANCE];
 		}
 		else if (expectedForNpcId != targetId)
 		{
@@ -2318,10 +2353,14 @@ public class PvmPerformancePlugin extends Plugin
 			// being sampled. Asking for them now is a memo lookup on the tick already being served.
 			maxHit = combatCalc.maxHit(targetId);
 			accuracy = combatCalc.hitChance(targetId);
-			averageHit = combatCalc.averageHit(targetId);
+			final DamageMoments ordinary = combatCalc.averageHitMoments(targetId);
+			final DamageMoments specialMoments = combatCalc.specialAttackMoments(targetId);
+			averageHit = meanOf(ordinary);
 			specMaxHit = combatCalc.specialAttackMaxHit(targetId);
 			specLandChance = combatCalc.specialAttackLandChance(targetId);
-			specAverageHit = combatCalc.specialAttackAverageHit(targetId);
+			specAverageHit = meanOf(specialMoments);
+			variance = varianceOf(ordinary);
+			specVariance = varianceOf(specialMoments);
 		}
 		// Held rather than added, unless the attack has already resolved: an expectation only belongs beside a measured
 		// figure if the attack got the chance to deal it, and a cast still in the air when someone else lands the kill reads
@@ -2343,24 +2382,26 @@ public class PvmPerformancePlugin extends Plugin
 			specFiredTick = Integer.MIN_VALUE;
 			maxHit = specMaxHit;
 			averageHit = specAverageHit;
+			variance = specVariance;
 			expectedChances = specLandChance;
 		}
-		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f",
-			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit);
+		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f, var %.1f",
+			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance);
 		if (attackObservedLag == MELEE_BOOKING_LAG)
 		{
-			fight.recordExpected(maxHit, expectedChances, averageHit);
-			session.recordExpected(expectedChances, averageHit);
+			fight.recordExpected(maxHit, expectedChances, averageHit, variance);
+			session.recordExpected(expectedChances, averageHit, variance);
 		}
 		else
 		{
 			pendingSamples.add(new PendingSample(fight,
-				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit));
+				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance));
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
 		attackObservedAccuracy = -1;
 		attackObservedAverageHit = -1;
+		attackObservedVariance = -1;
 	}
 
 	/**
@@ -2380,9 +2421,12 @@ public class PvmPerformancePlugin extends Plugin
 		private final int maxHit;
 		private final double accuracy;
 		private final double averageHit;
+		private final double variance;
 
-		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit)
+		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit,
+			double variance)
 		{
+			this.variance = variance;
 			this.fight = fight;
 			this.npcIndex = npcIndex;
 			this.tick = tick;
@@ -2406,9 +2450,9 @@ public class PvmPerformancePlugin extends Plugin
 			pendingSamples.remove(i);
 			if (sample.fight != null)
 			{
-				sample.fight.recordExpected(sample.maxHit, sample.accuracy, sample.averageHit);
+				sample.fight.recordExpected(sample.maxHit, sample.accuracy, sample.averageHit, sample.variance);
 			}
-			session.recordExpected(sample.accuracy, sample.averageHit);
+			session.recordExpected(sample.accuracy, sample.averageHit, sample.variance);
 			return;
 		}
 	}
@@ -3063,10 +3107,14 @@ public class PvmPerformancePlugin extends Plugin
 		attackObservedNpcId = npcId;
 		attackObservedMaxHit = combatCalc.maxHit(npcId);
 		attackObservedAccuracy = combatCalc.hitChance(npcId);
-		attackObservedAverageHit = combatCalc.averageHit(npcId);
+		final DamageMoments ordinary = combatCalc.averageHitMoments(npcId);
+		final DamageMoments special = combatCalc.specialAttackMoments(npcId);
+		attackObservedAverageHit = meanOf(ordinary);
 		attackObservedSpecMaxHit = combatCalc.specialAttackMaxHit(npcId);
 		attackObservedSpecAccuracy = combatCalc.specialAttackLandChance(npcId);
-		attackObservedSpecAverageHit = combatCalc.specialAttackAverageHit(npcId);
+		attackObservedSpecAverageHit = meanOf(special);
+		attackObservedVariance = varianceOf(ordinary);
+		attackObservedSpecVariance = varianceOf(special);
 		// A weapon swapped on a tick is not wielded until the next one, so an attack thrown on the tick of a switch used what
 		// was held before it. The client shows the new weapon immediately, which is why the figures have to come from the
 		// tick before the change rather than from now. This holds for every switch, not only one that lands on a melee
@@ -3086,6 +3134,8 @@ public class PvmPerformancePlugin extends Plugin
 					attackObservedSpecMaxHit = (int) earlier[EXP_SPEC_MAX];
 					attackObservedSpecAccuracy = earlier[EXP_SPEC_ACCURACY];
 					attackObservedSpecAverageHit = earlier[EXP_SPEC_AVERAGE];
+					attackObservedVariance = earlier[EXP_VARIANCE];
+					attackObservedSpecVariance = earlier[EXP_SPEC_VARIANCE];
 					break;
 				}
 			}
@@ -3645,12 +3695,14 @@ public class PvmPerformancePlugin extends Plugin
 			// Its own figures, not the primary target's. A negative accuracy means this npc has no stats, and then it lends
 			// its damage without lending an expectation - the same rule the primary target follows.
 			final double accuracy = combatCalc.hitChance(npc.getId());
-			final double average = combatCalc.averageHit(npc.getId());
+			final DamageMoments moments = combatCalc.averageHitMoments(npc.getId());
+			final double average = meanOf(moments);
 			if (accuracy >= 0 && average >= 0 && current.isScored())
 			{
 				final double chances = CombatCalc.landChance(accuracy, combatCalc.hitsPerAttack(npc.getId()));
-				current.recordExpected(combatCalc.maxHit(npc.getId()), chances, average);
-				session.recordExpected(chances, average);
+				final double variance = varianceOf(moments);
+				current.recordExpected(combatCalc.maxHit(npc.getId()), chances, average, variance);
+				session.recordExpected(chances, average, variance);
 			}
 		}
 		drain.onMyHitsplat(npc, damage);
@@ -3939,6 +3991,23 @@ public class PvmPerformancePlugin extends Plugin
 		return StatsCheck.accuracyVerdict(fight);
 	}
 
+	/**
+	 * The fight's luck as a percentile (T-028): the player's damage A against the
+	 * expected E, over the spread √V of the same attacks, z and Φ(z). Thrall, DoT
+	 * and reflected damage are in neither A nor E. Attacks still in the air are in
+	 * neither yet.
+	 */
+	static String luckLine(Fight fight)
+	{
+		final double variance = fight.damageVariance();
+		final double z = DamageMoments.z(fight.getDamageDealt(), fight.getSumExpectedAverageHit(), variance);
+		return String.format("LUCK %s (npc %d)%s: A %d, E %.1f, sd %s, z %s, percentile %s",
+			fight.getTargetName(), fight.getTargetId(), fight.isScored() ? "" : " (unscored)", fight.getDamageDealt(),
+			fight.getSumExpectedAverageHit(), variance < 0 ? "unknown" : String.format("%.1f", Math.sqrt(variance)),
+			Double.isNaN(z) ? "unknown" : String.format("%+.2f", z),
+			Double.isNaN(z) ? "unknown" : String.format("%.1f%%", 100 * DamageMoments.phi(z)));
+	}
+
 	private void finalizeFight(boolean died, long now, String reason)
 	{
 		finalizeFight(died, now, reason, false);
@@ -3960,6 +4029,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.getTargetName(), current.getTargetId(), reason, current.getAttempts(), current.getAttacksMade(),
 			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
 			current.getCombatTicks(), current.getSumExpectedAverageHit());
+		debug.log("%s", luckLine(current));
 		closeTargetHealth(died);
 		debug.log("%s", DamageTaken.summary(current));
 		current.end(died, now);

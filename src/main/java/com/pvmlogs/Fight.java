@@ -103,6 +103,11 @@ class Fight
 	// Accuracy and average hit need target data, so they can be missing while the max hit is known, and are counted
 	// separately.
 	private int expectedTargetSamples;
+	// The variance of each attack's damage, from the distribution its average came from, summed over the same attacks
+	// (T-028), and how many carried one. A fight saved before T-028 has none, so its spread is unknown rather than nought:
+	// see damageVariance().
+	private double sumExpectedDamageVariance;
+	private int expectedVarianceSamples;
 
 	// What the attacks were set up to deal, against what they would have set up properly. The ratio prices each slip in
 	// damage rather than counting alike.
@@ -403,6 +408,15 @@ class Fight
 	 */
 	void recordExpected(int maxHit, double accuracy, double averageHit)
 	{
+		recordExpected(maxHit, accuracy, averageHit, -1);
+	}
+
+	/**
+	 * As above, with the variance of the attack's damage (T-028); negative when
+	 * it has none, which leaves the fight's spread unknown.
+	 */
+	void recordExpected(int maxHit, double accuracy, double averageHit, double damageVariance)
+	{
 		if (maxHit > 0)
 		{
 			sumExpectedMaxHit += maxHit;
@@ -416,7 +430,33 @@ class Fight
 			sumExpectedLandedVariance += landed * (1 - landed);
 			sumExpectedAverageHit += averageHit;
 			expectedTargetSamples++;
+			if (damageVariance >= 0)
+			{
+				sumExpectedDamageVariance += damageVariance;
+				expectedVarianceSamples++;
+			}
 		}
+	}
+
+	/**
+	 * The variance of the damage the attacks were expected to deal, summed
+	 * (T-028): what a luck percentile divides by. -1 when unknown, because an
+	 * attack in it had no figure (a fight saved before T-028) or none was made.
+	 */
+	double damageVariance()
+	{
+		return expectedTargetSamples > 0 && expectedVarianceSamples == expectedTargetSamples
+			? sumExpectedDamageVariance : -1;
+	}
+
+	/**
+	 * The share of fights with these same attacks that would have dealt less
+	 * (T-028): Φ of the player's damage against the expected, over the spread.
+	 * -1 when the spread is unknown.
+	 */
+	double luckPercentile()
+	{
+		return DamageMoments.percentile(damageDealt, sumExpectedAverageHit, damageVariance());
 	}
 
 	/** Mean expected max hit over the attacks made, or -1 if never sampled. */
