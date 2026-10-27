@@ -4,6 +4,8 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import javax.inject.Inject;
 import net.runelite.client.ui.FontManager;
@@ -31,6 +33,13 @@ class PvmPerformanceOverlay extends OverlayPanel
 
 	private final PvmPerformancePlugin plugin;
 	private final PvmPerformanceConfig config;
+
+	// Your average on the room on show, kept until the room or the history changes: it reads up to 500 saved fights, and
+	// render runs every frame.
+	private Encounter averageRoom;
+	private int averageHistorySize = -1;
+	private Fight averageHistoryHead;
+	private LedgerHistory.Average average;
 
 	@Inject
 	PvmPerformanceOverlay(PvmPerformancePlugin plugin, PvmPerformanceConfig config)
@@ -95,8 +104,10 @@ class PvmPerformanceOverlay extends OverlayPanel
 			else if (room != null)
 			{
 				scope = LedgerRows.of(room);
+				final boolean killed = fight.isEnded() && room.isKilled();
 				state = LedgerRows.State.fight(room.getName(), fight.isEnded(), room.isKilled(), warning)
-					.withLoadout(loadout());
+					.withLoadout(loadout())
+					.withAverage(killed && room.getRaid() == null ? average(room) : null);
 			}
 			else
 			{
@@ -129,6 +140,24 @@ class PvmPerformanceOverlay extends OverlayPanel
 		}
 		panelComponent.setPreferredSize(new Dimension(width(widest), 0));
 		return super.render(graphics);
+	}
+
+	/** Your average on this room, from the saved fights; worked out again only when the room or the history changes. */
+	private LedgerHistory.Average average(Encounter room)
+	{
+		final List<Fight> history = plugin.getHistory();
+		// The iterator is a snapshot of the list, so a history cleared from the side panel mid-frame can't throw here.
+		final Iterator<Fight> newest = history.iterator();
+		final Fight head = newest.hasNext() ? newest.next() : null;
+		final int size = history.size();
+		if (room != averageRoom || size != averageHistorySize || head != averageHistoryHead)
+		{
+			averageRoom = room;
+			averageHistorySize = size;
+			averageHistoryHead = head;
+			average = LedgerHistory.of(new ArrayList<>(history), room.getName(), room.getFights());
+		}
+		return average;
 	}
 
 	/** The widest row's two sides plus the padding, held to the standard width and the cap. */

@@ -33,6 +33,10 @@ final class LedgerRows
 	static final double PERCENTILE_BETTER = 0.60;
 	/** ...and Cost at or under this one. */
 	static final double PERCENTILE_COST = 0.40;
+	/** " vs your average" is the median of this many of your latest kills of the boss... */
+	static final int AVERAGE_OF_LAST = 20;
+	/** ...and shows once there are this many (metrics spec, decision 5's sample). */
+	static final int AVERAGE_FROM_KILLS = 5;
 
 	/** An unknown value. U+2014 is in all three RuneScape fonts; arrows and bullets are not. */
 	static final String UNKNOWN = "—";
@@ -500,9 +504,17 @@ final class LedgerRows
 		/** {@code getStatsWarning(fight) != null}: the expected side can't be believed. */
 		final boolean warning;
 		final Loadout loadout;
+		/** Your usual expected time on this boss, or null with too few kills to say. */
+		final LedgerHistory.Average average;
 
 		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
 			Loadout loadout)
+		{
+			this(view, name, count, ended, killed, warning, loadout, null);
+		}
+
+		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
+			Loadout loadout, LedgerHistory.Average average)
 		{
 			this.view = view;
 			this.name = name == null ? "" : name;
@@ -511,6 +523,7 @@ final class LedgerRows
 			this.killed = killed;
 			this.warning = warning;
 			this.loadout = loadout == null ? new Loadout() : loadout;
+			this.average = average;
 		}
 
 		static State preAttack(String name, Loadout loadout)
@@ -552,7 +565,13 @@ final class LedgerRows
 		/** The same state with the loadout's figures, shown at the bottom while a fight runs. */
 		State withLoadout(Loadout loadout)
 		{
-			return new State(view, name, count, ended, killed, warning, loadout);
+			return new State(view, name, count, ended, killed, warning, loadout, average);
+		}
+
+		/** The same state with your usual time on the boss, for the details after a kill. */
+		State withAverage(LedgerHistory.Average average)
+		{
+			return new State(view, name, count, ended, killed, warning, loadout, average);
 		}
 	}
 
@@ -685,7 +704,7 @@ final class LedgerRows
 		top(rows, n, state, settings);
 		if (settings.details && state.ended)
 		{
-			details(rows, scope);
+			details(rows, n, scope, state);
 		}
 		// The loadout at the bottom while fighting (Eric, 2026-10-26): before the first attack the panel is barely up, since
 		// the fight opens on targeting and the attack follows a tick or two later. The warning at the top covers it.
@@ -822,11 +841,17 @@ final class LedgerRows
 		rows.add(detail(label, partValue(share, cost), costing ? Colour.COST : Colour.NEUTRAL));
 	}
 
-	private static void details(List<Row> rows, Scope s)
+	private static void details(List<Row> rows, Numbers n, Scope s, State state)
 	{
 		final List<Row> details = new ArrayList<>();
 		// No "Duration / expected" (Eric, 2026-10-26): the clock is in the title and Luck sits right under it, so the row
-		// only repeated them. A history row (this kill against your average) is planned for this spot, above the hits.
+		// only repeated them. In its place, this kill against your usual (Eric, the same evening). v2's " luckier than"
+		// goes under it, coloured by PERCENTILE_BETTER / PERCENTILE_COST.
+		final Row average = average(n, state);
+		if (average != null)
+		{
+			details.add(average);
+		}
 		if (s.expectedHits() > 0)
 		{
 			details.add(detail(" hits / expected", s.hits() + " / " + oneDecimal(s.expectedHits()), Colour.NEUTRAL));
@@ -853,6 +878,29 @@ final class LedgerRows
 			rows.add(blank());
 			rows.addAll(details);
 		}
+	}
+
+	/**
+	 * " vs your average 1:56 | 7 s faster": this kill's expected time against
+	 * the median of your recent kills' (spec section 5, brought forward from
+	 * v2). Both sides have the luck taken out, so what's left is how you played.
+	 * Better or Cost only outside your middle half; inside it, "= average".
+	 * After a kill only, outside a raid, and not under the warning.
+	 */
+	static Row average(Numbers n, State state)
+	{
+		final LedgerHistory.Average a = state.average;
+		if (a == null || state.view != View.FIGHT || !state.killed || state.warning
+			|| Double.isNaN(n.expectedDuration))
+		{
+			return null;
+		}
+		final double mine = n.expectedDuration;
+		final long seconds = roundHalfAway(Math.abs(mine - a.median));
+		final boolean usual = (mine >= a.lowerQuartile && mine <= a.upperQuartile) || seconds == 0;
+		final String verdict = usual ? "= average" : seconds + " s " + (mine < a.median ? "faster" : "slower");
+		final Colour colour = usual ? Colour.NEUTRAL : mine < a.median ? Colour.BETTER : Colour.COST;
+		return detail(" vs your average " + duration(a.median), verdict, colour);
 	}
 
 	// ---- colour rules ----

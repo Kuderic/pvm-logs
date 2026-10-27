@@ -1864,6 +1864,12 @@ public class PvmPerformancePlugin extends Plugin
 		return session;
 	}
 
+	/** The saved fights, newest first, read-only: the overlay's " vs your average" row reads them (T-014). */
+	List<Fight> getHistory()
+	{
+		return Collections.unmodifiableList(history);
+	}
+
 	/** Starts the trip totals over, from the side panel. */
 	void resetSession()
 	{

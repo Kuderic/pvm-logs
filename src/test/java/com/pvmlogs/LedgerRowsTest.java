@@ -265,6 +265,50 @@ public class LedgerRowsTest
 		assertEquals(d(" hits / expected", "32 / 30.2"), rows.get(10));
 	}
 
+	// ---- your average (Eric, 2026-10-26) ----
+
+	private static List<Row> deadWith(LedgerHistory.Average average)
+	{
+		return build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false).withAverage(average));
+	}
+
+	@Test
+	public void fasterThanYourAverage()
+	{
+		// This kill at average luck: 122.45 s. Your median 2:10, middle half 2:05 to 2:15: 8 s faster, outside it.
+		final List<Row> rows = deadWith(new LedgerHistory.Average(130, 125, 135, 12));
+		assertEquals(b("", ""), rows.get(9));
+		assertEquals(d(" vs your average 2:10", "8 s faster", BETTER), rows.get(10));
+		assertEquals(d(" hits / expected", "32 / 30.2"), rows.get(11));
+	}
+
+	@Test
+	public void slowerThanYourAverage()
+	{
+		assertTrue(deadWith(new LedgerHistory.Average(110, 105, 115, 5))
+			.contains(d(" vs your average 1:50", "12 s slower", COST)));
+	}
+
+	@Test
+	public void insideYourMiddleHalfIsAverage()
+	{
+		assertTrue(deadWith(new LedgerHistory.Average(124, 120, 128, 20))
+			.contains(d(" vs your average 2:04", "= average", NEUTRAL)));
+	}
+
+	@Test
+	public void theAverageOnlyFollowsAKill()
+	{
+		final LedgerHistory.Average a = new LedgerHistory.Average(130, 125, 135, 12);
+		final List<Row> ended = build(LedgerExamples.kill(), State.fight("Vardorvis", true, false, false).withAverage(a));
+		final List<Row> warned = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, true).withAverage(a));
+		final List<Row> running = build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false).withAverage(a));
+		for (List<Row> rows : Arrays.asList(ended, warned, running, deadWith(null)))
+		{
+			assertFalse(rows.stream().anyMatch(row -> row.left.startsWith(" vs your average")));
+		}
+	}
+
 	@Test
 	public void noDetailsToShowAddsNoBlankRow()
 	{

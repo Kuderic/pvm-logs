@@ -38,8 +38,9 @@ public final class LedgerPictures
 		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis", tentacle), all));
 		s.put("2-mid", LedgerRows.build(LedgerExamples.midFight(),
 			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
-		s.put("3-dead", LedgerRows.build(LedgerExamples.kill(),
-			LedgerRows.State.fight("Vardorvis", true, true, false), all));
+		// Illustrative average: a median of 2:10 over 12 kills, middle half 2:05 to 2:15.
+		s.put("3-dead", LedgerRows.build(LedgerExamples.kill(), LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(130, 125, 135, 12)), all));
 		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
 			LedgerRows.State.fight("Vardorvis", true, false, false), all));
 		s.put("5-trip", LedgerRows.build(LedgerExamples.trip(), LedgerRows.State.trip(6, false, false), all));
