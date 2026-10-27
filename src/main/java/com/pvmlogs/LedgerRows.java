@@ -696,15 +696,15 @@ final class LedgerRows
 		switch (state.view)
 		{
 			case TRIP:
-				return row("Trip" + DOT + plural(state.count, "kill"), longClock(ticks),
+				return row("Trip" + DOT + plural(state.count, "kill"), clock(ticks),
 					FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
 			case RAID:
-				return row(raidShortName(state.name) + DOT + plural(state.count, "room"), longClock(ticks),
+				return row(raidShortName(state.name) + DOT + plural(state.count, "room"), clock(ticks),
 					FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
 			default:
 				final String name = !state.ended ? state.name
 					: state.name + (state.killed ? " (dead)" : " (ended)");
-				return row(name, state.ended ? endedClock(ticks) : runningClock(ticks),
+				return row(name, clock(ticks),
 					FontRole.EMPHASIS, FontRole.BODY, state.killed ? Colour.DEAD : Colour.NEUTRAL, Colour.NEUTRAL);
 		}
 	}
@@ -785,17 +785,16 @@ final class LedgerRows
 	private static void details(List<Row> rows, Numbers n, Scope s, State state, Settings settings)
 	{
 		rows.add(blank());
-		final boolean ticked = state.view == View.FIGHT;
-		final String clock = ticked ? endedClock(s.combatTicks()) : longClock(s.combatTicks());
+		final String time = clock(s.combatTicks());
 		if (settings.luck)
 		{
 			// Hidden with Luck under the warning, since it is the clock plus the luck.
 			final boolean known = !Double.isNaN(n.expectedDuration) && !state.warning;
-			rows.add(body("Duration / expected", clock + " / " + (known ? duration(n.expectedDuration) : UNKNOWN)));
+			rows.add(body("Duration / expected", time + " / " + (known ? duration(n.expectedDuration) : UNKNOWN)));
 		}
 		else
 		{
-			rows.add(body("Duration", clock));
+			rows.add(body("Duration", time));
 		}
 		// v2 (Analyzer) rows go here, under Duration / expected: " vs your average" and " luckier than", coloured by
 		// PERCENTILE_BETTER / PERCENTILE_COST. Not built in v1.
@@ -900,23 +899,14 @@ final class LedgerRows
 		return QuantityFormatter.formatNumber(v);
 	}
 
-	/** A fight's clock while it runs: {@code m:ss}, counted up (a stopwatch, never ahead of itself). */
-	static String runningClock(int ticks)
+	/**
+	 * Every clock: whole seconds, {@code m:ss}, {@code h:mm:ss} past an hour,
+	 * counted up like a stopwatch. No tenths once the fight ends either (Eric,
+	 * 2026-10-26), so it reads like the expected time beside it.
+	 */
+	static String clock(int ticks)
 	{
-		return hms(tenths(ticks) / 10);
-	}
-
-	/** A fight's clock once it ends: {@code m:ss.s}, exact, since a tick is 0.6 s. */
-	static String endedClock(int ticks)
-	{
-		final long tenths = tenths(ticks);
-		return hms(tenths / 10) + "." + tenths % 10;
-	}
-
-	/** A trip's or raid's fighting time: {@code m:ss}, {@code h:mm:ss} past an hour. */
-	static String longClock(int ticks)
-	{
-		return hms(tenths(ticks) / 10);
+		return hms(Math.max(0, (long) ticks) * 6 / 10);
 	}
 
 	/**
@@ -926,11 +916,6 @@ final class LedgerRows
 	static String duration(double seconds)
 	{
 		return hms((long) Math.floor(Math.max(0, seconds)));
-	}
-
-	private static long tenths(int ticks)
-	{
-		return Math.max(0, (long) ticks) * 6;
 	}
 
 	private static String hms(long seconds)

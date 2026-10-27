@@ -139,7 +139,7 @@ public class LedgerRowsTest
 	{
 		// Eric's kill. 688 + thrall 80 - healed 68 = 700, the boss's HP.
 		assertRows(Arrays.asList(
-			r("Vardorvis (dead)", "2:16.8", EMPHASIS, BODY, DEAD, NEUTRAL),
+			r("Vardorvis (dead)", "2:16", EMPHASIS, BODY, DEAD, NEUTRAL),
 			emph("Luck", "-14 s", COST),
 			emph("Damage / expected", "688 / 778", COST),
 			b("DPS", "5.0"),
@@ -149,7 +149,7 @@ public class LedgerRowsTest
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
 			b("", ""),
-			b("Duration / expected", "2:16.8 / 2:02"),
+			b("Duration / expected", "2:16 / 2:02"),
 			d(" hits / expected", "32 / 30.2"),
 			d(" thrall dmg", "80"),
 			d(" boss healed", "68"),
@@ -161,7 +161,7 @@ public class LedgerRowsTest
 	public void endedWithoutAKill()
 	{
 		assertRows(Arrays.asList(
-			title("Vardorvis (ended)", "2:20.4"),
+			title("Vardorvis (ended)", "2:20"),
 			emph("Luck", "-15 s", COST),
 			emph("Damage / expected", "721 / 812", COST),
 			b("DPS", "5.1"),
@@ -171,7 +171,7 @@ public class LedgerRowsTest
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
 			b("", ""),
-			b("Duration / expected", "2:20.4 / 2:05"),
+			b("Duration / expected", "2:20 / 2:05"),
 			d(" hits / expected", "26 / 33.7"),
 			d(" burn/poison dmg", "40"),
 			d(" boss healed", "71")),
@@ -263,7 +263,7 @@ public class LedgerRowsTest
 	public void statsUnreliableHidesTheExpectedDurationToo()
 	{
 		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, true));
-		assertTrue(rows.contains(b("Duration / expected", "2:16.8 / —")));
+		assertTrue(rows.contains(b("Duration / expected", "2:16 / —")));
 	}
 
 	@Test
@@ -304,7 +304,7 @@ public class LedgerRowsTest
 		s.luck = false;
 		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false), s);
 		assertFalse(rows.stream().anyMatch(row -> row.left.equals("Luck")));
-		assertTrue(rows.contains(b("Duration", "2:16.8")));
+		assertTrue(rows.contains(b("Duration", "2:16")));
 		// Damage keeps its colour: it says how the fight is going on its own.
 		assertTrue(rows.contains(emph("Damage / expected", "688 / 778", COST)));
 	}
@@ -483,19 +483,18 @@ public class LedgerRowsTest
 	@Test
 	public void clocks()
 	{
-		// While fighting: whole seconds, counted up.
-		assertEquals("1:13", LedgerRows.runningClock(122));
-		assertEquals("0:00", LedgerRows.runningClock(0));
-		assertEquals("0:01", LedgerRows.runningClock(3));
-		// Ended: exact to the tenth.
-		assertEquals("2:16.8", LedgerRows.endedClock(228));
-		assertEquals("2:20.4", LedgerRows.endedClock(234));
-		assertEquals("0:00.6", LedgerRows.endedClock(1));
-		// Trip and raid: m:ss, h:mm:ss past an hour.
-		assertEquals("12:40", LedgerRows.longClock(1267));
-		assertEquals("59:59", LedgerRows.longClock(5999));
-		assertEquals("1:00:00", LedgerRows.longClock(6000));
-		assertEquals("1:05:03", LedgerRows.longClock(6505));
+		// Whole seconds, counted up, while fighting and once ended alike: no tenths.
+		assertEquals("1:13", LedgerRows.clock(122));
+		assertEquals("0:00", LedgerRows.clock(0));
+		assertEquals("0:00", LedgerRows.clock(1));
+		assertEquals("0:01", LedgerRows.clock(2));
+		assertEquals("2:16", LedgerRows.clock(228));
+		assertEquals("2:01", LedgerRows.clock(202));
+		// m:ss, h:mm:ss past an hour.
+		assertEquals("12:40", LedgerRows.clock(1267));
+		assertEquals("59:59", LedgerRows.clock(5999));
+		assertEquals("1:00:00", LedgerRows.clock(6000));
+		assertEquals("1:05:03", LedgerRows.clock(6505));
 		// Expected times: whole seconds, cut down like the clock.
 		assertEquals("2:02", LedgerRows.duration(122.45));
 		assertEquals("12:26", LedgerRows.duration(746.68));
@@ -507,9 +506,9 @@ public class LedgerRowsTest
 	{
 		assertEquals(title("Vardorvis", "1:13"),
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)).get(0));
-		assertEquals(r("Vardorvis (dead)", "2:16.8", EMPHASIS, BODY, DEAD, NEUTRAL),
+		assertEquals(r("Vardorvis (dead)", "2:16", EMPHASIS, BODY, DEAD, NEUTRAL),
 			build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false)).get(0));
-		assertEquals(title("Vardorvis (ended)", "2:16.8"),
+		assertEquals(title("Vardorvis (ended)", "2:16"),
 			build(LedgerExamples.kill(), State.fight("Vardorvis", true, false, false)).get(0));
 		// Not dead while it runs, whatever the room says.
 		assertEquals(title("Vardorvis", "2:16"),
