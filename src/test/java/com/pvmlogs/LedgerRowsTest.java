@@ -179,7 +179,7 @@ public class LedgerRowsTest
 			d(" hits/expected", "32/30.2"),
 			d(" thrall dmg", "80"),
 			d(" boss healed", "68"),
-			d(" eating", "7 ticks")),
+			d(" eating time", "4 s")),
 			build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false)));
 	}
 
@@ -226,7 +226,7 @@ public class LedgerRowsTest
 			d(" hits/expected", "161/158.7"),
 			d(" thrall dmg", "290"),
 			d(" burn/poison dmg", "60"),
-			d(" eating", "11 ticks")),
+			d(" eating time", "7 s")),
 			build(LedgerExamples.trip(), State.trip(6, false, false)));
 	}
 
@@ -419,66 +419,36 @@ public class LedgerRowsTest
 		return build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false).withAverage(average));
 	}
 
-	/** Your average: the clock's median and quartiles, then the same with the luck taken out. */
-	private static LedgerHistory.Average average(double clock, double clockLow, double clockHigh,
-		double adjusted, double adjustedLow, double adjustedHigh)
+	/** Your average: the clock's median and quartiles. */
+	private static LedgerHistory.Average average(double clock, double clockLow, double clockHigh)
 	{
-		return new LedgerHistory.Average(new LedgerHistory.Spread(clock, clockLow, clockHigh),
-			new LedgerHistory.Spread(adjusted, adjustedLow, adjustedHigh), 12);
+		return new LedgerHistory.Average(new LedgerHistory.Spread(clock, clockLow, clockHigh), 12);
 	}
 
 	@Test
-	public void yourAverageThenThisKillThenWithTheLuckRemoved()
+	public void yourAverageHeadsTheSummary()
 	{
-		// Eric, 2026-10-26: " vs your average 1:59" made no sense as a heading. This kill: 136.8 s on the clock (2:16),
-		// 122.45 s with its luck taken out. Your clock's median 1:59, middle half 1:55 to 2:05: 17 s slower, outside it.
-		// With the luck taken out your median is 2:10, middle half 2:05 to 2:15: 8 s faster, outside that too.
-		final List<Row> rows = deadWith(average(119, 115, 125, 130, 125, 135));
+		// Eric, 2026-10-26: " vs your average 1:59" made no sense as a heading; 2026-10-27: no " this kill",
+		// " luck removed" or " luckier than" with it. The median clock, cut to whole seconds like the title's.
+		final List<Row> rows = deadWith(average(119.9, 115, 125));
 		assertEquals(b("", ""), rows.get(10));
 		assertEquals(main("Summary", ""), rows.get(11));
 		assertEquals(d(" your average", "1:59"), rows.get(12));
-		assertEquals(d(" this kill", "17 s slower", COST), rows.get(13));
-		assertEquals(d(" luck removed", "8 s faster", BETTER), rows.get(14));
-		assertEquals(d(" hits/expected", "32/30.2"), rows.get(15));
-	}
-
-	@Test
-	public void thisKillIsTheGapBetweenTheTwoClocksOnShow()
-	{
-		// 2:16 (136.8 s) against a median of 1:58.9: both read in whole seconds, so it's the 18 s between 2:16 and 1:58,
-		// not the 17.9 the fractions give, nor 19.
-		assertTrue(deadWith(average(118.9, 115, 125, 130, 125, 135)).contains(d(" this kill", "18 s slower", COST)));
-		assertTrue(deadWith(average(119, 115, 125, 130, 125, 135)).contains(d(" your average", "1:59")));
-		// The same whole second reads even.
-		assertTrue(deadWith(average(136.9, 130, 140, 130, 125, 135)).contains(d(" this kill", "even")));
-	}
-
-	@Test
-	public void slowerThanYourAverageWithTheLuckRemoved()
-	{
-		// 122.45 against 1:50: 12 s slower. The clock, 2:16 against 2:20, is 4 s faster but inside your middle half.
-		final List<Row> rows = deadWith(average(140, 135, 145, 110, 105, 115));
-		assertTrue(rows.contains(d(" luck removed", "12 s slower", COST)));
-		assertTrue(rows.contains(d(" this kill", "4 s faster", NEUTRAL)));
-	}
-
-	@Test
-	public void insideYourMiddleHalfReadsNeutral()
-	{
-		assertTrue(deadWith(average(119, 115, 125, 124, 120, 128)).contains(d(" luck removed", "2 s faster", NEUTRAL)));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(13));
+		assertFalse(rows.stream().anyMatch(row -> row.left.equals(" this kill") || row.left.equals(" luck removed")
+			|| row.left.equals(" luckier than")));
 	}
 
 	@Test
 	public void theAverageOnlyFollowsAKill()
 	{
-		final LedgerHistory.Average a = average(119, 115, 125, 130, 125, 135);
+		final LedgerHistory.Average a = average(119, 115, 125);
 		final List<Row> ended = build(LedgerExamples.kill(), State.fight("Vardorvis", true, false, false).withAverage(a));
 		final List<Row> warned = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, true).withAverage(a));
 		final List<Row> running = build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false).withAverage(a));
 		for (List<Row> rows : Arrays.asList(ended, warned, running, deadWith(null)))
 		{
-			assertFalse(rows.stream().anyMatch(row -> row.left.equals(" your average") || row.left.equals(" this kill")
-				|| row.left.equals(" luck removed")));
+			assertFalse(rows.stream().anyMatch(row -> row.left.equals(" your average")));
 		}
 	}
 
@@ -568,7 +538,7 @@ public class LedgerRowsTest
 		assertEquals(b("", ""), rows.get(15));
 		assertEquals(main("Summary", ""), rows.get(16));
 		assertEquals(d(" hits/expected", "32/30.2"), rows.get(17));
-		assertEquals(d(" eating", "7 ticks"), rows.get(rows.size() - 1));
+		assertEquals(d(" eating time", "4 s"), rows.get(rows.size() - 1));
 	}
 
 	@Test
@@ -968,11 +938,14 @@ public class LedgerRowsTest
 	}
 
 	@Test
-	public void eatingCountsOneTickSingular()
+	public void eatingTimeIsInSeconds()
 	{
+		// Eric, 2026-10-27: in seconds, like everything else. One tick is 0.6 s, rounded half away from zero.
 		final FakeScope s = LedgerExamples.kill();
 		s.ticksLostEating = 1;
-		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating", "1 tick")));
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating time", "1 s")));
+		s.ticksLostEating = 7;
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating time", "4 s")));
 	}
 
 	@Test
@@ -1069,38 +1042,5 @@ public class LedgerRowsTest
 		close.damage = 417;
 		assertEquals("99%", LedgerRows.luckFigure(new LedgerRows.Numbers(close)));
 		assertEquals("\u2014", LedgerRows.luckFigure(new LedgerRows.Numbers(LedgerExamples.noData())));
-	}
-
-	// ---- luckier than (Eric, 2026-10-27, with the luck %) ----
-
-	private static LedgerHistory.Average averageWithLuck(double... luckShares)
-	{
-		return new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), new LedgerHistory.Spread(130, 125, 135),
-			luckShares, luckShares.length);
-	}
-
-	@Test
-	public void luckierThanFollowsTheAverageRows()
-	{
-		// This kill's luck: -14.35 s over 136.8 s, -10.5% of its clock. Two of five kills were unluckier: 40%, Cost.
-		final List<Row> rows = deadWith(averageWithLuck(-0.20, -0.15, -0.05, 0.0, 0.10));
-		final int removed = rows.indexOf(d(" luck removed", "8 s faster", BETTER));
-		assertEquals(d(" luckier than", "40% of kills", COST), rows.get(removed + 1));
-		assertEquals(d(" hits/expected", "32/30.2"), rows.get(removed + 2));
-	}
-
-	@Test
-	public void luckierThanIsColouredByTheBands()
-	{
-		assertTrue(deadWith(averageWithLuck(-0.30, -0.25, -0.20, -0.15, 0.10))
-			.contains(d(" luckier than", "80% of kills", BETTER)));
-		// Two of four: neither band.
-		assertTrue(deadWith(averageWithLuck(-0.30, -0.20, 0.0, 0.10))
-			.contains(d(" luckier than", "50% of kills", NEUTRAL)));
-		// A tie counts half: 1.5 of 3.
-		assertEquals(0.5, averageWithLuck(0.25, 0.5, 0.75).luckierThan(0.5), 1e-9);
-		// Without the kills' luck, no row.
-		assertFalse(deadWith(average(119, 115, 125, 130, 125, 135)).stream()
-			.anyMatch(row -> row.left.equals(" luckier than")));
 	}
 }
