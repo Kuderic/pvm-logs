@@ -17,6 +17,8 @@ class SessionTotals
 	// dealt like Fight keeps them, and shown beside it (T-014).
 	private int thrallDamage;
 	private int dotDamage;
+	// The damage the player took in the trip's scored fights, fed where Fight's is (T-016).
+	private int damageTaken;
 	private int attempts;
 	private int targets;
 	private int hits;
@@ -62,6 +64,7 @@ class SessionTotals
 		damageDealt = 0;
 		thrallDamage = 0;
 		dotDamage = 0;
+		damageTaken = 0;
 		attempts = 0;
 		targets = 0;
 		hits = 0;
@@ -135,6 +138,12 @@ class SessionTotals
 	void recordDotDamage(int damage)
 	{
 		dotDamage += Math.max(0, damage);
+	}
+
+	/** See {@code Fight.recordDamageTaken}. */
+	void recordDamageTaken(int damage)
+	{
+		damageTaken += Math.max(0, damage);
 	}
 
 	/** Takes back a splat recordAttempt counted, judged within its tick to be the thrall's instead. */

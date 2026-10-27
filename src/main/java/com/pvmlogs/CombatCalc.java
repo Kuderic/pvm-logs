@@ -1291,6 +1291,31 @@ class CombatCalc
 		}
 	}
 
+	/**
+	 * What the loadout attacks with, as the overlay names it (T-016, Eric): the
+	 * weapon, with the spell in brackets when one is cast, e.g. "Purging staff
+	 * (Fire Surge)". A powered staff's own attack names no spell; a manual cast
+	 * names its spell whatever is held. "Unarmed" with nothing in hand.
+	 */
+	String attackName()
+	{
+		final String weapon = weaponName();
+		final AttackStyle style = attackStyle();
+		final Spell spell = style.getAttackType() == AttackType.MAGIC && !"Powered staff".equals(style.getDisplayName())
+			? activeSpell() : null;
+		return attackName(weapon, spell == null ? null : spell.getDisplayName());
+	}
+
+	/** See {@link #attackName()}: either may be null. */
+	static String attackName(String weapon, String spell)
+	{
+		if (spell == null)
+		{
+			return weapon == null ? "Unarmed" : weapon;
+		}
+		return weapon == null ? spell : weapon + " (" + spell + ")";
+	}
+
 	/** The spell being cast, manual taking priority over autocast. */
 	String activeSpellName()
 	{

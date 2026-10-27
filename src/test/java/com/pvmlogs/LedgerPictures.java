@@ -40,7 +40,7 @@ public final class LedgerPictures
 			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
 		// Illustrative average: a median of 2:10 over 12 kills, middle half 2:05 to 2:15.
 		s.put("3-dead", LedgerRows.build(LedgerExamples.kill(), LedgerRows.State.fight("Vardorvis", true, true, false)
-			.withAverage(new LedgerHistory.Average(130, 125, 135, 12)), all));
+			.withLoadout(tentacle).withAverage(new LedgerHistory.Average(130, 125, 135, 12)), all));
 		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
 			LedgerRows.State.fight("Vardorvis", true, false, false), all));
 		s.put("5-trip", LedgerRows.build(LedgerExamples.trip(), LedgerRows.State.trip(6, false, false), all));
@@ -50,6 +50,7 @@ public final class LedgerPictures
 			LedgerRows.State.fight("Vardorvis", false, false, true).withLoadout(tentacle), all));
 		// Without monster data there is no accuracy to show; the max hit is known.
 		final LedgerRows.Loadout noAccuracy = new LedgerRows.Loadout();
+		noAccuracy.attack = "Osmumten's fang";
 		noAccuracy.maxHit = 44;
 		s.put("8-nodata", LedgerRows.build(LedgerExamples.noData(),
 			LedgerRows.State.fight("New boss", false, false, false).withLoadout(noAccuracy), all));
@@ -57,6 +58,12 @@ public final class LedgerPictures
 			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
 		s.put("10-pre-unsure", LedgerRows.build(null,
 			LedgerRows.State.preAttack("Vardorvis", tentacle, true), all));
+		// T-016: brewed down for most of the fight. The word stands in for 0%, the seconds carry the cost.
+		final LedgerExamples.FakeScope brewed = LedgerExamples.midFight();
+		brewed.attacksDrained = 12;
+		brewed.setup(0.95, 0.0, 3.36, 0);
+		s.put("11-drained", LedgerRows.build(brewed,
+			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
 		return s;
 	}
 

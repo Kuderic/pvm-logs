@@ -5,9 +5,14 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
 import javax.inject.Inject;
+import net.runelite.api.Client;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
@@ -33,6 +38,11 @@ class PvmPerformanceOverlay extends OverlayPanel
 
 	private final PvmPerformancePlugin plugin;
 	private final PvmPerformanceConfig config;
+	private final Client client;
+
+	// The panel's lines, built once a tick rather than every frame (T-016): render runs 50+ times a second and the numbers
+	// change at most a few times a tick. Built again whenever the key says something on show may have changed.
+	private final OncePerKey<Lines> lines = new OncePerKey<>();
 
 	// Your average on the room on show, kept until the room or the history changes: it reads up to 500 saved fights, and
 	// render runs every frame.
@@ -42,10 +52,11 @@ class PvmPerformanceOverlay extends OverlayPanel
 	private LedgerHistory.Average average;
 
 	@Inject
-	PvmPerformanceOverlay(PvmPerformancePlugin plugin, PvmPerformanceConfig config)
+	PvmPerformanceOverlay(PvmPerformancePlugin plugin, PvmPerformanceConfig config, Client client)
 	{
 		this.plugin = plugin;
 		this.config = config;
+		this.client = client;
 		setPosition(OverlayPosition.TOP_LEFT);
 	}
 
@@ -74,6 +85,39 @@ class PvmPerformanceOverlay extends OverlayPanel
 		}
 
 		final Encounter room = plugin.getDisplayEncounter();
+		final Font font = graphics.getFont();
+		// Everything that can change what's on show. The tick covers the loadout, the warning and the clock; the fight's
+		// own totals cover a projectile booked or a splat landed between ticks; the rest are the player's choices.
+		final List<Object> key = Arrays.asList(client.getTickCount(), fight, fight.isEnded(), fight.getAttacksMade(),
+			fight.getDamageDealt(), fight.getThrallDamage(), fight.getDotDamage(), fight.getHealed(), room,
+			config.overlayExpectedOnly(), config.overlaySessionTotals(), config.raidScope(), config.overlayShowLoadout(),
+			config.overlayLuck(), config.overlayParts(), config.overlayDetails(), font);
+		final Lines built = lines.get(key, () -> build(graphics, fight, room));
+		if (built == null)
+		{
+			return null;
+		}
+		panelComponent.getChildren().addAll(built.components);
+		panelComponent.setPreferredSize(new Dimension(built.width, 0));
+		return super.render(graphics);
+	}
+
+	/** What one build makes: the line components in order, and the panel's width for them. */
+	static final class Lines
+	{
+		final List<LineComponent> components;
+		final int width;
+
+		Lines(List<LineComponent> components, int width)
+		{
+			this.components = Collections.unmodifiableList(components);
+			this.width = width;
+		}
+	}
+
+	/** The lines for the fight and room on show, or null when there's nothing to show. */
+	private Lines build(Graphics2D graphics, Fight fight, Encounter room)
+	{
 		final boolean warning = plugin.getStatsWarning(fight) != null;
 		LedgerRows.Scope scope = null;
 		final LedgerRows.State state;
@@ -120,8 +164,8 @@ class PvmPerformanceOverlay extends OverlayPanel
 		{
 			return null;
 		}
-		final Font body = graphics.getFont();
-		final FontRoles fonts = FontRoles.of(body);
+		final FontRoles fonts = FontRoles.of(graphics.getFont());
+		final List<LineComponent> components = new ArrayList<>(rows.size());
 		int widest = 0;
 		for (LedgerRows.Row row : rows)
 		{
@@ -129,7 +173,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 			final Font right = fonts.get(row.rightFont);
 			widest = Math.max(widest, graphics.getFontMetrics(left).stringWidth(Text.removeTags(row.left))
 				+ graphics.getFontMetrics(right).stringWidth(Text.removeTags(row.right)));
-			panelComponent.getChildren().add(LineComponent.builder()
+			components.add(LineComponent.builder()
 				.left(row.left)
 				.right(row.right)
 				.leftFont(left)
@@ -138,8 +182,37 @@ class PvmPerformanceOverlay extends OverlayPanel
 				.rightColor(new Color(row.rightColour.rgb))
 				.build());
 		}
-		panelComponent.setPreferredSize(new Dimension(width(widest), 0));
-		return super.render(graphics);
+		return new Lines(components, width(widest));
+	}
+
+	/**
+	 * One value, kept until its key changes. The overlay's lines are one: built
+	 * on the first frame of a tick, reused by the rest of that tick's frames.
+	 */
+	static final class OncePerKey<V>
+	{
+		private boolean held;
+		private Object key;
+		private V value;
+		private int builds;
+
+		V get(Object key, Supplier<V> build)
+		{
+			if (!held || !Objects.equals(key, this.key))
+			{
+				this.key = key;
+				value = build.get();
+				held = true;
+				builds++;
+			}
+			return value;
+		}
+
+		/** How many times it has built, for tests. */
+		int builds()
+		{
+			return builds;
+		}
 	}
 
 	/** Your average on this room, from the saved fights; worked out again only when the room or the history changes. */
@@ -155,7 +228,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 			averageRoom = room;
 			averageHistorySize = size;
 			averageHistoryHead = head;
-			average = LedgerHistory.of(new ArrayList<>(history), room.getName(), room.getFights());
+			average = LedgerHistory.of(new ArrayList<>(history), room);
 		}
 		return average;
 	}
@@ -199,6 +272,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 	private LedgerRows.Loadout loadout()
 	{
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
+		l.attack = plugin.getAttackName();
 		l.maxHit = plugin.getExpectedMaxHit();
 		l.accuracy = plugin.getExpectedAccuracy();
 		l.dps = plugin.getExpectedDps();
@@ -206,6 +280,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 		{
 			l.specMaxHit = plugin.getExpectedSpecMaxHit();
 			l.specAccuracy = plugin.getExpectedSpecAccuracy();
+			l.specAverage = plugin.getExpectedSpecAverageHit();
 		}
 		return l;
 	}

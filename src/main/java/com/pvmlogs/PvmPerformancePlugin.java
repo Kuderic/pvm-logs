@@ -248,6 +248,8 @@ public class PvmPerformancePlugin extends Plugin
 	private double expectedSpecAverageHit = -1;
 	private double expectedDps = -1;
 	private SpecialAttack specialAttack;
+	// What the loadout's figures are for, named for the overlay (T-016): weapon, and spell when one is cast.
+	private String attackName;
 	// Which target the figures above were computed against, so an attack is only sampled with figures that were actually
 	// meant for it.
 	private int expectedForNpcId = -1;
@@ -716,6 +718,10 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// Damage on us during an active fight is attributed to it.
 			current.recordDamageTaken(hitsplat.getAmount(), now);
+			if (current.isScored())
+			{
+				session.recordDamageTaken(hitsplat.getAmount());
+			}
 		}
 	}
 
@@ -1527,6 +1533,7 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final Fight shown = getDisplayFight();
 		specialAttack = combatCalc.specialAttack();
+		attackName = combatCalc.attackName();
 		// for the same reason the prayer is: booking happens a tick or two later, and a trident attack judged at its booking
 		// was judged against the whip switched to by then. Cheap: the search is held until the weapon, style, target or
 		// carried items change.
@@ -3376,6 +3383,12 @@ public class PvmPerformancePlugin extends Plugin
 	double getExpectedSpecAverageHit()
 	{
 		return expectedSpecAverageHit;
+	}
+
+	/** The weapon, and the spell when one is cast, that the loadout's figures are for; null before the first tick. */
+	String getAttackName()
+	{
+		return attackName;
 	}
 
 	/** The equipped weapon's special attack, or null if it has none that hits. */

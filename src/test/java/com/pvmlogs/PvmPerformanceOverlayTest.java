@@ -2,10 +2,12 @@ package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.awt.Font;
+import java.util.Arrays;
 import net.runelite.client.ui.FontManager;
 import org.junit.Test;
 
@@ -144,6 +146,43 @@ public class PvmPerformanceOverlayTest
 		done.end(true, 1L);
 		assertFalse(PvmPerformanceOverlay.isBeforeFirstAttack(done, null));
 		assertFalse(PvmPerformanceOverlay.isBeforeFirstAttack(null, null));
+	}
+
+	// ---- built once a tick (T-016) ----
+
+	@Test
+	public void twoFramesInOneTickBuildOnce()
+	{
+		final PvmPerformanceOverlay.OncePerKey<String> lines = new PvmPerformanceOverlay.OncePerKey<>();
+		final int[] built = {0};
+		final java.util.function.Supplier<String> build = () -> "lines " + ++built[0];
+		assertEquals("lines 1", lines.get(Arrays.asList(1000, "Vardorvis", 370), build));
+		assertEquals("lines 1", lines.get(Arrays.asList(1000, "Vardorvis", 370), build));
+		assertEquals(1, lines.builds());
+		// A splat landing within the tick changes the key, and so does the next tick.
+		assertEquals("lines 2", lines.get(Arrays.asList(1000, "Vardorvis", 388), build));
+		assertEquals("lines 3", lines.get(Arrays.asList(1001, "Vardorvis", 388), build));
+		assertEquals(3, lines.builds());
+	}
+
+	@Test
+	public void nothingToShowIsKeptToo()
+	{
+		final PvmPerformanceOverlay.OncePerKey<String> lines = new PvmPerformanceOverlay.OncePerKey<>();
+		assertNull(lines.get(Arrays.asList(1000), () -> null));
+		assertNull(lines.get(Arrays.asList(1000), () -> "built again"));
+		assertEquals(1, lines.builds());
+	}
+
+	// ---- the loadout's name (T-016) ----
+
+	@Test
+	public void theLoadoutIsNamedForTheWeaponAndTheSpellCast()
+	{
+		assertEquals("Abyssal tentacle", CombatCalc.attackName("Abyssal tentacle", null));
+		assertEquals("Purging staff (Fire Surge)", CombatCalc.attackName("Purging staff", "Fire Surge"));
+		assertEquals("Ice Barrage", CombatCalc.attackName(null, "Ice Barrage"));
+		assertEquals("Unarmed", CombatCalc.attackName(null, null));
 	}
 
 	// ---- trip totals ----

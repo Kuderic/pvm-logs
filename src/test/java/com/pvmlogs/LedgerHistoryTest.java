@@ -17,6 +17,8 @@ import org.junit.Test;
 public class LedgerHistoryTest
 {
 	private static final String BOSS = "Vardorvis";
+	/** Post-quest Vardorvis, solo: what the test kills are. */
+	private static final LedgerHistory.Like LIKE = new LedgerHistory.Like(BOSS, 700, true);
 
 	/**
 	 * A kill with no luck in it (damage = expected), so its expected time is its
@@ -58,7 +60,7 @@ public class LedgerHistoryTest
 	public void fiveNewKillsMakeAnAverage()
 	{
 		final LedgerHistory.Average a = LedgerHistory.of(
-			newestFirst(kill(110), kill(120), kill(115), kill(130), kill(125)), BOSS, null);
+			newestFirst(kill(110), kill(120), kill(115), kill(130), kill(125)), LIKE, null);
 		assertNotNull(a);
 		assertEquals(5, a.kills);
 		assertEquals(120, a.median, 0.7);
@@ -69,7 +71,7 @@ public class LedgerHistoryTest
 	@Test
 	public void fourAreNotEnough()
 	{
-		assertNull(LedgerHistory.of(newestFirst(kill(110), kill(120), kill(115), kill(130)), BOSS, null));
+		assertNull(LedgerHistory.of(newestFirst(kill(110), kill(120), kill(115), kill(130)), LIKE, null));
 	}
 
 	@Test
@@ -79,9 +81,9 @@ public class LedgerHistoryTest
 		// side came from older boss stats.
 		final List<Fight> history = newestFirst(fight(BOSS, 300, false, true), fight(BOSS, 300, false, true),
 			kill(110), kill(120), kill(115), kill(130));
-		assertNull(LedgerHistory.of(history, BOSS, null));
+		assertNull(LedgerHistory.of(history, LIKE, null));
 		history.add(0, kill(125));
-		assertEquals(120, LedgerHistory.of(history, BOSS, null).median, 0.7);
+		assertEquals(120, LedgerHistory.of(history, LIKE, null).median, 0.7);
 	}
 
 	@Test
@@ -97,7 +99,7 @@ public class LedgerHistoryTest
 		final Fight warned = kill(300);
 		warned.addStatsWarning("placeholder stats");
 		final LedgerHistory.Average a = LedgerHistory.of(newestFirst(kill(110), died, kill(120), other, kill(115), raid,
-			kill(130), warned, kill(125)), BOSS, null);
+			kill(130), warned, kill(125)), LIKE, null);
 		assertEquals(5, a.kills);
 		assertEquals(120, a.median, 0.7);
 	}
@@ -107,7 +109,7 @@ public class LedgerHistoryTest
 	{
 		final Fight now = kill(60);
 		final List<Fight> history = newestFirst(kill(110), kill(120), kill(115), kill(130), kill(125), now);
-		final LedgerHistory.Average a = LedgerHistory.of(history, BOSS, Collections.singletonList(now));
+		final LedgerHistory.Average a = LedgerHistory.of(history, LIKE, Collections.singletonList(now));
 		assertEquals(5, a.kills);
 		assertEquals(120, a.median, 0.7);
 	}
@@ -124,7 +126,7 @@ public class LedgerHistoryTest
 		{
 			oldestFirst.add(kill(120));
 		}
-		final LedgerHistory.Average a = LedgerHistory.of(newestFirst(oldestFirst.toArray(new Fight[0])), BOSS, null);
+		final LedgerHistory.Average a = LedgerHistory.of(newestFirst(oldestFirst.toArray(new Fight[0])), LIKE, null);
 		assertEquals(20, a.kills);
 		assertEquals(120, a.upperQuartile, 0.7);
 	}
@@ -150,7 +152,7 @@ public class LedgerHistoryTest
 			f.end(true, 2L);
 			lucky.add(f);
 		}
-		assertEquals(144, LedgerHistory.of(lucky, BOSS, null).median, 0.01);
+		assertEquals(144, LedgerHistory.of(lucky, LIKE, null).median, 0.01);
 	}
 
 	@Test
@@ -186,7 +188,58 @@ public class LedgerHistoryTest
 		final List<Fight> history = newestFirst(oldestFirst.toArray(new Fight[0]));
 		assertEquals(5, LedgerHistory.rooms(history, name).size());
 		// Two fights of 100 ticks each: 120 s a kill.
-		assertEquals(120, LedgerHistory.of(history, name, null).median, 0.01);
+		assertEquals(120, LedgerHistory.of(history, new LedgerHistory.Like(name, 2400, true), null).median, 0.01);
+	}
+
+	@Test
+	public void anAwakenedKillDoesntCountTowardAPostQuestAverage()
+	{
+		// Same name and NPC id; the boss's full HP tells the versions apart (T-016).
+		final List<Fight> history = newestFirst(kill(110), kill(120), kill(115), kill(130), awakened(60), awakened(60),
+			awakened(60));
+		assertNull(LedgerHistory.of(history, LIKE, null));
+		history.add(0, kill(125));
+		assertEquals(120, LedgerHistory.of(history, LIKE, null).median, 0.7);
+		assertNull(LedgerHistory.of(history, new LedgerHistory.Like(BOSS, 1400, true), null));
+	}
+
+	@Test
+	public void aDuoKillDoesntCountTowardASoloAverage()
+	{
+		final List<Fight> history = newestFirst(kill(110), kill(120), kill(115), kill(130), duo(60), duo(60));
+		assertNull(LedgerHistory.of(history, LIKE, null));
+		history.add(0, kill(125));
+		assertEquals(120, LedgerHistory.of(history, LIKE, null).median, 0.7);
+		assertNull(LedgerHistory.of(history, new LedgerHistory.Like(BOSS, 700, false), null));
+	}
+
+	@Test
+	public void theRoomOnShowSetsWhatCounts()
+	{
+		final Fight now = duo(60);
+		final Encounter room = new Encounter(BOSS, null, 0L);
+		room.add(now);
+		final LedgerHistory.Like like = LedgerHistory.Like.of(room);
+		assertEquals(700, like.maxHp);
+		assertEquals(false, like.solo);
+		final List<Fight> history = newestFirst(duo(100), duo(110), duo(120), duo(130), duo(140), kill(30), now);
+		final LedgerHistory.Average a = LedgerHistory.of(history, room);
+		assertEquals(5, a.kills);
+		assertEquals(120, a.median, 0.7);
+	}
+
+	private static Fight awakened(double seconds)
+	{
+		final Fight f = kill(seconds);
+		f.noteMaxHp(1400);
+		return f;
+	}
+
+	private static Fight duo(double seconds)
+	{
+		final Fight f = kill(seconds);
+		f.recordOthersDamage(50);
+		return f;
 	}
 
 	@Test
@@ -202,7 +255,7 @@ public class LedgerHistoryTest
 	@Test
 	public void nothingToGoOn()
 	{
-		assertNull(LedgerHistory.of(Collections.emptyList(), BOSS, null));
-		assertNull(LedgerHistory.of(null, BOSS, null));
+		assertNull(LedgerHistory.of(Collections.emptyList(), LIKE, null));
+		assertNull(LedgerHistory.of(null, LIKE, null));
 	}
 }

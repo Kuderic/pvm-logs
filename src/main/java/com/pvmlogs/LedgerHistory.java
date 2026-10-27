@@ -27,6 +27,60 @@ final class LedgerHistory
 	{
 	}
 
+	/**
+	 * What makes two kills comparable (T-016): the same room, the same boss
+	 * version, and both solo or both not. Vardorvis Awakened (1,400 HP) and
+	 * post-quest (700 HP) share a name and an NPC id, so the version is told by
+	 * the boss's full HP, the room's largest as the side panel takes it. Any
+	 * other player's damage in the room makes it a group kill. Team size and
+	 * invocations wait for 03's encounter log.
+	 */
+	static final class Like
+	{
+		final String name;
+		final int maxHp;
+		final boolean solo;
+
+		Like(String name, int maxHp, boolean solo)
+		{
+			this.name = name;
+			this.maxHp = maxHp;
+			this.solo = solo;
+		}
+
+		static Like of(Encounter room)
+		{
+			return new Like(room.getName(), maxHp(room), solo(room));
+		}
+
+		boolean matches(Encounter room)
+		{
+			return maxHp == maxHp(room) && solo == solo(room);
+		}
+
+		private static int maxHp(Encounter room)
+		{
+			int hp = -1;
+			for (Fight fight : room.getFights())
+			{
+				hp = Math.max(hp, fight.getMaxHp());
+			}
+			return hp;
+		}
+
+		private static boolean solo(Encounter room)
+		{
+			for (Fight fight : room.getFights())
+			{
+				if (fight.getOthersDamage() > 0)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+	}
+
 	/** The median and quartiles of the sample's expected times, in seconds. */
 	static final class Average
 	{
@@ -44,16 +98,22 @@ final class LedgerHistory
 		}
 	}
 
+	/** Your average on kills like the room on show, which is left out of its own average. */
+	static Average of(List<Fight> history, Encounter current)
+	{
+		return current == null ? null : of(history, Like.of(current), current.getFights());
+	}
+
 	/**
-	 * Your average on the room {@code roomName}, or null with fewer than
-	 * {@link LedgerRows#AVERAGE_FROM_KILLS} kills to go on.
+	 * Your average on kills like {@code like}, or null with fewer than
+	 * {@link LedgerRows#AVERAGE_FROM_KILLS} of them to go on.
 	 *
 	 * @param history the saved fights, newest first, as the plugin keeps them
-	 * @param current the fights of the room on show, which is left out of its own average
+	 * @param current fights to leave out: the room on show
 	 */
-	static Average of(List<Fight> history, String roomName, Collection<Fight> current)
+	static Average of(List<Fight> history, Like like, Collection<Fight> current)
 	{
-		if (history == null || roomName == null)
+		if (history == null || like == null || like.name == null)
 		{
 			return null;
 		}
@@ -64,11 +124,11 @@ final class LedgerHistory
 		}
 		final double[] times = new double[LedgerRows.AVERAGE_OF_LAST];
 		int n = 0;
-		final List<Encounter> rooms = rooms(history, roomName);
+		final List<Encounter> rooms = rooms(history, like.name);
 		for (int i = rooms.size() - 1; i >= 0 && n < times.length; i--)
 		{
 			final Encounter room = rooms.get(i);
-			if (!counts(room, exclude))
+			if (!like.matches(room) || !counts(room, exclude))
 			{
 				continue;
 			}
