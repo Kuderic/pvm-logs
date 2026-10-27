@@ -749,6 +749,23 @@ class CombatCalc
 
 	double averageHit(int npcId)
 	{
+		final DamageMoments moments = averageHitMoments(npcId);
+		return moments == null ? -1 : moments.mean;
+	}
+
+	/**
+	 * The variance of one ordinary attack's damage (T-028), from the same
+	 * distribution {@link #averageHit} averages; -1 where that has no figure.
+	 */
+	double averageHitVariance(int npcId)
+	{
+		final DamageMoments moments = averageHitMoments(npcId);
+		return moments == null ? -1 : moments.variance();
+	}
+
+	/** One ordinary attack's damage as moments: {@link #averageHit}'s working, with the second moment beside it. */
+	DamageMoments averageHitMoments(int npcId)
+	{
 		final double accuracy = hitChance(npcId);
 		if (weaponStyle() == Style.MAGIC)
 		{
@@ -757,9 +774,10 @@ class CombatCalc
 			final MagicDamage magic = magicModel(npcId);
 			if (accuracy < 0 || magic.preHitRoll() <= 0)
 			{
-				return -1;
+				return null;
 			}
-			return accuracy * magic.expectedOnHit(mitigation(npcId), damageCap(npcId), overkillCap(npcId));
+			// T-028: the variance from the same walk, the miss as the accuracy roll in front of it.
+			return magic.onHit(mitigation(npcId), damageCap(npcId), overkillCap(npcId)).landing(accuracy);
 		}
 		// Averages, not best cases: a keris crit or an ahrim's proc raises the max hit but only lifts sustained damage by a
 		// few percent.
@@ -767,21 +785,13 @@ class CombatCalc
 			+ colossalBladeBonus(npcId) + elementalWeaknessBonus(npcId)) * mitigation(npcId);
 		if (accuracy < 0 || averageMax <= 0)
 		{
-			return -1;
+			return null;
 		}
 		final int cap = Math.min(damageCap(npcId), overkillCap(npcId));
 		// A scythe swing is several hits, each rolling its own accuracy and damage, so one attack is expected to deal their
 		// sum. Each max is half the one before ROUNDED DOWN, which is why this walks them rather than multiplying by 1.75: a
 		// 51 max is 51, 25, 12, which is 88 and not 89.25.
-		double ordinary = 0;
-		double max = averageMax;
-		for (int hit = 0; hit < hitsPerAttack(npcId); hit++)
-		{
-			ordinary += cap == Integer.MAX_VALUE
-				? accuracy * (max / 2.0)
-				: accuracy * cappedAverage((int) max, cap);
-			max = Math.floor(max / 2.0);
-		}
+		final DamageMoments ordinary = ordinaryMoments(averageMax, accuracy, hitsPerAttack(npcId), cap);
 
 		final EnchantedBolt bolt = loadedBolt(npcId);
 		if (bolt == null)
@@ -794,15 +804,49 @@ class CombatCalc
 			case RUBY:
 				// Fires regardless of the accuracy roll and replaces the hit entirely, so the two outcomes are weighted rather than
 				// scaled.
-				return procChance * EnchantedBolt.rubyDamage(targetCurrentHp(npcId))
-					+ (1.0 - procChance) * ordinary;
+				return rubyMoments(procChance, EnchantedBolt.rubyDamage(targetCurrentHp(npcId)), ordinary);
 			case DIAMOND:
 				// Also ignores accuracy, but rolls damage normally against a raised max, so a proc always lands.
-				return procChance * (1.15 * averageMax / 2.0) + (1.0 - procChance) * ordinary;
+				return DamageMoments.uniform(1.15 * averageMax).weighted(procChance)
+					.or(ordinary.weighted(1.0 - procChance));
 			default:
 				// Onyx leeches from damage actually dealt, so it needs a hit first.
-				return ordinary * (1.0 + 0.20 * procChance);
+				return onyxMoments(procChance, ordinary);
 		}
+	}
+
+	/**
+	 * Ordinary hits, each with its own accuracy and damage roll, the max halving
+	 * (rounded down) from one to the next: one hit for most weapons, a scythe's
+	 * two or three. Uncapped, the roll keeps the max's fraction, as the average
+	 * always has.
+	 */
+	static DamageMoments ordinaryMoments(double averageMax, double accuracy, int hits, int cap)
+	{
+		DamageMoments total = DamageMoments.ZERO;
+		double max = averageMax;
+		for (int hit = 0; hit < hits; hit++)
+		{
+			final DamageMoments roll = cap == Integer.MAX_VALUE
+				? DamageMoments.uniform(max)
+				: DamageMoments.capped((int) max, cap);
+			total = total.plus(roll.landing(accuracy));
+			max = Math.floor(max / 2.0);
+		}
+		return total;
+	}
+
+	/** A ruby bolt: with the proc's chance its fixed hit replaces the attack, else the attack as it was. */
+	static DamageMoments rubyMoments(double procChance, int rubyDamage, DamageMoments ordinary)
+	{
+		return DamageMoments.fixed(rubyDamage).weighted(procChance).or(ordinary.weighted(1.0 - procChance));
+	}
+
+	/** An onyx bolt: 20% more on a proc, which needs the hit, so the whole attack is scaled with that chance. */
+	static DamageMoments onyxMoments(double procChance, DamageMoments ordinary)
+	{
+		return new DamageMoments(ordinary.mean * (1.0 + 0.20 * procChance),
+			ordinary.times(1.20).second * procChance + ordinary.second * (1.0 - procChance));
 	}
 
 	/**
@@ -2047,23 +2091,37 @@ class CombatCalc
 	 */
 	double specialAttackAverageHit(int npcId)
 	{
+		final DamageMoments moments = specialAttackMoments(npcId);
+		return moments == null ? -1 : moments.mean;
+	}
+
+	/** The variance of one special's damage (T-028), from {@link #specialAttackAverageHit}'s distribution; -1 without one. */
+	double specialAttackVariance(int npcId)
+	{
+		final DamageMoments moments = specialAttackMoments(npcId);
+		return moments == null ? -1 : moments.variance();
+	}
+
+	/** One special's damage as moments: {@link #specialAttackAverageHit}'s working, with the second moment beside it. */
+	DamageMoments specialAttackMoments(int npcId)
+	{
 		final SpecialAttack spec = specialAttack();
 		if (spec == null)
 		{
 			// No special that changes the hit, so activating one deals what an ordinary attack deals.
-			return averageHit(npcId);
+			return averageHitMoments(npcId);
 		}
 		final double accuracy = spec.alwaysHits() ? 1.0 : hitChance(npcId, spec);
 		if (accuracy < 0)
 		{
-			return -1;
+			return null;
 		}
 		// Pulsate alone: fixed damage that no gear, prayer or mitigation touches, and the only hit Verzik's first phase lets
 		// past its cap.
 		if (spec.hasFixedDamage())
 		{
 			final int flatMax = spec.fixedMax();
-			return cappedAverage((int) (flatMax * spec.minFraction()), flatMax,
+			return DamageMoments.capped((int) (flatMax * spec.minFraction()), flatMax,
 				spec.ignoresDamageCap() ? Integer.MAX_VALUE : damageCap(npcId));
 		}
 		// Chance-based gear is worth less over time than it is at the top of the roll, which is the whole reason averageHit
@@ -2080,20 +2138,20 @@ class CombatCalc
 		{
 			final int normalMax = (int) (unmitigatedMaxHit(npcId) * scale);
 			return spec == SpecialAttack.BURNING_CLAWS
-				? burningClawsAverage(normalMax, accuracy, cap)
-				: clawsAverage(normalMax, accuracy, cap);
+				? burningClawsMoments(normalMax, accuracy, cap)
+				: clawsMoments(normalMax, accuracy, cap);
 		}
 		if (spec.binomialAccuracy())
 		{
-			return crimsonKistenAverage((int) (unmitigatedMaxHit(npcId) * scale), accuracy, cap);
+			return crimsonKistenMoments((int) (unmitigatedMaxHit(npcId) * scale), accuracy, cap);
 		}
 		// A special with no damage multipliers of its own - the fang, the bludgeon, the volatile staff - has already had its
 		// max worked out.
 		final int base = spec.hasDamageMultipliers()
 			? unmitigatedMaxHit(npcId)
 			: unmitigatedSpecialAttackMaxHit(npcId);
-		return specAverage(spec.hitMaxima((int) (base * scale)), accuracy, spec.minFraction(),
-			spec.flatMinimum(), cap);
+		return specMoments(spec.hitMaxima((int) (base * scale)), accuracy, spec.minFraction(),
+			spec.flatMinimum(), cap, spec.sharedAccuracyRoll());
 	}
 
 	/**
@@ -2113,13 +2171,32 @@ class CombatCalc
 	static double specAverage(int[] hitMaxima, double accuracy, double minFraction,
 		int flatMinimum, int cap)
 	{
+		return specMoments(hitMaxima, accuracy, minFraction, flatMinimum, cap, false).mean;
+	}
+
+	/**
+	 * {@link #specAverage}'s special as moments. The average is the same either
+	 * way; the spread is not: with {@code sharedRoll} (the abyssal dagger) one
+	 * accuracy roll lands every hitsplat or none, otherwise each hitsplat rolls
+	 * its own, as {@link #specialAttackLandChance} counts them. Each hitsplat's
+	 * damage is its own roll.
+	 */
+	static DamageMoments specMoments(int[] hitMaxima, double accuracy, double minFraction,
+		int flatMinimum, int cap, boolean sharedRoll)
+	{
 		double total = 0;
+		DamageMoments independent = DamageMoments.ZERO;
+		DamageMoments rolls = DamageMoments.ZERO;
 		for (int max : hitMaxima)
 		{
 			final int floor = Math.max(flatMinimum, (int) (max * minFraction));
-			total += accuracy * cappedAverage(Math.min(floor, max), max, cap);
+			final DamageMoments roll = DamageMoments.capped(Math.min(floor, max), max, cap);
+			total += accuracy * roll.mean;
+			independent = independent.plus(roll.landing(accuracy));
+			rolls = rolls.plus(roll);
 		}
-		return total;
+		final double second = sharedRoll ? rolls.landing(accuracy).second : independent.second;
+		return new DamageMoments(total, second);
 	}
 
 	/**
@@ -2133,16 +2210,25 @@ class CombatCalc
 	 */
 	static double crimsonKistenAverage(int normalMaxHit, double accuracy, int cap)
 	{
+		return crimsonKistenMoments(normalMaxHit, accuracy, cap).mean;
+	}
+
+	/** {@link #crimsonKistenAverage} as moments: a mixture over the number of successes, each one band's roll. */
+	static DamageMoments crimsonKistenMoments(int normalMaxHit, double accuracy, int cap)
+	{
 		double expected = 0;
+		double second = 0;
 		for (int hits = 1; hits <= KISTEN_ROLLS; hits++)
 		{
 			final double weight = binomial(KISTEN_ROLLS, hits)
 				* Math.pow(accuracy, hits) * Math.pow(1.0 - accuracy, KISTEN_ROLLS - hits);
 			final double floor = KISTEN_FLOORS[hits - 1];
-			expected += weight * cappedAverage(
+			final DamageMoments band = DamageMoments.capped(
 				(int) (normalMaxHit * floor), (int) (normalMaxHit * (floor + KISTEN_BAND)), cap);
+			expected += weight * band.mean;
+			second += weight * band.second;
 		}
-		return expected;
+		return new DamageMoments(expected, second);
 	}
 
 	/** Ways to choose k of n, for the kisten's four rolls. */
@@ -2174,19 +2260,31 @@ class CombatCalc
 	 */
 	static double clawsAverage(int normalMaxHit, double accuracy, int cap)
 	{
-		final double[] byOutcome = new double[CLAW_SHAPE.length];
+		return clawsMoments(normalMaxHit, accuracy, cap).mean;
+	}
+
+	/**
+	 * {@link #clawsAverage} as moments. An outcome's hitsplats are shares of one
+	 * roll, so they move together ({@link DamageMoments#together}).
+	 */
+	static DamageMoments clawsMoments(int normalMaxHit, double accuracy, int cap)
+	{
+		final DamageMoments[] byOutcome = new DamageMoments[CLAW_SHAPE.length];
 		for (int failed = 0; failed < byOutcome.length; failed++)
 		{
 			final double[] shape = failed < byOutcome.length - 1
 				? Arrays.copyOf(CLAW_SHAPE, byOutcome.length - failed)
 				: CLAW_LAST_RESORT;
-			for (double share : shape)
+			final DamageMoments[] splats = new DamageMoments[shape.length];
+			for (int i = 0; i < shape.length; i++)
 			{
-				byOutcome[failed] += cappedAverage(0, (int) (normalMaxHit * share), cap);
+				splats[i] = DamageMoments.capped(0, (int) (normalMaxHit * shape[i]), cap);
 			}
+			byOutcome[failed] = DamageMoments.together(splats);
 		}
-		// Every roll missed, which is the one outcome that still deals something.
-		return cascadeAverage(accuracy, byOutcome, Math.min(1.0, cap));
+		// Every roll missed, which is the one outcome that still deals something: 0 or 2, alike.
+		final double missMean = Math.min(1.0, cap);
+		return cascadeMoments(accuracy, byOutcome, new DamageMoments(missMean, cap >= 2 ? 2.0 : missMean * missMean));
 	}
 
 	/**
@@ -2209,21 +2307,31 @@ class CombatCalc
 	 */
 	static double burningClawsAverage(int normalMaxHit, double accuracy, int cap)
 	{
-		final double[] byOutcome = new double[BURNING_CLAW_SHAPES.length];
+		return burningClawsMoments(normalMaxHit, accuracy, cap).mean;
+	}
+
+	/** {@link #burningClawsAverage} as moments; an outcome's hitsplats split one roll, so they move together. */
+	static DamageMoments burningClawsMoments(int normalMaxHit, double accuracy, int cap)
+	{
+		final DamageMoments[] byOutcome = new DamageMoments[BURNING_CLAW_SHAPES.length];
 		for (int failed = 0; failed < byOutcome.length; failed++)
 		{
 			final double floor = BURNING_CLAW_FLOORS[failed];
 			final double ceiling = BURNING_CLAW_CEILINGS[failed];
-			for (double share : BURNING_CLAW_SHAPES[failed])
+			final double[] shape = BURNING_CLAW_SHAPES[failed];
+			final DamageMoments[] splats = new DamageMoments[shape.length];
+			for (int i = 0; i < shape.length; i++)
 			{
-				byOutcome[failed] += cappedAverage(
-					(int) (normalMaxHit * floor * share),
-					(int) (normalMaxHit * ceiling * share),
+				splats[i] = DamageMoments.capped(
+					(int) (normalMaxHit * floor * shape[i]),
+					(int) (normalMaxHit * ceiling * shape[i]),
 					cap);
 			}
+			byOutcome[failed] = DamageMoments.together(splats);
 		}
-		// 0, 1 or 2 at 20/40/40, which averages 1.2.
-		return cascadeAverage(accuracy, byOutcome, Math.min(1.2, cap));
+		// 0, 1 or 2 at 20/40/40, which averages 1.2 and squares to 2.
+		final double missMean = Math.min(1.2, cap);
+		return cascadeMoments(accuracy, byOutcome, new DamageMoments(missMean, cap >= 2 ? 2.0 : missMean * missMean));
 	}
 
 	/**
@@ -2232,18 +2340,21 @@ class CombatCalc
 	 *
 	 * <p>Split out because both claws share it and it is the half that is easy
 	 * to get wrong: outcome k is reached only when the first k rolls all missed,
-	 * so its weight is {@code (1-a)^k * a} rather than {@code a}.
+	 * so its weight is {@code (1-a)^k * a} rather than {@code a}. A mixture, so
+	 * the second moments are weighted the same way.
 	 */
-	private static double cascadeAverage(double accuracy, double[] damageByOutcome, double missAverage)
+	private static DamageMoments cascadeMoments(double accuracy, DamageMoments[] byOutcome, DamageMoments miss)
 	{
 		double expected = 0;
+		double second = 0;
 		double reached = 1.0;
-		for (double damage : damageByOutcome)
+		for (DamageMoments outcome : byOutcome)
 		{
-			expected += reached * accuracy * damage;
+			expected += reached * accuracy * outcome.mean;
+			second += reached * accuracy * outcome.second;
 			reached *= 1.0 - accuracy;
 		}
-		return expected + reached * missAverage;
+		return new DamageMoments(expected + reached * miss.mean, second + reached * miss.second);
 	}
 
 	private int computeBaseMaxHit()

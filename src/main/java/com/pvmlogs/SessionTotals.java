@@ -57,6 +57,11 @@ class SessionTotals
 	// weapon's own contribution.
 	private double sumExpectedAccuracy;
 	private double sumExpectedAverageHit;
+	// The variance of each scored attack's damage (T-028), summed beside the expected; see Fight. The trip only lives in
+	// memory, so every attack in it carries one, bar any recorded without (expectedSamples counts both).
+	private double sumExpectedDamageVariance;
+	private int expectedSamples;
+	private int expectedVarianceSamples;
 
 	SessionTotals(long now)
 	{
@@ -101,6 +106,9 @@ class SessionTotals
 		scoredCombatTicks = 0;
 		sumExpectedAccuracy = 0;
 		sumExpectedAverageHit = 0;
+		sumExpectedDamageVariance = 0;
+		expectedSamples = 0;
+		expectedVarianceSamples = 0;
 	}
 
 	void recordFightEnded(boolean died, Fight fight, long now)
@@ -337,11 +345,29 @@ class SessionTotals
 
 	void recordExpected(double accuracy, double averageHit)
 	{
+		recordExpected(accuracy, averageHit, -1);
+	}
+
+	/** As above, with the attack's damage variance (T-028); negative for none. */
+	void recordExpected(double accuracy, double averageHit, double damageVariance)
+	{
 		if (accuracy >= 0 && averageHit >= 0)
 		{
 			sumExpectedAccuracy += accuracy;
 			sumExpectedAverageHit += averageHit;
+			expectedSamples++;
+			if (damageVariance >= 0)
+			{
+				sumExpectedDamageVariance += damageVariance;
+				expectedVarianceSamples++;
+			}
 		}
+	}
+
+	/** The trip's damage variance (T-028), as {@link Fight#damageVariance()}: -1 when unknown or nothing was scored. */
+	double damageVariance()
+	{
+		return expectedSamples > 0 && expectedVarianceSamples == expectedSamples ? sumExpectedDamageVariance : -1;
 	}
 
 	/**

@@ -330,6 +330,31 @@ class Encounter
 		return attempts == 0 ? 0 : (double) getDamageDealt() / attempts;
 	}
 
+	/**
+	 * The scored fights' damage variance, summed (T-028); -1 when any scored fight
+	 * that was attacked has none (saved before T-028), or nothing was.
+	 */
+	double sumExpectedDamageVariance()
+	{
+		double total = 0;
+		boolean any = false;
+		for (Fight fight : fights)
+		{
+			if (!fight.isScored() || fight.getExpectedTargetSamples() == 0)
+			{
+				continue;
+			}
+			final double variance = fight.damageVariance();
+			if (variance < 0)
+			{
+				return -1;
+			}
+			total += variance;
+			any = true;
+		}
+		return any ? total : -1;
+	}
+
 	/** Running total of what each attack was expected to deal, or 0 if untracked. */
 	double sumExpectedAverageHit()
 	{
