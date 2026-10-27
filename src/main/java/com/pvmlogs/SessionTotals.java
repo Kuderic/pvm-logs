@@ -13,6 +13,10 @@ class SessionTotals
 	private int fights;
 	private int kills;
 	private int damageDealt;
+	// Our thrall's damage and damage over time (burn, poison, venom, bleed), fed where Fight's are. Kept out of damage
+	// dealt like Fight keeps them, and shown beside it (T-014).
+	private int thrallDamage;
+	private int dotDamage;
 	private int attempts;
 	private int targets;
 	private int hits;
@@ -54,6 +58,8 @@ class SessionTotals
 		fights = 0;
 		kills = 0;
 		damageDealt = 0;
+		thrallDamage = 0;
+		dotDamage = 0;
 		attempts = 0;
 		targets = 0;
 		hits = 0;
@@ -114,6 +120,18 @@ class SessionTotals
 			hits++;
 		}
 		noteActivity(now);
+	}
+
+	/** See {@code Fight.recordThrallDamage}: real damage, but none of it the player's weapon. */
+	void recordThrallDamage(int damage)
+	{
+		thrallDamage += Math.max(0, damage);
+	}
+
+	/** See {@code Fight.recordDotDamage}. */
+	void recordDotDamage(int damage)
+	{
+		dotDamage += Math.max(0, damage);
 	}
 
 	/** Takes back a splat recordAttempt counted, judged within its tick to be the thrall's instead. */
