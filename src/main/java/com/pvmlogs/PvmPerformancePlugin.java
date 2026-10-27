@@ -32,6 +32,8 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Hitsplat;
+import net.runelite.api.EquipmentInventorySlot;
+import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
@@ -58,6 +60,7 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.api.events.NpcChanged;
 import net.runelite.api.events.NpcSpawned;
+import net.runelite.api.events.OverheadTextChanged;
 import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.AnimationID;
@@ -170,7 +173,9 @@ public class PvmPerformancePlugin extends Plugin
 		+ "attacksMade,attacksPrayed,attacksPotted,attacksSwitched,efficiencyPct,boostPct,boostCostPct,switchCostPct,"
 		+ "thrallDamage,dotDamage,healed,statsWarning,"
 		// T-018, at the end so no older column moves. damageTaken above is hits only from T-018 on.
-		+ "dotTaken,hitsTaken,biggestHitTaken,damageTakenUnprotected\n";
+		+ "dotTaken,hitsTaken,biggestHitTaken,damageTakenUnprotected,"
+		// T-017 Part B: recoil and vengeance, at the end for the same reason.
+		+ "reflectDamage\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -365,6 +370,12 @@ public class PvmPerformancePlugin extends Plugin
 	private final Map<Integer, Integer> weaponByTick = new HashMap<>();
 	// This tick's splats counted beyond their attack's splats, logged once the tick's re-judging is done.
 	private final List<ExtraSplat> extrasThisTick = new ArrayList<>();
+	// Recoil and vengeance (T-017 Part B): which hits taken they have answered. The ring worn at the end of each recent
+	// tick, since the ring of recoil can shatter on the very hit whose recoil is still to land; and whether vengeance was
+	// up, so its varbit falling marks the rebound.
+	private final Reflect reflect = new Reflect();
+	private final Map<Integer, Integer> ringByTick = new HashMap<>();
+	private boolean vengeanceUp;
 
 	/** A splat counted beyond what its attack deals, waiting for the tick's re-judging before it is logged. */
 	private static final class ExtraSplat
@@ -425,6 +436,12 @@ public class PvmPerformancePlugin extends Plugin
 		boolean booked;
 		boolean fromFlight;
 		boolean done;
+		// Taken back from the player at the end of its tick, to the thrall or as a reflection.
+		boolean takenBack;
+		// What the reflection check needs (T-017 Part B): whether the experience paid for exactly this splat, as the
+		// ledger saw it when the splat landed, and whether its npc could be what hit the player.
+		boolean xpExact;
+		boolean couldBeReflected;
 
 		PlayerSplatRecord(int npcIndex, int amount, boolean judged, double thrallProbability, Integer previousSeen,
 			int previousAttackSeenTick)
@@ -592,6 +609,9 @@ public class PvmPerformancePlugin extends Plugin
 		recentSpecDrops.clear();
 		weaponByTick.clear();
 		extrasThisTick.clear();
+		ringByTick.clear();
+		reflect.clear();
+		vengeanceUp = false;
 		lastHitsplatTick.clear();
 		burstLanded.clear();
 		bursts.clear();
@@ -634,6 +654,21 @@ public class PvmPerformancePlugin extends Plugin
 		if (actor instanceof NPC && hitsplat.isMine() && !EncounterGroup.isIgnored(((NPC) actor).getId()))
 		{
 			final NPC npc = (NPC) actor;
+			// Recoil and vengeance first (T-017 Part B): they are isMine() too, and a small recoil would otherwise go to the
+			// thrall gate, or book a blow.
+			final boolean couldBeReflected = hitsplat.getAmount() > 0 && couldHaveHitMe(npc);
+			final boolean xpExact = xpLedger.trusted()
+				&& xpLedger.coverage(hitsplat.getAmount(), client.getTickCount()) == XpLedger.Coverage.EXACT;
+			if (couldBeReflected && !xpExact)
+			{
+				final Reflect.Match match = reflect.claim(client.getTickCount(), hitsplat.getAmount(), this::hitsTakenOn,
+					recoilWorn(client.getTickCount()));
+				if (match != null)
+				{
+					onReflectedSplat(npc, hitsplat, match);
+					return;
+				}
+			}
 			// Issue #1. isMine() passes our thrall's splats too, and nothing on the splat says whose it is, so with a thrall
 			// out each small one is weighed before anything else hears of it. A thrall's splat opens no fight, books no
 			// attack and counts no hit; it still takes the target's health down.
@@ -784,6 +819,8 @@ public class PvmPerformancePlugin extends Plugin
 				splatInFlight.landed = landedAttack;
 				splatInFlight.booked = booked;
 				splatInFlight.fromFlight = arrivedFromFlight;
+				splatInFlight.xpExact = xpExact;
+				splatInFlight.couldBeReflected = couldBeReflected;
 				splatInFlight.done = true;
 				playerSplatsThisTick.add(splatInFlight);
 			}
@@ -830,6 +867,76 @@ public class PvmPerformancePlugin extends Plugin
 	List<Integer> hitsTakenOn(int tick)
 	{
 		return taken.hitsTakenOn(tick);
+	}
+
+	/**
+	 * A splat of mine matched to a hit I took as its recoil or vengeance (T-017
+	 * Part B). Real damage on the npc, so its health goes down; but no attack threw
+	 * it, so it opens no fight, books no attack, counts no hit and is not weapon
+	 * damage. Counted only on the fight's own target: reflected onto anything else,
+	 * it is logged and left.
+	 */
+	private void onReflectedSplat(NPC npc, Hitsplat hitsplat, Reflect.Match match)
+	{
+		final int amount = hitsplat.getAmount();
+		final int tick = client.getTickCount();
+		final boolean ours = current != null && !current.isEnded() && current.getTargetIndex() == npc.getIndex();
+		debug.log("REFLECT %d type %d on %s (npc %d, index %d): %s%s", amount, hitsplat.getHitsplatType(), npc.getName(),
+			npc.getId(), npc.getIndex(), match, ours ? "" : ", not the fight's target: not counted");
+		if (!ours)
+		{
+			return;
+		}
+		if (HitsplatKind.of(true, false, hitsplat.getHitsplatType()) == HitsplatKind.PLAYER)
+		{
+			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
+			health.damage(npc.getIndex(), npc.getId(), amount, tick);
+		}
+		current.recordReflectDamage(amount);
+		if (current.isScored())
+		{
+			session.recordReflectDamage(amount);
+		}
+	}
+
+	/**
+	 * Whether this npc could be what hit me, so a splat of mine on it could be my
+	 * recoil or vengeance: the fight's target, or anything aimed at me.
+	 */
+	private boolean couldHaveHitMe(NPC npc)
+	{
+		final Player me = client.getLocalPlayer();
+		return (current != null && !current.isEnded() && current.getTargetIndex() == npc.getIndex())
+			|| (me != null && npc.getInteracting() == me);
+	}
+
+	/**
+	 * Whether a recoil ring was worn on this tick or the one before: a ring of
+	 * recoil shatters on the hit that uses its last charge, before that hit's
+	 * recoil has landed.
+	 */
+	private boolean recoilWorn(int tick)
+	{
+		if (Reflect.isRecoilRing(wornRingId()))
+		{
+			return true;
+		}
+		for (int t = tick - Reflect.WINDOW_TICKS - 1; t <= tick; t++)
+		{
+			final Integer ring = ringByTick.get(t);
+			if (ring != null && Reflect.isRecoilRing(ring))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private int wornRingId()
+	{
+		final ItemContainer worn = client.getItemContainer(InventoryID.WORN);
+		final Item ring = worn == null ? null : worn.getItem(EquipmentInventorySlot.RING.getSlotIdx());
+		return ring == null ? -1 : ring.getId();
 	}
 
 	/**
@@ -1217,7 +1324,8 @@ public class PvmPerformancePlugin extends Plugin
 				PlayerSplatRecord pick = null;
 				for (PlayerSplatRecord r : playerSplatsThisTick)
 				{
-					if (r.npcIndex == target && r.judged && r.done && !r.fromFlight && r.amount <= thralls.maxHit()
+					if (r.npcIndex == target && r.judged && r.done && !r.takenBack && !r.fromFlight
+						&& r.amount <= thralls.maxHit()
 						&& (pick == null || r.thrallProbability > pick.thrallProbability))
 					{
 						pick = r;
@@ -1231,9 +1339,16 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		finally
 		{
-			playerSplatsThisTick.clear();
-			splatInFlight = null;
-			reportExtras();
+			try
+			{
+				rejudgeReflections(tick);
+			}
+			finally
+			{
+				playerSplatsThisTick.clear();
+				splatInFlight = null;
+				reportExtras();
+			}
 		}
 	}
 
@@ -1274,11 +1389,36 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void giveToThrall(PlayerSplatRecord r, int tick)
 	{
+		final String outcome = takeBackFromPlayer(r, tick);
+		if (current != null && !current.isEnded())
+		{
+			current.recordThrallDamage(r.amount);
+			if (current.isScored())
+			{
+				session.recordThrallDamage(r.amount);
+			}
+		}
+		thralls.noteThrallSplat(r.npcIndex, tick);
+		debug.log("RE-JUDGED hitsplat %d on index %d (was player, thrall p=%.2f): THRALL - its projectile's splat had gone "
+			+ "unclaimed%s", r.amount, r.npcIndex, r.thrallProbability, outcome);
+	}
+
+	/**
+	 * Undoes what a splat given to the player did, within the tick it landed: its
+	 * damage dealt and hit, and, when nothing else of the player's landed on that
+	 * npc this tick, the blow it booked and the burst it began. Health is left
+	 * alone: the splat was real damage on the npc whoever dealt it.
+	 *
+	 * @return what happened to the blow, for the log line
+	 */
+	private String takeBackFromPlayer(PlayerSplatRecord r, int tick)
+	{
+		r.takenBack = true;
 		boolean otherSplat = false;
 		boolean otherLanded = false;
 		for (PlayerSplatRecord o : playerSplatsThisTick)
 		{
-			if (o != r && o.npcIndex == r.npcIndex && o.done)
+			if (o != r && o.npcIndex == r.npcIndex && o.done && !o.takenBack)
 			{
 				otherSplat = true;
 				otherLanded |= o.amount > 0;
@@ -1289,14 +1429,11 @@ public class PvmPerformancePlugin extends Plugin
 		if (current != null && !current.isEnded())
 		{
 			current.revokeDamageDealt(r.amount, hitTaken);
-			current.recordThrallDamage(r.amount);
 			if (current.isScored())
 			{
 				session.revokeAttempt(r.amount, hitTaken);
-				session.recordThrallDamage(r.amount);
 			}
 		}
-		thralls.noteThrallSplat(r.npcIndex, tick);
 		// Nothing else of the player's landed on that npc this tick, so there was no blow: its booking goes, and the
 		// burst it began with it.
 		final boolean unbooked = r.booked && !otherSplat && attackObservedTick == tick;
@@ -1328,9 +1465,42 @@ public class PvmPerformancePlugin extends Plugin
 				lastHitsplatTick.put(r.npcIndex, r.previousSeen);
 			}
 		}
-		debug.log("RE-JUDGED hitsplat %d on index %d (was player, thrall p=%.2f): THRALL - its projectile's splat had gone "
-				+ "unclaimed%s", r.amount, r.npcIndex, r.thrallProbability,
-			unbooked ? "; the blow it booked is withdrawn" : otherSplat ? "; the player's other splat keeps the blow" : "");
+		return unbooked ? "; the blow it booked is withdrawn" : otherSplat ? "; the player's other splat keeps the blow" : "";
+	}
+
+	/**
+	 * Recoil and vengeance whose evidence came later in the tick than their splat
+	 * (T-017 Part B): the hit on the player, or vengeance's varbit, can arrive
+	 * after the splat it set off. Each player's splat this tick not yet taken back
+	 * is asked again, and a match is taken back from the player as reflected
+	 * damage. Run at the top of the tick, after the thrall's re-judging and before
+	 * the tick's blow is booked.
+	 */
+	private void rejudgeReflections(int tick)
+	{
+		for (PlayerSplatRecord r : playerSplatsThisTick)
+		{
+			if (!r.done || r.takenBack || r.fromFlight || !r.couldBeReflected || r.xpExact)
+			{
+				continue;
+			}
+			final Reflect.Match match = reflect.claim(tick, r.amount, this::hitsTakenOn, recoilWorn(tick));
+			if (match == null)
+			{
+				continue;
+			}
+			final String outcome = takeBackFromPlayer(r, tick);
+			if (current != null && !current.isEnded() && current.getTargetIndex() == r.npcIndex)
+			{
+				current.recordReflectDamage(r.amount);
+				if (current.isScored())
+				{
+					session.recordReflectDamage(r.amount);
+				}
+			}
+			debug.log("RE-JUDGED hitsplat %d on index %d (was player): REFLECT, %s%s", r.amount, r.npcIndex, match,
+				outcome);
+		}
 	}
 
 	/**
@@ -1886,6 +2056,7 @@ public class PvmPerformancePlugin extends Plugin
 		// to the new weapon's speed.
 		speedByTick.put(client.getTickCount(), combatCalc.attackSpeedTicks());
 		weaponByTick.put(client.getTickCount(), combatCalc.equippedWeaponId());
+		ringByTick.put(client.getTickCount(), wornRingId());
 		if (combatCalc.isMeleeEquipped())
 		{
 			lastMeleeTick = client.getTickCount();
@@ -1894,6 +2065,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			speedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			weaponByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
+			ringByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 		}
 		if (shown != null)
 		{
@@ -2903,10 +3075,33 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("THRALL resurrection active varbit -> %d", event.getValue());
 			thralls.onResurrectionVarbit(event.getValue() == 1, client.getTickCount());
 		}
+		if (event.getVarbitId() == VarbitID.VENGEANCE_REBOUND)
+		{
+			// Up from the cast until a hit sets it off: it falling is the rebound (T-017 Part B).
+			final boolean up = event.getValue() == 1;
+			debug.log("VENGEANCE varbit -> %d", event.getValue());
+			if (vengeanceUp && !up)
+			{
+				reflect.vengeanceFired(client.getTickCount());
+			}
+			vengeanceUp = up;
+		}
 		// Watched here because the energy falling is what says a special went out, and the player's own specials are not
 		// carried by the party message.
 		drain.onEnergyChanged();
 		noteSpecialEnergy();
+	}
+
+	/** "Taste vengeance!": the player's own words as the rebound goes off, beside the varbit (T-017 Part B). */
+	@Subscribe
+	public void onOverheadTextChanged(OverheadTextChanged event)
+	{
+		if (event.getActor() != null && event.getActor() == client.getLocalPlayer()
+			&& "Taste vengeance!".equals(event.getOverheadText()))
+		{
+			debug.log("VENGEANCE said Taste vengeance!");
+			reflect.vengeanceFired(client.getTickCount());
+		}
 	}
 
 	/**
@@ -3069,6 +3264,9 @@ public class PvmPerformancePlugin extends Plugin
 			lastHitsplatTick.clear();
 			burstLanded.clear();
 			bursts.clear();
+			reflect.clear();
+			ringByTick.clear();
+			vengeanceUp = false;
 			pendingMineHits.clear();
 			damageByIndex.clear();
 			health.clear();
@@ -3435,12 +3633,12 @@ public class PvmPerformancePlugin extends Plugin
 		final int counted = health.damageCounted(index);
 		final int healed = health.healed(index);
 		final int net = counted - healed;
-		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + dot %d + others %d + "
-				+ "unclassified %d, healed %d; on the target %d - %d = %d against %d full hp (%s)%s; bar last read %d, now "
-				+ "%d left (%s)",
+		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + others "
+				+ "%d + unclassified %d, healed %d; on the target %d - %d = %d against %d full hp (%s)%s; bar last read %d, "
+				+ "now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
-			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getDotDamage(),
-			current.getOthersDamage(),
+			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),
+			current.getDotDamage(), current.getOthersDamage(),
 			current.getUnclassifiedDamage(), current.getHealed(), counted, healed, net, full, fullFrom,
 			died && full > 0 ? String.format(", diff %+d (%.1f%%)", net - full, 100.0 * (net - full) / full) : "",
 			health.lastHudHp(index), health.remaining(index, tick), health.source(index, tick));
@@ -4027,7 +4225,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
 			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d%n",
+				+ "%d,%d,%d,%d,%d%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -4059,7 +4257,8 @@ public class PvmPerformancePlugin extends Plugin
 				room.getDotTaken(),
 				room.getHitsTaken(),
 				room.getBiggestHitTaken(),
-				room.getDamageTakenUnprotected());
+				room.getDamageTakenUnprotected(),
+				room.getReflectDamage());
 	}
 
 	static String csvRaidRow(String raidName, int raidRun, List<Encounter> rooms)
@@ -4076,7 +4275,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
 			+ String.format("%s,,,,,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d%n",
+				+ "%d,%d,%d,%d,%d%n",
 				started,
 				raid.getDamageDealt(),
 				raid.getDamageTaken(),
@@ -4107,7 +4306,8 @@ public class PvmPerformancePlugin extends Plugin
 				raid.getDotTaken(),
 				raid.getHitsTaken(),
 				raid.getBiggestHitTaken(),
-				raid.getDamageTakenUnprotected());
+				raid.getDamageTakenUnprotected(),
+				raid.getReflectDamage());
 	}
 
 	private static String csvFightRow(String raidName, int raidRun, Fight fight)
@@ -4122,7 +4322,7 @@ public class PvmPerformancePlugin extends Plugin
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
 		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-			+ "%d,%d,%d,%d%n",
+			+ "%d,%d,%d,%d,%d%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -4158,7 +4358,8 @@ public class PvmPerformancePlugin extends Plugin
 			fight.getDotTaken(),
 			fight.getHitsTaken(),
 			fight.getBiggestHitTaken(),
-			fight.getDamageTakenUnprotected());
+			fight.getDamageTakenUnprotected(),
+			fight.getReflectDamage());
 	}
 
 	/**

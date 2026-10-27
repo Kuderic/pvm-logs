@@ -32,8 +32,10 @@ public class CsvRowTest
 	public void theHeaderNamesEveryColumnOnce()
 	{
 		// attempts and targets are both there now: one throw of chinchompas is one attempt and several targets. T-018 added
-		// four at the end.
-		assertEquals(40, COLUMNS);
+		// four at the end, T-017 Part B one more (reflectDamage).
+		assertEquals(41, COLUMNS);
+		assertEquals("reflectDamage", PvmPerformancePlugin.CSV_HEADER.trim().substring(
+			PvmPerformancePlugin.CSV_HEADER.trim().lastIndexOf(',') + 1));
 	}
 
 	@Test
@@ -99,8 +101,9 @@ public class CsvRowTest
 	public void damageTakenAndItsBreakdownHaveTheirColumns()
 	{
 		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
+		// T-018's four, followed since T-017 Part B by reflectDamage.
 		assertEquals(Arrays.asList("dotTaken", "hitsTaken", "biggestHitTaken", "damageTakenUnprotected"),
-			header.subList(header.size() - 4, header.size()));
+			header.subList(header.size() - 5, header.size() - 1));
 		assertEquals(10, header.indexOf("damageTaken"));
 		final Fight f = fight();
 		f.recordHitTaken(41, true, 700L);

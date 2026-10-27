@@ -54,6 +54,16 @@ class Raid
 		return total;
 	}
 
+	int getReflectDamage()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getReflectDamage();
+		}
+		return total;
+	}
+
 	int getDotDamage()
 	{
 		int total = 0;

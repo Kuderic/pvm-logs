@@ -49,6 +49,9 @@ final class ThrallReplay
 	private static final Pattern RAW = Pattern.compile("^hitsplat (\\d+) type (\\d+) on .*index (\\d+)\\)");
 	private static final Pattern SPECIAL = Pattern.compile("^ +scored as a SPECIAL");
 	private static final Pattern START = Pattern.compile("^fight START .*\\(npc (\\d+),");
+	// T-018's line for a splat on the player; only hits are what recoil and vengeance answer.
+	private static final Pattern TAKEN = Pattern.compile("^TAKEN (\\d+) type \\d+ hit ");
+	private static final Pattern VENGEANCE = Pattern.compile("^VENGEANCE (varbit -> (\\d+)|said )");
 	private static final Set<Integer> NON_ATTACK_ANIMATIONS = new HashSet<>(Arrays.asList(
 		-1, 9047, 9048, 13683, 11595, 13674));
 
@@ -102,10 +105,18 @@ final class ThrallReplay
 	private final Map<Integer, AttackSplats.Burst> bursts = new HashMap<>();
 	private int bookOnTick = Integer.MIN_VALUE;
 	// This tick's player splats, as the plugin keeps them for re-judging: {judged index or -1, npc, amount, booked,
-	// previous seen tick or MIN}.
+	// previous seen tick or MIN, taken back, experience paid exactly}.
 	private final List<int[]> playerSplatsThisTick = new ArrayList<>();
 	/** Splats re-judged to the thrall at the end of their tick. */
 	final List<Judged> rejudged = new ArrayList<>();
+	// Recoil and vengeance (T-017 Part B), as the plugin matches them: the hits taken per tick from the TAKEN lines, and
+	// the rebound from the VENGEANCE lines. The log does not say which ring was worn, so the replay is told.
+	final Reflect reflect = new Reflect();
+	private final Map<Integer, List<Integer>> hitsTaken = new HashMap<>();
+	private boolean recoilWorn;
+	private boolean vengeanceUp;
+	/** Splats taken as recoil or vengeance, as "tick: amount source". */
+	final List<String> reflected = new ArrayList<>();
 	private int targetId = -1;
 	private int fight;
 	// The last thrall seen spawning or claimed, which a projectile naming no source is taken to have come from: these
@@ -166,6 +177,13 @@ final class ThrallReplay
 		return run(lines);
 	}
 
+	/** Replays as if a recoil ring were worn throughout. */
+	ThrallReplay wearingRecoil()
+	{
+		recoilWorn = true;
+		return this;
+	}
+
 	/** Replays log lines written out in a test. */
 	ThrallReplay run(List<String> lines)
 	{
@@ -213,6 +231,26 @@ final class ThrallReplay
 				lastHitsplatTick.clear();
 				burstBooked.clear();
 				bursts.clear();
+			}
+			else if ((e = TAKEN.matcher(body)).find())
+			{
+				hitsTaken.computeIfAbsent(t, k -> new ArrayList<>()).add(Integer.parseInt(e.group(1)));
+			}
+			else if ((e = VENGEANCE.matcher(body)).find())
+			{
+				if (e.group(2) == null)
+				{
+					reflect.vengeanceFired(t);
+				}
+				else
+				{
+					final boolean up = "1".equals(e.group(2));
+					if (vengeanceUp && !up)
+					{
+						reflect.vengeanceFired(t);
+					}
+					vengeanceUp = up;
+				}
 			}
 			else if ((e = XP.matcher(body)).find())
 			{
@@ -295,6 +333,18 @@ final class ThrallReplay
 
 	private void splat(int tick, int amount, int index)
 	{
+		// As the plugin: recoil and vengeance before the thrall gate, unless the experience paid for exactly this splat.
+		final boolean xpExact = ledger.trusted() && ledger.coverage(amount, tick) == XpLedger.Coverage.EXACT;
+		if (amount > 0 && !xpExact)
+		{
+			final Reflect.Match match = reflect.claim(tick, amount,
+				t -> hitsTaken.getOrDefault(t, java.util.Collections.emptyList()), recoilWorn);
+			if (match != null)
+			{
+				reflected.add(tick + ": " + amount + " " + match.source.label);
+				return;
+			}
+		}
 		if (thralls.hasThrall() && amount <= thralls.maxHit())
 		{
 			final ThrallTracker.Evidence ev = new ThrallTracker.Evidence();
@@ -317,7 +367,7 @@ final class ThrallReplay
 				return;
 			}
 			ledger.spend(amount, tick, false);
-			playerSplat(tick, amount, index, judged.size() - 1);
+			playerSplat(tick, amount, index, judged.size() - 1, xpExact);
 		}
 		else
 		{
@@ -326,12 +376,12 @@ final class ThrallReplay
 			{
 				cleanHits.computeIfAbsent(fight, k -> new ArrayList<>()).add(tick);
 			}
-			playerSplat(tick, amount, index, -1);
+			playerSplat(tick, amount, index, -1, xpExact);
 		}
 	}
 
 	// The player's: a burst on one npc is one blow, booked from its first splat.
-	private void playerSplat(int tick, int amount, int index, int judgedAt)
+	private void playerSplat(int tick, int amount, int index, int judgedAt, boolean xpExact)
 	{
 		final Integer seen = lastHitsplatTick.put(index, tick);
 		if (seen == null || tick - seen > 1)
@@ -354,7 +404,7 @@ final class ThrallReplay
 			}
 		}
 		playerSplatsThisTick.add(new int[]{judgedAt, index, amount, booked ? 1 : 0,
-			seen == null ? Integer.MIN_VALUE : seen});
+			seen == null ? Integer.MIN_VALUE : seen, 0, xpExact ? 1 : 0});
 	}
 
 	// As the plugin's rejudgeUnclaimedProjectiles: before the tick's blow is booked.
@@ -365,7 +415,7 @@ final class ThrallReplay
 			int[] pick = null;
 			for (int[] r : playerSplatsThisTick)
 			{
-				if (r[0] >= 0 && r[1] == target && r[2] <= thralls.maxHit()
+				if (r[0] >= 0 && r[5] == 0 && r[1] == target && r[2] <= thralls.maxHit()
 					&& (pick == null || judged.get(r[0]).probability > judged.get(pick[0]).probability))
 				{
 					pick = r;
@@ -381,38 +431,70 @@ final class ThrallReplay
 			judged.set(pick[0], now);
 			rejudged.add(now);
 			thralls.noteThrallSplat(target, tick);
-			boolean other = false;
-			for (int[] o : playerSplatsThisTick)
+			takeBack(pick, tick);
+		}
+	}
+
+	// As the plugin's rejudgeReflections: recoil and vengeance whose evidence came after their splat in the tick.
+	private void rejudgeReflections(int tick)
+	{
+		for (int[] r : playerSplatsThisTick)
+		{
+			if (r[5] == 1 || r[6] == 1 || r[2] <= 0)
 			{
-				other |= o != pick && o[1] == target;
+				continue;
 			}
-			if (other)
+			final Reflect.Match match = reflect.claim(tick, r[2],
+				t -> hitsTaken.getOrDefault(t, java.util.Collections.emptyList()), recoilWorn);
+			if (match != null)
 			{
-				final AttackSplats.Burst burst = bursts.get(target);
-				if (burst != null)
+				reflected.add(tick + ": " + r[2] + " " + match.source.label);
+				if (r[0] >= 0)
 				{
-					burst.takeBack();
+					final Judged was = judged.get(r[0]);
+					judged.set(r[0], new Judged(was.tick, was.amount, was.targetIndex, false, was.probability, was.player,
+						was.fight));
 				}
+				takeBack(r, tick);
+			}
+		}
+	}
+
+	// As the plugin's takeBackFromPlayer.
+	private void takeBack(int[] pick, int tick)
+	{
+		pick[5] = 1;
+		final int target = pick[1];
+		boolean other = false;
+		for (int[] o : playerSplatsThisTick)
+		{
+			other |= o != pick && o[1] == target && o[5] == 0;
+		}
+		if (other)
+		{
+			final AttackSplats.Burst burst = bursts.get(target);
+			if (burst != null)
+			{
+				burst.takeBack();
+			}
+		}
+		else
+		{
+			if (pick[3] == 1 && bookOnTick == tick)
+			{
+				bookOnTick = Integer.MIN_VALUE;
+			}
+			burstBooked.remove(target);
+			bursts.remove(target);
+			if (pick[4] == Integer.MIN_VALUE)
+			{
+				lastHitsplatTick.remove(target);
 			}
 			else
 			{
-				if (pick[3] == 1 && bookOnTick == tick)
-				{
-					bookOnTick = Integer.MIN_VALUE;
-				}
-				burstBooked.remove(target);
-				bursts.remove(target);
-				if (pick[4] == Integer.MIN_VALUE)
-				{
-					lastHitsplatTick.remove(target);
-				}
-				else
-				{
-					lastHitsplatTick.put(target, pick[4]);
-				}
+				lastHitsplatTick.put(target, pick[4]);
 			}
 		}
-		playerSplatsThisTick.clear();
 	}
 
 	private void endTick(int tick)
@@ -421,6 +503,7 @@ final class ThrallReplay
 		{
 			rejudge(tick);
 		}
+		rejudgeReflections(tick);
 		playerSplatsThisTick.clear();
 		// As the plugin's reportExtras: only the extras still standing once a splat may have been handed back.
 		for (Map.Entry<AttackSplats.Burst, List<int[]>> attack : extrasThisTick.entrySet())

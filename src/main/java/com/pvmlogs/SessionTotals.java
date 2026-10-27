@@ -17,6 +17,8 @@ class SessionTotals
 	// dealt like Fight keeps them, and shown beside it (T-014).
 	private int thrallDamage;
 	private int dotDamage;
+	// Recoil and vengeance (T-017 Part B), kept out of damage dealt like the thrall's.
+	private int reflectDamage;
 	// The damage the player took in the trip's scored fights, fed where Fight's is (T-016), and its breakdown (T-018):
 	// see Fight. Hits only since T-018.
 	private int damageTaken;
@@ -69,6 +71,7 @@ class SessionTotals
 		damageDealt = 0;
 		thrallDamage = 0;
 		dotDamage = 0;
+		reflectDamage = 0;
 		damageTaken = 0;
 		dotTaken = 0;
 		hitsTaken = 0;
@@ -141,6 +144,12 @@ class SessionTotals
 	void recordThrallDamage(int damage)
 	{
 		thrallDamage += Math.max(0, damage);
+	}
+
+	/** See {@code Fight.recordReflectDamage}. */
+	void recordReflectDamage(int damage)
+	{
+		reflectDamage += Math.max(0, damage);
 	}
 
 	/** See {@code Fight.recordDotDamage}. */
