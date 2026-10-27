@@ -295,6 +295,108 @@ public class LedgerRowsTest
 			build(LedgerExamples.midFightBeforeT010(), State.fight("Vardorvis", false, false, false)));
 	}
 
+	// ---- the loadout ----
+
+	@Test
+	public void theLoadoutSitsAtTheBottomWhileFighting()
+	{
+		// Eric, 2026-10-26: the panel only comes up once the fight does, so the loadout goes under the fight's rows.
+		assertRows(Arrays.asList(
+			title("Vardorvis", "1:13"),
+			emph("Luck", "-8 s", COST),
+			emph("Damage / expected", "370 / 418", COST),
+			b("DPS", "5.1"),
+			b("Execution", "90%"),
+			d(" uptime", "92% (-6 s)", COST),
+			d(" stat boost", "84% (-1 s)"),
+			d(" prayer", "100%"),
+			d(" gear", "100%"),
+			b("", ""),
+			b("Max hit", "49"),
+			b("Accuracy", "54%"),
+			b("Expected DPS", "5.5"),
+			d(" spec", "50 max \u00b7 71%")),
+			build(LedgerExamples.midFight(),
+				State.fight("Vardorvis", false, false, false).withLoadout(LedgerExamples.loadout())));
+	}
+
+	@Test
+	public void underTheWarningTheLoadoutSitsBelowIt()
+	{
+		final List<Row> rows = build(LedgerExamples.midFight(),
+			State.fight("Vardorvis", false, false, true).withLoadout(LedgerExamples.loadout()));
+		assertEquals(r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL), rows.get(1));
+		assertEquals(b("Accuracy", "54%"), rows.get(rows.size() - 3));
+	}
+
+	@Test
+	public void theDetailsReplaceTheLoadoutOnceTheFightEnds()
+	{
+		final List<Row> rows = build(LedgerExamples.kill(),
+			State.fight("Vardorvis", true, true, false).withLoadout(LedgerExamples.loadout()));
+		assertFalse(rows.stream().anyMatch(row -> row.left.equals("Max hit")));
+		assertEquals(d(" eating", "7 ticks"), rows.get(rows.size() - 1));
+	}
+
+	@Test
+	public void aTripOrRaidShowsTheLoadoutOnlyWhileAFightRuns()
+	{
+		final LedgerRows.Loadout l = LedgerExamples.loadout();
+		assertTrue(build(LedgerExamples.trip(), State.trip(6, true, false).withLoadout(l)).contains(b("Max hit", "49")));
+		assertFalse(build(LedgerExamples.trip(), State.trip(6, false, false).withLoadout(l)).contains(b("Max hit", "49")));
+		assertTrue(build(LedgerExamples.raid(), State.raid("Tombs of Amascut", 3, true, false).withLoadout(l))
+			.contains(b("Max hit", "49")));
+	}
+
+	@Test
+	public void showLoadoutOffLeavesItOutOfTheFight()
+	{
+		final Settings s = new Settings();
+		s.showLoadout = false;
+		final List<Row> rows = LedgerRows.build(LedgerExamples.midFight(),
+			State.fight("Vardorvis", false, false, false).withLoadout(LedgerExamples.loadout()), s);
+		assertEquals(d(" gear", "100%"), rows.get(rows.size() - 1));
+	}
+
+	@Test
+	public void aLoadoutWithNothingKnownAddsNoBlankRow()
+	{
+		final List<Row> rows = build(LedgerExamples.midFight(),
+			State.fight("Vardorvis", false, false, false).withLoadout(new LedgerRows.Loadout()));
+		assertEquals(d(" gear", "100%"), rows.get(rows.size() - 1));
+	}
+
+	@Test
+	public void theWarningShowsOverTheLoadoutBeforeTheFirstAttack()
+	{
+		// The accuracy is the figure bad boss data gets wrong (Vardorvis read 98% before T-001).
+		assertRows(Arrays.asList(
+			title("Vardorvis", ""),
+			r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL),
+			b("Max hit", "49"),
+			b("Accuracy", "54%"),
+			b("Expected DPS", "5.5"),
+			d(" spec", "50 max \u00b7 71%")),
+			build(null, State.preAttack("Vardorvis", LedgerExamples.loadout(), true)));
+	}
+
+	@Test
+	public void andOverLoadoutOnly()
+	{
+		final List<Row> rows = build(null, State.loadoutOnly("Vardorvis", LedgerExamples.loadout(), true));
+		assertEquals(r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL), rows.get(1));
+		assertEquals(6, rows.size());
+	}
+
+	@Test
+	public void withShowLoadoutOffThereIsNothingToWarnAbout()
+	{
+		final Settings s = new Settings();
+		s.showLoadout = false;
+		assertRows(Arrays.asList(title("Vardorvis", "")),
+			LedgerRows.build(null, State.preAttack("Vardorvis", LedgerExamples.loadout(), true), s));
+	}
+
 	// ---- settings ----
 
 	@Test
@@ -461,6 +563,23 @@ public class LedgerRowsTest
 		assertEquals("86% (-1 s)", LedgerRows.partValue(0.86, 0.5));
 		assertEquals("86%", LedgerRows.partValue(0.86, 0.49));
 		assertEquals("100%", LedgerRows.partValue(1, 0));
+	}
+
+	@Test
+	public void aPartNeverRoundsUpToAHundredUnlessItIsOne()
+	{
+		// Orchestrator, PR #14 review: a part that cost something mustn't read as perfect.
+		assertEquals("99%", LedgerRows.partPercent(0.996));
+		assertEquals("99%", LedgerRows.partPercent(0.9949));
+		assertEquals("100%", LedgerRows.partPercent(1));
+		assertEquals("50%", LedgerRows.partPercent(0.5));
+		assertEquals("0%", LedgerRows.partPercent(0));
+		assertEquals("99% (-1 s)", LedgerRows.partValue(0.997, 0.6));
+		// Prayed 279 of 280: 99.6%.
+		final FakeScope s = LedgerExamples.trip();
+		s.attacksMade = 280;
+		s.attacksPrayed = 279;
+		assertTrue(build(s, State.trip(6, true, false)).contains(d(" prayer", "99% (-3 s)")));
 	}
 
 	@Test

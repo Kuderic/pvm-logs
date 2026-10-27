@@ -33,10 +33,11 @@ public final class LedgerPictures
 	static Map<String, List<LedgerRows.Row>> states()
 	{
 		final LedgerRows.Settings all = new LedgerRows.Settings();
+		final LedgerRows.Loadout tentacle = LedgerExamples.loadout();
 		final Map<String, List<LedgerRows.Row>> s = new LinkedHashMap<>();
-		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis", LedgerExamples.loadout()), all));
+		s.put("1-pre", LedgerRows.build(null, LedgerRows.State.preAttack("Vardorvis", tentacle), all));
 		s.put("2-mid", LedgerRows.build(LedgerExamples.midFight(),
-			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
 		s.put("3-dead", LedgerRows.build(LedgerExamples.kill(),
 			LedgerRows.State.fight("Vardorvis", true, true, false), all));
 		s.put("4-ended", LedgerRows.build(LedgerExamples.ended(),
@@ -45,11 +46,16 @@ public final class LedgerPictures
 		s.put("6-raid", LedgerRows.build(LedgerExamples.raid(),
 			LedgerRows.State.raid("Tombs of Amascut", 3, false, false), all));
 		s.put("7-unsure", LedgerRows.build(LedgerExamples.midFight(),
-			LedgerRows.State.fight("Vardorvis", false, false, true), all));
+			LedgerRows.State.fight("Vardorvis", false, false, true).withLoadout(tentacle), all));
+		// Without monster data there is no accuracy to show; the max hit is known.
+		final LedgerRows.Loadout noAccuracy = new LedgerRows.Loadout();
+		noAccuracy.maxHit = 44;
 		s.put("8-nodata", LedgerRows.build(LedgerExamples.noData(),
-			LedgerRows.State.fight("New boss", false, false, false), all));
+			LedgerRows.State.fight("New boss", false, false, false).withLoadout(noAccuracy), all));
 		s.put("9-setup", LedgerRows.build(LedgerExamples.midFightBeforeT010(),
-			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+			LedgerRows.State.fight("Vardorvis", false, false, false).withLoadout(tentacle), all));
+		s.put("10-pre-unsure", LedgerRows.build(null,
+			LedgerRows.State.preAttack("Vardorvis", tentacle, true), all));
 		return s;
 	}
 

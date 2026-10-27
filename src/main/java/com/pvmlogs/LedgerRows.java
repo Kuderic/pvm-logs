@@ -515,12 +515,23 @@ final class LedgerRows
 
 		static State preAttack(String name, Loadout loadout)
 		{
-			return new State(View.PRE_ATTACK, name, 0, false, false, false, loadout);
+			return preAttack(name, loadout, false);
+		}
+
+		/** With the warning on, the loadout's figures are flagged: the accuracy is exactly what bad boss data gets wrong. */
+		static State preAttack(String name, Loadout loadout, boolean warning)
+		{
+			return new State(View.PRE_ATTACK, name, 0, false, false, warning, loadout);
 		}
 
 		static State loadoutOnly(String name, Loadout loadout)
 		{
-			return new State(View.LOADOUT_ONLY, name, 0, false, false, false, loadout);
+			return loadoutOnly(name, loadout, false);
+		}
+
+		static State loadoutOnly(String name, Loadout loadout, boolean warning)
+		{
+			return new State(View.LOADOUT_ONLY, name, 0, false, false, warning, loadout);
 		}
 
 		static State fight(String name, boolean ended, boolean killed, boolean warning)
@@ -537,11 +548,18 @@ final class LedgerRows
 		{
 			return new State(View.RAID, raidName, rooms, !fightRunning, false, warning, null);
 		}
+
+		/** The same state with the loadout's figures, shown at the bottom while a fight runs. */
+		State withLoadout(Loadout loadout)
+		{
+			return new State(view, name, count, ended, killed, warning, loadout);
+		}
 	}
 
 	/** The overlay's settings (spec section 7), so the rows don't read the config themselves. */
 	static final class Settings
 	{
+		/** The loadout before the first attack, and at the bottom while a fight runs. */
 		boolean showLoadout = true;
 		boolean luck = true;
 		ExecutionParts parts = ExecutionParts.ALL;
@@ -646,12 +664,14 @@ final class LedgerRows
 				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL));
 				if (settings.showLoadout)
 				{
-					loadout(rows, state.loadout);
+					loadoutWarning(rows, state);
+					rows.addAll(loadout(state.loadout));
 				}
 				return rows;
 			case LOADOUT_ONLY:
 				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL));
-				loadout(rows, state.loadout);
+				loadoutWarning(rows, state);
+				rows.addAll(loadout(state.loadout));
 				return rows;
 			default:
 				break;
@@ -667,11 +687,30 @@ final class LedgerRows
 		{
 			details(rows, n, scope, state, settings);
 		}
+		// The loadout at the bottom while fighting (Eric, 2026-10-26): before the first attack the panel is barely up, since
+		// the fight opens on targeting and the attack follows a tick or two later. The warning at the top covers it.
+		final List<Row> loadout = settings.showLoadout && !state.ended ? loadout(state.loadout) : Collections.emptyList();
+		if (!loadout.isEmpty())
+		{
+			rows.add(blank());
+			rows.addAll(loadout);
+		}
 		return rows;
 	}
 
-	private static void loadout(List<Row> rows, Loadout l)
+	/** The warning above the loadout's own rows, where no fight block above them carries it. */
+	private static void loadoutWarning(List<Row> rows, State state)
 	{
+		if (state.warning)
+		{
+			rows.add(row("! Boss data unsure", "", FontRole.BODY, FontRole.BODY, Colour.WARNING, Colour.NEUTRAL));
+		}
+	}
+
+	/** Max hit, accuracy, expected DPS and the spec, each only when known. */
+	private static List<Row> loadout(Loadout l)
+	{
+		final List<Row> rows = new ArrayList<>();
 		if (l.maxHit > 0)
 		{
 			rows.add(body("Max hit", String.valueOf(l.maxHit)));
@@ -689,6 +728,7 @@ final class LedgerRows
 			rows.add(detail(" spec", l.specMaxHit + " max" + (l.specAccuracy >= 0 ? DOT + percent(l.specAccuracy) : ""),
 				Colour.NEUTRAL));
 		}
+		return rows;
 	}
 
 	private static Row title(State state, int ticks)
@@ -863,7 +903,7 @@ final class LedgerRows
 	/** {@code NN%}, then {@code (-N s)} when the cost rounds to at least a second. */
 	static String partValue(double share, double costSeconds)
 	{
-		final String pct = Double.isNaN(share) ? UNKNOWN : percent(share);
+		final String pct = Double.isNaN(share) ? UNKNOWN : partPercent(share);
 		final long secs = Double.isNaN(costSeconds) ? 0 : roundHalfAway(costSeconds);
 		return secs >= 1 ? pct + " (-" + secs + " s)" : pct;
 	}
@@ -887,6 +927,16 @@ final class LedgerRows
 	static String percent(double share)
 	{
 		return Math.round(share * 100) + "%";
+	}
+
+	/**
+	 * A part's share: rounded, but never up to 100% unless it is 100%, so a part
+	 * that cost something doesn't read as perfect (Orchestrator, PR #14 review).
+	 */
+	static String partPercent(double share)
+	{
+		final long p = Math.round(share * 100);
+		return (p >= 100 && share < 1 - 1e-9 ? 99 : p) + "%";
 	}
 
 	static String oneDecimal(double v)

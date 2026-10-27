@@ -62,9 +62,9 @@ public interface PvmPerformanceConfig extends Config
 
 	@ConfigItem(
 		keyName = "overlayShowLoadout",
-		name = "Show loadout before the first attack",
-		description = "Once you target something, and until your first attack, show your max hit, accuracy and "
-			+ "expected DPS against it. Off shows the name alone",
+		name = "Show loadout",
+		description = "Show your max hit, accuracy and expected DPS against the target: at the bottom while you "
+			+ "fight, and before your first attack",
 		position = 3
 	)
 	default boolean overlayShowLoadout()

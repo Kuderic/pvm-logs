@@ -65,36 +65,38 @@ class PvmPerformanceOverlay extends OverlayPanel
 		}
 
 		final Encounter room = plugin.getDisplayEncounter();
+		final boolean warning = plugin.getStatsWarning(fight) != null;
 		LedgerRows.Scope scope = null;
 		final LedgerRows.State state;
 		if (config.overlayExpectedOnly())
 		{
-			state = LedgerRows.State.loadoutOnly(fight.encounterName(), loadout());
+			state = LedgerRows.State.loadoutOnly(fight.encounterName(), loadout(), warning);
 		}
 		else if (isBeforeFirstAttack(fight, room))
 		{
-			state = LedgerRows.State.preAttack(fight.encounterName(), loadout());
+			state = LedgerRows.State.preAttack(fight.encounterName(), loadout(), warning);
 		}
 		else
 		{
-			final boolean warning = plugin.getStatsWarning(fight) != null;
 			final boolean running = !fight.isEnded();
 			final SessionTotals session = config.overlaySessionTotals() ? plugin.getSession() : null;
 			final Raid raid = session == null && config.raidScope() == RaidScope.RAID ? plugin.getCurrentRaid() : null;
 			if (session != null)
 			{
 				scope = LedgerRows.of(session);
-				state = LedgerRows.State.trip(session.getKills(), running, warning);
+				state = LedgerRows.State.trip(session.getKills(), running, warning).withLoadout(loadout());
 			}
 			else if (raid != null)
 			{
 				scope = LedgerRows.of(raid);
-				state = LedgerRows.State.raid(raid.getName(), raid.getEncounters().size(), running, warning);
+				state = LedgerRows.State.raid(raid.getName(), raid.getEncounters().size(), running, warning)
+					.withLoadout(loadout());
 			}
 			else if (room != null)
 			{
 				scope = LedgerRows.of(room);
-				state = LedgerRows.State.fight(room.getName(), fight.isEnded(), room.isKilled(), warning);
+				state = LedgerRows.State.fight(room.getName(), fight.isEnded(), room.isKilled(), warning)
+					.withLoadout(loadout());
 			}
 			else
 			{
