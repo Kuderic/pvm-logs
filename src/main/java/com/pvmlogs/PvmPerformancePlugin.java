@@ -737,6 +737,10 @@ public class PvmPerformancePlugin extends Plugin
 			case DAMAGE_OVER_TIME:
 				// Damage over time is the target's health going down with no attack behind it: no activity, no hit, no attempt.
 				current.recordDotDamage(amount);
+				if (current.isScored())
+				{
+					session.recordDotDamage(amount);
+				}
 				break;
 			case HEAL:
 				current.recordHeal(amount);
@@ -801,6 +805,10 @@ public class PvmPerformancePlugin extends Plugin
 			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
 			health.damage(npc.getIndex(), npc.getId(), amount, tick);
 			current.recordThrallDamage(amount);
+			if (current.isScored())
+			{
+				session.recordThrallDamage(amount);
+			}
 		}
 		return p;
 	}
@@ -976,6 +984,7 @@ public class PvmPerformancePlugin extends Plugin
 			if (current.isScored())
 			{
 				session.revokeAttempt(r.amount, hitTaken);
+				session.recordThrallDamage(r.amount);
 			}
 		}
 		thralls.noteThrallSplat(r.npcIndex, tick);
