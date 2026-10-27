@@ -26,11 +26,14 @@ The plan, task briefs and status docs live in the claude.ai Project ("OSRS PvE P
 Any claim about how the game behaves ("thrall splats land on the projectile's first tick", "burn isn't `isMine()`") needs a debug log from Eric's client or a test. Say which. A guess is labelled as one. Read `docs/HANDOFF.md` before working on thralls or any damage that isn't the player's attack: it lists what has already been measured and failed.
 
 ## Names that must not drift
-- Data folder: `PvmPerformanceConfig.DATA_DIR` = `pvm-performance-tracker`. Never write a folder name as a literal.
+- Data folder: `~/.runelite/plugin-data/<PvmPerformanceConfig.INTERNAL_NAME>/` (`pvm-performance-tracker`), from RuneLite's `getPluginDirectory()`. Since T-009 all file access goes through `net.runelite.client.util.Filepath`, never `java.io.File` or `java.nio.file.Files` (Plugin Hub rule). Never write a folder name as a literal.
+- Legacy folder: `PvmPerformanceConfig.DATA_DIR` = `pvm-performance-tracker`, i.e. `~/.runelite/pvm-performance-tracker/`. The descriptor's `legacyDataDirectory` makes RuneLite move it into the data folder once.
 - Settings group: `PvmPerformanceConfig.GROUP` = `pvmperformance`.
 - Display name: PvM Performance Tracker.
 
-`OriginalNamesTest` pins all three. Changing any of them would reset settings or hide fight history for the users of Arodab's hub entry. The package `com.pvmlogs` isn't user-visible and stays as it is.
+`OriginalNamesTest` pins these. Changing any of them would reset settings or hide fight history for the users of Arodab's hub entry. The package `com.pvmlogs` isn't user-visible and stays as it is.
+
+`ForbiddenApiTest` fails the build on anything the Plugin Hub forbids (the wiki's list, plus the `Filepath`-only rule above).
 
 ## Layout
 - `src/main/java/com/pvmlogs/`: one package. Most logic is in two ~3k-line files:
@@ -42,11 +45,13 @@ Any claim about how the game behaves ("thrall splats land on the projectile's fi
 - Code style: tabs, RuneLite's brace style. Match the code around you.
 
 ## Debug logs from Eric's PC
-They're in `C:\Users\<user>\.runelite\pvm-performance-tracker\`:
+They're in `C:\Users\<user>\.runelite\plugin-data\pvm-performance-tracker\`:
 - `pvm-debug-recent-<stamp>.log`: the side panel's **Save debug log** button (the last few thousand lines, with a setup header);
 - `pvm-debug-<stamp>.log`: the stream while the **Debug logging** setting is on;
 - `history.json`, CSV exports (`pvm-<label>-<stamp>.csv`), and the `monsters.json` cache.
 
-Logs from before 2026-10-26's T-004, including the first Vardorvis logs, are in `...\.runelite\pvm-logs\`.
+Older logs:
+- written between T-004 and T-009 were in `...\.runelite\pvm-performance-tracker\`. RuneLite moved them into the folder above the first time a T-009 build started;
+- written before T-004 (2026-10-26), including the first Vardorvis logs, are in `...\.runelite\pvm-logs\`, which isn't moved.
 
-To read them, the chat has to be linked to Eric's computer through the Claude desktop app. Request access to that one folder (`~/.runelite/pvm-performance-tracker`); Eric approves the prompt. Read the files where they are, and ask before copying a log into the repo as a test fixture.
+To read them, the chat has to be linked to Eric's computer through the Claude desktop app. Request access to that one folder (`~/.runelite/plugin-data/pvm-performance-tracker`); Eric approves the prompt. Read the files where they are, and ask before copying a log into the repo as a test fixture.

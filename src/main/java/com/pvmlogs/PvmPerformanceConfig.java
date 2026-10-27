@@ -12,10 +12,17 @@ public interface PvmPerformanceConfig extends Config
 	 */
 	String GROUP = "pvmperformance";
 	/**
-	 * Folder under {@code ~/.runelite/} that holds history, CSV exports, debug logs and cached data. Arodab's
-	 * original, so users of his entry keep their history. Every file the plugin writes goes under this one name.
+	 * The folder under {@code ~/.runelite/} where Arodab's plugin, and this one until T-009, kept history, CSV
+	 * exports, debug logs and cached data. Hub plugins now get their files through RuneLite's {@code Filepath}, which
+	 * lives in {@code ~/.runelite/plugin-data/<INTERNAL_NAME>/}. The descriptor names this as its legacy folder, so
+	 * RuneLite moves it there the first time the plugin asks for its folder, and nobody's history is lost.
 	 */
 	String DATA_DIR = "pvm-performance-tracker";
+	/**
+	 * The Plugin Hub entry's internal name: Arodab's, since the plan is to release on his entry. RuneLite names the
+	 * plugin's data folder after it ({@code ~/.runelite/plugin-data/<this>/}).
+	 */
+	String INTERNAL_NAME = "pvm-performance-tracker";
 
 	@ConfigItem(
 		keyName = "showOverlay",

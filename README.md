@@ -2,7 +2,7 @@
 
 This is a maintained fork of [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker) by Arodab, and builds on his combat model. It fixes the build against current RuneLite and counts thrall hits apart from your own ([Arodab's issue #1](https://github.com/Arodab/pvm-performance-tracker/issues/1)), with per-kill logs to follow.
 
-It keeps the original plugin's name, settings group (`pvmperformance`) and data folder (`~/.runelite/pvm-performance-tracker/`), so it can be released as an update to the existing Plugin Hub entry without resetting anyone's settings or fight history.
+It keeps the original plugin's name and settings group (`pvmperformance`), so it can be released as an update to the existing Plugin Hub entry without resetting anyone's settings. Fight history, exports and logs now live in RuneLite's plugin-data folder, `~/.runelite/plugin-data/pvm-performance-tracker/`, as current Plugin Hub rules require. On first start RuneLite moves the old `~/.runelite/pvm-performance-tracker/` folder there, so nobody's history is lost.
 
 A RuneLite plugin that tracks your real vs expected combat performance (damage, accuracy, DPS) against any NPC. 
 
@@ -35,9 +35,9 @@ These are the steps that work on Windows. Run them in PowerShell, from the repo 
    ```
 4. **Log in:** in the client's sidebar, open the Jagex account panel → **Add Jagex Account** → sign in → pick your character → **Play Now**. If an old `.runelite\credentials.properties` exists, delete it first.
 5. **Capture a debug log:** after a fight, press **Save debug log** in the plugin's side panel. It writes the last few thousand lines. For a whole session, turn on **Debug logging** in the plugin's settings instead.
-6. **Find the files** in `%USERPROFILE%\.runelite\pvm-performance-tracker\`: `pvm-debug-recent-*.log` (the button), `pvm-debug-*.log` (the setting), `history.json` and CSV exports.
+6. **Find the files** in `%USERPROFILE%\.runelite\plugin-data\pvm-performance-tracker\`: `pvm-debug-recent-*.log` (the button), `pvm-debug-*.log` (the setting), `history.json` and CSV exports.
 
-**Tests:** `.\gradlew.bat test` on Windows, or `bash ./gradlew test` on Linux and macOS (JDK 11 or newer). CI runs them on every push and pull request.
+**Tests:** `.\gradlew.bat test` on Windows, or `./gradlew test` on Linux and macOS (JDK 11 or newer). CI runs them on every push and pull request.
 
 `CLAUDE.md` covers how Claude sessions work on this repo. `docs/HANDOFF.md` records what is known about thrall damage and other damage that isn't the player's attack.
 

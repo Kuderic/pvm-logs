@@ -3,13 +3,10 @@ package com.pvmlogs;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
-import java.io.BufferedWriter;
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -68,7 +65,6 @@ import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -82,6 +78,7 @@ import net.runelite.client.plugins.specialcounter.SpecialCounterUpdate;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.Filepath;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
 
@@ -89,7 +86,9 @@ import net.runelite.client.util.Text;
 @PluginDescriptor(
 	name = "PvM Performance Tracker",
 	description = "Tracks your real vs expected combat performance against any NPC",
-	tags = {"pvm", "dps", "combat", "performance", "damage", "accuracy", "boss", "luck"}
+	tags = {"pvm", "dps", "combat", "performance", "damage", "accuracy", "boss", "luck"},
+	internalName = PvmPerformanceConfig.INTERNAL_NAME,
+	legacyDataDirectory = PvmPerformanceConfig.DATA_DIR
 )
 public class PvmPerformancePlugin extends Plugin
 {
@@ -205,6 +204,9 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Inject
 	private MonsterStatsProvider monsterStats;
+
+	// From getPluginDirectory() at startUp; read by the executor's writes. Null if RuneLite couldn't give one.
+	private volatile Filepath dataDirectory;
 
 	@Inject
 	private ClientThread clientThread;
@@ -465,11 +467,31 @@ public class PvmPerformancePlugin extends Plugin
 			.build();
 		clientToolbar.addNavigation(navButton);
 
+		dataDirectory = openDataDirectory();
+		debug.setDirectory(dataDirectory);
 		executor.execute(this::loadHistory);
-		monsterStats.startUp();
+		monsterStats.startUp(dataDirectory);
 		if (config.debugLogging())
 		{
 			debug.start();
+		}
+	}
+
+	/**
+	 * The plugin's data folder, {@code ~/.runelite/plugin-data/<INTERNAL_NAME>/}. The first call moves the old
+	 * {@code ~/.runelite/<DATA_DIR>/} there (the descriptor's {@code legacyDataDirectory}), history and all. Null if
+	 * RuneLite can't give one: the plugin still runs, without history, exports, debug files or the monster cache.
+	 */
+	private Filepath openDataDirectory()
+	{
+		try
+		{
+			return getPluginDirectory();
+		}
+		catch (IOException | RuntimeException e)
+		{
+			log.warn("PvM Logs: no data folder, so history, exports and debug files are off", e);
+			return null;
 		}
 	}
 
@@ -1076,7 +1098,7 @@ public class PvmPerformancePlugin extends Plugin
 			header.addAll(combatCalc.describeLoadout(targetId));
 			executor.execute(() ->
 			{
-				final java.nio.file.Path written = debug.saveRecent(header);
+				final Filepath written = debug.saveRecent(header);
 				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.CONSOLE, "PvM Performance",
 					written == null ? "Nothing to save yet - fight something first."
 						: "Saved the recent debug log to " + written.getFileName(), null));
@@ -3079,21 +3101,26 @@ public class PvmPerformancePlugin extends Plugin
 		saveHistory();
 	}
 
-	private Path historyFile()
+	private Filepath historyFile()
 	{
-		return new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR), "history.json").toPath();
+		final Filepath dir = dataDirectory;
+		return dir == null ? null : dir.joinSegment("history.json");
 	}
 
 	private void loadHistory()
 	{
-		final Path file = historyFile();
-		if (!Files.exists(file))
+		final Filepath file = historyFile();
+		if (file == null || !file.exists())
 		{
 			return;
 		}
 		try
 		{
-			final String json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+			final String json;
+			try (InputStream in = file.openInputStream())
+			{
+				json = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+			}
 			final Fight[] loaded = gson.fromJson(json, Fight[].class);
 			if (loaded != null)
 			{
@@ -3124,11 +3151,15 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			try
 			{
-				final Path file = historyFile();
-				Files.createDirectories(file.getParent());
-				Files.write(file, gson.toJson(snapshot).getBytes(StandardCharsets.UTF_8));
+				final Filepath file = historyFile();
+				if (file == null)
+				{
+					return;
+				}
+				file.getParent().createDirectories();
+				file.write(gson.toJson(snapshot).getBytes(StandardCharsets.UTF_8));
 			}
-			catch (IOException e)
+			catch (IOException | RuntimeException e)
 			{
 				log.warn("PvM Logs: could not save history", e);
 			}
@@ -3368,21 +3399,25 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			try
 			{
-				final File dir = new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR);
-				Files.createDirectories(dir.toPath());
-				final File out = new File(dir, "pvm-" + label + "-" + FILE_TS.format(LocalDateTime.now()) + ".csv");
-				try (Writer writer = new BufferedWriter(new java.io.OutputStreamWriter(
-					Files.newOutputStream(out.toPath()), StandardCharsets.UTF_8)))
+				final Filepath dir = dataDirectory;
+				if (dir == null)
+				{
+					setStatus("Export failed: no data folder.");
+					return;
+				}
+				dir.createDirectories();
+				final Filepath out = dir.joinSegment("pvm-" + label + "-" + FILE_TS.format(LocalDateTime.now()) + ".csv");
+				try (Writer writer = out.openBufferedWriter())
 				{
 					writer.write(CSV_HEADER);
 					writeRows(writer, fights);
 				}
-				final String path = out.getAbsolutePath();
+				final String path = out.toString();
 				setStatus("Exported " + fights.size() + " fights → " + path);
 				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "",
 					"PvM Performance: exported " + fights.size() + " fights to " + path, null));
 			}
-			catch (IOException e)
+			catch (IOException | RuntimeException e)
 			{
 				log.warn("PvM Logs export failed", e);
 				setStatus("Export failed: " + e.getMessage());

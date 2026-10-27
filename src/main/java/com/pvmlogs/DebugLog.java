@@ -1,10 +1,7 @@
 package com.pvmlogs;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -22,7 +19,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
-import net.runelite.client.RuneLite;
+import net.runelite.client.util.Filepath;
 
 /**
  * What the tracker saw, in two forms.
@@ -84,7 +81,9 @@ class DebugLog
 
 	// Read on every logged line, so both are volatile rather than synchronized: the switch itself is rare.
 	private volatile boolean on;
-	private volatile Path file;
+	private volatile Filepath file;
+	/** The plugin's data folder, from {@code Plugin.getPluginDirectory}; null if RuneLite could not give one. */
+	private volatile Filepath directory;
 	private ScheduledFuture<?> flusher;
 
 	@Inject
@@ -100,9 +99,15 @@ class DebugLog
 	}
 
 	/** The file being written, or null while logging is off. */
-	Path getFile()
+	Filepath getFile()
 	{
 		return file;
+	}
+
+	/** Where log files go. Set by the plugin before anything is started or saved. */
+	void setDirectory(Filepath directory)
+	{
+		this.directory = directory;
 	}
 
 	synchronized void start()
@@ -111,8 +116,13 @@ class DebugLog
 		{
 			return;
 		}
-		file = new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR),
-			"pvm-debug-" + LocalDateTime.now().format(STAMP) + ".log").toPath();
+		final Filepath dir = directory;
+		if (dir == null)
+		{
+			log.warn("PvM Logs: no data folder, so debug logging to a file stays off");
+			return;
+		}
+		file = dir.joinSegment("pvm-debug-" + LocalDateTime.now().format(STAMP) + ".log");
 		pending.clear();
 		queued.set(0);
 		dropped.set(0);
@@ -199,8 +209,13 @@ class DebugLog
 	 * every figure questioned so far turned on one of those, and a list of
 	 * numbers with no setup attached cannot answer for itself.
 	 */
-	Path saveRecent(List<String> header)
+	Filepath saveRecent(List<String> header)
 	{
+		final Filepath dir = directory;
+		if (dir == null)
+		{
+			return null;
+		}
 		final List<String> lines;
 		synchronized (recent)
 		{
@@ -210,8 +225,7 @@ class DebugLog
 			}
 			lines = new ArrayList<>(recent);
 		}
-		final Path target = new File(new File(RuneLite.RUNELITE_DIR, PvmPerformanceConfig.DATA_DIR),
-			"pvm-debug-recent-" + LocalDateTime.now().format(STAMP) + ".log").toPath();
+		final Filepath target = dir.joinSegment("pvm-debug-recent-" + LocalDateTime.now().format(STAMP) + ".log");
 		final StringBuilder buffer = new StringBuilder();
 		buffer.append("=== PvM Logs, the last ").append(lines.size())
 			.append(" lines before this was saved. Plugin ").append(version()).append(" ===")
@@ -230,8 +244,8 @@ class DebugLog
 		}
 		try
 		{
-			Files.createDirectories(target.getParent());
-			Files.write(target, buffer.toString().getBytes(StandardCharsets.UTF_8),
+			target.getParent().createDirectories();
+			target.write(buffer.toString().getBytes(StandardCharsets.UTF_8),
 				StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 			return target;
 		}
@@ -263,7 +277,7 @@ class DebugLog
 
 	private void flush()
 	{
-		final Path target = file;
+		final Filepath target = file;
 		if (target == null || pending.isEmpty())
 		{
 			return;
@@ -281,8 +295,8 @@ class DebugLog
 		}
 		try
 		{
-			Files.createDirectories(target.getParent());
-			Files.write(target, buffer.toString().getBytes(StandardCharsets.UTF_8),
+			target.getParent().createDirectories();
+			target.write(buffer.toString().getBytes(StandardCharsets.UTF_8),
 				StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 		}
 		catch (IOException | RuntimeException e)
