@@ -168,6 +168,19 @@ public interface PvmPerformanceConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "deliberateItems",
+		name = "Worn on purpose",
+		description = "Items you wear for something the damage figures can't see, such as healing. While you wear one, "
+			+ "a better-damage item for its slot isn't counted as a missed switch. Item names, separated by commas",
+		position = 10
+	)
+	default String deliberateItems()
+	{
+		// Worn for its healing, at a known cost in damage against a torture. Clear this to have that cost counted.
+		return "Amulet of blood fury";
+	}
+
+	@ConfigItem(
 		keyName = "fightTimeoutTicks",
 		name = "Fight timeout (ticks)",
 		description = "End the current fight after this many game ticks with no damage dealt. Also how long a finished "

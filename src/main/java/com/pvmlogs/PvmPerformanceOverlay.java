@@ -201,17 +201,34 @@ class PvmPerformanceOverlay extends OverlayPanel
 				: raid != null ? raid.getAttacksMade() : room.getAttacksMade();
 			final int prayed = session != null ? session.getAttacksPrayed()
 				: raid != null ? raid.getAttacksPrayed() : room.getAttacksPrayed();
-			final int potted = session != null ? session.getAttacksPotted()
-				: raid != null ? raid.getAttacksPotted() : room.getAttacksPotted();
-			// Always shown, both of them. Hiding a counter that reads full makes it impossible to tell a perfect run from one
+			// Always shown, all of them. Hiding a counter that reads full makes it impossible to tell a perfect run from one
 			// that is not counting.
 			line("  prayed", prayed + "/" + made);
-			line("  potted", potted + "/" + made);
+			// The boost as a share of the full effect, not a count of attacks at exactly full boost: a super combat drops a
+			// level a minute, and the count read every attack after the first minute as unpotted (T-010). Beside it, what
+			// the missing boost cost, as a share of the damage the attacks would have been set up to deal.
+			final double boost = session != null ? session.boostShare()
+				: raid != null ? raid.boostShare() : room.boostShare();
+			if (boost >= 0)
+			{
+				final double boostCost = session != null ? session.boostCostShare()
+					: raid != null ? raid.boostCostShare() : room.boostCostShare();
+				line("  boost", withCost(String.format("%.0f%%", boost * 100), boostCost));
+			}
+			else
+			{
+				// Fights from before the share was read have only the count.
+				final int potted = session != null ? session.getAttacksPotted()
+					: raid != null ? raid.getAttacksPotted() : room.getAttacksPotted();
+				line("  potted", potted + "/" + made);
+			}
 			final int switched = session != null ? session.getAttacksSwitched()
 				: raid != null ? raid.getAttacksSwitched() : room.getAttacksSwitched();
-			// The gap to made is the number of attacks that missed at least one switch, read the same way as the two lines above
-			// it.
-			line("  switches", switched + "/" + made);
+			final double switchCost = session != null ? session.switchCostShare()
+				: raid != null ? raid.switchCostShare() : room.switchCostShare();
+			// The gap to made is the number of attacks that missed at least one switch, read the same way as prayed. The cost
+			// beside it is what tells a small trade (blood fury cleared from "Worn on purpose") from a real miss.
+			line("  switches", withCost(switched + "/" + made, switchCost));
 		}
 
 		final double lostShare = session != null ? session.ticksLostShare()
@@ -242,6 +259,16 @@ class PvmPerformanceOverlay extends OverlayPanel
 	private void line(String left, String right)
 	{
 		line(left, right, Color.WHITE);
+	}
+
+	/**
+	 * A figure with what it cost beside it, e.g. "84% (-1.2%)": the cost as a
+	 * share of the damage the attacks would have been set up to deal. Nothing is
+	 * added when there was no cost or no figure to price it against.
+	 */
+	static String withCost(String figure, double costShare)
+	{
+		return costShare >= 0.0005 ? figure + String.format(" (-%.1f%%)", costShare * 100) : figure;
 	}
 
 	private void line(String left, String right, Color rightColor)

@@ -134,11 +134,18 @@ class CombatCalc
 	private int manualCastsPending;
 	// Whether the attack currently being described was proven by a hitsplat.
 	private boolean meleeProvenAttack;
-	// Which setup the level and prayer reads answer for. REAL is what the player had; IDEAL is the intended prayer at full
-	// boost; PRAYER_HELD is the intended prayer at the real boost, for a prayer flicked within the tick.
+	// Which setup the level and prayer reads answer for, as two switches that work apart: the prayer read is the one up or
+	// the one intended for the style, and the levels are the real ones or the base plus the full boost expected here.
+	// REAL is what the player had; IDEAL is the intended prayer at full boost; PRAYER_HELD is the intended prayer at the
+	// real boost, for a prayer flicked within the tick; BOOSTED is the prayer as it was at full boost, which is what prices
+	// the missing boost on its own.
+	private static final int INTENDED_PRAYER = 1;
+	private static final int FULL_BOOST = 2;
 	private static final int REAL = 0;
-	private static final int IDEAL = 1;
-	private static final int PRAYER_HELD = 2;
+	private static final int PRAYER_HELD = INTENDED_PRAYER;
+	private static final int BOOSTED = FULL_BOOST;
+	private static final int IDEAL = INTENDED_PRAYER | FULL_BOOST;
+	private static final int MODES = 4;
 	private int mode = REAL;
 	// The index of the NPC the figures are being computed against, so the defence read can account for what has been
 	// drained off it.
@@ -184,8 +191,8 @@ class CombatCalc
 	private final boolean[] memoAttackBonusSet = new boolean[AttackType.values().length];
 	private final int[] memoEquipmentBonus = new int[2];
 	private final boolean[] memoEquipmentBonusSet = new boolean[2];
-	private final int[] memoBaseMaxHit = new int[3];
-	private final boolean[] memoBaseMaxHitSet = new boolean[3];
+	private final int[] memoBaseMaxHit = new int[MODES];
+	private final boolean[] memoBaseMaxHitSet = new boolean[MODES];
 	private int memoGearNpc = Integer.MIN_VALUE;
 	private GearBonus memoGear;
 	private Loadout memoLoadout;
@@ -198,6 +205,9 @@ class CombatCalc
 	private int memoBestGearWeapon = Integer.MIN_VALUE;
 	private AttackStyle memoBestGearStyle;
 	private long memoBestGearAvailable = Long.MIN_VALUE;
+	// And the slots kept as worn because the player wears that item on purpose: taking blood fury off moves this, and so
+	// does changing the setting.
+	private Set<EquipmentInventorySlot> memoBestGearKept;
 	// Every equippable item on the player, worn and carried together, and whether a container has said anything moved
 	// since it was last counted.
 	private long availableSignature;
@@ -1043,7 +1053,7 @@ class CombatCalc
 
 	private double meleeAccuracyPrayer()
 	{
-		if (mode != REAL)
+		if (intendedPrayer())
 		{
 			return prayerGoal().getAttackMultiplier();
 		}
@@ -2502,7 +2512,7 @@ class CombatCalc
 
 	private double meleePrayer()
 	{
-		if (mode != REAL)
+		if (intendedPrayer())
 		{
 			return prayerGoal().getStrengthMultiplier();
 		}
@@ -2542,20 +2552,96 @@ class CombatCalc
 	}
 
 	// Expected damage if the attack had been set up properly: the configured prayer up and stats at full boost, everything
-	// else exactly as it is.
+	// else exactly as it is. Over the ticks the attack really took, so a loadout swinging at another speed would be
+	// compared per tick; the weapon is held fixed, so today the speeds are the same and this is the plain average hit.
 	double idealAverageHit(int npcId)
 	{
-		return averageHitWith(bestGear(npcId), npcId, IDEAL);
+		final Loadout best = bestGear(npcId);
+		final double hit = averageHitWith(best, npcId, IDEAL);
+		final int bestSpeed = attackSpeedWith(best);
+		final int wornSpeed = attackSpeedTicks();
+		return hit < 0 || bestSpeed == wornSpeed ? hit : hit * wornSpeed / bestSpeed;
 	}
 
 	/**
-	 * Whether a switch was available and not made. Compared by contents, never
-	 * by identity: the answer is held across ticks while the worn loadout is
-	 * rebuilt each one, so the same gear is two objects a tick later.
+	 * Whether a switch was available and not made, to what, and what it cost.
+	 * Compared by contents, never by identity: the answer is held across ticks
+	 * while the worn loadout is rebuilt each one, so the same gear is two objects
+	 * a tick later.
 	 */
-	boolean missedGearSwitch(int npcId)
+	SwitchCheck switchCheck(int npcId)
 	{
-		return !bestGear(npcId).sameItems(gear());
+		final Loadout best = bestGear(npcId);
+		final Loadout worn = gear();
+		if (best.sameItems(worn))
+		{
+			return SwitchCheck.NONE;
+		}
+		final double wornHit = averageHitWith(worn, npcId, IDEAL);
+		final double bestHit = averageHitWith(best, npcId, IDEAL);
+		final int wornSpeed = attackSpeedTicks();
+		final int bestSpeed = attackSpeedWith(best);
+		return new SwitchCheck(worn, best, wornHit, wornSpeed, bestHit, bestSpeed);
+	}
+
+	/**
+	 * One tick's switch check: whether the worn loadout fell short of the best
+	 * one on hand, and by how much. Holds the two loadouts rather than their
+	 * names, so the description costs nothing until a missed attack asks for it.
+	 */
+	static final class SwitchCheck
+	{
+		static final SwitchCheck NONE = new SwitchCheck(null, null, 0, 1, 0, 1);
+
+		private final Loadout worn;
+		private final Loadout best;
+		private final double wornHit;
+		private final int wornSpeed;
+		private final double bestHit;
+		private final int bestSpeed;
+
+		SwitchCheck(Loadout worn, Loadout best, double wornHit, int wornSpeed, double bestHit, int bestSpeed)
+		{
+			this.worn = worn;
+			this.best = best;
+			this.wornHit = wornHit;
+			this.wornSpeed = wornSpeed;
+			this.bestHit = bestHit;
+			this.bestSpeed = bestSpeed;
+		}
+
+		boolean isMissed()
+		{
+			return best != null;
+		}
+
+		/** Expected damage the attack lost by not switching. See GearSearch.switchCost. */
+		double cost()
+		{
+			return isMissed() ? GearSearch.switchCost(wornHit, wornSpeed, bestHit, bestSpeed) : 0;
+		}
+
+		/** What would have been switched to, and both loadouts' damage per tick, for the debug log. */
+		String describe()
+		{
+			if (!isMissed())
+			{
+				return "nothing better on hand";
+			}
+			final StringBuilder swaps = new StringBuilder();
+			for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
+			{
+				if (worn.id(slot) != best.id(slot))
+				{
+					swaps.append(swaps.length() == 0 ? "" : ", ").append(slot).append(' ')
+						.append(worn.id(slot) < 0 ? "empty" : worn.name(slot)).append(" -> ")
+						.append(best.id(slot) < 0 ? "empty" : best.name(slot));
+				}
+			}
+			return String.format("%s; damage per tick %.3f worn, %.3f switched (speed %d / %d), costing %.2f a hit",
+				swaps, GearSearch.perTick(wornHit, wornSpeed), GearSearch.perTick(bestHit, bestSpeed), wornSpeed, bestSpeed,
+				cost());
+		}
 	}
 
 	// The best gear against this target, held until the weapon, the combat style or what the player has on them moves.
@@ -2568,15 +2654,17 @@ class CombatCalc
 		final int weaponId = worn.id(EquipmentInventorySlot.WEAPON);
 		final AttackStyle style = attackStyle();
 		final long available = availableEquippableSignature();
+		final Set<EquipmentInventorySlot> kept = GearSearch.keptSlots(worn,
+			GearSearch.deliberateNames(config.deliberateItems()), worn::name);
 		if (memoBestGear != null && memoBestGearNpc == npcId && memoBestGearWeapon == weaponId
-			&& memoBestGearStyle == style && memoBestGearAvailable == available)
+			&& memoBestGearStyle == style && memoBestGearAvailable == available && kept.equals(memoBestGearKept))
 		{
 			// Kept only while it still beats what is worn. The search is greedy, so an answer reached from one set is not
 			// guaranteed to beat a different set reached later - void put on after the fact is exactly that - and a stale answer
 			// would mark a player down for doing the right thing.
 			if (!memoBestGear.sameItems(worn)
-				&& averageHitWith(worn, npcId, IDEAL)
-				> averageHitWith(memoBestGear, npcId, IDEAL) - GearSearch.MEANINGFUL)
+				&& damagePerTick(worn, npcId, IDEAL)
+				> damagePerTick(memoBestGear, npcId, IDEAL) - GearSearch.MEANINGFUL)
 			{
 				memoBestGear = worn;
 			}
@@ -2587,9 +2675,31 @@ class CombatCalc
 		memoBestGearWeapon = weaponId;
 		memoBestGearStyle = style;
 		memoBestGearAvailable = available;
-		memoBestGear = GearSearch.best(worn, carriedCandidates(), weapon != null && weapon.isTwoHanded(),
-			candidate -> averageHitWith(candidate, npcId, IDEAL));
+		memoBestGearKept = kept;
+		memoBestGear = GearSearch.best(worn, carriedCandidates(), weapon != null && weapon.isTwoHanded(), kept,
+			candidate -> damagePerTick(candidate, npcId, IDEAL));
 		return memoBestGear;
+	}
+
+	// Expected damage per tick for a loadout, so loadouts that swing at different speeds compare fairly.
+	private double damagePerTick(Loadout gear, int npcId, int as)
+	{
+		return GearSearch.perTick(averageHitWith(gear, npcId, as), attackSpeedWith(gear));
+	}
+
+	// The attack speed a loadout would have, style included. Restores what was there afterwards, as averageHitWith does.
+	private int attackSpeedWith(Loadout gear)
+	{
+		final Loadout worn = memoLoadout;
+		try
+		{
+			useLoadout(gear);
+			return attackSpeedTicks();
+		}
+		finally
+		{
+			useLoadout(worn);
+		}
 	}
 
 	// Everything carried that could be equipped, paired with its slot. The bank is deliberately out: the question is what
@@ -2627,6 +2737,17 @@ class CombatCalc
 		return averageHitAs(npcId, prayerHeld ? PRAYER_HELD : REAL);
 	}
 
+	/**
+	 * The same attack with every stat it rolls on at the full boost, and nothing
+	 * else changed - the prayer as it was, the gear as worn. Less the actual
+	 * figure, that is what the missing boost cost.
+	 */
+	double boostedAverageHit(int npcId, boolean prayerHeld)
+	{
+		// With the intended prayer held, "that prayer at full boost" is the ideal setup on the worn gear.
+		return averageHitAs(npcId, prayerHeld ? IDEAL : BOOSTED);
+	}
+
 	private double averageHitAs(int npcId, int as)
 	{
 		mode = as;
@@ -2647,7 +2768,7 @@ class CombatCalc
 	 */
 	private int boostedLevel(Skill skill)
 	{
-		if (mode != IDEAL)
+		if (!fullBoost())
 		{
 			return client.getBoostedSkillLevel(skill);
 		}
@@ -2766,6 +2887,58 @@ class CombatCalc
 		return client.getBoostedSkillLevel(skill) >= base + maxBoost(skill, base);
 	}
 
+	/**
+	 * How much of the full boost the stats this style rolls on hold, from 0 to
+	 * 1: melee's attack and strength averaged, ranged and magic their one skill.
+	 * Unlike isPotted, a super combat decayed by a level reads as most of a dose
+	 * rather than none of one.
+	 */
+	double boostShare()
+	{
+		switch (attackStyle().getAttackType())
+		{
+			case MAGIC:
+				return boostShare(Skill.MAGIC);
+			case RANGED:
+				return boostShare(Skill.RANGED);
+			default:
+				return (boostShare(Skill.ATTACK) + boostShare(Skill.STRENGTH)) / 2;
+		}
+	}
+
+	private double boostShare(Skill skill)
+	{
+		final int base = client.getRealSkillLevel(skill);
+		return boostShare(client.getBoostedSkillLevel(skill), base, maxBoost(skill, base));
+	}
+
+	/**
+	 * The share of a full boost one stat holds: what it is above its base over
+	 * what the full boost would put it above, clamped to 0..1. Drained below the
+	 * base is none of it. With no boost expected at all, a stat at or above its
+	 * base holds all of nothing - the same call isPotted makes.
+	 */
+	static double boostShare(int boosted, int base, int maxBoost)
+	{
+		if (maxBoost <= 0)
+		{
+			return boosted >= base ? 1 : 0;
+		}
+		return Math.max(0, Math.min(1, (double) (boosted - base) / maxBoost));
+	}
+
+	// Whether the intended prayer stands in for whatever was really up.
+	private boolean intendedPrayer()
+	{
+		return (mode & INTENDED_PRAYER) != 0;
+	}
+
+	// Whether the levels read are the base plus the full boost, rather than what the stats really were.
+	private boolean fullBoost()
+	{
+		return (mode & FULL_BOOST) != 0;
+	}
+
 	// Whether a prayer was active for what the server is resolving now. Reads the varbit directly; Client.isPrayerActive
 	// is deprecated with no replacement.
 	private boolean prayerActive(Prayer prayer)
@@ -2780,7 +2953,7 @@ class CombatCalc
 	// Magic attack prayer multiplier.
 	private double magicAccuracyPrayer()
 	{
-		if (mode != REAL)
+		if (intendedPrayer())
 		{
 			return prayerGoal().getAttackMultiplier();
 		}
@@ -2829,7 +3002,7 @@ class CombatCalc
 	 */
 	private double magicDamagePrayerPercent()
 	{
-		if (mode != REAL)
+		if (intendedPrayer())
 		{
 			return prayerGoal().getMagicDamagePercent();
 		}
@@ -2868,7 +3041,7 @@ class CombatCalc
 	/** Ranged attack prayer multiplier. Rigour gives less here than it does to strength. */
 	private double rangedAccuracyPrayer()
 	{
-		if (mode != REAL)
+		if (intendedPrayer())
 		{
 			return prayerGoal().getAttackMultiplier();
 		}
@@ -2913,7 +3086,7 @@ class CombatCalc
 
 	private double rangedPrayer()
 	{
-		if (mode != REAL)
+		if (intendedPrayer())
 		{
 			return prayerGoal().getStrengthMultiplier();
 		}
