@@ -286,4 +286,36 @@ public class PvmPerformanceOverlayTest
 			assertTrue(body.getName(), m.stringWidth(" spec damage") + m.stringWidth("26.0 (8.2 burn)") <= old);
 		}
 	}
+
+	// ---- T-029: Luck's band gives up its seconds on a narrow panel ----
+
+	@Test
+	public void luckDropsItsSecondsWhenThePanelIsTooNarrow()
+	{
+		final LedgerRows.Row luck = new LedgerRows.Row("Luck", "bottom 20% (14 s slower)", LedgerRows.FontRole.EMPHASIS,
+			LedgerRows.FontRole.EMPHASIS, LedgerRows.Colour.NEUTRAL, LedgerRows.Colour.COST, null, "bottom 20%");
+		// 4 + 24 characters at 7 px, the 6 px gap and the 8 px border: 210.
+		assertSame(luck, PvmPerformanceOverlay.fit(luck, PvmPerformanceOverlayTest::sevens, PvmPerformanceOverlayTest::sevens,
+			210));
+		final LedgerRows.Row narrow = PvmPerformanceOverlay.fit(luck, PvmPerformanceOverlayTest::sevens,
+			PvmPerformanceOverlayTest::sevens, 209);
+		assertEquals("bottom 20%", narrow.right);
+		assertEquals("Luck", narrow.left);
+		assertEquals(LedgerRows.Colour.COST, narrow.rightColour);
+	}
+
+	@Test
+	public void theLuckBandFitsWhereDamageExpectedDoes()
+	{
+		final java.awt.Graphics2D g = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+			.createGraphics();
+		for (Font body : Arrays.asList(FontManager.getRunescapeFont(), FontManager.getRunescapeBoldFont(),
+			FontManager.getRunescapeSmallFont()))
+		{
+			final java.awt.FontMetrics m = g.getFontMetrics(PvmPerformanceOverlay.FontRoles.of(body).emphasis);
+			final int damage = m.stringWidth("Damage/expected") + m.stringWidth("688/778");
+			// The short form always fits where Damage/expected does; the full one may need the short form.
+			assertTrue(body.getName(), m.stringWidth("Luck") + m.stringWidth("bottom 20%") <= damage);
+		}
+	}
 }

@@ -178,7 +178,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 			final FontMetrics leftMetrics = graphics.getFontMetrics(left);
 			final FontMetrics rightMetrics = graphics.getFontMetrics(right);
 			final LedgerRows.Row row = fit(given, t -> leftMetrics.stringWidth(Text.removeTags(t)),
-				rightMetrics.stringWidth(Text.removeTags(given.right)), panelWidth);
+				t -> rightMetrics.stringWidth(Text.removeTags(t)), panelWidth);
 			widest = Math.max(widest, leftMetrics.stringWidth(Text.removeTags(row.left))
 				+ rightMetrics.stringWidth(Text.removeTags(row.right)));
 			components.add(LineComponent.builder()
@@ -252,6 +252,20 @@ class PvmPerformanceOverlay extends OverlayPanel
 	 * form (the attack's name) that's too wide tries the short form, then cuts it
 	 * with "…"; any other row is left to RuneLite, which wraps it.
 	 */
+	static LedgerRows.Row fit(LedgerRows.Row row, ToIntFunction<String> leftWidth, ToIntFunction<String> rightWidth,
+		int panelWidth)
+	{
+		// A long figure with a short form (T-029: Luck's band without its seconds) gives way first.
+		if (row.shortRight != null)
+		{
+			final int line = panelWidth - BORDER - MIN_GAP;
+			return leftWidth.applyAsInt(row.left) + rightWidth.applyAsInt(row.right) <= line
+				? row : row.withRight(row.shortRight);
+		}
+		return fit(row, leftWidth, rightWidth.applyAsInt(row.right), panelWidth);
+	}
+
+	/** {@link #fit(LedgerRows.Row, ToIntFunction, ToIntFunction, int)} for a row with a fixed right side. */
 	static LedgerRows.Row fit(LedgerRows.Row row, ToIntFunction<String> leftWidth, int rightWidth, int panelWidth)
 	{
 		final int room = panelWidth - BORDER - rightWidth - (row.right.isEmpty() ? 0 : MIN_GAP);
