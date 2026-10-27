@@ -549,6 +549,9 @@ public class PvmPerformancePlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		// Turned off and on again, the plugin cannot know what happened in between: Mark of Darkness and Charge read down
+		// until their messages say otherwise (T-026).
+		gearBonuses.resetBuffs("the plugin has just started");
 		LoadoutOverlay.migrateLoadoutOnly(LoadoutOverlay.Settings.of(configManager));
 		overlayManager.add(overlay);
 		overlayManager.add(loadoutOverlay);
@@ -3114,9 +3117,9 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/**
-	 * Mark of Darkness, from the game's own messages: no varbit carries it, and
-	 * the one named for it is a buff bar display toggle. The messages are exact,
-	 * which beats computing a duration and hoping the formula holds.
+	 * Mark of Darkness and Charge, from the game's own messages: no varbit carries
+	 * either, and the ones named for them are buff bar display toggles. Their
+	 * durations are only the fallback (T-026, see GearBonusCalc.onGameMessage).
 	 */
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
@@ -3127,13 +3130,11 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final String message = Text.removeTags(event.getMessage());
 		noteBlowpipeCheck(message);
-		if (message.startsWith("You have placed a Mark of Darkness upon yourself"))
+		final String buff = gearBonuses.onGameMessage(message, client.getTickCount());
+		if (buff != null)
 		{
-			gearBonuses.setMarkOfDarkness(true);
-		}
-		else if (message.startsWith("Your Mark of Darkness has faded away"))
-		{
-			gearBonuses.setMarkOfDarkness(false);
+			debug.log("%s", buff);
+			combatCalc.invalidateGear();
 		}
 	}
 
@@ -3213,6 +3214,12 @@ public class PvmPerformancePlugin extends Plugin
 		// First: the tick's experience has all arrived by now, and none of the splats it pays for can have.
 		trackThrallAndXp();
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
+		// A buff whose fade message never came is let go once its duration is well past (T-026).
+		for (String line : gearBonuses.tickBuffs(client.getTickCount()))
+		{
+			debug.log("%s", line);
+			combatCalc.invalidateGear();
+		}
 		trackRaid(System.currentTimeMillis());
 		noteEngaged();
 		startFightOnTarget();
@@ -3350,6 +3357,12 @@ public class PvmPerformancePlugin extends Plugin
 			thralls.clear();
 			xpLedger.clear();
 			targetIds.clear();
+			// Whether Mark of Darkness or Charge outlasts a logout or a hop is not known here, so both read down until a
+			// message says otherwise (T-026).
+			for (String line : gearBonuses.resetBuffs(state == GameState.LOGIN_SCREEN ? "logged out" : "hopped"))
+			{
+				debug.log("%s", line);
+			}
 			if (state == GameState.LOGIN_SCREEN)
 			{
 				// Possibly another account next: its experience is not a gain on this one's.

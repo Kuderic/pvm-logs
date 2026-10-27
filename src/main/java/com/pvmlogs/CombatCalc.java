@@ -179,7 +179,7 @@ class CombatCalc
 	/** The gear multipliers for the current loadout against this target. */
 	private GearBonus computeGearBonus(int npcId)
 	{
-		return gearBonuses.compute(gear(), attackStyle(), monsters.get(npcId), activeSpell(),
+		return gearBonuses.compute(gear(), attackStyle(), monsters.get(npcId), npcId, castSpell(),
 			slayerVerdict(npcId).onTask);
 	}
 
@@ -260,6 +260,16 @@ class CombatCalc
 	private int memoGearNpc = Integer.MIN_VALUE;
 	private GearBonus memoGear;
 	private Loadout memoLoadout;
+	// The magic formula's parts for a target, per mode, as the base max hit is: levels and prayers differ by mode.
+	private final MagicDamage[] memoMagic = new MagicDamage[MODES];
+	private final int[] memoMagicNpc = new int[MODES];
+	private final List<String>[] memoMagicWhy = newReasonSlots();
+
+	@SuppressWarnings("unchecked")
+	private static List<String>[] newReasonSlots()
+	{
+		return (List<String>[]) new List<?>[MODES];
+	}
 	// The gear search's answer, which outlives the tick memo: the answer names item ids, and a switch only moves one
 	// between the hand and the bag, so it keeps describing what the player should be wearing while they wear it.
 	private int memoBestGearNpc = Integer.MIN_VALUE;
@@ -352,6 +362,7 @@ class CombatCalc
 		Arrays.fill(memoAttackBonusSet, false);
 		Arrays.fill(memoEquipmentBonusSet, false);
 		Arrays.fill(memoBaseMaxHitSet, false);
+		Arrays.fill(memoMagic, null);
 	}
 
 	// The gear every figure is worked out for. One object rather than a container read per question, so asking what
@@ -378,6 +389,7 @@ class CombatCalc
 		Arrays.fill(memoAttackBonusSet, false);
 		Arrays.fill(memoEquipmentBonusSet, false);
 		Arrays.fill(memoBaseMaxHitSet, false);
+		Arrays.fill(memoMagic, null);
 	}
 
 	// Expected damage for a loadout that is not being worn. Restores what was there afterwards, memo included, so a search
@@ -738,6 +750,17 @@ class CombatCalc
 	double averageHit(int npcId)
 	{
 		final double accuracy = hitChance(npcId);
+		if (weaponStyle() == Style.MAGIC)
+		{
+			// The magic formula walks every roll (T-026): Mark of Darkness and Ahrim's act on the rolled hit, sunfire runes
+			// raise the bottom of it, and the twinflame staff adds a second splat, none of which a max over two can say.
+			final MagicDamage magic = magicModel(npcId);
+			if (accuracy < 0 || magic.preHitRoll() <= 0)
+			{
+				return -1;
+			}
+			return accuracy * magic.expectedOnHit(mitigation(npcId), damageCap(npcId), overkillCap(npcId));
+		}
 		// Averages, not best cases: a keris crit or an ahrim's proc raises the max hit but only lifts sustained damage by a
 		// few percent.
 		final double averageMax = (baseMaxHit() * gearBonus(npcId).getExpectedDamage()
@@ -1625,6 +1648,11 @@ class CombatCalc
 			total += Math.min(cap, max);
 			max = nextScytheMax(max);
 		}
+		if (weaponStyle() == Style.MAGIC)
+		{
+			// The twinflame staff's second spell, 40% of the first.
+			total += Math.min(cap, (int) (magicModel(npcId).secondMaxHit() * mitigation(npcId)));
+		}
 		return total;
 	}
 
@@ -1873,6 +1901,10 @@ class CombatCalc
 	/** The max hit before the fang narrows its roll, which is what its spec reaches. */
 	private int unnarrowedMaxHit(int npcId)
 	{
+		if (weaponStyle() == Style.MAGIC)
+		{
+			return magicModel(npcId).maxHit();
+		}
 		final int hit = (int) (baseMaxHit() * gearBonus(npcId).getDamage())
 			+ colossalBladeBonus(npcId) + elementalWeaknessBonus(npcId);
 		final EnchantedBolt bolt = loadedBolt(npcId);
@@ -2296,7 +2328,7 @@ class CombatCalc
 	 */
 	private int elementalWeakness(int npcId)
 	{
-		final Spell spell = activeSpell();
+		final Spell spell = castSpell();
 		if (spell == null || attackStyle().getAttackType() != AttackType.MAGIC)
 		{
 			return 0;
@@ -2351,11 +2383,22 @@ class CombatCalc
 
 	/**
 	 * Scales a base magic hit by the summed magic damage % of the worn gear
-	 * (occult, tormented, ancestral, ...), which Tumeken's Shadow multiplies.
-	 * Not modelled: the tomes' elemental bonuses and the smoke staff's
-	 * standard-spell bonus, so those setups still read low.
+	 * (occult, tormented, ancestral, ...), which Tumeken's Shadow multiplies. The
+	 * magic specials that carry no other bonus use this; an ordinary magic attack
+	 * goes through {@link #magicModel}, which places the rest (T-026).
 	 */
 	private int applyMagicDamage(int baseMaxHit, Spell spell)
+	{
+		return (int) Math.floor(baseMaxHit * (1.0 + magicDamagePercent(spell) / 100.0));
+	}
+
+	/**
+	 * The additive magic damage %, before the parts the magic formula takes from
+	 * the gear and the target ({@link GearBonusCalc#fillMagic}): the worn bonuses,
+	 * which Tumeken's Shadow multiplies and caps, virtus on ancients, and the
+	 * prayer.
+	 */
+	private double magicDamagePercent(Spell spell)
 	{
 		final Loadout gear = gear();
 		// Magic damage is a float: several items carry fractions of a percent, so summing into an int would truncate each one
@@ -2384,7 +2427,75 @@ class CombatCalc
 		// Prayer magic damage is not worn equipment, so the shadow doesn't multiply it and the equipment cap doesn't apply to
 		// it.
 		percent += magicDamagePrayerPercent();
-		return (int) Math.floor(baseMaxHit * (1.0 + percent / 100.0));
+		return percent;
+	}
+
+	/**
+	 * The spell this magic attack casts: a manual cast whatever is held, nothing
+	 * for a powered staff's own attack, else the autocast spell. What the tomes,
+	 * the staves' spell bonuses, demonbane and elemental weakness turn on.
+	 */
+	private Spell castSpell()
+	{
+		final Spell manual = activeManualCast();
+		if (manual != null)
+		{
+			return manual;
+		}
+		if (poweredStaffMaxHit() > 0)
+		{
+			return null;
+		}
+		final WeaponCategory category = weaponCategory();
+		if (category == WeaponCategory.POWERED_STAFF || category == WeaponCategory.SALAMANDER)
+		{
+			return null;
+		}
+		return autocastSpell();
+	}
+
+	/**
+	 * The magic attack's base max hit, before any bonus: the spell's at the magic
+	 * level, or the powered staff's own. Magic Dart from a slayer's staff (e) on
+	 * task is {@code floor(Magic / 6) + 13} (wiki).
+	 */
+	private int magicBase(Spell spell, boolean onTask)
+	{
+		final int magic = boostedLevel(Skill.MAGIC);
+		if (spell == Spell.MAGIC_DART && onTask && weaponItemId() == ItemID.SLAYER_STAFF_ENCHANTED)
+		{
+			return Spell.enchantedSlayerStaffDart(magic);
+		}
+		if (spell != null)
+		{
+			return spell.maxHitAt(magic);
+		}
+		return Math.max(0, poweredStaffMaxHit());
+	}
+
+	/**
+	 * The magic formula for this target, filled in (T-026): see {@link MagicDamage}.
+	 * Held per mode for the tick, like the base max hit.
+	 */
+	private MagicDamage magicModel(int npcId)
+	{
+		expireMemo();
+		final int slot = mode;
+		if (memoMagic[slot] == null || memoMagicNpc[slot] != npcId)
+		{
+			final MagicDamage m = new MagicDamage();
+			final Spell spell = castSpell();
+			final boolean onTask = slayerVerdict(npcId).onTask;
+			m.base = magicBase(spell, onTask);
+			m.percent = magicDamagePercent(spell);
+			m.weaknessPercent = elementalWeakness(npcId);
+			// What the formula does not place itself: the dragon hunter wand, the revenant sceptres, leafy targets.
+			m.others = gearBonus(npcId).getDamage();
+			memoMagicWhy[slot] = gearBonuses.fillMagic(m, gear(), monsters.get(npcId), npcId, spell, onTask);
+			memoMagic[slot] = m;
+			memoMagicNpc[slot] = npcId;
+		}
+		return memoMagic[slot];
 	}
 
 	/**
@@ -2539,9 +2650,12 @@ class CombatCalc
 				own ? gearBonuses.shadowMultiplier(gear) : 1,
 				own ? "own attack" : "cast, passive does not apply"));
 			final GearBonus bonus = gearBonus(npcId);
-			lines.add(String.format("Gear multipliers: accuracy x%.3f, damage x%.3f, mark of darkness %s",
+			final MagicDamage magic = magicModel(npcId);
+			final List<String> applied = memoMagicWhy[mode];
+			lines.add(String.format("Gear multipliers: accuracy x%.3f, other damage x%.3f; magic bonuses: %s",
 				bonus.getAccuracy(), bonus.getDamage(),
-				gearBonuses.hasMarkOfDarkness() ? "UP" : "down"));
+				applied == null || applied.isEmpty() ? "none" : String.join("; ", applied)));
+			lines.add("Magic max hit: " + magic.describe());
 			// Named even when it is nought, so "this target has none" reads differently from "the spell is the wrong element for
 			// it".
 			final MonsterStatsProvider.MonsterStats weak = monsters.get(npcId);
@@ -3004,6 +3118,7 @@ class CombatCalc
 			.append(", prayer ").append(prayerText(PrayerIdeal.Style.MAGIC));
 		line.append("; on task ").append(slayerVerdict(npcId));
 		line.append("; blowpipe dart ").append(loadedDart).append(" (").append(loadedDartSource).append(')');
+		line.append("; ").append(gearBonuses.describeBuffs());
 		return line.toString();
 	}
 
