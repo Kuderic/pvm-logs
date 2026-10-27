@@ -1556,6 +1556,26 @@ class CombatCalc
 		return weapon == null ? spell : weapon + " (" + spell + ")";
 	}
 
+	/** The attack in hand's style, for the fight timeline (T-035). */
+	FightTimeline.Style timelineStyle()
+	{
+		switch (weaponStyle())
+		{
+			case RANGED:
+				return FightTimeline.Style.RANGED;
+			case MAGIC:
+				return FightTimeline.Style.MAGIC;
+			default:
+				return FightTimeline.Style.MELEE;
+		}
+	}
+
+	/** The spell the attack in hand casts, or null: a powered staff's own attack, or not magic (T-035). */
+	Spell timelineSpell()
+	{
+		return weaponStyle() == Style.MAGIC ? castSpell() : null;
+	}
+
 	/** The spell being cast, manual taking priority over autocast. */
 	String activeSpellName()
 	{
