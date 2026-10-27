@@ -484,6 +484,8 @@ public class PvmPerformancePlugin extends Plugin
 	// Every fight's attack-by-attack and tick-by-tick record this session, for the side panel's charts (T-035). Fed from
 	// Fight's own counting; the hooks below add what each attack was and whose each splat is.
 	private final FightTimeline.Store timelines = new FightTimeline.Store();
+	// Specials' splats still to come long after their hit: the ancient godsword's 25 (T-037).
+	private final AttackSplats.Delayed delayedSplats = new AttackSplats.Delayed();
 
 
 	// The room the fights add up to, and the raid the rooms add up to. Both are views over the fights, so the three widths
@@ -689,6 +691,12 @@ public class PvmPerformancePlugin extends Plugin
 		if (actor instanceof NPC && hitsplat.isMine() && !EncounterGroup.isIgnored(((NPC) actor).getId()))
 		{
 			final NPC npc = (NPC) actor;
+			// A special's delayed splat before anything else (T-037): the ancient godsword's 25, eight ticks after its hit,
+			// would otherwise open a burst and book an attack, or be weighed as the thrall's.
+			if (onDelayedSpecialSplat(npc, hitsplat.getAmount(), now))
+			{
+				return;
+			}
 			// Recoil and vengeance first (T-017 Part B): they are isMine() too, and a small recoil would otherwise go to the
 			// thrall gate, or book a blow.
 			final boolean couldBeReflected = hitsplat.getAmount() > 0 && couldHaveHitMe(npc);
@@ -1286,6 +1294,7 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final int tick = client.getTickCount();
 		rejudgeUnclaimedProjectiles(tick);
+		delayedSplats.prune(tick);
 		final boolean[] cannotReport = new boolean[XpLedger.SKILLS.length];
 		for (int i = 0; i < cannotReport.length; i++)
 		{
@@ -2402,6 +2411,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
 			specFiredTick = Integer.MIN_VALUE;
+			expectDelayedSplat(fight);
 			final FightTimeline line = timelines.of(fight);
 			if (line != null)
 			{
@@ -2530,6 +2540,57 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/** The trip totals shown when the overlay is set to whole-trip mode. */
+	// The special just booked puts a splat down long after its hit (T-037): the ancient godsword's 25, eight ticks from the
+	// booking, which for a melee special is its hit's tick.
+	private void expectDelayedSplat(Fight fight)
+	{
+		final Integer held = weaponByTick.get(attackOriginTick);
+		final SpecialAttack special = SpecialAttack.forItem(held != null ? held : combatCalc.equippedWeaponId());
+		final int delay = AttackSplats.delayedSplatTicks(special);
+		if (delay > 0)
+		{
+			delayedSplats.expect(fight.getTargetIndex(), client.getTickCount() + delay, AttackSplats.BLOOD_SACRIFICE_DAMAGE,
+				attackOriginTick);
+		}
+	}
+
+	/**
+	 * A special's delayed splat landing (T-037): the special's own damage, so it
+	 * counts as weapon damage and against the target's health, but it books no
+	 * attack, opens no burst, and is neither an extra nor the thrall's.
+	 *
+	 * @return whether the splat was one
+	 */
+	private boolean onDelayedSpecialSplat(NPC npc, int amount, long now)
+	{
+		final int thrownTick = delayedSplats.claim(npc.getIndex(), client.getTickCount(), amount);
+		if (thrownTick == Integer.MIN_VALUE)
+		{
+			return false;
+		}
+		if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
+		{
+			debug.log("DELAYED SPLAT %d on %s (npc %d, index %d) from the special thrown on %d, but its fight is over: "
+				+ "taken as an ordinary splat", amount, npc.getName(), npc.getId(), npc.getIndex(), thrownTick);
+			return false;
+		}
+		current.recordDamageDealt(amount, now, false);
+		if (current.isScored())
+		{
+			session.recordAttempt(amount, false, now);
+		}
+		damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
+		health.damage(npc.getIndex(), npc.getId(), amount, client.getTickCount());
+		final FightTimeline line = timelines.of(current);
+		if (line != null)
+		{
+			line.attributeSplat(thrownTick);
+		}
+		debug.log("DELAYED SPLAT %d on %s (npc %d, index %d): Blood Sacrifice from the special thrown on %d",
+			amount, npc.getName(), npc.getId(), npc.getIndex(), thrownTick);
+		return true;
+	}
+
 	/** Every fight's timeline this session (T-035), for the side panel. Read on the client thread. */
 	FightTimeline.Store getTimelines()
 	{

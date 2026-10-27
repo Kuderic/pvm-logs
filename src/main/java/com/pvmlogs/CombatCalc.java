@@ -2400,11 +2400,41 @@ class CombatCalc
 		{
 			return DamageMoments.capped(maxima[0], cap).landing(landChance(accuracy, spec.hits()));
 		}
+		if (spec == SpecialAttack.ANCIENT_GODSWORD || spec == SpecialAttack.SARADOMIN_SWORD)
+		{
+			return withExtraSplat(maxima[0], accuracy, cap, spec);
+		}
 		if (spec == SpecialAttack.DINHS_BULWARK && inMulticombat())
 		{
 			return specMoments(new int[]{maxima[0], maxima[0]}, accuracy, 0, 0, cap, false);
 		}
 		return specMoments(maxima, accuracy, spec.minFraction(), spec.flatMinimum(), cap, spec.sharedAccuracyRoll());
+	}
+
+	/** Saradomin's Lightning's extra Magic damage, "1-16" (wiki, Saradomin sword, read 2026-10-27; T-037). */
+	static final int LIGHTNING_MIN = 1;
+	static final int LIGHTNING_MAX = 16;
+
+	/**
+	 * A special whose hit brings a second splat of the player's own when it
+	 * lands (T-037; wiki, read 2026-10-27), with the hit's damage roll and that
+	 * splat both behind the one accuracy roll:
+	 * <ul>
+	 * <li>Blood Sacrifice (ancient godsword): 25, eight ticks later, "unless the
+	 * target has moved 5 or more tiles away", which is assumed not to happen;</li>
+	 * <li>Saradomin's Lightning (Saradomin sword): 1 to 16 Magic damage on the
+	 * same attack; "If the melee attack misses, then the Magic attack will also
+	 * fail". The wiki doesn't say whether it rolls its own accuracy, so it is
+	 * taken to land whenever the melee hit does.</li>
+	 * </ul>
+	 * Each splat is held to the per-hitsplat cap on its own.
+	 */
+	static DamageMoments withExtraSplat(int meleeMax, double accuracy, int cap, SpecialAttack spec)
+	{
+		final DamageMoments extra = spec == SpecialAttack.ANCIENT_GODSWORD
+			? DamageMoments.fixed(Math.min(cap, AttackSplats.BLOOD_SACRIFICE_DAMAGE))
+			: DamageMoments.capped(LIGHTNING_MIN, LIGHTNING_MAX, cap);
+		return DamageMoments.capped(0, meleeMax, cap).plus(extra).landing(accuracy);
 	}
 
 	// Dragon arrows in the quiver, seeking ones included: Descent of Dragons rather than of Darkness (wiki, Dark bow).

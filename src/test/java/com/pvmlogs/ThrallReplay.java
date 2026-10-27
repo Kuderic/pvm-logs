@@ -128,6 +128,11 @@ final class ThrallReplay
 	private int lastThrall = -1;
 	// The ticks an attack booked as a special began landing on, from the log's own "scored as a SPECIAL" lines.
 	private final Set<Integer> specialStarts = new HashSet<>();
+	// T-037: whether the specials are the ancient godsword's, whose 25 lands eight ticks after each, and those claimed.
+	private boolean agsSpecials;
+	private final AttackSplats.Delayed delayed = new AttackSplats.Delayed();
+	/** Splats taken as a special's delayed damage, as "tick: amount (thrown T)". */
+	final List<String> delayedSplats = new ArrayList<>();
 
 	// Outputs.
 	final List<Judged> judged = new ArrayList<>();
@@ -179,6 +184,13 @@ final class ThrallReplay
 			}
 		}
 		return run(lines);
+	}
+
+	/** Replays with the ancient godsword as the special weapon (T-037). */
+	ThrallReplay withAncientGodsword()
+	{
+		agsSpecials = true;
+		return this;
 	}
 
 	/** Replays as if a recoil ring were worn throughout. */
@@ -337,6 +349,13 @@ final class ThrallReplay
 
 	private void splat(int tick, int amount, int index)
 	{
+		// As the plugin: a special's delayed splat before anything else (T-037).
+		final int fromSpecial = delayed.claim(index, tick, amount);
+		if (fromSpecial != Integer.MIN_VALUE)
+		{
+			delayedSplats.add(tick + ": " + amount + " (thrown " + fromSpecial + ")");
+			return;
+		}
 		// As the plugin: recoil and vengeance before the thrall gate, unless the experience paid for exactly this splat.
 		final boolean xpExact = ledger.trusted() && ledger.coverage(amount, tick) == XpLedger.Coverage.EXACT;
 		if (amount > 0 && !xpExact)
@@ -396,6 +415,10 @@ final class ThrallReplay
 		if (booked)
 		{
 			bookOnTick = tick;
+			if (agsSpecials && specialStarts.contains(tick))
+			{
+				delayed.expect(index, tick + AttackSplats.BLOOD_SACRIFICE_TICKS, AttackSplats.BLOOD_SACRIFICE_DAMAGE, tick - 1);
+			}
 			bursts.put(index, new AttackSplats.Burst(tick - 1, tick, ordinarySplats, specialSplats,
 				specialStarts.contains(tick), "replay"));
 		}
@@ -520,6 +543,7 @@ final class ThrallReplay
 			}
 		}
 		extrasThisTick.clear();
+		delayed.prune(tick);
 		final XpLedger.Award award = ledger.close(tick, targetId, formulaMultiplier, null);
 		if (ledger.castNote() != null)
 		{
