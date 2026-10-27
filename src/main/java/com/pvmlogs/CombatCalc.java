@@ -103,6 +103,16 @@ class CombatCalc
 		{0.50, 0.50, 0.00},
 		{0.00, 0.00, 1.00},
 	};
+	/**
+	 * Wiki (Burning claws, read 2026-10-27): each hitsplat of a Burning barrage
+	 * rolls its own burn, at 15% when the first accuracy roll connected, 30% the
+	 * second, 45% the third; the all-miss hits can't burn.
+	 */
+	private static final double[] BURNING_CLAW_BURN_CHANCE = {0.15, 0.30, 0.45};
+	/** Wiki (Burn): a burn deals 10 over 40 ticks; the Arkan blade's strong burn is the same 10. */
+	private static final int BURN_DAMAGE = 10;
+	/** Wiki (Scorching bow, read 2026-10-27): Scorching shackles burns a demon for 5 in all. */
+	private static final int SCORCHING_BURN = 5;
 
 	/**
 	 * Verzik's first phase, in all three difficulties. The seated form counts:
@@ -2595,6 +2605,65 @@ class CombatCalc
 	static double burningClawsAverage(int normalMaxHit, double accuracy, int cap)
 	{
 		return burningClawsMoments(normalMaxHit, accuracy, cap).mean;
+	}
+
+	/**
+	 * What a special deals on top of its own hitsplats, on average, for the
+	 * loadout's spec figure (T-030). Read-only to scoring: the burn that lands is
+	 * DoT, counted luck-neutral in {@code O}. The burns, from the wiki (read
+	 * 2026-10-27; the whole audit is in the overlay chat's status doc):
+	 * <ul>
+	 * <li>Burning barrage: see {@link #burningClawsBurnAverage};</li>
+	 * <li>Flames of Ralos (Arkan blade): a 10 burn when the hit succeeds;</li>
+	 * <li>Scorching shackles (Scorching bow): 5 against a demon, on use; it won't
+	 * fire at anything else.</li>
+	 * </ul>
+	 * 0 for every other weapon, -1 when the target's stats aren't known.
+	 */
+	double specialExtraAverage(int npcId)
+	{
+		final SpecialAttack spec = specialAttack();
+		if (spec == SpecialAttack.SCORCHING_BOW)
+		{
+			final MonsterStatsProvider.MonsterStats npc = monsters.get(npcId);
+			return npc == null ? -1 : npc.hasAttribute("demon") ? SCORCHING_BURN : 0;
+		}
+		if (spec != SpecialAttack.BURNING_CLAWS && spec != SpecialAttack.ARKAN_BLADE)
+		{
+			return 0;
+		}
+		final double accuracy = hitChance(npcId, spec);
+		if (accuracy < 0)
+		{
+			return -1;
+		}
+		return spec == SpecialAttack.BURNING_CLAWS ? burningClawsBurnAverage(accuracy) : accuracy * BURN_DAMAGE;
+	}
+
+	/**
+	 * Burning barrage's expected burn: over the cascade's outcomes (the first
+	 * roll to connect, each at {@code accuracy}), the damaging hitsplats times
+	 * their burn chance times 10. Counted as 10 a burn: the wiki lists 19 and 29
+	 * among the totals without saying why, so this can be a point high.
+	 */
+	static double burningClawsBurnAverage(double accuracy)
+	{
+		double expected = 0;
+		double reached = 1.0;
+		for (int connected = 0; connected < BURNING_CLAW_SHAPES.length; connected++)
+		{
+			int damaging = 0;
+			for (double share : BURNING_CLAW_SHAPES[connected])
+			{
+				if (share > 0)
+				{
+					damaging++;
+				}
+			}
+			expected += reached * accuracy * damaging * BURNING_CLAW_BURN_CHANCE[connected] * BURN_DAMAGE;
+			reached *= 1.0 - accuracy;
+		}
+		return expected;
 	}
 
 	/** {@link #burningClawsAverage} as moments; an outcome's hitsplats split one roll, so they move together. */

@@ -68,6 +68,9 @@ public final class LedgerPictures
 		// loadout's name falls back to the spell rather than wrapping.
 		s.put("12-saved-width", LedgerRows.build(LedgerExamples.midFight(),
 			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+		// T-030: the burning claws' spec, with its burn.
+		s.put("13-claws", LedgerRows.build(LedgerExamples.midFight(),
+			LedgerRows.State.fight("Vardorvis", false, false, false), all));
 		// T-022: the loadout overlay under the Ledger, in the states it's worth seeing in. Each is drawn as its own picture,
 		// "<state>.L", which the sheet stacks under the Ledger's as RuneLite stacks the two boxes.
 		final Map<String, List<LedgerRows.Row>> both = new LinkedHashMap<>();
@@ -102,6 +105,18 @@ public final class LedgerPictures
 		LOADOUTS.put("8-nodata", LedgerRows.loadout(fang, false));
 		LOADOUTS.put("10-pre-unsure", LedgerRows.loadout(tentacle, true));
 		LOADOUTS.put("12-saved-width", LedgerRows.loadout(staff, false));
+		// Illustrative figures for burning claws (T-030).
+		final LedgerRows.Loadout claws = new LedgerRows.Loadout();
+		claws.attack = "Burning claws";
+		claws.maxHit = 41;
+		claws.accuracy = 0.62;
+		claws.dps = 5.9;
+		claws.specMaxHit = 48;
+		claws.specAccuracy = 0.71;
+		claws.specAverage = 17.8;
+		claws.specExtra = 8.2;
+		claws.specExtraKind = "burn";
+		LOADOUTS.put("13-claws", LedgerRows.loadout(claws, false));
 	}
 
 	/** States drawn at a width the player saved rather than the panel's own. */

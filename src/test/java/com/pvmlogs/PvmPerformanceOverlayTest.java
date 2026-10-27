@@ -269,4 +269,21 @@ public class PvmPerformanceOverlayTest
 		assertEquals(PvmPerformanceOverlay.MAX_WIDTH, PvmPerformanceOverlay.savedWidth(new java.awt.Dimension(0, 0)));
 		assertEquals(180, PvmPerformanceOverlay.savedWidth(new java.awt.Dimension(180, 0)));
 	}
+
+	// ---- T-030: the spec's two rows are no wider than the one they replace ----
+
+	@Test
+	public void theSpecsTwoRowsFitWhereTheOldOneDid()
+	{
+		final java.awt.Graphics2D g = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+			.createGraphics();
+		for (Font body : Arrays.asList(FontManager.getRunescapeFont(), FontManager.getRunescapeBoldFont(),
+			FontManager.getRunescapeSmallFont()))
+		{
+			final java.awt.FontMetrics m = g.getFontMetrics(PvmPerformanceOverlay.FontRoles.of(body).detail);
+			final int old = m.stringWidth(" spec") + m.stringWidth("50 max \u00b7 71% \u00b7 17.8 dmg");
+			assertTrue(body.getName(), m.stringWidth(" spec") + m.stringWidth("48 max \u00b7 71%") <= old);
+			assertTrue(body.getName(), m.stringWidth(" spec damage") + m.stringWidth("26.0 (8.2 burn)") <= old);
+		}
+	}
 }

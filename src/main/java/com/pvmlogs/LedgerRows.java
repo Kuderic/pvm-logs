@@ -683,6 +683,10 @@ final class LedgerRows
 		double specAccuracy = -1;
 		/** What one spec is expected to deal: hit chance times damage, as the plugin books it (Eric, 2026-10-26). */
 		double specAverage = -1;
+		/** T-030: what the spec deals beyond its own hitsplats on average (Burning barrage's burn); 0 for none. */
+		double specExtra = -1;
+		/** What {@link #specExtra} is, for its bracket: "burn". */
+		String specExtraKind;
 	}
 
 	/** Which state the overlay is in, beyond the numbers. */
@@ -921,8 +925,13 @@ final class LedgerRows
 		}
 		if (l.specMaxHit > 0)
 		{
-			rows.add(detail(" spec", l.specMaxHit + " max" + (l.specAccuracy >= 0 ? DOT + percent(l.specAccuracy) : "")
-				+ (l.specAverage >= 0 ? DOT + oneDecimal(l.specAverage) + " dmg" : ""), Colour.NEUTRAL));
+			// Two rows (Eric, 2026-10-27): the hit, then what a spec deals, burn and all.
+			rows.add(detail(" spec", l.specMaxHit + " max" + (l.specAccuracy >= 0 ? DOT + percent(l.specAccuracy) : ""),
+				Colour.NEUTRAL));
+			if (l.specAverage >= 0)
+			{
+				rows.add(detail(" spec damage", specDamage(l), Colour.NEUTRAL));
+			}
 		}
 		if (!rows.isEmpty() || l.dps >= 0)
 		{
@@ -934,6 +943,19 @@ final class LedgerRows
 				: new Row(name, dps, FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL, spellOr(name)));
 		}
 		return rows;
+	}
+
+	/**
+	 * {@code 26.0 (8.2 burn)}: the spec's expected damage including what it deals
+	 * beyond its hitsplats, that extra named in brackets; {@code 17.8} with none.
+	 * No "exp" (Eric's standing rule).
+	 */
+	static String specDamage(Loadout l)
+	{
+		final double extra = Math.max(0, l.specExtra);
+		final String total = oneDecimal(l.specAverage + extra);
+		return extra >= 0.05 && l.specExtraKind != null
+			? total + " (" + oneDecimal(extra) + " " + l.specExtraKind + ")" : total;
 	}
 
 	/**

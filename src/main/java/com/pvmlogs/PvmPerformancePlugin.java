@@ -257,6 +257,8 @@ public class PvmPerformancePlugin extends Plugin
 	private int expectedSpecMaxHit;
 	private double expectedSpecAccuracy = -1;
 	private double expectedSpecAverageHit = -1;
+	/** T-030: what the special deals beyond its own hitsplats on average (Burning barrage's burn), for the loadout only. */
+	private double expectedSpecExtra = -1;
 	// The variance of each one's damage (T-028), from the same distributions as the averages.
 	private double expectedVariance = -1;
 	private double expectedSpecVariance = -1;
@@ -2170,6 +2172,7 @@ public class PvmPerformancePlugin extends Plugin
 			expectedSpecMaxHit = combatCalc.specialAttackMaxHit(shownId);
 			expectedSpecAccuracy = combatCalc.specialAttackLandChance(shownId);
 			expectedSpecAverageHit = meanOf(special);
+			expectedSpecExtra = combatCalc.specialExtraAverage(shownId);
 			expectedVariance = varianceOf(ordinary);
 			expectedSpecVariance = varianceOf(special);
 			expectedForNpcId = shownId;
@@ -2222,6 +2225,7 @@ public class PvmPerformancePlugin extends Plugin
 			expectedSpecMaxHit = combatCalc.specialAttackMaxHit(-1);
 			expectedSpecAccuracy = -1;
 			expectedSpecAverageHit = -1;
+			expectedSpecExtra = -1;
 			expectedVariance = -1;
 			expectedSpecVariance = -1;
 			expectedForNpcId = -1;
@@ -4331,6 +4335,12 @@ public class PvmPerformancePlugin extends Plugin
 	double getExpectedSpecAverageHit()
 	{
 		return expectedSpecAverageHit;
+	}
+
+	/** See expectedSpecExtra (T-030). */
+	double getExpectedSpecExtra()
+	{
+		return expectedSpecExtra;
 	}
 
 	/** The weapon, and the spell when one is cast, that the loadout's figures are for; null before the first tick. */

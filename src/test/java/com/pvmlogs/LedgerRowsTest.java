@@ -112,7 +112,8 @@ public class LedgerRowsTest
 			TENTACLE,
 			d(" max hit", "49"),
 			d(" accuracy", "54%"),
-			d(" spec", "50 max · 71% · 17.8 dmg")),
+			d(" spec", "50 max · 71%"),
+			d(" spec damage", "17.8")),
 			LedgerRows.loadout(LedgerExamples.loadout(), false));
 	}
 
@@ -539,7 +540,8 @@ public class LedgerRowsTest
 		claws.specMaxHit = 110;
 		claws.specAccuracy = 0.62;
 		claws.specAverage = 33.4;
-		assertTrue(LedgerRows.loadout(claws, false).contains(d(" spec", "110 max \u00b7 62% \u00b7 33.4 dmg")));
+		assertTrue(LedgerRows.loadout(claws, false).containsAll(Arrays.asList(d(" spec", "110 max \u00b7 62%"),
+			d(" spec damage", "33.4"))));
 	}
 
 	@Test
@@ -609,7 +611,8 @@ public class LedgerRowsTest
 			TENTACLE,
 			d(" max hit", "49"),
 			d(" accuracy", "54%"),
-			d(" spec", "50 max \u00b7 71% \u00b7 17.8 dmg")),
+			d(" spec", "50 max \u00b7 71%"),
+			d(" spec damage", "17.8")),
 			LedgerRows.loadout(LedgerExamples.loadout(), true));
 	}
 
@@ -1197,5 +1200,53 @@ public class LedgerRowsTest
 		final double expected = s.expectedDamage();
 		assertEquals(12.0 * (80 - expected) / expected, n.luck, 1e-9);
 		assertEquals(80 / 12.0, n.dps, 1e-9);
+	}
+
+	// ---- T-030: the spec as two rows, with what it deals beyond its hits ----
+
+	@Test
+	public void burningClawsShowTheirBurnInTheSpecDamage()
+	{
+		final LedgerRows.Loadout claws = new LedgerRows.Loadout();
+		claws.attack = "Burning claws";
+		claws.maxHit = 41;
+		claws.specMaxHit = 48;
+		claws.specAccuracy = 0.71;
+		claws.specAverage = 17.8;
+		claws.specExtra = 8.2;
+		claws.specExtraKind = "burn";
+		final List<Row> rows = LedgerRows.loadout(claws, false);
+		assertEquals(d(" spec", "48 max \u00b7 71%"), rows.get(rows.size() - 2));
+		// The total, burn and all, then the burn named.
+		assertEquals(d(" spec damage", "26.0 (8.2 burn)"), rows.get(rows.size() - 1));
+	}
+
+	@Test
+	public void aSpecWithNothingExtraHasNoBracket()
+	{
+		final LedgerRows.Loadout l = LedgerExamples.loadout();
+		l.specExtra = 0;
+		assertEquals("17.8", LedgerRows.specDamage(l));
+		l.specExtra = -1;
+		assertEquals("17.8", LedgerRows.specDamage(l));
+		// No average known: no damage row, the max and chance still show.
+		l.specAverage = -1;
+		final List<Row> rows = LedgerRows.loadout(l, false);
+		assertEquals(d(" spec", "50 max \u00b7 71%"), rows.get(rows.size() - 1));
+	}
+
+	@Test
+	public void burningClawsExpectedBurnByHand()
+	{
+		// Wiki: each damaging hitsplat burns at 15% / 30% / 45% by which roll connected first; 10 a burn.
+		// Damaging hitsplats: 3 when the first roll connects (25-25-50), 2 on the second (50-50-0), 1 on the third.
+		// At a per-roll accuracy a = 0.6:
+		//   first:  a              = 0.6    x 3 x 0.15 x 10 = 2.70
+		//   second: (1 - a) a      = 0.24   x 2 x 0.30 x 10 = 1.44
+		//   third:  (1 - a)^2 a    = 0.096  x 1 x 0.45 x 10 = 0.432
+		//   all miss: no burn.                         total = 4.572
+		assertEquals(4.572, CombatCalc.burningClawsBurnAverage(0.6), 1e-9);
+		assertEquals(4.5, CombatCalc.burningClawsBurnAverage(1.0), 1e-9);
+		assertEquals(0.0, CombatCalc.burningClawsBurnAverage(0.0), 1e-9);
 	}
 }
