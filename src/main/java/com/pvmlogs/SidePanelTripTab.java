@@ -77,6 +77,8 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		{
 			u.accept(tab);
 		}
+		// One paint pass for the whole update (T-046 follow-up), as the Fight tab does.
+		repaint();
 	}
 
 	int builds()

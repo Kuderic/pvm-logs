@@ -3836,9 +3836,11 @@ public class PvmPerformancePlugin extends Plugin
 			panel.onTick();
 			perf.stop(PerfProbe.Slot.PANEL_SNAPSHOT, snapshotStarted);
 		}
-		// The input-delay probe (T-045 item 4), after the panel has queued its update: it waits behind that update and its
-		// repaint, as a click made just after the tick does.
+		// The input-delay probe (T-045 item 4), after the panel has queued its update: it waits behind that update's apply
+		// only, as the apply's repaint is queued while the apply runs, behind the probe. The 20 ms watch on Swing's thread
+		// (T-046 follow-up) runs on RuneLite's executor between ticks and sees every stall.
 		perf.postInputProbe();
+		perf.watchSwing(executor);
 	}
 
 	/** Whether the player is still interacting with this NPC. */

@@ -153,9 +153,14 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final String s = tab.structure();
 		if (!s.equals(structure))
 		{
+			final long started = PerfProbe.start(perf);
 			structure = s;
 			rebuild(tab);
 			reserved = false;
+			if (started != 0L)
+			{
+				perf.stopSwing(PerfProbe.SwingSlot.REBUILD, started);
+			}
 		}
 		else if (!reserved && tab.state == PanelSnapshot.State.LIVE && getWidth() > 0)
 		{
@@ -168,6 +173,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			u.accept(tab);
 		}
+		// One paint pass for the whole update (T-046 follow-up): Swing paints each dirty component with no dirty ancestor
+		// in a pass of its own, each ending in its own copy to the window, about 17 an update. With the tab dirty, every
+		// child's repaint joins its pass.
+		repaint();
 	}
 
 	private static void reserveDigits(java.awt.Container c)

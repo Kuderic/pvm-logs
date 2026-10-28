@@ -2,7 +2,12 @@ package com.pvmlogs;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.SwingUtilities;
 
@@ -28,6 +33,9 @@ final class PerfProbe
 		REFRESH_EXPECTED("onGameTick: refreshExpected", true),
 		SWITCH_CHECK("onGameTick: gear-switch check", true),
 		PANEL_SNAPSHOT("onGameTick: side panel snapshot", true),
+		// T-046 follow-up: inside the snapshot, the ticks that build one (every 5 during a fight), apart from the ticks that
+		// only check whether to.
+		PANEL_BUILD("onGameTick: side panel snapshot, the builds alone", true),
 		TICK_REST("onGameTick: the rest", true),
 		// The other handlers.
 		ON_HITSPLAT_APPLIED("onHitsplatApplied", false),
@@ -78,7 +86,9 @@ final class PerfProbe
 		VIEW_BLIT("panel copy to screen"),
 		LAYOUT("panel layout pass"),
 		CHART_DRAW("damage chart image"),
-		STRIP_DRAW("tick strip image");
+		STRIP_DRAW("tick strip image"),
+		// T-046 follow-up: a Fight tab rebuilt because its structure changed (a section or a damage row came or went).
+		REBUILD("panel rebuild (structure changed)");
 
 		final String label;
 
@@ -167,7 +177,8 @@ final class PerfProbe
 	private int[] baseline;
 	private int baselineCount;
 	private long baselineSpanNanos;
-	private boolean fighting;
+	// Read by the 20 ms watch on RuneLite's executor too (T-046 follow-up).
+	private volatile boolean fighting;
 
 	// Which panel state each tick of the fight was in (panelState's codes), in the order first seen.
 	static final int PANEL_STATES = 13;
@@ -193,6 +204,59 @@ final class PerfProbe
 		inputPending.set(false);
 	};
 
+	// T-046 follow-up: Swing's thread watched every 20 ms from RuneLite's executor, so no stall can fall between two
+	// probes. One probe pending at a time; a post skipped because the last is still waiting is 20 ms of stall. When a probe
+	// has waited over 50 ms, Swing's thread's stack is read: what holds it.
+	static final long WATCH_MILLIS = 20;
+	/** A fight's watch samples kept for the percentiles: 11 minutes; the count, total and max cover every one. */
+	static final int WATCH_SAMPLES = 1 << 15;
+	static final int STALL_FRAMES = 30;
+	static final int STALLS_SHOWN = 5;
+	private static final int STALLS_KEPT = 64;
+	private ScheduledFuture<?> watch;
+	private final AtomicBoolean watchPending = new AtomicBoolean();
+	private volatile long watchPosted;
+	/** The thread the last probe ran on: Swing's. */
+	private volatile Thread swingThread;
+	/** When the last panel apply ended, to say how long after it the slow probes were posted. */
+	private volatile long lastApplyEnd;
+	private Timer watchDelay;
+	private int watchSlow;
+	private int watchStuck;
+	private long watchSkipped;
+	/** Slow probes (over 16 ms) by when they were posted: no apply yet, under 100 ms after one, 0.1 to 0.6 s, 0.6 to 3 s, later. */
+	private final int[] slowAfterApply = new int[5];
+	/** What held Swing's thread, by its top frames; written on the executor, read at the report, under {@link #stallLock}. */
+	private final Object stallLock = new Object();
+	private final Map<String, Stall> stalls = new LinkedHashMap<>();
+	private int stallsOther;
+	private final Runnable watchProbe = () ->
+	{
+		swingThread = Thread.currentThread();
+		final long posted = watchPosted;
+		recordWatch(System.nanoTime() - posted, posted);
+		watchPending.set(false);
+	};
+
+	/** One distinct stack Swing's thread was seen in while a probe waited over 50 ms. */
+	static final class Stall
+	{
+		final StackTraceElement[] frames;
+		int seen;
+		long longest;
+
+		Stall(StackTraceElement[] frames)
+		{
+			this.frames = frames;
+		}
+	}
+
+	// T-046 follow-up: what asked for each layout pass of the panel during a fight, by the stack of the first component
+	// to invalidate since the pass before. Swing's thread, under swingLock.
+	private final Map<String, int[]> layoutAskers = new LinkedHashMap<>();
+	private int layoutPasses;
+	private String pendingAsker;
+
 	void setOn(boolean on)
 	{
 		if (on && timers == null)
@@ -210,6 +274,7 @@ final class PerfProbe
 					swingTimers[i] = new Timer(TIMER_SAMPLES);
 				}
 				inputDelay = new Timer(TIMER_SAMPLES);
+				watchDelay = new Timer(WATCH_SAMPLES);
 			}
 			frames = new int[FRAME_SAMPLES];
 			windowEnds = new long[BASELINE_FRAMES];
@@ -221,8 +286,189 @@ final class PerfProbe
 			// Turned off mid-fight, the fight has no report: turned back on, the next fight starts clean.
 			lastFrame = 0;
 			fighting = false;
+			stopWatch();
 		}
 		this.on = on;
+	}
+
+	// ---- The 20 ms watch on Swing's thread (T-046 follow-up) ----
+
+	/**
+	 * Once a tick on the client thread: while on, makes sure the 20 ms watch runs on RuneLite's executor (no thread of
+	 * our own); off, stops it.
+	 */
+	synchronized void watchSwing(ScheduledExecutorService executor)
+	{
+		if (!on || executor == null)
+		{
+			stopWatch();
+			return;
+		}
+		if (watch == null)
+		{
+			watch = executor.scheduleAtFixedRate(this::sampleSwing, WATCH_MILLIS, WATCH_MILLIS, TimeUnit.MILLISECONDS);
+		}
+	}
+
+	/** Whether the 20 ms watch is scheduled; for tests. */
+	synchronized boolean watching()
+	{
+		return watch != null;
+	}
+
+	private synchronized void stopWatch()
+	{
+		if (watch != null)
+		{
+			watch.cancel(false);
+			watch = null;
+		}
+	}
+
+	/** Every 20 ms on the executor: posts a probe, or, while the last still waits, counts the stall and reads the stack. */
+	void sampleSwing()
+	{
+		// Only during a fight: the report is a fight's.
+		if (!on || !fighting)
+		{
+			return;
+		}
+		final long now = System.nanoTime();
+		if (watchPending.get())
+		{
+			if (fighting)
+			{
+				synchronized (swingLock)
+				{
+					watchSkipped++;
+				}
+				final Thread swing = swingThread;
+				if (swing != null && now - watchPosted > INPUT_STUCK_NANOS)
+				{
+					recordStall(swing.getStackTrace(), now - watchPosted);
+				}
+			}
+			return;
+		}
+		watchPending.set(true);
+		watchPosted = now;
+		SwingUtilities.invokeLater(watchProbe);
+	}
+
+	/** One watch probe's wait. Swing's thread, or a test. */
+	void recordWatch(long nanos, long posted)
+	{
+		synchronized (swingLock)
+		{
+			if (watchDelay == null || !fighting)
+			{
+				return;
+			}
+			watchDelay.add(nanos);
+			if (nanos > INPUT_SLOW_NANOS)
+			{
+				watchSlow++;
+				final long apply = lastApplyEnd;
+				final long since = posted - apply;
+				slowAfterApply[apply == 0L || since < 0 ? 0 : since < 100_000_000L ? 1 : since < 600_000_000L ? 2
+					: since < 3_000_000_000L ? 3 : 4]++;
+			}
+			watchStuck += nanos > INPUT_STUCK_NANOS ? 1 : 0;
+		}
+	}
+
+	/** Swing's thread's stack while a probe waits over 50 ms: kept by its top frames, counted. */
+	void recordStall(StackTraceElement[] stack, long waited)
+	{
+		final StackTraceElement[] top = Arrays.copyOf(stack, Math.min(STALL_FRAMES, stack.length));
+		final String key = Arrays.toString(top);
+		synchronized (stallLock)
+		{
+			Stall s = stalls.get(key);
+			if (s == null)
+			{
+				if (stalls.size() >= STALLS_KEPT)
+				{
+					stallsOther++;
+					return;
+				}
+				s = new Stall(top);
+				stalls.put(key, s);
+			}
+			s.seen++;
+			s.longest = Math.max(s.longest, waited);
+		}
+	}
+
+	// ---- What asks for the panel's layout passes (T-046 follow-up) ----
+
+	/**
+	 * The panel's validate root was invalidated: the stack says by what. Kept for the next layout pass, the first since
+	 * the last pass only. Swing's thread; the caller reads the stack only while the probe is on.
+	 */
+	void layoutAsked(StackTraceElement[] stack)
+	{
+		if (!fighting)
+		{
+			return;
+		}
+		synchronized (swingLock)
+		{
+			if (pendingAsker == null)
+			{
+				pendingAsker = asker(stack);
+			}
+		}
+	}
+
+	/** A layout pass of the panel ran: counted against what asked for it. */
+	void layoutPassed()
+	{
+		if (!fighting)
+		{
+			return;
+		}
+		synchronized (swingLock)
+		{
+			layoutPasses++;
+			final String asker = pendingAsker == null ? "nothing invalidated it (a validate from outside)" : pendingAsker;
+			pendingAsker = null;
+			final int[] n = layoutAskers.get(asker);
+			if (n != null)
+			{
+				n[0]++;
+			}
+			else if (layoutAskers.size() < STALLS_KEPT)
+			{
+				layoutAskers.put(asker, new int[]{1});
+			}
+		}
+	}
+
+	/** The first frames of an invalidation's stack past AWT's and Swing's own invalidate and revalidate. */
+	static String asker(StackTraceElement[] stack)
+	{
+		final StringBuilder out = new StringBuilder();
+		int shown = 0;
+		for (StackTraceElement f : stack)
+		{
+			final String c = f.getClassName();
+			final String m = f.getMethodName();
+			final boolean machinery = m.equals("invalidate") || m.equals("invalidateIfValid") || m.equals("invalidateParent")
+				|| m.equals("revalidate") || m.equals("getStackTrace") || c.equals(PerfProbe.class.getName())
+				|| c.startsWith("com.pvmlogs.PvmPerformancePanel$");
+			if (machinery && shown == 0)
+			{
+				continue;
+			}
+			out.append(shown == 0 ? "" : " < ").append(c.substring(c.lastIndexOf('.') + 1)).append('.').append(m)
+				.append(':').append(f.getLineNumber());
+			if (++shown == 6)
+			{
+				break;
+			}
+		}
+		return shown == 0 ? "unknown" : out.toString();
 	}
 
 	boolean isOn()
@@ -295,7 +541,12 @@ final class PerfProbe
 		{
 			return;
 		}
-		final long nanos = System.nanoTime() - started;
+		final long ended = System.nanoTime();
+		final long nanos = ended - started;
+		if (slot == SwingSlot.APPLY)
+		{
+			lastApplyEnd = ended;
+		}
 		synchronized (swingLock)
 		{
 			if (swingTimers != null)
@@ -428,9 +679,22 @@ final class PerfProbe
 			{
 				t.reset();
 			}
+			watchDelay.reset();
+			watchSlow = 0;
+			watchStuck = 0;
+			watchSkipped = 0;
+			Arrays.fill(slowAfterApply, 0);
+			layoutAskers.clear();
+			layoutPasses = 0;
+			pendingAsker = null;
 			inputDelay.reset();
 			inputSlow = 0;
 			inputStuck = 0;
+		}
+		synchronized (stallLock)
+		{
+			stalls.clear();
+			stallsOther = 0;
 		}
 		Arrays.fill(panelTicks, 0);
 		panelSeen = 0;
@@ -516,12 +780,67 @@ final class PerfProbe
 		lines.add(swing.toString());
 		synchronized (swingLock)
 		{
+			// Behind only the panel's apply: the apply's repaint is queued while it runs, behind this probe (T-046 follow-up).
 			lines.add("PERF input delay (Swing's queue, a probe a tick): " + timerSummary("waited", inputDelay)
 				+ String.format("; over 16 ms %d, over 50 ms %d", inputSlow, inputStuck));
 		}
 		lines.add("PERF budgets: " + budgets());
+		lines.addAll(watchLines(span));
 		lastReport = new ArrayList<>(lines);
 		return lines;
+	}
+
+	/** The 20 ms watch's line, the layout passes' and the stalls' (T-046 follow-up). */
+	private List<String> watchLines(long span)
+	{
+		final List<String> lines = new ArrayList<>();
+		synchronized (swingLock)
+		{
+			lines.add(String.format("PERF input delay (Swing's queue, a probe every %d ms): %s; over 16 ms %d, over 50 ms %d;"
+				+ " stalled %.2f%% of the fight (%d posts skipped while one waited); the slow ones posted: %d before any"
+				+ " apply, %d under 0.1 s after one, %d at 0.1-0.6 s, %d at 0.6-3 s, %d later; budget p99 %.3f ms %s 16,"
+				+ " over 50 ms %d %s 0", WATCH_MILLIS, timerSummary("waited", watchDelay), watchSlow, watchStuck,
+				100.0 * watchSkipped * WATCH_MILLIS * 1e6 / span, watchSkipped, slowAfterApply[0], slowAfterApply[1],
+				slowAfterApply[2], slowAfterApply[3], slowAfterApply[4], watchDelay.quantile(0.99) / 1e6,
+				watchDelay.quantile(0.99) < INPUT_SLOW_NANOS ? "<" : ">=", watchStuck, watchStuck == 0 ? "=" : ">"));
+			final List<Map.Entry<String, int[]>> askers = new ArrayList<>(layoutAskers.entrySet());
+			askers.sort((a, b) -> Integer.compare(b.getValue()[0], a.getValue()[0]));
+			final StringBuilder layout = new StringBuilder("PERF layout passes: " + layoutPasses);
+			for (int i = 0; i < askers.size() && i < 8; i++)
+			{
+				layout.append(i == 0 ? "; asked by " : " | ").append(askers.get(i).getValue()[0]).append("x ")
+					.append(askers.get(i).getKey());
+			}
+			lines.add(layout.toString());
+		}
+		lines.addAll(stallLines());
+		return lines;
+	}
+
+	/** The {@code PERF stall} lines: the most seen stacks, top frames first. */
+	private List<String> stallLines()
+	{
+		final List<String> out = new ArrayList<>();
+		synchronized (stallLock)
+		{
+			final List<Stall> seen = new ArrayList<>(stalls.values());
+			seen.sort((a, b) -> Integer.compare(b.seen, a.seen));
+			for (int i = 0; i < seen.size() && i < STALLS_SHOWN; i++)
+			{
+				final Stall st = seen.get(i);
+				out.add(String.format("PERF stall %d of %d: Swing's thread seen here %dx, a probe waiting up to %.0f ms",
+					i + 1, seen.size(), st.seen, st.longest / 1e6));
+				for (StackTraceElement f : st.frames)
+				{
+					out.add("PERF stall " + (i + 1) + "   at " + f);
+				}
+			}
+			if (stallsOther > 0)
+			{
+				out.add("PERF stall: " + stallsOther + " more samples in other stacks");
+			}
+		}
+		return out;
 	}
 
 	/** The last fight's PERF block, for the Save debug log header; empty before one. */
