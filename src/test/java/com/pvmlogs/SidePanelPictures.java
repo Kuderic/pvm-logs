@@ -74,6 +74,13 @@ public final class SidePanelPictures
 			// T-044: a ruled kill (16:03 kill 4's figures), and a ruled kill opened from History.
 			write(out, "13a-ruled-kill", scale, render(SidePanelExamples.ruledKill(true), scale));
 			write(out, "13b-ruled-saved-kill", scale, renderRuledSavedKill(scale));
+			// T-052: the Defence card, the live line and the trip's drains.
+			write(out, "14a-two-hammers-one-landed", scale, render(SidePanelExamples.twoHammersOneLanded(), scale));
+			write(out, "14b-bandos-godsword", scale, render(SidePanelExamples.bandosGodsword(), scale));
+			write(out, "14c-at-its-floor", scale, render(SidePanelExamples.atItsFloor(), scale));
+			write(out, "14d-immune", scale, render(SidePanelExamples.immune(), scale));
+			write(out, "14e-live-defence", scale, render(SidePanelExamples.liveDrained(), scale));
+			write(out, "14f-trip-drains", scale, renderTrip(SidePanelExamples.tripWithDrains(), scale));
 		}
 	}
 

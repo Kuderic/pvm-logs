@@ -70,10 +70,19 @@ final class PanelSnapshot
 		final List<TripRow> rooms;
 		final Rows taken;
 		final Rows other;
+		/** T-052: the trip's drains, what they added and the specials' share of luck; null for none. */
+		final Rows drains;
 
 		TripTab(Header header, List<Tile> tiles, Parts execution, Text roomsHint, List<TripRow> rooms, Rows taken,
 			Rows other)
 		{
+			this(header, tiles, execution, roomsHint, rooms, taken, other, null);
+		}
+
+		TripTab(Header header, List<Tile> tiles, Parts execution, Text roomsHint, List<TripRow> rooms, Rows taken,
+			Rows other, Rows drains)
+		{
+			this.drains = drains;
 			this.header = header;
 			this.tiles = tiles == null ? null : list(tiles);
 			this.execution = execution;
@@ -87,7 +96,8 @@ final class PanelSnapshot
 		String structure()
 		{
 			return (tiles == null ? "" : "T") + (execution == null ? "" : "|e" + execution.parts.size()) + "|r" + rooms.size()
-				+ (taken == null ? "" : "|k" + taken.rows.size()) + (other == null ? "" : "|o" + other.rows.size());
+				+ (taken == null ? "" : "|k" + taken.rows.size()) + (other == null ? "" : "|o" + other.rows.size())
+				+ (drains == null ? "" : "|dr" + drains.rows.size());
 		}
 	}
 
@@ -224,6 +234,8 @@ final class PanelSnapshot
 		final Text clock;
 		/** The boss's icon before its name, a hiscores sprite, or {@link SidePanelBossIcons#NONE} (T-054). */
 		final int icon;
+		/** T-052: the target's tracked Defence while the fight runs, once a drain has landed; empty before. */
+		final Text defence;
 
 		Header(Text name, Text suffix, Text sub, Text clock)
 		{
@@ -232,11 +244,17 @@ final class PanelSnapshot
 
 		Header(Text name, Text suffix, Text sub, Text clock, int icon)
 		{
+			this(name, suffix, sub, clock, icon, Text.NONE);
+		}
+
+		Header(Text name, Text suffix, Text sub, Text clock, int icon, Text defence)
+		{
 			this.name = name;
 			this.suffix = suffix;
 			this.sub = sub;
 			this.clock = clock;
 			this.icon = icon;
+			this.defence = defence == null ? Text.NONE : defence;
 		}
 	}
 
@@ -601,6 +619,8 @@ final class PanelSnapshot
 		final String later;
 		final Rows details;
 		final Rows taken;
+		/** T-052: the Defence card after a fight with tracked drains; null for none. */
+		final Defence defence;
 		final Loadout loadout;
 		final ListRow lastFight;
 		final Empty empty;
@@ -625,6 +645,7 @@ final class PanelSnapshot
 			later = b.later;
 			details = b.details;
 			taken = b.taken;
+			defence = b.defence;
 			loadout = b.loadout;
 			lastFight = b.lastFight;
 			empty = b.empty;
@@ -643,6 +664,8 @@ final class PanelSnapshot
 			s.append(header == null ? "" : "|h");
 			// Whether the header has an icon's box (T-054); which icon is a value, set in place.
 			s.append(header == null || header.icon == SidePanelBossIcons.NONE ? "" : "i");
+			// T-052: the live defence line, from the first drain that lands.
+			s.append(header == null || header.defence.isEmpty() ? "" : "d");
 			s.append(banner == null ? "" : "|w");
 			s.append(unscoredNote == null ? "" : "|u");
 			s.append(targets == null ? "" : "|t" + targets.rows.size());
@@ -662,6 +685,7 @@ final class PanelSnapshot
 			s.append(chart != null && chart.rangeShown ? "r" : "");
 			s.append(details == null ? "" : "|D" + details.rows.size());
 			s.append(taken == null ? "" : "|k" + taken.rows.size());
+			s.append(defence == null ? "" : "|df" + defence.structure());
 			if (loadout != null)
 			{
 				s.append("|l").append(loadout.rows.size()).append('.').append(loadout.specName == null ? 0
@@ -674,6 +698,35 @@ final class PanelSnapshot
 	}
 
 	/** Collects a Fight tab's sections; every field starts out as "not shown". */
+	/**
+	 * T-052: the Defence card after a fight with tracked drains: the path and
+	 * floor, the specials thrown and landed, what the drains added, and the
+	 * specials' share of luck.
+	 */
+	static final class Defence
+	{
+		/** The section's value: Defence start → end. */
+		final Text hint;
+		final List<Row> rows;
+		/** "The drains added 182 expected damage: about 14 s faster." Null when T-050's figure is unknown. */
+		final Text worth;
+		/** "Your specials landed better than average: 5 s faster. That's part of Luck." Null without own specials. */
+		final Text specLuck;
+
+		Defence(Text hint, List<Row> rows, Text worth, Text specLuck)
+		{
+			this.hint = hint == null ? Text.NONE : hint;
+			this.rows = list(rows);
+			this.worth = worth;
+			this.specLuck = specLuck;
+		}
+
+		String structure()
+		{
+			return rows.size() + (worth == null ? "" : "w") + (specLuck == null ? "" : "s");
+		}
+	}
+
 	static final class Builder
 	{
 		State state = State.EMPTY;
@@ -694,6 +747,7 @@ final class PanelSnapshot
 		String later;
 		Rows details;
 		Rows taken;
+		Defence defence;
 		Loadout loadout;
 		ListRow lastFight;
 		Empty empty;
