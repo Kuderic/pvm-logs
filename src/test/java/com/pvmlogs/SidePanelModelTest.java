@@ -136,8 +136,9 @@ public class SidePanelModelTest
 		assertEquals("14 s slower", tile(t, "Luck").sub.text);
 		assertEquals("+80 thrall", tile(t, "Damage/expected").sub.text);
 		assertEquals("weapon only", tile(t, "DPS").sub.text);
-		// Uptime 19.2 s and stat boost 2.4 s: 21.6 s, rounded, and costing because uptime is.
-		assertEquals("22 s lost", tile(t, "Execution").sub.text);
+		// Uptime's 15 idle seconds and stat boost 2.4 s: 17.4 s, rounded, and costing because uptime is. Eating's 4.2 s
+		// isn't one of Execution's parts (T-038).
+		assertEquals("17 s lost", tile(t, "Execution").sub.text);
 		assertEquals(SidePanelStyle.COST, tile(t, "Execution").sub.colour);
 		// Luck's tile edge takes its colour.
 		assertEquals(SidePanelStyle.COST, tile(t, "Luck").edge);
@@ -182,16 +183,19 @@ public class SidePanelModelTest
 		assertEquals(n.clock, b.sum(), 1e-9);
 		assertEquals(n.clock, b.total, 1e-9);
 		assertEquals(0, b.luckSaved, 0);
-		// Best play, then uptime 19.2 s and stat boost 2.35 s, then luck's 14.35 s: 157 + 30 + 4 + 22 px of 213 (spec).
+		// Best play, then uptime's 15 idle seconds, eating's 4.2 (T-038: 19.2 s between them, as before), stat boost
+		// 2.35 s, then luck's 14.35 s: 157 + 23.4 + 6.5 + 3.7 + 22 px of 213. Best play doesn't move.
 		final double[] px = new double[b.segments.size()];
 		for (int i = 0; i < px.length; i++)
 		{
 			px[i] = b.segments.get(i).seconds / b.total * 213;
 		}
 		assertEquals(157, px[0], 0.6);
-		assertEquals(30, px[1], 0.6);
-		assertEquals(4, px[2], 0.6);
-		assertEquals(22, px[5], 0.6);
+		assertEquals(23.4, px[1], 0.1);
+		assertEquals(PanelSnapshot.Fill.EATING, b.segments.get(2).fill);
+		assertEquals(6.5, px[2], 0.1);
+		assertEquals(3.7, px[3], 0.1);
+		assertEquals(22, px[6], 0.6);
 	}
 
 	@Test
@@ -446,5 +450,67 @@ public class SidePanelModelTest
 	{
 		assertNull(SidePanelModel.luckRemoved(newestFirst(kill(110, 0, true, true), kill(120, 0, true, true),
 			kill(115, 0, true, true), kill(130, 0, true, true)), current()));
+	}
+
+	// ---- T-038: eating as its own stretch of the time budget ----
+
+	@Test
+	public void eatingIsItsOwnNeutralStretchAfterUptime()
+	{
+		final PanelSnapshot.TimeBudget b = tab(SidePanelExamples.dead()).budget;
+		// Best play stays 1:41: 136.8 - 14.3 - (15.0 + 4.2 + 2.4) = 100.9 s.
+		assertEquals("1:41", b.rows.get(0).value.text);
+		assertEquals("uptime", b.rows.get(1).label.text);
+		assertEquals("+15 s", b.rows.get(1).value.text);
+		final PanelSnapshot.BudgetRow eating = b.rows.get(2);
+		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
+		assertEquals("eating", eating.label.text);
+		assertEquals("+4 s", eating.value.text);
+		assertEquals(SidePanelStyle.BODY, eating.value.colour);
+		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
+		// The details keep their own eating row.
+		assertTrue(tab(SidePanelExamples.dead()).details.rows.stream().anyMatch(r -> r.left.text.equals("eating")));
+	}
+
+	@Test
+	public void theBudgetStillAddsUpWithEatingWhenLuckSavedTime()
+	{
+		final SidePanelModel.Input in = SidePanelExamples.raid();
+		((LedgerExamples.FakeScope) in.scope).ticksLostEating = 30;
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
+		final PanelSnapshot.TimeBudget b = tab(in).budget;
+		assertTrue(n.luck > 0);
+		assertEquals(18, n.eatingCost, 1e-9);
+		assertEquals(n.clock + n.luck, b.sum(), 1e-9);
+		// Best play doesn't move: the 18 s came out of uptime's.
+		assertEquals("8:10", b.rows.get(0).value.text);
+	}
+
+	@Test
+	public void noEatingNoStretch()
+	{
+		final SidePanelModel.Input in = SidePanelExamples.raid();
+		final PanelSnapshot.TimeBudget b = tab(in).budget;
+		assertFalse(b.rows.stream().anyMatch(r -> r.swatch == PanelSnapshot.Fill.EATING));
+		assertEquals(0, b.segments.get(2).seconds, 0);
+	}
+
+	@Test
+	public void eatingShowsWhenUptimeHasNoRow()
+	{
+		// Orchestrator's review of #39: 0 idle and 7 eating ticks. Uptime's 0 s has no row; eating's 4 s still does.
+		final SidePanelModel.Input in = SidePanelExamples.dead();
+		final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) in.scope;
+		s.ticksLost = 7;
+		s.ticksLostEating = 7;
+		final PanelSnapshot.TimeBudget b = tab(in).budget;
+		assertFalse(b.rows.stream().anyMatch(r -> r.label.text.equals("uptime")));
+		final PanelSnapshot.BudgetRow eating = b.rows.get(1);
+		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
+		assertEquals("eating", eating.label.text);
+		assertEquals("+4 s", eating.value.text);
+		assertEquals(0, b.segments.get(1).seconds, 0);
+		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
+		assertEquals(new LedgerRows.Numbers(s).clock, b.sum(), 1e-9);
 	}
 }

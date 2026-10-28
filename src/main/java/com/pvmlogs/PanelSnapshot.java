@@ -274,6 +274,8 @@ final class PanelSnapshot
 		LUCK_SLOWER,
 		LUCK_AVERAGE,
 		UNSCORED,
+		/** Time spent eating (T-038): neutral, neither kept nor a cost. */
+		EATING,
 		/** Only as a row's swatch: the time luck saved is an outline past the clock, not a stretch of the bar. */
 		LUCK_FASTER
 	}

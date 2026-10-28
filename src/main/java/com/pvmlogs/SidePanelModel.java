@@ -688,7 +688,10 @@ final class SidePanelModel
 		return parts.isEmpty() ? "" : "+" + String.join(", ", parts);
 	}
 
-	/** Every part's seconds together: uptime, then the setup (boost, prayer, gear, or one setup figure). */
+	/**
+	 * Every part's seconds together: uptime, then the setup (boost, prayer, gear,
+	 * or one setup figure). Not eating (T-038): it isn't one of Execution's parts.
+	 */
 	static double lostSeconds(LedgerRows.Numbers n)
 	{
 		double lost = n.uptimeCost;
@@ -775,7 +778,10 @@ final class SidePanelModel
 		final double l = luckKnown ? n.luck : 0;
 		final double[] costs = costs(n);
 		final String[] labels = costLabels(n);
-		double costSum = 0;
+		// Eating is its own stretch after uptime (T-038): B = T - U + L - (Cu + Ce + Cb + Cp + Cg). Neutral, not a cost:
+		// the plugin can't tell why you ate.
+		final double e = Double.isNaN(n.eatingCost) ? 0 : n.eatingCost;
+		double costSum = e;
 		for (double c : costs)
 		{
 			costSum += c;
@@ -786,9 +792,13 @@ final class SidePanelModel
 
 		final List<Segment> segments = new ArrayList<>();
 		segments.add(new Segment(Math.max(0, best), Fill.KEPT));
-		for (double c : costs)
+		for (int i = 0; i < costs.length; i++)
 		{
-			segments.add(new Segment(c, LedgerRows.isCosting(c, n.clock) ? Fill.COST : Fill.MINOR_COST));
+			segments.add(new Segment(costs[i], LedgerRows.isCosting(costs[i], n.clock) ? Fill.COST : Fill.MINOR_COST));
+			if (i == 0)
+			{
+				segments.add(new Segment(e, Fill.EATING));
+			}
 		}
 		segments.add(new Segment(Math.max(0, -l), averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER));
 		segments.add(new Segment(u, Fill.UNSCORED));
@@ -801,13 +811,19 @@ final class SidePanelModel
 			Text.small(bestKnown ? SidePanelStyle.roundedDuration(best) : LedgerRows.UNKNOWN, SidePanelStyle.VALUE)));
 		for (int i = 0; i < costs.length; i++)
 		{
-			if (LedgerRows.roundHalfAway(costs[i]) < 1)
+			if (LedgerRows.roundHalfAway(costs[i]) >= 1)
 			{
-				continue;
+				final boolean costing = LedgerRows.isCosting(costs[i], n.clock);
+				rows.add(new BudgetRow(costing ? Fill.COST : Fill.MINOR_COST, Text.small(labels[i], SidePanelStyle.BODY),
+					null, Text.small("+" + SidePanelStyle.seconds(costs[i]), costing ? SidePanelStyle.COST
+						: SidePanelStyle.BODY)));
 			}
-			final boolean costing = LedgerRows.isCosting(costs[i], n.clock);
-			rows.add(new BudgetRow(costing ? Fill.COST : Fill.MINOR_COST, Text.small(labels[i], SidePanelStyle.BODY),
-				null, Text.small("+" + SidePanelStyle.seconds(costs[i]), costing ? SidePanelStyle.COST : SidePanelStyle.BODY)));
+			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
+			if (i == 0 && LedgerRows.roundHalfAway(e) >= 1)
+			{
+				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
+					Text.small("+" + SidePanelStyle.seconds(e), SidePanelStyle.BODY)));
+			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
 		// slower)", so a saving doesn't read like a cost.

@@ -25,6 +25,8 @@ import net.runelite.client.util.QuantityFormatter;
 final class LedgerRows
 {
 	static final double SECONDS_PER_TICK = 0.6;
+	/** The eating row's label (T-038). */
+	static final String EATING = " eating";
 
 	// The thresholds that decide what is coloured. All in one place: they were set on two of Eric's fights and will be
 	// tuned on more.
@@ -823,8 +825,16 @@ final class LedgerRows
 		/** T* - T: positive when the rolls saved time. */
 		final double luck;
 		final double dps;
+		/** The share of the clock spent attacking or on cooldown: idle ticks count against it, eating doesn't (T-038). */
 		final double uptime;
+		/** The idle ticks' seconds: off cooldown, no attack, not eating. */
 		final double uptimeCost;
+		/**
+		 * Ticks lost to eating, in seconds (T-038): out of Execution, as the
+		 * plugin can't tell eating through chip damage you can't avoid from eating
+		 * for damage you could have.
+		 */
+		final double eatingCost;
 		final double efficiency;
 		final double execution;
 		/** What the setup (boost, prayer, gear) cost in seconds. */
@@ -862,14 +872,23 @@ final class LedgerRows
 			percentile = p < 0 ? Double.NaN : p;
 			expectedDuration = Double.isNaN(luck) ? Double.NaN : clock + luck;
 
+			// Eating comes out of uptime and gets a line of its own (Eric, 2026-10-27, option C; T-038). The lost share is
+			// lost ticks over combat ticks, so the idle ticks' share is the eating ticks' share less of it.
 			final double lostShare = s.ticksLostShare();
-			uptime = lostShare < 0 ? Double.NaN : 1 - lostShare;
-			uptimeCost = Math.max(0, s.ticksLost()) * SECONDS_PER_TICK;
+			final int lost = Math.max(0, s.ticksLost());
+			final int eating = Math.min(lost, Math.max(0, s.ticksLostEating()));
+			final int idle = lost - eating;
+			uptime = lostShare < 0 ? Double.NaN : 1 - (lost == 0 ? lostShare : lostShare * idle / lost);
+			uptimeCost = idle * SECONDS_PER_TICK;
+			eatingCost = eating * SECONDS_PER_TICK;
 
 			efficiency = s.efficiency();
 			final boolean setupKnown = efficiency >= 0;
 			execution = !setupKnown || Double.isNaN(uptime) ? Double.NaN : uptime * efficiency;
-			setupCost = setupKnown ? Math.max(0, clock - uptimeCost) * Math.max(0, 1 - efficiency) : Double.NaN;
+			// The setup applies to the time you were attacking: neither idle nor eating. The same number as before T-038, when
+			// uptime's seconds held the eating too.
+			setupCost = setupKnown ? Math.max(0, clock - uptimeCost - eatingCost) * Math.max(0, 1 - efficiency)
+				: Double.NaN;
 
 			final int made = s.attacksMade();
 			split = setupKnown && s.boostShare() >= 0 && made > 0;
@@ -1120,6 +1139,22 @@ final class LedgerRows
 			parts(rows, n, settings.parts == ExecutionParts.COSTING);
 			// Under Execution too (Eric, 2026-10-26): the damage you took. Your own HP, nothing about the boss.
 			rows.add(detail(" damage taken", number(scope.damageTaken()), Colour.NEUTRAL));
+			eating(rows, n);
+		}
+	}
+
+	/**
+	 * {@code  eating  4 s} (T-038): the time spent eating, live and after the
+	 * fight, once it rounds to a second. After {@code damage taken} (Eric,
+	 * 2026-10-27, over a main row of its own), with which it shows and hides; like
+	 * it, not one of Execution's parts, and never coloured as a cost: the plugin
+	 * can't tell why you ate.
+	 */
+	private static void eating(List<Row> rows, Numbers n)
+	{
+		if (roundHalfAway(n.eatingCost) >= 1)
+		{
+			rows.add(detail(EATING, roundHalfAway(n.eatingCost) + " s", Colour.NEUTRAL));
 		}
 	}
 
@@ -1207,12 +1242,7 @@ final class LedgerRows
 		{
 			details.add(detail(" without protection", number(s.damageTakenUnprotected()), Colour.NEUTRAL));
 		}
-		if (s.ticksLostEating() > 0)
-		{
-			// In seconds like everything else (Eric, 2026-10-27), not ticks.
-			details.add(detail(" eating time", roundHalfAway(s.ticksLostEating() * SECONDS_PER_TICK) + " s",
-				Colour.NEUTRAL));
-		}
+		// No eating time here any more: it has its own row, live and after (T-038).
 		if (!details.isEmpty())
 		{
 			// Under a main row of their own (Eric, 2026-10-26), as the parts sit under Execution.
