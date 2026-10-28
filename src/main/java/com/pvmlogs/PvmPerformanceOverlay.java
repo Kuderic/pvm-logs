@@ -18,6 +18,7 @@ import net.runelite.api.Client;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.components.ComponentConstants;
 import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.util.Text;
 
@@ -49,6 +50,8 @@ class PvmPerformanceOverlay extends OverlayPanel
 	// The panel's lines, built once a tick rather than every frame (T-016): render runs 50+ times a second and the numbers
 	// change at most a few times a tick. Built again whenever the key says something on show may have changed.
 	private final OncePerKey<Lines> lines = new OncePerKey<>();
+	// And drawn from what it drew last time until those lines change (T-047).
+	private final OverlayCache drawn = new OverlayCache();
 
 	// Your average on the room on show, kept until the room or the history changes: it reads up to 500 saved fights, and
 	// render runs every frame.
@@ -103,21 +106,49 @@ class PvmPerformanceOverlay extends OverlayPanel
 		{
 			return null;
 		}
-		panelComponent.getChildren().addAll(built.components);
-		panelComponent.setPreferredSize(new Dimension(built.width, 0));
-		return super.render(graphics);
+		return drawn.draw(graphics, built.look(getPreferredSize()), background(this), g -> paint(g, built));
 	}
 
-	/** What one build makes: the line components in order, and the panel's width for them. */
+	/** The panel drawn the ordinary way: what {@link OverlayCache} records, or falls back to. */
+	private Dimension paint(Graphics2D g, Lines built)
+	{
+		panelComponent.getChildren().clear();
+		panelComponent.getChildren().addAll(built.components);
+		panelComponent.setPreferredSize(new Dimension(built.width, 0));
+		return super.render(g);
+	}
+
+	/**
+	 * The colour {@code OverlayPanel.render} draws an overlay's background in:
+	 * the player's "Overlay color" while the panel keeps RuneLite's standard
+	 * colour, which ours always do.
+	 */
+	static Color background(OverlayPanel overlay)
+	{
+		final Color own = overlay.getPanelComponent().getBackgroundColor();
+		final Color preferred = overlay.getPreferredColor();
+		return preferred != null && ComponentConstants.STANDARD_BACKGROUND_COLOR.equals(own) ? preferred : own;
+	}
+
+	/** What one build makes: the line components in order, the rows they show, and the panel's width for them. */
 	static final class Lines
 	{
 		final List<LineComponent> components;
+		/** The rows as fitted to the width, which is what the box shows. */
+		final List<LedgerRows.Row> rows;
 		final int width;
 
-		Lines(List<LineComponent> components, int width)
+		Lines(List<LineComponent> components, List<LedgerRows.Row> rows, int width)
 		{
 			this.components = Collections.unmodifiableList(components);
+			this.rows = Collections.unmodifiableList(rows);
 			this.width = width;
+		}
+
+		/** Everything about these lines that changes the box's pixels, for {@link OverlayCache}. */
+		Object look(Dimension saved)
+		{
+			return Arrays.asList(rows, width, saved == null ? 0 : saved.width, saved == null ? 0 : saved.height);
 		}
 	}
 
@@ -177,6 +208,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 		}
 		final FontRoles fonts = FontRoles.of(graphics.getFont());
 		final List<LineComponent> components = new ArrayList<>(rows.size());
+		final List<LedgerRows.Row> fitted = new ArrayList<>(rows.size());
 		// A width the player dragged the panel to wins over ours (OverlayPanel.render), and a row wider than it wraps
 		// onto a second line, so the panel grows taller (Eric, 2026-10-26, "Abyssal tentacle (or)"). The attack's name
 		// is shortened to fit instead.
@@ -190,6 +222,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 			final FontMetrics rightMetrics = graphics.getFontMetrics(right);
 			final LedgerRows.Row row = fit(given, t -> leftMetrics.stringWidth(Text.removeTags(t)),
 				t -> rightMetrics.stringWidth(Text.removeTags(t)), panelWidth);
+			fitted.add(row);
 			widest = Math.max(widest, leftMetrics.stringWidth(Text.removeTags(row.left))
 				+ rightMetrics.stringWidth(Text.removeTags(row.right)));
 			components.add(LineComponent.builder()
@@ -201,7 +234,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 				.rightColor(new Color(row.rightColour.rgb))
 				.build());
 		}
-		return new Lines(components, width(widest));
+		return new Lines(components, fitted, width(widest));
 	}
 
 	/**
