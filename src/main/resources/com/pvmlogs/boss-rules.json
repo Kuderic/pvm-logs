@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "portedFrom": {
     "repo": "weirdgloop/osrs-dps-calc",
     "paths": ["src/lib/scaling", "src/lib/constants.ts"],
@@ -73,7 +73,12 @@
       "hpRestoredOnLeaving": [5886, 5887, 5888],
       "countedHpMargin": 30,
       "xpBonus": 1.125,
-      "notes": "Ids per version from the wiki's Abyssal Sire page (id1 = 5886,5887,5888; id2 = 5889,5890; id3 = 5891; id4 = 5908); the DPS calc's data lists only 5886, 5889, 5891 and 5908. Stage 2 has half the defence bonuses. Phase 1: any damage only counts towards disorienting it, and it is restored to full health by the end of the phase (wiki, Abyssal Sire/Strategies); in Eric's 10 kills of 2026-10-27 everything after phase 1 came to 425-452 whatever phase 1 took (0-100). The 0-27 over 425 is not explained (not the 50% transition reduction, not damage taken); the margin covers it so the last attacks are not capped short. Not modelled: if it reaches 0 before phase 2 it starts at 40%, before phase 3 at 20% (wiki). XP: all 42 clean melee drops on stage 2 decode at x1.125 to the splats they paid for, as on the other phases; 25 of them do not at the x1.100 the formula gives on stage 2's stats."
+      "notes": "Ids per version from the wiki's Abyssal Sire page (id1 = 5886,5887,5888; id2 = 5889,5890; id3 = 5891; id4 = 5908); the DPS calc's data lists only 5886, 5889, 5891 and 5908. Stage 2 has half the defence bonuses. Phase 1: any damage only counts towards disorienting it, and it is restored to full health by the end of the phase (wiki, Abyssal Sire/Strategies); in Eric's 10 kills of 2026-10-27 everything after phase 1 came to 425-452 whatever phase 1 took (0-100). The 0-27 over 425 is not explained (not the 50% transition reduction, not damage taken); the margin covers it so the last attacks are not capped short. Not modelled: if it reaches 0 before phase 2 it starts at 40%, before phase 3 at 20% (wiki). XP: all 42 clean melee drops on stage 2 decode at x1.125 to the splats they paid for, as on the other phases; 25 of them do not at the x1.100 the formula gives on stage 2's stats.",
+      "damageModifiers": {
+        "modifiers": [
+          {"name": "walking", "npcIds": [5889], "multiply": [1, 2], "source": "OSRS Wiki, read 2026-10-28: Abyssal Sire: 'Damage dealt to the Sire while it is transitioning between phases is reduced by 50%' (changelog: 'introduced a 50% damage reduction during its transition phases'). The DPS calc halves it (divisionTransformer(2), rounding down). The form is 5889 (ABYSSALSIRE_SIRE_PUPPET), stepping out at the start of phase 2 and walking south at the start of phase 3, as Eric's logs show: in the 10 kills of 2026-10-27 and the 2 of 2026-10-28 no hit on 5889 was above half the attack's max (16 landed, the most 28 against a max of 57-61), where on 5890 they reach the max. 5891 (phase 3, standing) took 39 of a 49 max and 41 of 61, so it is not halved."}
+        ]
+      }
     },
     {
       "name": "Bork",
@@ -334,6 +339,20 @@
       "defenceDrain": {
         "immuneVersions": ["Awakened"],
         "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies, Awakened: 'The boss is immune to stat drains.'"
+      },
+      "damageModifiers": {
+        "states": [
+          {"name": "stunned", "startOnPlayerSpell": ["SHADOW_RUSH", "SHADOW_BURST", "SHADOW_BLITZ", "SHADOW_BARRAGE"], "ticks": 15, "endOnModifierLanded": "into the wound", "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: 'players can cast any type of shadow spell to stun the Leviathan, where it will stay still for 15 ticks (9 seconds)'; The Leviathan: 'which will always succeed'; a shot into the wound 'will cause it to retaliate with a special attack' (The Leviathan: 'The Leviathan will break out of its stun when this occurs'). Awakened stuns are 'are 50% shorter': not modelled, the awakened fight sharing the id. The stun is timed from the player's own cast landing (ancient cast animation 1978/1979 with a shadow spell named): the Leviathan's NPC_LEVIATHAN_01_STUN_01 (10282) plays every ~21 ticks in Eric's 2026-10-28 kill without a stun, so it is not the signal."},
+          {"name": "special", "startOnBossAnim": [10285, 10288], "endOnBossAnim": [10287, 10290, 10278, 10281], "minTicks": 3, "maxTicks": 60, "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: 'Damage dealt to the Leviathan is reduced by 33% for the duration of each special attack' (Lightning Barrage, Smoke Blast). Opened by NPC_LEVIATHAN_01_360_START (10285, the lightning barrage) or SPIT_START (10288, the smoke blast); closed by 360_END (10287), EXPLOSION_START (10290), or the volley's PROJECTILE_START/SINGLE (10278, 10281) once it is over. Eric's kill of 2026-10-28: 10285 at [1660] after a shot into the wound at [1657], volleys again from about [1705]; every hit between, 12 to 26, under two thirds of the 44 max."}
+        ],
+        "modifiers": [
+          {"name": "into the wound", "state": "stunned", "behind": true, "styles": ["RANGED"], "accuracy": 1.0, "minHitShare": 0.65, "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: 'When attacking the backside with ranged, it deals at least a minimum of ~65% of your maximum hit as damage'. Read as a hit that cannot miss with that minimum. Eric's kill: 33 at [1657] against a 44 max (65% is 28). Behind is the half-plane away from its facing: a guess, the wiki gives no geometry."},
+          {"name": "into the wound", "state": "stunned", "behind": true, "styles": ["MAGIC"], "multiply": [2, 1], "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: 'whereas attacking with magic is not guaranteed to hit and is subject to the usual accuracy rolls, but will deal double damage'."},
+          {"name": "stunned, from the front", "state": "stunned", "behind": false, "cap": 10, "source": "OSRS Wiki, read 2026-10-28: The Leviathan: 'Damage against it is capped at 10 when stunned'. Eric's kill: 2 at [1647] while stunned. The wiki's 'free ranged shot every stun before Levi's damage reduction kicks in' (Strategies) is not modelled: the cap counts from the cast landing."},
+          {"name": "special", "state": "special", "multiply": [2, 3], "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: 'Damage dealt to the Leviathan is reduced by 33% for the duration of each special attack'. Read as two thirds, rounded down: the rounding is not stated."},
+          {"name": "pathfinder", "insideNpc": {"npcIds": [12220], "range": 1}, "styles": ["RANGED"], "accuracy": 1.0, "minHitShare": 0.2, "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: the abyssal pathfinder 'has a 5x5 Area-of-Effect'; inside, the player is 'granted perfect accuracy and an increased minimum hit', Mod Ash: 'it's ensuring you hit for at least 20% of your max'. The npc is LEVIATHAN_BUFF_NPC (12220); the range is the wiki's radius marker, 'a Ranged attack range of 1 for normal Leviathan, or ... 2 for Awakened' (the awakened 7x7 is not modelled). Judged where the player stands when the attack goes out (Eric, 2026-10-28). Outside it 'the player's attacks will deal less damage': by how much is not stated, so not modelled. Eric's kill: 7 of 7 enrage shots landed."},
+          {"name": "pathfinder", "insideNpc": {"npcIds": [12220], "range": 1}, "styles": ["MAGIC"], "multiply": [2, 1], "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: 'Attacking with magic instead of ranged while within the pathfinder's AoE will grant doubled damage instead of perfect accuracy.'"}
+        ]
       }
     },
     {

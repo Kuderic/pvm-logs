@@ -17,6 +17,8 @@ import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
+import net.runelite.api.Player;
+import net.runelite.api.coords.WorldArea;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
@@ -57,6 +59,8 @@ class CombatCalc
 	private final PvmPerformanceConfig config;
 	private final NPCManager npcManager;
 	private final DefenceDrain drain;
+	// The boss's damage modifiers an attack lands with (T-057).
+	private final DamageModifiers modifiers;
 	private final PartyHitpoints partyHitpoints;
 	private final TargetHealth health;
 
@@ -177,8 +181,9 @@ class CombatCalc
 	@Inject
 	CombatCalc(Client client, ItemManager itemManager, MonsterStatsProvider monsters,
 		GearBonusCalc gearBonuses, PvmPerformanceConfig config, NPCManager npcManager,
-		DefenceDrain drain, PartyHitpoints partyHitpoints, TargetHealth health)
+		DefenceDrain drain, PartyHitpoints partyHitpoints, TargetHealth health, DamageModifiers modifiers)
 	{
+		this.modifiers = modifiers;
 		this.health = health;
 		this.client = client;
 		this.itemManager = itemManager;
@@ -545,10 +550,51 @@ class CombatCalc
 		return memoGear;
 	}
 
-	/** Expected hit chance (0..1), or -1 with no data. */
+	/** Expected hit chance (0..1), or -1 with no data. A boss's modifier can replace it (T-057: "cannot miss"). */
 	double hitChance(int npcId)
 	{
-		return hitChance(npcId, null);
+		return ModifierTracker.accuracy(bossModifiers(npcId), hitChance(npcId, null));
+	}
+
+	/**
+	 * The boss's damage modifiers an ordinary attack going out now lands with
+	 * (T-057): the Sire's halving while it walks, the Leviathan's stun cap, its
+	 * wound, its specials and the pathfinder. Empty for any other target, and for
+	 * a target other than the fight's own.
+	 */
+	private List<BossRules.ModifierRule> bossModifiers(int npcId)
+	{
+		final NPC npc = targetNpc;
+		if (modifiers == null || npc == null || npc.getId() != npcId || !modifiers.hasModifiers(npc))
+		{
+			return Collections.emptyList();
+		}
+		return modifiers.forAttack(npc, weaponStyle(), landsInTicks(npc));
+	}
+
+	// Ticks from the attack going out to its hitsplat, as the client sees it: melee the next tick, ranged and magic by
+	// the wiki's hit delay for the distance, plus the tick the client lags the server (as magicHitDelay measures it).
+	private int landsInTicks(NPC npc)
+	{
+		final Player me = client.getLocalPlayer();
+		final WorldArea area = npc.getWorldArea();
+		final int distance = me == null || area == null || me.getWorldLocation() == null ? 1
+			: Math.max(0, area.distanceTo(me.getWorldLocation()));
+		switch (weaponStyle())
+		{
+			case MAGIC:
+				return 2 + (1 + distance) / 3;
+			case RANGED:
+				return 2 + (3 + distance) / 6;
+			default:
+				return 1;
+		}
+	}
+
+	/** The modifiers, for the ATTACK line: their names, or "none". */
+	String describeBossModifiers(int npcId)
+	{
+		return ModifierTracker.names(bossModifiers(npcId));
 	}
 
 	/**
@@ -831,6 +877,19 @@ class CombatCalc
 	DamageMoments averageHitMoments(int npcId)
 	{
 		final double accuracy = hitChance(npcId);
+		// A boss's damage modifiers (T-057) walk every roll of every hitsplat, so the game's rounding is kept per hit.
+		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
+		if (!mods.isEmpty())
+		{
+			final int first = (int) (unmitigatedMaxHit(npcId) * mitigation(npcId));
+			if (accuracy < 0 || first <= 0)
+			{
+				return null;
+			}
+			final int[] maxima = weaponStyle() == Style.MAGIC ? new int[]{first}
+				: shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId));
+			return ModifierTracker.moments(mods, maxima, accuracy, Math.min(damageCap(npcId), overkillCap(npcId)));
+		}
 		if (weaponStyle() == Style.MAGIC)
 		{
 			// The magic formula walks every roll (T-026): Mark of Darkness and Ahrim's act on the rolled hit, sunfire runes
@@ -1603,6 +1662,12 @@ class CombatCalc
 	 * player is doing. Casting takes 5 ticks, so the window is slightly wider
 	 * and lapses back to the weapon once they stop clicking.
 	 */
+	/** The spell a manual cast named in the last few ticks, or null (T-057: the shadow spell that stuns). */
+	Spell recentManualCast()
+	{
+		return activeManualCast();
+	}
+
 	private Spell activeManualCast()
 	{
 		if (manualCastSpell == null || client.getTickCount() - manualCastTick > MANUAL_CAST_TICKS)
@@ -1989,9 +2054,11 @@ class CombatCalc
 		// halving rounds down at every step. The cap is per hit, being a limit on what one blow may land.
 		// The other multi-hit weapons too (T-032): a dark bow's two arrows, the split hits, the tonalztics' throws.
 		int total = 0;
+		// A boss's modifiers (T-057): the cap while stunned, the halving, the doubling for magic into the wound.
+		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
 		for (int max : shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId)))
 		{
-			total += Math.min(cap, max);
+			total += Math.min(cap, mods.isEmpty() ? max : ModifierTracker.max(mods, max));
 		}
 		if (weaponStyle() == Style.MAGIC)
 		{

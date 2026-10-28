@@ -28,11 +28,11 @@ public class BossDrainRulesTest
 	}
 
 	@Test
-	public void theBundledFileIsSchemaFour()
+	public void aSchemaFourFileStillLoads()
 	{
 		final BossRules.RulesFile file = BossRules.read(GSON, new StringReader("{\"schemaVersion\":4,\"bosses\":[]}"));
 		assertNotNull(file);
-		assertEquals(4, BossRules.SCHEMA_VERSION);
+		assertEquals(5, BossRules.SCHEMA_VERSION);
 	}
 
 	/** DefenceDrainCap's three entries, now data: Verzik immune, Demonic Brutus immune, Doom 30 off its 90. */
