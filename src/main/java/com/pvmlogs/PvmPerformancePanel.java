@@ -100,6 +100,8 @@ class PvmPerformancePanel extends PluginPanel
 	// The trip's saved rooms, kept until the history or the trip changes (client thread).
 	private List<SidePanelHistory.KillRow> tripSaved = java.util.Collections.emptyList();
 	private List<Object> tripSavedKey;
+	/** T-044: the avoidable attack names at the trip's saved fights' bosses, worked out with {@link #tripSaved}. */
+	private java.util.Set<String> tripAvoidable = java.util.Collections.emptySet();
 
 	PvmPerformancePanel(PvmPerformancePlugin plugin)
 	{
@@ -474,6 +476,11 @@ class PvmPerformancePanel extends PluginPanel
 			charts(in, raid, FightTimeline.raid(raid, plugin.getTimelines()));
 			in.ended = fight.isEnded();
 			in.warning = plugin.getStatsWarning(fight);
+			// T-044: only an ended scope shows them, so they're looked up once it has.
+			if (in.ended)
+			{
+				in.avoidableAttacks = avoidableAttacks(raidFights(raid));
+			}
 			return in;
 		}
 		if (room == null)
@@ -488,6 +495,10 @@ class PvmPerformancePanel extends PluginPanel
 		final boolean current = contains(room, fight);
 		in.ended = !current || fight.isEnded();
 		in.killed = in.ended && room.isKilled();
+		if (in.ended)
+		{
+			in.avoidableAttacks = avoidableAttacks(room.getFights());
+		}
 		in.warning = current ? plugin.getStatsWarning(fight) : room.getStatsWarning();
 		long end = 0;
 		for (Fight f : room.getFights())
@@ -554,6 +565,22 @@ class PvmPerformancePanel extends PluginPanel
 		};
 	}
 
+	/** T-044: the attack names the boss rules call avoidable at these fights' bosses; empty without rules. */
+	private java.util.Set<String> avoidableAttacks(java.util.Collection<Fight> fights)
+	{
+		return SidePanelModel.avoidableAttacks(monsterStats == null ? null : monsterStats.rules(), fights);
+	}
+
+	private static List<Fight> raidFights(Raid raid)
+	{
+		final List<Fight> fights = new ArrayList<>();
+		for (Encounter e : raid.getEncounters())
+		{
+			fights.addAll(e.getFights());
+		}
+		return fights;
+	}
+
 	/** The boss version's name for these fights at this full HP, from the boss rules; null where they don't say. */
 	private String version(List<Fight> fights, int maxHp)
 	{
@@ -572,13 +599,26 @@ class PvmPerformancePanel extends PluginPanel
 		in.scoredThrall = in.thrall = Math.max(0, trip.getThrallDamage());
 		in.scoredDot = in.dot = Math.max(0, trip.getDotDamage());
 		in.scoredReflect = in.reflect = Math.max(0, trip.getReflectDamage());
+		// T-044: the trip's avoidable figures sum its ended ruled fights, shown, as on the overlay, while no fight runs.
+		in.ended = running == null;
+		in.takenByAttack = trip.getDamageTakenByAttack();
 		final List<Object> key = Arrays.asList(history.size(), head, trip.getStartMillis());
 		if (!key.equals(tripSavedKey))
 		{
 			tripSavedKey = key;
 			tripSaved = SidePanelHistory.tripSaved(history, trip.getStartMillis(), System.currentTimeMillis(),
 				java.time.ZoneId.systemDefault());
+			final List<Fight> tripFights = new ArrayList<>();
+			for (Fight f : history)
+			{
+				if (f.getStartMillis() >= trip.getStartMillis())
+				{
+					tripFights.add(f);
+				}
+			}
+			tripAvoidable = avoidableAttacks(tripFights);
 		}
+		in.avoidableAttacks = tripAvoidable;
 		final List<PanelSnapshot.TripRow> rows = new ArrayList<>();
 		for (SidePanelHistory.KillRow r : SidePanelHistory.tripRooms(tripSaved, running))
 		{
@@ -699,7 +739,20 @@ class PvmPerformancePanel extends PluginPanel
 		@Override
 		public SidePanelHistory.Versions versions()
 		{
-			return (room, maxHp) -> version(room.getFights(), maxHp);
+			return new SidePanelHistory.Versions()
+			{
+				@Override
+				public String name(Encounter room, int maxHp)
+				{
+					return version(room.getFights(), maxHp);
+				}
+
+				@Override
+				public java.util.Set<String> avoidable(Encounter room)
+				{
+					return avoidableAttacks(room.getFights());
+				}
+			};
 		}
 
 		@Override

@@ -61,6 +61,9 @@ public final class SidePanelPictures
 			write(out, "12c-luck-saved-60s", scale, render(SidePanelExamples.luckSaved(60), scale));
 			write(out, "12d-luck-slower", scale, render(SidePanelExamples.luckSaved(-7), scale));
 			write(out, "12e-average-on-the-bar", scale, render(SidePanelExamples.luckSavedAverageOnTheBar(), scale));
+			// T-044: a ruled kill (16:03 kill 4's figures), and a ruled kill opened from History.
+			write(out, "13a-ruled-kill", scale, render(SidePanelExamples.ruledKill(true), scale));
+			write(out, "13b-ruled-saved-kill", scale, renderRuledSavedKill(scale));
 		}
 	}
 
@@ -154,6 +157,86 @@ public final class SidePanelPictures
 			public SidePanelHistory.Versions versions()
 			{
 				return (room, maxHp) -> maxHp == 700 ? "Post-quest" : null;
+			}
+
+			public long sessionStart()
+			{
+				return -1;
+			}
+
+			public long now()
+			{
+				return SidePanelHistoryExamples.NOW;
+			}
+
+			public java.time.ZoneId zone()
+			{
+				return SidePanelExamples.ZONE;
+			}
+
+			public void exportNpc(String name)
+			{
+			}
+
+			@Override
+			public void charts(Encounter room, java.util.function.Consumer<FightTimeline.View> done)
+			{
+				done.accept(FightTimeline.room(room, kill.store));
+			}
+		};
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source);
+		panel.tabs().select(panel.tabs().getTab(1));
+		panel.historyTab().open(kill.fight);
+		return draw(panel.tabs(), panel.historyTab(), scale);
+	}
+
+	/**
+	 * T-044: a Vardorvis kill classed by attack rules, from this session, opened
+	 * from History with its charts and the rules' avoidable names: 5 of its 7
+	 * eating ticks for the avoidable hits.
+	 */
+	static BufferedImage renderRuledSavedKill(int scale)
+	{
+		final SidePanelTimelineExamples.Built kill = SidePanelTimelineExamples.kill();
+		final java.util.Map<String, Integer> by = new java.util.LinkedHashMap<>();
+		by.put("melee", 101);
+		by.put("spike", 52);
+		by.put("melee off prayer", 34);
+		by.put("axe", 27);
+		by.put("bleed", 20);
+		by.put("head", 8);
+		// The hits those 242 HP came in.
+		for (int hit : new int[]{31, 27, 24, 22, 20, 19, 18, 17, 16, 14, 12, 10, 8, 4})
+		{
+			kill.fight.recordHitTaken(hit, false, SidePanelExamples.at(15, 30));
+		}
+		kill.fight.recordAvoidable(1, 132.5, by, 5.0, 29, AvoidableEating.LINE_THIS_KILL);
+		kill.fight.end(true, SidePanelExamples.at(15, 31));
+		final java.util.List<Fight> history = java.util.Collections.singletonList(kill.fight);
+		final java.util.Set<String> avoidable = SidePanelModel.avoidableAttacks(AvoidableReplayTest.vardorvis());
+		final SidePanelHistoryTab.Source source = new SidePanelHistoryTab.Source()
+		{
+			public java.util.List<Fight> history()
+			{
+				return history;
+			}
+
+			public SidePanelHistory.Versions versions()
+			{
+				return new SidePanelHistory.Versions()
+				{
+					@Override
+					public String name(Encounter room, int maxHp)
+					{
+						return maxHp == 700 ? "Post-quest" : null;
+					}
+
+					@Override
+					public java.util.Set<String> avoidable(Encounter room)
+					{
+						return avoidable;
+					}
+				};
 			}
 
 			public long sessionStart()

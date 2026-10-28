@@ -162,18 +162,26 @@ final class PanelSnapshot
 	static final class Row
 	{
 		final Text left;
+		/** A word after the label in its own colour (T-044's {@code avoidable}); empty for none. */
+		final Text hint;
 		final Text right;
 
 		Row(Text left, Text right)
 		{
+			this(left, Text.NONE, right);
+		}
+
+		Row(Text left, Text hint, Text right)
+		{
 			this.left = left;
+			this.hint = hint == null ? Text.NONE : hint;
 			this.right = right;
 		}
 
 		@Override
 		public String toString()
 		{
-			return left + " | " + right;
+			return left + (hint.isEmpty() ? "" : " [" + hint.text.trim() + "]") + " | " + right;
 		}
 	}
 

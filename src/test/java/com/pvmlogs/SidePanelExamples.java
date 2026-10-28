@@ -4,6 +4,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -312,6 +313,56 @@ final class SidePanelExamples
 		final SidePanelModel.Input in = luckSaved(15);
 		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(84, 80, 90), 10);
 		in.luckRemoved = new LedgerHistory.Spread(88, 84, 92);
+		return in;
+	}
+
+	/**
+	 * T-044: Eric's 16:03 kill 4 at Vardorvis (T-041's replay of it, #46): 216
+	 * combat ticks; 27 eating ticks, 18 of them for the avoidable hits; 263
+	 * taken, 134 of it avoidable (off prayer counts ¾); by attack melee 122,
+	 * melee off prayer 30, head 6, axe 26, bleed 30, spike 49. {@code ended}
+	 * false is the same figures on a scope still running.
+	 */
+	static SidePanelModel.Input ruledKill(boolean ended)
+	{
+		final LedgerExamples.FakeScope s = LedgerExamples.kill();
+		s.combatTicks = 216;
+		s.ticksLost = 41;
+		s.ticksLostEating = 27;
+		s.setup(0.98, 0.85, 2.352, 0);
+		s.damageVariance = 11436;
+		s.damageTaken = 263;
+		s.biggestHitTaken = 31;
+		s.damageTakenUnprotected = 36;
+		s.avoidableEatingTicks = 18.0;
+		s.damageTakenAvoidable = 134;
+		final SidePanelModel.Input in = room("Vardorvis", s);
+		in.ended = ended;
+		in.killed = ended;
+		in.endMillis = ended ? at(16, 3) : 0;
+		in.scoredThrall = 80;
+		in.hitsTaken = 21;
+		final Map<String, Integer> by = new LinkedHashMap<>();
+		by.put("melee", 122);
+		by.put("melee off prayer", 30);
+		by.put("head", 6);
+		by.put("axe", 26);
+		by.put("bleed", 30);
+		by.put("spike", 49);
+		in.takenByAttack = by;
+		in.avoidableAttacks = SidePanelModel.avoidableAttacks(AvoidableReplayTest.vardorvis());
+		return in;
+	}
+
+	/** T-044: the same kill at a boss with no attack rules, or saved before T-041: no avoidable figures. */
+	static SidePanelModel.Input unruledKill()
+	{
+		final SidePanelModel.Input in = ruledKill(true);
+		final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) in.scope;
+		s.avoidableEatingTicks = -1;
+		s.damageTakenAvoidable = -1;
+		in.takenByAttack = Collections.emptyMap();
+		in.avoidableAttacks = Collections.emptySet();
 		return in;
 	}
 

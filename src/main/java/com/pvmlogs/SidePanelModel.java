@@ -14,6 +14,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -95,6 +96,8 @@ final class SidePanelModel
 		int combatTicks;
 		LedgerRows.Numbers numbers;
 		boolean warning;
+		/** Every fight of the room has ended: its Execution may include avoidable eating (T-044). */
+		boolean ended;
 	}
 
 	/** The previous room, for "Last fight" before the first attack. */
@@ -178,6 +181,13 @@ final class SidePanelModel
 		int thrall;
 		int dot;
 		int reflect;
+		/**
+		 * T-044: HP taken by attack ({@code melee}, {@code melee off prayer}, {@code axe}, ...) over the scope's ended
+		 * fights at bosses with attack rules; empty for none.
+		 */
+		Map<String, Integer> takenByAttack = Collections.emptyMap();
+		/** T-044: the attack names the boss rules call avoidable, all or in part ({@code melee off prayer}). */
+		Set<String> avoidableAttacks = Collections.emptySet();
 	}
 
 	// ---- reading the plugin's objects (client thread) ----
@@ -195,6 +205,7 @@ final class SidePanelModel
 		in.unscored = anyUnscored(fights);
 		in.hitsTaken = room.getHitsTaken();
 		in.inRaid = room.getRaid() != null;
+		in.takenByAttack = room.getDamageTakenByAttack();
 		fillOther(in, fights);
 		in.targets = targets(fights);
 	}
@@ -207,6 +218,7 @@ final class SidePanelModel
 		in.roomCount = raid.getEncounters().size();
 		in.inRaid = true;
 		in.hitsTaken = raid.getHitsTaken();
+		in.takenByAttack = raid.getDamageTakenByAttack();
 		final List<Fight> fights = new ArrayList<>();
 		final List<Room> rooms = new ArrayList<>();
 		for (Encounter e : raid.getEncounters())
@@ -217,11 +229,24 @@ final class SidePanelModel
 			r.combatTicks = e.getCombatTicks();
 			r.numbers = new LedgerRows.Numbers(LedgerRows.of(e));
 			r.warning = e.getStatsWarning() != null;
+			r.ended = allEnded(e.getFights());
 			rooms.add(r);
 		}
 		in.startMillis = raid.getStartMillis();
 		in.rooms = rooms;
 		fillOther(in, fights);
+	}
+
+	private static boolean allEnded(List<Fight> fights)
+	{
+		for (Fight f : fights)
+		{
+			if (!f.isEnded())
+			{
+				return false;
+			}
+		}
+		return !fights.isEmpty();
 	}
 
 	/** The previous room for the "Last fight" row. */
@@ -459,6 +484,7 @@ final class SidePanelModel
 			b.budget = budget(n, in, luckColour, warning);
 		}
 		b.tiles = tiles(n, s, in, luckColour, warning);
+		final boolean avoidable = avoidableShown(n, in);
 		if (after && !warning)
 		{
 			if (!Double.isNaN(n.percentile))
@@ -471,7 +497,7 @@ final class SidePanelModel
 				b.noCurveHint = Text.title(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.of(luckColour));
 			}
 		}
-		b.execution = execution(n);
+		b.execution = execution(n, avoidable);
 		if (in.later != null)
 		{
 			// A kill from before this session: no per-attack data, so one card says why (spec 3.2).
@@ -487,9 +513,9 @@ final class SidePanelModel
 		}
 		if (after)
 		{
-			b.details = details(s);
+			b.details = details(s, avoidable);
 		}
-		b.taken = taken(s, in.hitsTaken);
+		b.taken = taken(s, in, avoidable);
 	}
 
 	private static PanelSnapshot.Header header(Input in, LedgerRows.Scope s)
@@ -570,8 +596,9 @@ final class SidePanelModel
 		{
 			final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
 			tiles = tiles(n, s, in, luckColour(n), false);
-			execution = execution(n);
-			taken = taken(s, in.hitsTaken);
+			final boolean avoidable = avoidableShown(n, in);
+			execution = execution(n, avoidable);
+			taken = taken(s, in, avoidable);
 		}
 		int kills = 0;
 		int ended = 0;
@@ -660,13 +687,15 @@ final class SidePanelModel
 			SidePanelStyle.VALUE), Text.small(in.unscored && in.kind == Kind.ROOM ? "on the " + in.scoredName
 			: "weapon only", SidePanelStyle.SECONDARY), SidePanelStyle.TRACK));
 
-		final double lost = lostSeconds(n);
-		final boolean costing = anyCosting(n);
+		final boolean avoidable = avoidableShown(n, in);
+		final double execution = shownExecution(n, in);
+		final double lost = lostSeconds(n, avoidable);
+		final boolean costing = anyCosting(n, avoidable);
 		final Text lostText = LedgerRows.roundHalfAway(lost) >= 1
 			? Text.small(SidePanelStyle.seconds(lost) + " lost", costing ? SidePanelStyle.COST : SidePanelStyle.SECONDARY)
-			: Text.small(Double.isNaN(n.execution) ? "" : "no time lost", SidePanelStyle.MUTED);
-		tiles.add(tile("Execution", Text.title(Double.isNaN(n.execution) ? LedgerRows.UNKNOWN
-			: LedgerRows.partPercent(n.execution), SidePanelStyle.VALUE), lostText, SidePanelStyle.TRACK));
+			: Text.small(Double.isNaN(execution) ? "" : "no time lost", SidePanelStyle.MUTED);
+		tiles.add(tile("Execution", Text.title(Double.isNaN(execution) ? LedgerRows.UNKNOWN
+			: LedgerRows.partPercent(execution), SidePanelStyle.VALUE), lostText, SidePanelStyle.TRACK));
 		return tiles;
 	}
 
@@ -695,12 +724,38 @@ final class SidePanelModel
 	}
 
 	/**
-	 * Every part's seconds together: uptime, then the setup (boost, prayer, gear,
-	 * or one setup figure). Not eating (T-038): it isn't one of Execution's parts.
+	 * T-044 (from #50): whether avoidable eating shows, as the overlay decides it:
+	 * once the scope has ended, and only where its fights had attack rules. While
+	 * it runs nothing about the boss's attacks shows (Jagex's rule).
 	 */
-	static double lostSeconds(LedgerRows.Numbers n)
+	static boolean avoidableShown(LedgerRows.Numbers n, Input in)
+	{
+		return in.ended && !Double.isNaN(n.avoidableEatingCost);
+	}
+
+	/** Execution as shown: with avoidable eating once the scope has ended (T-043), without it while it runs. */
+	static double shownExecution(LedgerRows.Numbers n, Input in)
+	{
+		return shownExecution(n, avoidableShown(n, in));
+	}
+
+	static double shownExecution(LedgerRows.Numbers n, boolean avoidable)
+	{
+		return avoidable ? n.execution : n.executionLive;
+	}
+
+	/**
+	 * Every part's seconds together: uptime, avoidable eating once it shows
+	 * (T-044), then the setup (boost, prayer, gear, or one setup figure). Not the
+	 * rest of the eating (T-038): it isn't one of Execution's parts.
+	 */
+	static double lostSeconds(LedgerRows.Numbers n, boolean avoidable)
 	{
 		double lost = n.uptimeCost;
+		if (avoidable)
+		{
+			lost += avoidableEating(n);
+		}
 		if (!Double.isNaN(n.setupCost))
 		{
 			lost += n.setupCost;
@@ -708,8 +763,22 @@ final class SidePanelModel
 		return lost;
 	}
 
-	private static boolean anyCosting(LedgerRows.Numbers n)
+	/** {@code Ca}: the eating the avoidable hits cost, never more than all the eating; 0 when unknown. */
+	static double avoidableEating(LedgerRows.Numbers n)
 	{
+		if (Double.isNaN(n.avoidableEatingCost))
+		{
+			return 0;
+		}
+		return Math.max(0, Math.min(n.avoidableEatingCost, Double.isNaN(n.eatingCost) ? 0 : n.eatingCost));
+	}
+
+	private static boolean anyCosting(LedgerRows.Numbers n, boolean avoidable)
+	{
+		if (avoidable && LedgerRows.isCosting(avoidableEating(n), n.clock))
+		{
+			return true;
+		}
 		for (double c : costs(n))
 		{
 			if (LedgerRows.isCosting(c, n.clock))
@@ -737,10 +806,21 @@ final class SidePanelModel
 
 	// ---- execution ----
 
+	/** The Execution card without avoidable eating: a running scope's, or one with no attack rules. */
 	static PanelSnapshot.Parts execution(LedgerRows.Numbers n)
 	{
-		final List<Part> parts = new ArrayList<>(4);
+		return execution(n, false);
+	}
+
+	/** The Execution card; with {@code avoidable}, T-044's fifth bar after uptime and the % that includes it. */
+	static PanelSnapshot.Parts execution(LedgerRows.Numbers n, boolean avoidable)
+	{
+		final List<Part> parts = new ArrayList<>(5);
 		parts.add(part("uptime", n.uptime, n.uptimeCost, n));
+		if (avoidable)
+		{
+			parts.add(part("avoidable eating", n.avoidableEatingShare, avoidableEating(n), n));
+		}
 		if (!Double.isNaN(n.setupCost))
 		{
 			if (n.split)
@@ -758,8 +838,9 @@ final class SidePanelModel
 				parts.add(part("setup", n.efficiency, n.setupCost, n));
 			}
 		}
-		return new PanelSnapshot.Parts(Text.title(Double.isNaN(n.execution) ? LedgerRows.UNKNOWN
-			: LedgerRows.partPercent(n.execution), SidePanelStyle.VALUE), parts);
+		final double execution = shownExecution(n, avoidable);
+		return new PanelSnapshot.Parts(Text.title(Double.isNaN(execution) ? LedgerRows.UNKNOWN
+			: LedgerRows.partPercent(execution), SidePanelStyle.VALUE), parts);
 	}
 
 	private static Part part(String label, double share, double cost, LedgerRows.Numbers n)
@@ -785,8 +866,11 @@ final class SidePanelModel
 		final double[] costs = costs(n);
 		final String[] labels = costLabels(n);
 		// Eating is its own stretch after uptime (T-038): B = T - U + L - (Cu + Ce + Cb + Cp + Cg). Neutral, not a cost:
-		// the plugin can't tell why you ate.
+		// the plugin can't tell why you ate. After a ruled fight (T-044) its avoidable part Ca is a cost of its own and
+		// the rest stays neutral; best play is the same: B = T - U + L - (Cu + Ca + (Ce - Ca) + Cb + Cp + Cg).
 		final double e = Double.isNaN(n.eatingCost) ? 0 : n.eatingCost;
+		final double ca = avoidableShown(n, in) ? avoidableEating(n) : 0;
+		final boolean caCosting = LedgerRows.isCosting(ca, n.clock);
 		double costSum = e;
 		for (double c : costs)
 		{
@@ -808,7 +892,11 @@ final class SidePanelModel
 			segments.add(new Segment(costs[i], LedgerRows.isCosting(costs[i], n.clock) ? Fill.COST : Fill.MINOR_COST));
 			if (i == 0)
 			{
-				segments.add(new Segment(e, Fill.EATING));
+				if (ca > 0)
+				{
+					segments.add(new Segment(ca, caCosting ? Fill.COST : Fill.MINOR_COST));
+				}
+				segments.add(new Segment(e - ca, Fill.EATING));
 			}
 		}
 		segments.add(new Segment(Math.max(0, -l), averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER));
@@ -839,10 +927,16 @@ final class SidePanelModel
 						: SidePanelStyle.BODY)));
 			}
 			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
-			if (i == 0 && LedgerRows.roundHalfAway(e) >= 1)
+			if (i == 0 && LedgerRows.roundHalfAway(ca) >= 1)
+			{
+				rows.add(new BudgetRow(caCosting ? Fill.COST : Fill.MINOR_COST, Text.small("avoidable eating",
+					SidePanelStyle.BODY), null, Text.small("+" + SidePanelStyle.seconds(ca), caCosting ? SidePanelStyle.COST
+					: SidePanelStyle.BODY)));
+			}
+			if (i == 0 && LedgerRows.roundHalfAway(e - ca) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
-					Text.small("+" + SidePanelStyle.seconds(e), SidePanelStyle.BODY)));
+					Text.small("+" + SidePanelStyle.seconds(e - ca), SidePanelStyle.BODY)));
 			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
@@ -969,11 +1063,17 @@ final class SidePanelModel
 		{
 			rows.add(new ListRow(Text.body(r.name, SidePanelStyle.VALUE), null,
 				Text.title(LedgerRows.clock(r.combatTicks), SidePanelStyle.VALUE),
-				Text.small("execution " + (Double.isNaN(r.numbers.execution) ? LedgerRows.UNKNOWN
-					: LedgerRows.partPercent(r.numbers.execution)), SidePanelStyle.SECONDARY),
+				Text.small("execution " + (Double.isNaN(roomExecution(r)) ? LedgerRows.UNKNOWN
+					: LedgerRows.partPercent(roomExecution(r))), SidePanelStyle.SECONDARY),
 				chip(r.numbers, r.warning), chipFill(r.numbers, r.warning)));
 		}
 		return new PanelSnapshot.ListRows(Text.small("time · luck · execution", SidePanelStyle.SECONDARY), rows);
+	}
+
+	/** A raid room's Execution: with avoidable eating once the room has ended (T-044), without it while it runs. */
+	private static double roomExecution(Room r)
+	{
+		return shownExecution(r.numbers, r.ended && !Double.isNaN(r.numbers.avoidableEatingCost));
 	}
 
 	private static ListRow lastFightRow(LastFight l, ZoneId zone)
@@ -1214,6 +1314,12 @@ final class SidePanelModel
 	/** After the fight: the overlay's Summary rows that the tiles and Damage taken don't already show. */
 	static PanelSnapshot.Rows details(LedgerRows.Scope s)
 	{
+		return details(s, false);
+	}
+
+	/** With {@code avoidable} (T-044), the eating row is what's left once the avoidable eating is Execution's, as on the overlay. */
+	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable)
+	{
 		final List<Row> rows = new ArrayList<>();
 		if (s.expectedHits() > 0)
 		{
@@ -1236,20 +1342,55 @@ final class SidePanelModel
 		{
 			rows.add(row("boss healed", LedgerRows.number(s.healed())));
 		}
-		if (s.ticksLostEating() > 0)
+		final double eating = s.ticksLostEating() * LedgerRows.SECONDS_PER_TICK
+			- (avoidable ? avoidableEating(new LedgerRows.Numbers(s)) : 0);
+		if (s.ticksLostEating() > 0 && LedgerRows.roundHalfAway(eating) >= 1)
 		{
-			rows.add(row("eating", LedgerRows.roundHalfAway(s.ticksLostEating() * LedgerRows.SECONDS_PER_TICK) + " s"));
+			rows.add(row("eating", LedgerRows.roundHalfAway(eating) + " s"));
 		}
 		return rows.isEmpty() ? null : new PanelSnapshot.Rows(null, rows);
 	}
 
+	/** Damage taken without T-044's rows by attack: a running scope, or no attack rules. */
 	static PanelSnapshot.Rows taken(LedgerRows.Scope s, int hitsTaken)
+	{
+		final Input in = new Input();
+		in.hitsTaken = hitsTaken;
+		return taken(s, in, false);
+	}
+
+	/**
+	 * The Damage taken card. With {@code avoidable} (an ended scope with attack
+	 * rules, T-044): first a row per attack, biggest first, each avoidable one
+	 * marked in words, then {@code avoidable 141 (54%)}; then the rows from before.
+	 */
+	static PanelSnapshot.Rows taken(LedgerRows.Scope s, Input in, boolean avoidable)
 	{
 		if (s.damageTaken() <= 0 && s.dotTaken() <= 0)
 		{
 			return null;
 		}
-		final List<Row> rows = new ArrayList<>(4);
+		final int hitsTaken = in.hitsTaken;
+		final List<Row> rows = new ArrayList<>(12);
+		final int part = s.damageTakenAvoidable();
+		if (avoidable && part >= 0)
+		{
+			final List<Map.Entry<String, Integer>> attacks = new ArrayList<>(in.takenByAttack.entrySet());
+			// Biggest first; unnamed only when there is some, and last among equals.
+			attacks.removeIf(a -> a.getValue() == null || a.getValue() <= 0);
+			attacks.sort((a, b) -> b.getValue().equals(a.getValue()) ? Boolean.compare(isUnnamed(a.getKey()),
+				isUnnamed(b.getKey())) : Integer.compare(b.getValue(), a.getValue()));
+			for (Map.Entry<String, Integer> a : attacks)
+			{
+				final boolean marked = in.avoidableAttacks.contains(a.getKey());
+				rows.add(new Row(Text.small(a.getKey(), SidePanelStyle.BODY),
+					marked ? Text.small(" " + AVOIDABLE, SidePanelStyle.COST) : Text.NONE,
+					Text.small(LedgerRows.number(a.getValue()), SidePanelStyle.BODY)));
+			}
+			final int share = s.damageTaken() <= 0 ? 0 : (int) Math.round(100.0 * part / s.damageTaken());
+			rows.add(new Row(Text.small(AVOIDABLE, SidePanelStyle.BODY), Text.small(LedgerRows.number(part) + " ("
+				+ share + "%)", part > 0 ? SidePanelStyle.COST : SidePanelStyle.BODY)));
+		}
 		if (hitsTaken > 0)
 		{
 			rows.add(row("hits", LedgerRows.number(hitsTaken)));
@@ -1267,6 +1408,58 @@ final class SidePanelModel
 			rows.add(row("burn/poison taken", LedgerRows.number(s.dotTaken())));
 		}
 		return new PanelSnapshot.Rows(Text.title(LedgerRows.number(s.damageTaken()), SidePanelStyle.VALUE), rows);
+	}
+
+	static final String AVOIDABLE = "avoidable";
+
+	private static boolean isUnnamed(String attack)
+	{
+		return attack.startsWith(AttackClassifier.UNNAMED);
+	}
+
+	/**
+	 * T-044: the attack names a version's rules call avoidable, as the classifier
+	 * saves them: an {@code always} attack by its name, an {@code offPrayer} one
+	 * off prayer ({@code melee off prayer}). Empty for none.
+	 */
+	static Set<String> avoidableAttacks(BossRules.AttacksOnPlayer rules)
+	{
+		final Set<String> out = new java.util.LinkedHashSet<>();
+		if (rules == null || rules.attacks == null)
+		{
+			return out;
+		}
+		for (BossRules.AttackRule r : rules.attacks)
+		{
+			if (r == null || r.name == null)
+			{
+				continue;
+			}
+			if ("always".equals(r.avoidable))
+			{
+				out.add(r.name);
+			}
+			else if ("offPrayer".equals(r.avoidable))
+			{
+				out.add(r.name + AttackClassifier.OFF_PRAYER);
+			}
+		}
+		return out;
+	}
+
+	/** {@link #avoidableAttacks(BossRules.AttacksOnPlayer)} over the bosses these fights were at. */
+	static Set<String> avoidableAttacks(BossRules rules, Collection<Fight> fights)
+	{
+		final Set<String> out = new java.util.LinkedHashSet<>();
+		if (rules == null || fights == null)
+		{
+			return out;
+		}
+		for (Fight f : fights)
+		{
+			out.addAll(avoidableAttacks(BossRules.attacksFor(rules.forNpc(f.getTargetId()), f.getMaxHp())));
+		}
+		return out;
 	}
 
 	private static Row row(String label, String value)

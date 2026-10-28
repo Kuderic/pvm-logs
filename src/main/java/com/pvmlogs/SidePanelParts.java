@@ -66,11 +66,12 @@ final class SidePanelParts
 		Line(PanelSnapshot.Row row)
 		{
 			this(row.left, row.right);
+			set(row);
 		}
 
 		void set(PanelSnapshot.Row row)
 		{
-			left.set(row.left);
+			left.set(row.left, row.hint.isEmpty() ? null : row.hint);
 			right.set(row.right);
 		}
 

@@ -46,6 +46,12 @@ final class SidePanelHistory
 		Versions NONE = (room, maxHp) -> null;
 
 		String name(Encounter room, int maxHp);
+
+		/** T-044: the attack names the boss rules call avoidable at this room's boss; empty without rules. */
+		default java.util.Set<String> avoidable(Encounter room)
+		{
+			return Collections.emptySet();
+		}
 	}
 
 	// ---- rooms ----
@@ -265,15 +271,28 @@ final class SidePanelHistory
 		final LedgerHistory.Spread star;
 		final double execution;
 		final double damageTaken;
+		/**
+		 * T-044: the kills Execution's median is over. When the boss has kills classed by attack rules, only those (their
+		 * Execution counts avoidable eating, older ones' doesn't); under {@link LedgerRows#AVERAGE_FROM_KILLS} of them, no
+		 * median.
+		 */
+		final int executionKills;
 
 		Usual(List<Encounter> kills, LedgerHistory.Spread clock, LedgerHistory.Spread star, double execution,
 			double damageTaken)
+		{
+			this(kills, clock, star, execution, damageTaken, kills.size());
+		}
+
+		Usual(List<Encounter> kills, LedgerHistory.Spread clock, LedgerHistory.Spread star, double execution,
+			double damageTaken, int executionKills)
 		{
 			this.kills = kills;
 			this.clock = clock;
 			this.star = star;
 			this.execution = execution;
 			this.damageTaken = damageTaken;
+			this.executionKills = executionKills;
 		}
 	}
 
@@ -337,23 +356,37 @@ final class SidePanelHistory
 		final double[] star = new double[kills.size()];
 		final double[] taken = new double[kills.size()];
 		final List<Double> execution = new ArrayList<>();
+		final List<Double> ruledExecution = new ArrayList<>();
+		int ruled = 0;
 		for (int i = 0; i < kills.size(); i++)
 		{
 			final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(kills.get(i)));
 			clock[i] = n.clock;
 			star[i] = n.expectedDuration;
 			taken[i] = kills.get(i).getDamageTaken();
+			// T-044: a kill classed by attack rules has avoidable eating in its Execution; it compares with its own kind.
+			final boolean classed = !Double.isNaN(n.avoidableEatingCost);
+			ruled += classed ? 1 : 0;
 			if (!Double.isNaN(n.execution))
 			{
 				execution.add(n.execution);
+				if (classed)
+				{
+					ruledExecution.add(n.execution);
+				}
 			}
 		}
+		final boolean byRules = ruled > 0;
+		final List<Double> over = byRules ? ruledExecution : execution;
 		Arrays.sort(clock);
 		Arrays.sort(star);
 		Arrays.sort(taken);
-		final double[] exec = execution.stream().mapToDouble(Double::doubleValue).sorted().toArray();
+		final double[] exec = over.stream().mapToDouble(Double::doubleValue).sorted().toArray();
+		final int executionKills = byRules ? ruled : kills.size();
+		final boolean enough = executionKills >= LedgerRows.AVERAGE_FROM_KILLS;
 		return new Usual(kills, LedgerHistory.Spread.of(clock), LedgerHistory.Spread.of(star),
-			exec.length == 0 ? Double.NaN : LedgerHistory.quantile(exec, 0.5), LedgerHistory.quantile(taken, 0.5));
+			exec.length == 0 || !enough ? Double.NaN : LedgerHistory.quantile(exec, 0.5),
+			LedgerHistory.quantile(taken, 0.5), executionKills);
 	}
 
 	/**
@@ -444,8 +477,12 @@ final class SidePanelHistory
 		}
 		tiles.add(tile("your average", LedgerRows.duration(u.clock.median), middleHalf(u.clock), SidePanelStyle.TRACK));
 		tiles.add(tile("luck removed", LedgerRows.duration(u.star.median), middleHalf(u.star), LUCK_REMOVED));
-		tiles.add(tile("execution", Double.isNaN(u.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(u.execution),
-			"median", SidePanelStyle.TRACK));
+		// T-044: over ruled kills only once the boss has any, with the same under-5 rule as the others.
+		tiles.add(u.executionKills < LedgerRows.AVERAGE_FROM_KILLS
+			? tile("execution", LedgerRows.UNKNOWN, "from " + LedgerRows.AVERAGE_FROM_KILLS + " kills ("
+				+ u.executionKills + " so far)", SidePanelStyle.TRACK)
+			: tile("execution", Double.isNaN(u.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(u.execution),
+				"median", SidePanelStyle.TRACK));
 		tiles.add(tile("damage taken", LedgerRows.number(Math.round(u.damageTaken)), "median", SidePanelStyle.TRACK));
 		return tiles;
 	}
@@ -588,6 +625,7 @@ final class SidePanelHistory
 		in.zone = zone;
 		in.historyFights = history.size();
 		in.version = names == null ? null : names.name(room, in.maxHp);
+		in.avoidableAttacks = names == null ? Collections.emptySet() : names.avoidable(room);
 		if (in.killed && room.getRaid() == null && in.warning == null)
 		{
 			in.average = LedgerHistory.of(history, room);
