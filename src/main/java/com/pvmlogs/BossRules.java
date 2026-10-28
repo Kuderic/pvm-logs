@@ -76,11 +76,19 @@ import net.runelite.client.util.Filepath;
  * It replaces the hard-coded {@code DefenceDrainCap}. A file of an older schema
  * has none: those bosses drain to 0, the wiki's rule for a monster with no stated
  * limit.
+ *
+ * <p>Schema 5 (T-057) adds one optional field to a boss, {@code damageModifiers}
+ * ({@link DamageModifierRules}): what the boss does to the player's damage while
+ * it is in some state - the Abyssal Sire's halving while it walks, the
+ * Leviathan's cap while stunned, its wound, its specials and the enrage's
+ * pathfinder. {@link DamageModifiers} tracks the states and the expected figures
+ * take the effects. A file of an older schema has none: the boss takes every hit
+ * as it rolls.
  */
 @Slf4j
 class BossRules
 {
-	static final int SCHEMA_VERSION = 4;
+	static final int SCHEMA_VERSION = 5;
 
 	static final class Variant
 	{
@@ -197,6 +205,78 @@ class BossRules
 		double xpBonus;
 		/** Schema 4: how its stats drain; null for the wiki's default, to 0 with no special cases. */
 		DrainRules defenceDrain;
+		/** Schema 5: what it does to the player's damage, and when; null for nothing. */
+		DamageModifierRules damageModifiers;
+	}
+
+	/**
+	 * Schema 5 (T-057): a boss's damage modifiers. {@code states} are windows the
+	 * client can see open and close (a stun, a special attack); {@code modifiers}
+	 * say what an attack landing in them takes, in the order listed.
+	 */
+	static final class DamageModifierRules
+	{
+		List<StateRule> states;
+		List<ModifierRule> modifiers;
+	}
+
+	/** A window of the boss's: what opens it, what closes it, how long it can last. Every field optional. */
+	static final class StateRule
+	{
+		String name;
+		/** The player's own cast of one of these spells (Spell names) lands on the boss. */
+		List<String> startOnPlayerSpell;
+		/** The boss starts one of these animations. */
+		int[] startOnBossAnim;
+		/** One of the player's attacks lands with this modifier: the Leviathan's wound starts its special. */
+		String startOnModifierLanded;
+		/** A fixed length in ticks from the start; 0 for none. */
+		int ticks;
+		/** The boss starts one of these animations, at least {@link #minTicks} after the start. */
+		int[] endOnBossAnim;
+		int minTicks;
+		/** One of the player's attacks lands with this modifier: a shot into the wound breaks the stun. */
+		String endOnModifierLanded;
+		/** The longest it can last, when nothing else closed it; 0 for no limit. */
+		int maxTicks;
+		String source;
+	}
+
+	/**
+	 * What an attack landing on the boss takes, and when. Every condition given
+	 * must hold; the effects apply in the order accuracy, minimum hit, cap,
+	 * multiplier, and modifiers in the order listed.
+	 */
+	static final class ModifierRule
+	{
+		String name;
+		/** The id the boss wears when the attack lands; any when left out. */
+		int[] npcIds;
+		/** A state that must be open when the attack lands. */
+		String state;
+		/** A state that must not be. */
+		String notState;
+		/** The player behind the boss (its facing against the player's tile when the attack goes out); either if null. */
+		Boolean behind;
+		/** The player within {@code range} tiles of one of these npcs when the attack goes out. */
+		InsideNpc insideNpc;
+		/** MELEE, RANGED or MAGIC; any when left out. */
+		List<String> styles;
+		/** The chance a roll lands, replacing the accuracy: 1 for "cannot miss". */
+		Double accuracy;
+		/** A landed roll deals at least this share of the max, rounded down. */
+		Double minHitShare;
+		/** No hitsplat above this. */
+		Integer cap;
+		/** The damage times num/den, rounded down: {1, 2} halves. */
+		int[] multiply;
+		String source;
+	}
+
+	static final class InsideNpc
+	{
+		int[] npcIds;
+		int range;
 	}
 
 	/**

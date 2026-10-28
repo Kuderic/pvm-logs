@@ -239,6 +239,10 @@ public class PvmPerformancePlugin extends Plugin
 	@Inject
 	private DefenceDrain drain;
 
+	// The bosses' damage modifiers (T-057): the windows that change the player's damage.
+	@Inject
+	private DamageModifiers damageModifiers;
+
 	@Inject
 	private GearBonusCalc gearBonuses;
 
@@ -675,6 +679,7 @@ public class PvmPerformancePlugin extends Plugin
 		bursts.clear();
 		pendingMineHits.clear();
 		drain.clear();
+		damageModifiers.clear();
 		health.clear();
 		thralls.clear();
 		xpLedger.clear();
@@ -740,6 +745,11 @@ public class PvmPerformancePlugin extends Plugin
 			// Every splat of mine, before anything judges it (T-049): a special's own is picked from them by its tick and the
 			// order they arrive in, as RuneLite's special attack counter picks it, so a thrall's is never taken.
 			drain.onMyHitsplat(npc, hitsplat.getAmount());
+			// A hit into the Leviathan's wound breaks its stun (T-057).
+			if (damageModifiers.hasModifiers(npc))
+			{
+				damageModifiers.onMyHitsplat(npc);
+			}
 			// A special's delayed splat before anything else (T-037): the ancient godsword's 25, eight ticks after its hit,
 			// would otherwise open a burst and book an attack, or be weighed as the thrall's.
 			if (onDelayedSpecialSplat(npc, hitsplat.getAmount(), now))
@@ -2992,6 +3002,8 @@ public class PvmPerformancePlugin extends Plugin
 		final NPC npc = event.getNpc();
 		// A new form carries its drains over, or restores them where its rules say so (T-049: Muspah's shield).
 		drain.onNpcChanged(npc);
+		// And may be one a damage modifier keys on (T-057: the Sire walking).
+		damageModifiers.onNpcChanged(npc);
 		if (current == null || current.isEnded())
 		{
 			return;
@@ -3054,6 +3066,11 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			targetSeen.noteAnimation(client.getTickCount(), current.getTargetIndex(), event.getActor().getAnimation());
 		}
+		// A boss's damage-modifier windows its animations open and close (T-057: the Leviathan's specials).
+		if (event.getActor() instanceof NPC && damageModifiers.hasModifiers((NPC) event.getActor()))
+		{
+			damageModifiers.onNpcAnimation((NPC) event.getActor());
+		}
 		if (event.getActor() instanceof NPC && Thralls.isThrall(((NPC) event.getActor()).getId()))
 		{
 			final NPC thrall = (NPC) event.getActor();
@@ -3077,6 +3094,17 @@ public class PvmPerformancePlugin extends Plugin
 		if (event.getActor() != me || me.getAnimation() == IDLE_ANIMATION)
 		{
 			return;
+		}
+		// A shadow spell cast at a boss it stuns (T-057: the Leviathan), from the ancient cast animation and the manual
+		// cast the menu named; the stun starts when the spell lands.
+		if (me.getAnimation() == AnimationID.ZAROS_CASTING || me.getAnimation() == AnimationID.ZAROS_VERTICAL_CASTING)
+		{
+			final NPC castAt = castTarget();
+			final Spell cast = combatCalc.recentManualCast();
+			if (castAt != null && cast != null && damageModifiers.hasModifiers(castAt))
+			{
+				damageModifiers.onPlayerCast(castAt, cast, client.getTickCount() + magicHitDelay(castDistance(castAt)));
+			}
 		}
 		if (!combatCalc.castLandsWithoutProjectile()
 			|| client.getTickCount() < lastAttackSeenTick + combatCalc.attackSpeedTicks())
@@ -3248,6 +3276,7 @@ public class PvmPerformancePlugin extends Plugin
 		closeOnDespawn(npc);
 		// The drain dies with the NPC, as its stats do: after the fight on it has been closed, which saves them.
 		drain.forget(npc);
+		damageModifiers.forget(npc);
 	}
 
 	private void closeOnDespawn(NPC npc)
@@ -3402,10 +3431,11 @@ public class PvmPerformancePlugin extends Plugin
 			// average of -1 is the tell that the target has no stats and that this attack was scored against nothing.
 			debug.log("ATTACK on %s (npc %d) thrown tick %d, booked +%d, speed %d, next due %d, "
 					+ "prayed=%b potted=%b boost %.2f (cost %.2f) switched=%b (cost %.2f) projectile=%b, scored=%b, "
-					+ "expected avg %.2f, ideal %.2f",
+					+ "expected avg %.2f, ideal %.2f, boss modifiers %s",
 				attacker.getTargetName(), targetId, attackTick, attackObservedLag, speed, attackDueTick,
 				prayed, potted, boostShare, boostCost, switched, switchCost, attackObservedFromProjectile,
-				attacker.isScored(), actualSetup, idealSetup);
+				attacker.isScored(), actualSetup, idealSetup, combatCalc.describeBossModifiers(targetLiveId >= 0
+					? targetLiveId : targetId));
 			lastAttackFromProjectile = attackObservedFromProjectile;
 			if (attackObservedFromProjectile)
 			{
@@ -3821,6 +3851,8 @@ public class PvmPerformancePlugin extends Plugin
 		trackThrallAndXp();
 		// The specials due this tick land their drains before anything works out an expectation (T-049).
 		drain.onGameTick();
+		// Damage-modifier windows that ran out (T-057).
+		damageModifiers.onGameTick();
 		// The tick's splats against the max each attack was expected to have (T-056).
 		maxHits.endTick(client.getTickCount());
 		// What they and the party's did to the fights' outcome distributions (T-050).
@@ -3994,6 +4026,7 @@ public class PvmPerformancePlugin extends Plugin
 			health.clear();
 			lastHealthBarReading = Long.MIN_VALUE;
 			drain.clear();
+		damageModifiers.clear();
 			thralls.clear();
 			xpLedger.clear();
 			targetIds.clear();
