@@ -513,6 +513,11 @@ class PvmPerformancePanel extends PluginPanel
 		final boolean current = contains(room, fight);
 		in.ended = !current || fight.isEnded();
 		in.killed = in.ended && room.isKilled();
+		if (!in.ended)
+		{
+			// T-052: the target's tracked Defence for the header's live line, read with the rest of the build.
+			in.liveDefence = SidePanelModel.liveDefence(plugin.getTrackedDrain(fight.getTargetIndex()));
+		}
 		if (in.ended)
 		{
 			in.avoidableAttacks = avoidableAttacks(room.getFights());
@@ -620,6 +625,13 @@ class PvmPerformancePanel extends PluginPanel
 		// T-044: the trip's avoidable figures sum its ended ruled fights, shown, as on the overlay, while no fight runs.
 		in.ended = running == null;
 		in.takenByAttack = trip.getDamageTakenByAttack();
+		// T-052: what the trip's drains added and the specials' share of luck (T-050's sums over its ended fights).
+		final SidePanelModel.Drain drains = new SidePanelModel.Drain();
+		drains.valueDamage = trip.getDrainValueDamage();
+		drains.valueSeconds = trip.luckSeconds(drains.valueDamage);
+		drains.specLuckDamage = trip.getSpecLuckDamage();
+		drains.specLuckSeconds = trip.luckSeconds(drains.specLuckDamage);
+		in.drain = drains;
 		final List<Object> key = Arrays.asList(history.size(), head, trip.getStartMillis());
 		if (!key.equals(tripSavedKey))
 		{

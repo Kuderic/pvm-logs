@@ -123,6 +123,11 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		{
 			rows("tripOther", "Other damage", tab.other, t -> t.other);
 		}
+		if (tab.drains != null)
+		{
+			// T-052: what the trip's defence drains added, and the specials' share of luck.
+			rows("tripDrains", "Defence drains", tab.drains, t -> t.drains);
+		}
 		final JButton newTrip = SidePanelFightTab.button("New trip", SidePanelStyle.VALUE);
 		newTrip.setToolTipText("Start the trip totals over. Saved fights are untouched");
 		newTrip.addActionListener(e -> actions.newTrip());

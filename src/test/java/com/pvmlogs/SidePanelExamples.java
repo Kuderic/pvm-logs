@@ -367,6 +367,93 @@ final class SidePanelExamples
 		return in;
 	}
 
+	// ---- T-052: defence drains (illustrative figures, shaped on T-049's rules) ----
+
+	/** A drain over a room: Defence start → end of base, floor, and T-050's figures in damage and seconds. */
+	static SidePanelModel.Drain drain(int start, int end, int base, int floor, int party, double value, double valueSeconds,
+		double specLuck, double specLuckSeconds)
+	{
+		final SidePanelModel.Drain d = new SidePanelModel.Drain();
+		d.defenceStart = start;
+		d.defenceEnd = end;
+		d.defenceBase = base;
+		d.defenceFloor = floor;
+		d.magicStart = 0;
+		d.magicEnd = 0;
+		d.partyDrains = party;
+		d.valueDamage = value;
+		d.valueSeconds = valueSeconds;
+		d.specLuckDamage = specLuck;
+		d.specLuckSeconds = specLuckSeconds;
+		return d;
+	}
+
+	/** The Fight tab after a kill with this drain, at this boss. */
+	static SidePanelModel.Input drainKill(String boss, SidePanelModel.Drain d)
+	{
+		final SidePanelModel.Input in = dead();
+		in.name = boss;
+		in.scoredName = boss;
+		in.average = null;
+		in.luckRemoved = null;
+		in.drain = d;
+		return in;
+	}
+
+	/** Two Dragon warhammers at General Graardor, one landed: 250 → 175. The miss cost about 3 s. */
+	static SidePanelModel.Input twoHammersOneLanded()
+	{
+		final SidePanelModel.Drain d = drain(250, 175, 250, 0, 0, 182, 14.2, -41, -3.2);
+		d.specs.put("DRAGON_WARHAMMER", new int[]{2, 1});
+		return drainKill("General Graardor", d);
+	}
+
+	/** A Bandos godsword at the Corporeal Beast, which drains twice its damage: a 39 took 78. */
+	static SidePanelModel.Input bandosGodsword()
+	{
+		final SidePanelModel.Drain d = drain(310, 232, 310, 0, 0, 96, 7.6, 52, 4.1);
+		d.specs.put("BANDOS_GODSWORD", new int[]{1, 1});
+		return drainKill("Corporeal Beast", d);
+	}
+
+	/** Xarth at its floor (60%: 102 of 170): two hammers and a party member's; the second hammer had nothing left. */
+	static SidePanelModel.Input atItsFloor()
+	{
+		final SidePanelModel.Drain d = drain(170, 102, 170, 102, 1, 60, 5.1, 2, 0.2);
+		d.specs.put("DRAGON_WARHAMMER", new int[]{2, 2});
+		return drainKill("Xarth", d);
+	}
+
+	/** Vardorvis is immune: the record says so, so the room has no drain to show. */
+	static SidePanelModel.Input immune()
+	{
+		return drainKill("Vardorvis", null);
+	}
+
+	/** The fight still running, a hammer landed on Graardor: the header's live line. */
+	static SidePanelModel.Input liveDrained()
+	{
+		final SidePanelModel.Input in = live();
+		in.name = "General Graardor";
+		in.scoredName = in.name;
+		final SidePanelModel.LiveDefence l = new SidePanelModel.LiveDefence();
+		l.defence = 175;
+		l.defenceBase = 250;
+		l.defenceFloor = 0;
+		l.magic = 80;
+		l.magicBase = 80;
+		in.liveDefence = l;
+		return in;
+	}
+
+	/** The trip with its drains: T-050's sums over its ended fights. */
+	static SidePanelModel.Input tripWithDrains()
+	{
+		final SidePanelModel.Input in = trip();
+		in.drain = drain(-1, -1, -1, -1, 0, 338, 26.9, 13, 1.1);
+		return in;
+	}
+
 	private static SidePanelModel.Input room(String name, LedgerExamples.FakeScope scope)
 	{
 		final SidePanelModel.Input in = base();

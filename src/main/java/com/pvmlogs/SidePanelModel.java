@@ -20,6 +20,7 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -110,6 +111,49 @@ final class SidePanelModel
 		boolean warning;
 	}
 
+	/**
+	 * T-052: what the defence drains did over a room (T-049's record, T-050's
+	 * figures), or the trip's sums (the levels and specials -1 there).
+	 */
+	static final class Drain
+	{
+		int defenceStart = -1;
+		int defenceEnd = -1;
+		int defenceBase = -1;
+		int defenceFloor = -1;
+		int magicStart = -1;
+		int magicEnd = -1;
+		/** The player's own draining specials by RuneLite's weapon name: {thrown, landed}. */
+		Map<String, int[]> specs = new LinkedHashMap<>();
+		int partyDrains;
+		/** T-050's drain value, realized, in damage and seconds (positive is time saved); NaN unknown. */
+		double valueDamage = Double.NaN;
+		double valueSeconds = Double.NaN;
+		/** T-050's spec luck in damage and seconds; NaN unknown. */
+		double specLuckDamage = Double.NaN;
+		double specLuckSeconds = Double.NaN;
+
+		int ownThrown()
+		{
+			int n = 0;
+			for (int[] c : specs.values())
+			{
+				n += c[0];
+			}
+			return n;
+		}
+	}
+
+	/** T-052: a target's tracked stats while the fight runs (T-049's tracker). */
+	static final class LiveDefence
+	{
+		int defence;
+		int defenceBase;
+		int defenceFloor;
+		int magic;
+		int magicBase;
+	}
+
 	/** Everything the Fight tab needs, read on the client thread. */
 	static final class Input
 	{
@@ -118,6 +162,10 @@ final class SidePanelModel
 		String name;
 		/** The raid the room or scope is in, or null: a raid's rooms show its icon (T-054). */
 		RaidType raidType;
+		/** T-052: the room's tracked drains, or the trip's sums; null where nothing was tracked. */
+		Drain drain;
+		/** T-052: the target's tracked stats while the fight runs, once a drain has landed; null before. */
+		LiveDefence liveDefence;
 		boolean ended;
 		boolean killed;
 		/** {@code getStatsWarning(fight)}, or null. */
@@ -209,8 +257,64 @@ final class SidePanelModel
 		in.inRaid = room.getRaid() != null;
 		in.raidType = room.getRaid();
 		in.takenByAttack = room.getDamageTakenByAttack();
+		in.drain = drain(room);
 		fillOther(in, fights);
 		in.targets = targets(fights);
+	}
+
+	/**
+	 * T-052: a room's drains, or null where nothing was tracked: no record (fights saved before T-049), an immune
+	 * target, or no special thrown at it by anyone.
+	 */
+	static Drain drain(Encounter room)
+	{
+		DrainRecord first = null;
+		for (Fight f : room.getFights())
+		{
+			if (f.getDrainRecord() != null)
+			{
+				first = f.getDrainRecord();
+				break;
+			}
+		}
+		if (first == null || first.immune)
+		{
+			return null;
+		}
+		final Drain d = new Drain();
+		d.specs = room.getOwnDrainSpecs();
+		d.partyDrains = Math.max(0, room.getPartyDrains());
+		if (d.ownThrown() <= 0 && d.partyDrains <= 0)
+		{
+			return null;
+		}
+		d.defenceStart = room.getDefenceStart();
+		d.defenceEnd = room.getDefenceEnd();
+		d.defenceBase = first.defenceBase;
+		d.defenceFloor = first.defenceFloor;
+		d.magicStart = room.getMagicStart();
+		d.magicEnd = room.getMagicEnd();
+		d.valueDamage = room.getDrainValueDamage();
+		d.valueSeconds = room.luckSeconds(d.valueDamage);
+		d.specLuckDamage = room.getSpecLuckDamage();
+		d.specLuckSeconds = room.luckSeconds(d.specLuckDamage);
+		return d;
+	}
+
+	/** T-052: a target's tracked stats for the live line, or null until a drain has landed on it. */
+	static LiveDefence liveDefence(DrainTracker.Tracked t)
+	{
+		if (t == null || t.target.immune || !t.drained())
+		{
+			return null;
+		}
+		final LiveDefence l = new LiveDefence();
+		l.defence = t.state.defence;
+		l.defenceBase = t.target.defence;
+		l.defenceFloor = t.target.defenceFloor;
+		l.magic = t.state.magic;
+		l.magicBase = t.target.magic;
+		return l;
 	}
 
 	/** The whole raid's scope and its rooms. */
@@ -495,6 +599,11 @@ final class SidePanelModel
 			if (!Double.isNaN(n.percentile))
 			{
 				b.curve = curve(n, s, luckColour);
+				final String specs = specsShareOfLuck(in.drain);
+				if (specs != null)
+				{
+					b.curve = new PanelSnapshot.Curve(b.curve.z, b.curve.headerValue, b.curve.caption + ". " + specs);
+				}
 			}
 			else if (!Double.isNaN(n.luck))
 			{
@@ -519,6 +628,10 @@ final class SidePanelModel
 		if (after)
 		{
 			b.details = details(s, avoidable);
+			if (!raid && in.drain != null)
+			{
+				b.defence = defence(in.drain);
+			}
 		}
 		b.taken = taken(s, in, avoidable);
 	}
@@ -568,7 +681,28 @@ final class SidePanelModel
 		return new PanelSnapshot.Header(Text.title(in.name, SidePanelStyle.VALUE), suffix,
 			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
 			new Text(LedgerRows.clock(s.combatTicks()), SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK),
-			SidePanelBossIcons.sprite(in.name, in.raidType));
+			SidePanelBossIcons.sprite(in.name, in.raidType),
+			in.ended || in.kind == Kind.RAID ? Text.NONE : liveDefenceText(in.liveDefence));
+	}
+
+	/**
+	 * T-052: {@code defence 145 / 215}, {@code defence 129 (floor)} at its floor, and {@code · magic 80 / 100} once
+	 * Magic was drained. The player's and party's own specials' effect, as RuneLite's Special Attack Counter shows it:
+	 * nothing about the boss's attacks.
+	 */
+	static Text liveDefenceText(LiveDefence l)
+	{
+		if (l == null)
+		{
+			return Text.NONE;
+		}
+		final StringBuilder s = new StringBuilder("defence ").append(l.defence);
+		s.append(l.defence <= l.defenceFloor && l.defenceFloor < l.defenceBase ? " (floor)" : " / " + l.defenceBase);
+		if (l.magic < l.magicBase)
+		{
+			s.append(DOT).append("magic ").append(l.magic).append(" / ").append(l.magicBase);
+		}
+		return Text.small(s.toString(), SidePanelStyle.SECONDARY);
 	}
 
 	/** Luck's colour role: by the percentile when it's known (T-029), else by the seconds, as the overlay goes. */
@@ -635,7 +769,7 @@ final class SidePanelModel
 			other.add(row("recoil/veng dmg", LedgerRows.number(in.reflect)));
 		}
 		return new PanelSnapshot.TripTab(header, tiles, execution, Text.small(hint, SidePanelStyle.SECONDARY), in.tripRows,
-			taken, other.isEmpty() ? null : new PanelSnapshot.Rows(null, other));
+			taken, other.isEmpty() ? null : new PanelSnapshot.Rows(null, other), tripDrains(in.drain));
 	}
 
 	/** A trip row from a rebuilt or running room: texts only. The running one is never "(ended)". */
@@ -1012,6 +1146,137 @@ final class SidePanelModel
 			return LedgerRows.Colour.COST;
 		}
 		return seconds < spread.lowerQuartile ? LedgerRows.Colour.BETTER : LedgerRows.Colour.NEUTRAL;
+	}
+
+	// ---- the Defence card (T-052) ----
+
+	/** The Defence card after a room with tracked drains. */
+	static PanelSnapshot.Defence defence(Drain d)
+	{
+		final List<Row> rows = new ArrayList<>();
+		final boolean atFloor = d.defenceEnd >= 0 && d.defenceEnd <= d.defenceFloor && d.defenceFloor < d.defenceBase;
+		rows.add(new Row(Text.small("defence", SidePanelStyle.BODY),
+			atFloor ? Text.small(" at its floor", SidePanelStyle.SECONDARY) : Text.NONE,
+			Text.small(path(d.defenceStart, d.defenceEnd), SidePanelStyle.VALUE)));
+		rows.add(row("floor", d.defenceFloor <= 0 ? "none" : String.valueOf(d.defenceFloor)));
+		if (d.magicStart >= 0 && d.magicEnd >= 0 && d.magicEnd != d.magicStart)
+		{
+			rows.add(row("magic", path(d.magicStart, d.magicEnd)));
+		}
+		for (Map.Entry<String, int[]> e : d.specs.entrySet())
+		{
+			rows.add(row(weaponName(e.getKey()), e.getValue()[1] + " of " + e.getValue()[0] + " landed"));
+		}
+		if (d.partyDrains > 0)
+		{
+			rows.add(row("party drains", String.valueOf(d.partyDrains)));
+		}
+		return new PanelSnapshot.Defence(Text.small(path(d.defenceStart, d.defenceEnd), SidePanelStyle.SECONDARY), rows,
+			drainWorth(d), specLuck(d));
+	}
+
+	private static String path(int start, int end)
+	{
+		return start < 0 || end < 0 ? "unknown" : start == end ? String.valueOf(end) : start + " → " + end;
+	}
+
+	/** A special's name as the game's items are written: {@code Dragon warhammer}, {@code Dinh's bulwark}. */
+	static String weaponName(String weapon)
+	{
+		String name;
+		try
+		{
+			name = net.runelite.client.plugins.specialcounter.SpecialWeapon.valueOf(weapon).getName();
+		}
+		catch (IllegalArgumentException | NullPointerException e)
+		{
+			name = weapon == null ? "special" : weapon.replace('_', ' ');
+		}
+		final String lower = name.toLowerCase(Locale.ENGLISH);
+		return lower.isEmpty() ? lower : Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+	}
+
+	/** {@code The drains added 182 expected damage: about 14 s faster.} Null when T-050's figure is unknown. */
+	static Text drainWorth(Drain d)
+	{
+		if (Double.isNaN(d.valueDamage))
+		{
+			return null;
+		}
+		final long dmg = LedgerRows.roundHalfAway(d.valueDamage);
+		final String who = d.ownThrown() > 0 && d.partyDrains <= 0 ? "Your drains" : "The drains";
+		final StringBuilder s = new StringBuilder(who);
+		s.append(dmg >= 0 ? " added " : " took away ").append(LedgerRows.number(Math.abs(dmg))).append(" expected damage");
+		if (!Double.isNaN(d.valueSeconds) && LedgerRows.roundHalfAway(d.valueSeconds) != 0)
+		{
+			s.append(": about ").append(LedgerRows.fasterOrSlower(d.valueSeconds));
+		}
+		return Text.small(s.append('.').toString(), SidePanelStyle.BODY);
+	}
+
+	/**
+	 * T-050's spec luck in words: {@code Your specials landed better than average: 5 s faster. That's part of Luck.}
+	 * Null without own draining specials, or when unknown.
+	 */
+	static Text specLuck(Drain d)
+	{
+		final String phrase = specLuckPhrase(d);
+		if (phrase == null)
+		{
+			return null;
+		}
+		final long r = LedgerRows.roundHalfAway(d.specLuckSeconds);
+		final Color c = r > 0 ? SidePanelStyle.BETTER : r < 0 ? SidePanelStyle.COST : SidePanelStyle.BODY;
+		return Text.small("Your specials " + phrase + ". That's part of Luck.", c);
+	}
+
+	private static String specLuckPhrase(Drain d)
+	{
+		if (d == null || d.ownThrown() <= 0 || Double.isNaN(d.specLuckSeconds))
+		{
+			return null;
+		}
+		final long r = LedgerRows.roundHalfAway(d.specLuckSeconds);
+		return r == 0 ? "landed about as well as average"
+			: (r > 0 ? "landed better than average: " : "landed worse than average: ")
+			+ LedgerRows.fasterOrSlower(d.specLuckSeconds);
+	}
+
+	/** Luck's caption, second sentence: {@code Your specials' share: 5 s faster}. Null without own specials. */
+	static String specsShareOfLuck(Drain d)
+	{
+		if (specLuckPhrase(d) == null)
+		{
+			return null;
+		}
+		final long r = LedgerRows.roundHalfAway(d.specLuckSeconds);
+		return "Your specials' share: " + (r == 0 ? "about even" : LedgerRows.fasterOrSlower(d.specLuckSeconds));
+	}
+
+	/** T-052: the trip's drains, or null where none were worth anything. */
+	static PanelSnapshot.Rows tripDrains(Drain d)
+	{
+		if (d == null || Double.isNaN(d.valueDamage))
+		{
+			return null;
+		}
+		final long dmg = LedgerRows.roundHalfAway(d.valueDamage);
+		final boolean luck = !Double.isNaN(d.specLuckSeconds) && LedgerRows.roundHalfAway(d.specLuckSeconds) != 0;
+		if (dmg == 0 && !luck)
+		{
+			return null;
+		}
+		final List<Row> rows = new ArrayList<>(2);
+		final String secs = Double.isNaN(d.valueSeconds) || LedgerRows.roundHalfAway(d.valueSeconds) == 0 ? ""
+			: DOT + LedgerRows.fasterOrSlower(d.valueSeconds);
+		rows.add(row("expected dmg added", (dmg > 0 ? "+" : "") + LedgerRows.number(dmg) + secs));
+		if (luck)
+		{
+			final long r = LedgerRows.roundHalfAway(d.specLuckSeconds);
+			rows.add(new Row(Text.small("your specials' luck", SidePanelStyle.BODY),
+				Text.small(LedgerRows.fasterOrSlower(d.specLuckSeconds), r > 0 ? SidePanelStyle.BETTER : SidePanelStyle.COST)));
+		}
+		return new PanelSnapshot.Rows(null, rows);
 	}
 
 	// ---- the luck curve ----

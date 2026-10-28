@@ -267,6 +267,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				budget(tab);
 				tiles(tab);
 				curve(tab);
+				defence(tab);
 				execution(tab);
 				damage(tab);
 				later(tab);
@@ -358,6 +359,12 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final SidePanelText sub = new SidePanelText(tab.header.sub, false);
 		left.add(name);
 		left.add(sub);
+		// T-052: the target's tracked Defence while the fight runs, from the first drain; the structure says whether.
+		final SidePanelText defence = tab.header.defence.isEmpty() ? null : new SidePanelText(tab.header.defence, false);
+		if (defence != null)
+		{
+			left.add(defence);
+		}
 		final SidePanelText clock = new SidePanelText(tab.header.clock, true);
 		// The boss's game icon before its name (T-054), only when it has one; the structure says whether.
 		final SidePanelBossIcons.View icon = tab.header.icon == SidePanelBossIcons.NONE ? null
@@ -377,6 +384,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			if (icon != null)
 			{
 				icon.set(t.header.icon);
+			}
+			if (defence != null)
+			{
+				defence.set(t.header.defence);
 			}
 		});
 	}
@@ -813,6 +824,51 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				rows.get(i).set(t.damage.rows.get(i));
 			}
 		});
+	}
+
+	/**
+	 * T-052: the Defence card after a fight with tracked drains: its rows (the path, the floor, the specials thrown and
+	 * landed, the party's drains), then what the drains added and the specials' share of luck in words.
+	 */
+	private void defence(FightTab tab)
+	{
+		if (tab.defence == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(6);
+		final SidePanelParts.RowsCard rows = flat(tab.defence.rows);
+		card.add(rows);
+		final SidePanelParts.Paragraph worth = tab.defence.worth == null ? null : paragraph(tab.defence.worth);
+		final SidePanelParts.Paragraph luck = tab.defence.specLuck == null ? null : paragraph(tab.defence.specLuck);
+		if (worth != null)
+		{
+			card.add(worth);
+		}
+		if (luck != null)
+		{
+			card.add(luck);
+		}
+		final SidePanelSection section = new SidePanelSection("defence", "Defence", tab.defence.hint, card, folds);
+		add(section);
+		updaters.add(t ->
+		{
+			section.setHint(t.defence.hint);
+			rows.set(t.defence.rows);
+			if (worth != null)
+			{
+				worth.set(t.defence.worth.text, t.defence.worth.colour);
+			}
+			if (luck != null)
+			{
+				luck.set(t.defence.specLuck.text, t.defence.specLuck.colour);
+			}
+		});
+	}
+
+	private static SidePanelParts.Paragraph paragraph(PanelSnapshot.Text t)
+	{
+		return new SidePanelParts.Paragraph(t.text, t.colour, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
 	}
 
 	private void rowsSection(FightTab tab, String id, String title, PanelSnapshot.Rows rows,
