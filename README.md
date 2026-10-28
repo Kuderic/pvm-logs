@@ -1,21 +1,71 @@
 # PvM Performance Tracker
 
-This is a maintained fork of [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker) by Arodab, and builds on his combat model. It fixes the build against current RuneLite and counts thrall hits apart from your own ([Arodab's issue #1](https://github.com/Arodab/pvm-performance-tracker/issues/1)), with per-kill logs to follow.
+A RuneLite plugin for bossing. After every kill it tells you how much of your time was luck and how much was you, for any boss. There's no account to make, and nothing about you leaves your computer.
 
-It keeps the original plugin's name and settings group (`pvmperformance`), so it can be released as an update to the existing Plugin Hub entry without resetting anyone's settings. Fight history, exports and logs now live in RuneLite's plugin-data folder, `~/.runelite/plugin-data/pvm-performance-tracker/`, as current Plugin Hub rules require. On first start RuneLite moves the old `~/.runelite/pvm-performance-tracker/` folder there, so nobody's history is lost.
+It works out what each of your attacks should have done, from your gear, levels, boosts and prayers against the boss's defence, and compares that with what you actually hit. The gap between your kill and a perfect one splits into two parts: **Luck** (the dice) and **Execution** (the time you weren't attacking, or were attacking without the right setup).
 
-A RuneLite plugin that tracks your real vs expected combat performance (damage, accuracy, DPS) against any NPC. 
+## What it shows
 
-Instead of just telling you how much damage you dealt, this plugin models your exact gear, stats, and prayers on every single tick to calculate what your **expected** damage should have been. This allows you to evaluate your luck, identify missed attacks, and truly measure your performance.
+### Luck and Execution
+- **Luck** says how lucky the kill was: where your damage falls among all the ways the same attacks could have rolled (bottom 20%, the middle half, top 15%), and what that cost or saved in seconds.
+- **Execution** says how much of the fight you spent attacking, and with the right setup: uptime, prayer, gear and stat boost, each with the seconds it cost.
+- **After a kill at a boss with attack rules** (Vardorvis so far), it also counts the food you ate because of damage you could have avoided, and how much of the damage you took was avoidable.
 
-## Features
-- **Efficiency Tracker:** Calculates your expected damage versus what it would have been with flawless execution. It automatically accounts for mistakes by detecting:
-  - **Missed Gear Switches:** (Optional) Scans your inventory to see if better gear was available for the weapon used.
-  - **Missed Prayers:** Identifies attacks made without the correct offensive prayer active.
-  - **Unpotted Attacks:** Tracks attacks made when your stat-boosting potions had expired.
-- **Raid Support:** Dynamically scales monster defence based on your party size and raid level in the Chambers of Xeric and Tombs of Amascut.
-- **Live Overlay:** Displays a real-time comparison of your actual damage vs expected damage.
-- **Exportable Data:** Dumps your session fight data to CSV for further analysis.
+### The fight overlay
+Live during the fight, the full breakdown after the kill.
+
+<table>
+<tr>
+<td><img src="docs/images/overlay-mid-fight.png" alt="The fight overlay mid-fight, with the loadout overlay under it"></td>
+<td><img src="docs/images/overlay-after-kill.png" alt="The fight overlay after a kill"></td>
+</tr>
+<tr>
+<td>Mid-fight, with the loadout overlay under it</td>
+<td>After the kill</td>
+</tr>
+</table>
+
+After a kill at a boss with attack rules, Execution gains an **avoidable eating** line and damage taken says how much was avoidable:
+
+<img src="docs/images/overlay-ruled-kill.png" alt="The fight overlay after a Vardorvis kill, with avoidable eating and avoidable damage taken">
+
+### The loadout overlay
+Your current weapon's max hit, accuracy and DPS against the target, and its special attack's.
+
+<img src="docs/images/overlay-loadout.png" alt="The loadout overlay for an Abyssal tentacle">
+
+### The side panel
+- **Fight:** where the time went, Luck, Execution, damage by source and damage taken.
+- **History:** your saved kills, and your usual time and execution at each boss.
+- **Trip:** the session's kills together.
+
+<table>
+<tr>
+<td><img src="docs/images/panel-fight.png" alt="The side panel's Fight tab after a Vardorvis kill" width="242"></td>
+<td><img src="docs/images/panel-history.png" alt="The side panel's History tab" width="242"></td>
+<td><img src="docs/images/panel-trip.png" alt="The side panel's Trip tab" width="242"></td>
+</tr>
+<tr><td>Fight</td><td>History</td><td>Trip</td></tr>
+</table>
+
+The Fight tab during a kill, updating every 5 ticks, then the full view once the boss dies (a simulated two-minute Vardorvis kill at 7.5× speed):
+
+<img src="docs/images/panel-fight-live.gif" alt="The Fight tab updating through a kill" width="242">
+
+### What it never shows during a fight
+Nothing about the boss's attacks, and no comparison with your own average while you fight: only your own output, as Jagex's rules for third-party clients require. Your average appears once the fight is over.
+
+### Also
+- Counts your thrall's hits apart from your own, and burn, poison and the boss healing apart from your weapon.
+- Scales boss defence for party size and raid level in the Chambers of Xeric and Tombs of Amascut.
+- Exports fights to CSV.
+
+All the pictures here are drawn by the plugin's own code (see Developing), over a plain dark backdrop: the overlays are see-through in game.
+
+## About this fork
+This is a maintained fork of [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker) by Arodab, and builds on his combat model. It fixes the build against current RuneLite and counts thrall hits apart from your own ([Arodab's issue #1](https://github.com/Arodab/pvm-performance-tracker/issues/1)).
+
+It keeps the original plugin's name and settings group (`pvmperformance`), so it can be released as an update to the existing Plugin Hub entry without resetting anyone's settings. Fight history, exports and logs live in RuneLite's plugin-data folder, `~/.runelite/plugin-data/pvm-performance-tracker/`, as current Plugin Hub rules require. On first start RuneLite moves the old `~/.runelite/pvm-performance-tracker/` folder there, so nobody's history is lost.
 
 ## Developing
 These are the steps that work on Windows. Run them in PowerShell, from the repo folder.
@@ -34,10 +84,21 @@ These are the steps that work on Windows. Run them in PowerShell, from the repo 
    .\gradlew.bat run
    ```
 4. **Log in:** in the client's sidebar, open the Jagex account panel → **Add Jagex Account** → sign in → pick your character → **Play Now**. If an old `.runelite\credentials.properties` exists, delete it first.
-5. **Capture a debug log:** after a fight, press **Save debug log** in the plugin's side panel. It writes the last few thousand lines. For a whole session, turn on **Debug logging** in the plugin's settings instead.
+5. **Capture a debug log:** after a fight, press **Save debug log** on the side panel's Fight tab (or **Save log** under History → Tools). It writes the last few thousand lines. For a whole session, turn on **Debug logging** in the plugin's settings instead.
 6. **Find the files** in `%USERPROFILE%\.runelite\plugin-data\pvm-performance-tracker\`: `pvm-debug-recent-*.log` (the button), `pvm-debug-*.log` (the setting), `history.json` and CSV exports.
 
 **Tests:** `.\gradlew.bat test` on Windows, or `./gradlew test` on Linux and macOS (JDK 11 or newer). CI runs them on every push and pull request.
+
+**README pictures:** everything in `docs/images/` comes from one generator, `ReadmePictures` (test code), which draws with the plugin's own overlay and panel code. Run it again whenever the look changes; the same code gives the same files.
+```
+./gradlew shadowJar
+java -Djava.awt.headless=true -cp build/libs/pvm-logs-unspecified-all.jar com.pvmlogs.ReadmePictures
+```
+On Windows (PowerShell needs the quotes):
+```powershell
+.\gradlew.bat shadowJar
+java "-Djava.awt.headless=true" -cp build\libs\pvm-logs-unspecified-all.jar com.pvmlogs.ReadmePictures
+```
 
 `CLAUDE.md` covers how Claude sessions work on this repo. `docs/HANDOFF.md` records what is known about thrall damage and other damage that isn't the player's attack.
 
