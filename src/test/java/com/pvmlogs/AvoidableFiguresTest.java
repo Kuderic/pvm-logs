@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import com.google.gson.Gson;
 import java.util.Arrays;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.Test;
@@ -206,18 +207,23 @@ public class AvoidableFiguresTest
 	@Test
 	public void theCsvsLastTwoColumns()
 	{
+		// The two avoidable columns, found by name: T-050 appended six more after them.
 		final String header = PvmPerformancePlugin.CSV_HEADER.trim();
-		assertTrue(header.endsWith(",reflectDamage,damageTakenAvoidable,avoidableEatingTicks"));
+		assertTrue(header.contains(",reflectDamage,damageTakenAvoidable,avoidableEatingTicks,"));
+		final List<String> names = Arrays.asList(header.split(",", -1));
+		// The fight and room rows start after the four scope columns (level, raid, raidRun, room) a fight row lacks.
+		final int avoidable = names.indexOf("damageTakenAvoidable") - 4;
+		final int eating = names.indexOf("avoidableEatingTicks") - 4;
 		final String[] ruled = PvmPerformancePlugin.csvRow(kill(true)).trim().split(",", -1);
-		assertEquals(Arrays.asList("70", "9.0"), Arrays.asList(ruled[ruled.length - 2], ruled[ruled.length - 1]));
+		assertEquals(Arrays.asList("70", "9.0"), Arrays.asList(ruled[avoidable], ruled[eating]));
 		final Fight goblin = new Fight("Goblin", NpcIds.GOBLIN, 1, 5, 0L, null, 0);
 		goblin.end(true, 1000L);
 		final String[] none = PvmPerformancePlugin.csvRow(goblin).trim().split(",", -1);
-		assertEquals(Arrays.asList("", ""), Arrays.asList(none[none.length - 2], none[none.length - 1]));
+		assertEquals(Arrays.asList("", ""), Arrays.asList(none[avoidable], none[eating]));
 		final Encounter room = new Encounter("Vardorvis", null, 0L);
 		room.add(kill(true));
 		final String[] roomRow = PvmPerformancePlugin.csvRoomRow(null, 0, room).trim().split(",", -1);
-		assertEquals("70", roomRow[roomRow.length - 2]);
-		assertEquals("9.0", roomRow[roomRow.length - 1]);
+		assertEquals("70", roomRow[avoidable + 4]);
+		assertEquals("9.0", roomRow[eating + 4]);
 	}
 }

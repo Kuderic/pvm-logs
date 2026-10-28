@@ -60,6 +60,8 @@ final class PerfProbe
 		ON_COMMAND_EXECUTED("onCommandExecuted", false),
 		// Inside the handlers above.
 		TIMELINE("FightTimeline hooks", true),
+		// T-050's outcome distribution: the tick's figures at each state, each booking, each tick's drains.
+		DRAIN_OUTCOMES("spec outcomes (T-050)", true),
 		// A frame's overlays.
 		OVERLAY("overlay render", false),
 		LOADOUT_OVERLAY("loadout overlay render", false);

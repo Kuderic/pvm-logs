@@ -124,6 +124,15 @@ class Fight
 	// see damageVariance().
 	private double sumExpectedDamageVariance;
 	private int expectedVarianceSamples;
+	// T-050: what averaging the expected damage over the player's own draining specials' outcomes adds to the sums above
+	// (both 0 until a special has branched them), and what the drains were worth: the attacks' expectation as made less
+	// with nothing drained, realized and averaged. drainValueKnown is false on fights saved before T-050 and where nothing
+	// could be drained (an immune boss, no stats).
+	private double outcomeExpectedShift;
+	private double outcomeVarianceShift;
+	private boolean drainValueKnown;
+	private double drainValueDamage;
+	private double drainValueExpected;
 
 	// What the attacks were set up to deal, against what they would have set up properly. The ratio prices each slip in
 	// damage rather than counting alike.
@@ -619,7 +628,77 @@ class Fight
 	double damageVariance()
 	{
 		return expectedTargetSamples > 0 && expectedVarianceSamples == expectedTargetSamples
-			? sumExpectedDamageVariance : -1;
+			? Math.max(0, sumExpectedDamageVariance + outcomeVarianceShift) : -1;
+	}
+
+	/**
+	 * What every attack was expected to deal, summed: averaged over the player's
+	 * own draining specials' outcomes (T-050), so a missed hammer is bad luck and
+	 * a landed one good. The same as {@link #getRealizedExpected()} until a
+	 * special has branched them, and on every fight saved before T-050.
+	 */
+	double getSumExpectedAverageHit()
+	{
+		return sumExpectedAverageHit + outcomeExpectedShift;
+	}
+
+	/** The attacks' expectations as made, each at the state the target was really in (T-050): E(realized). */
+	double getRealizedExpected()
+	{
+		return sumExpectedAverageHit;
+	}
+
+	/**
+	 * T-050's figures, as they stand: what averaging over the specials' outcomes
+	 * adds to the expected damage and its variance, and the drains' worth realized
+	 * and averaged. Set again after every attack, so live luck includes them.
+	 */
+	void recordSpecOutcomes(double expectedShift, double varianceShift, double valueDamage, double valueExpected)
+	{
+		outcomeExpectedShift = expectedShift;
+		outcomeVarianceShift = varianceShift;
+		drainValueKnown = true;
+		drainValueDamage = valueDamage;
+		drainValueExpected = valueExpected;
+	}
+
+	/** Whether the drains' worth is known: false before T-050 and where nothing could be drained. */
+	boolean hasDrainValue()
+	{
+		return drainValueKnown;
+	}
+
+	/**
+	 * The drains' worth in damage: the attacks' expectation as made less what it
+	 * would have been with nothing drained, the party's drains included. NaN when
+	 * unknown.
+	 */
+	double getDrainValueDamage()
+	{
+		return drainValueKnown ? drainValueDamage : Double.NaN;
+	}
+
+	/** The same, averaged over the player's own specials' outcomes; NaN when unknown. */
+	double getDrainValueExpected()
+	{
+		return drainValueKnown ? drainValueExpected : Double.NaN;
+	}
+
+	/**
+	 * E(realized) - E(averaged): the part of luck that came from the specials,
+	 * positive when they landed better than average. The rest of luck is the
+	 * attacks' own rolls. NaN when unknown.
+	 */
+	double getSpecLuckDamage()
+	{
+		return drainValueKnown ? -outcomeExpectedShift : Double.NaN;
+	}
+
+	/** Damage as seconds, the way luck turns damage into time (T-050): over this fight, NaN where it has no rate. */
+	double luckSeconds(double damage)
+	{
+		return DrainValue.seconds(damage, isScored() ? combatTicks : 0, getSumExpectedAverageHit(),
+			Math.max(0, thrallDamage) + Math.max(0, dotDamage) + Math.max(0, reflectDamage));
 	}
 
 	/**
@@ -629,7 +708,7 @@ class Fight
 	 */
 	double luckPercentile()
 	{
-		return DamageMoments.percentile(damageDealt, sumExpectedAverageHit, damageVariance());
+		return DamageMoments.percentile(damageDealt, getSumExpectedAverageHit(), damageVariance());
 	}
 
 	/** Mean expected max hit over the attacks made, or -1 if never sampled. */

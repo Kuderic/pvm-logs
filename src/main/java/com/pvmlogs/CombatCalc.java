@@ -164,6 +164,10 @@ class CombatCalc
 	private int targetIndex = -1;
 	// The NPC being fought, for the health bar the ruby bolt is a share of.
 	private NPC targetNpc;
+	// T-050: the target's levels to work the figures out at, in place of what the drain tracker says is left; null for the
+	// tracker's. Set only for the length of one figuresAt call.
+	private DrainRule.Target levelsBase;
+	private DrainRule.State levelsAt;
 	// The enemy a miss has armed the gauntlets against, or -1. Per enemy because the effect is spent on the next attack
 	// against that same one.
 	private final ConflictionCharge charge = new ConflictionCharge();
@@ -565,7 +569,9 @@ class CombatCalc
 			return -1;
 		}
 		final AttackStyle style = attackStyle();
-		final AttackType type = style.getAttackType();
+		// Weaken rolls as a stab whatever style is selected (T-050).
+		final AttackType type = spec != null && spec.rollsAgainst() != null && style.getAttackType().isMelee()
+			? spec.rollsAgainst() : style.getAttackType();
 		final double gear = gearBonus(npcId).getAccuracy();
 		if (type.isMelee())
 		{
@@ -1188,9 +1194,9 @@ class CombatCalc
 		final int raidLevel = RaidScaling.tombsRaidLevel(client);
 		if (raidLevel > 0)
 		{
-			return RaidScaling.tombs(Math.max(0, npc.getDefenceLevel() - drain.drainedFrom(targetIndex)), raidLevel);
+			return RaidScaling.tombs(Math.max(0, npc.getDefenceLevel() - defenceDrained()), raidLevel);
 		}
-		return Math.max(0, raidScaled(npc) - drain.drainedFrom(targetIndex));
+		return Math.max(0, raidScaled(npc) - defenceDrained());
 	}
 
 	/**
@@ -1226,13 +1232,30 @@ class CombatCalc
 			return defenceLevel(npc);
 		}
 		final int magic = RaidScaling.magic(client, npc.getMagicLevel(), npc.getName(), partyHitpoints.highest());
-		return Math.max(0, magic - drain.magicDrainedFrom(targetIndex));
+		return Math.max(0, magic - magicDrained());
+	}
+
+	// What has been drained off the target: the tracker's, or, inside figuresAt, the state's (T-050).
+	private int defenceDrained()
+	{
+		return levelsAt != null ? Math.max(0, levelsBase.defence - levelsAt.defence) : drain.drainedFrom(targetIndex);
+	}
+
+	private int magicDrained()
+	{
+		return levelsAt != null ? Math.max(0, levelsBase.magic - levelsAt.magic) : drain.magicDrainedFrom(targetIndex);
+	}
+
+	private int magicDefenceDrained()
+	{
+		return levelsAt != null ? Math.max(0, levelsBase.magicDefence - levelsAt.magicDefence)
+			: drain.magicDefenceDrainedFrom(targetIndex);
 	}
 
 	/** The target's magic defence bonus, less what an Eye of ayak took (T-049). */
 	private int magicDefenceBonus(MonsterStatsProvider.MonsterStats npc)
 	{
-		final int taken = drain.magicDefenceDrainedFrom(targetIndex);
+		final int taken = magicDefenceDrained();
 		return taken <= 0 ? npc.getDefMagic() : Math.max(0, npc.getDefMagic() - taken);
 	}
 
@@ -2413,6 +2436,60 @@ class CombatCalc
 	{
 		final DamageMoments moments = specialAttackMoments(npcId);
 		return moments == null ? -1 : moments.variance();
+	}
+
+	// T-050: figuresAt's slots.
+	static final int AT_MEAN = 0;
+	static final int AT_VARIANCE = 1;
+	static final int AT_SPEC_MEAN = 2;
+	static final int AT_SPEC_VARIANCE = 3;
+	static final int AT_SPEC_LAND = 4;
+	static final int AT_SPEC_ACCURACY = 5;
+	static final int AT_SPEC_MAX = 6;
+	static final int AT_CAP = 7;
+	static final int AT_WIDTH = 8;
+
+	/**
+	 * The expected figures with the target's Defence, Magic and magic defence
+	 * bonus at {@code at} rather than where the drain tracker says they are
+	 * (T-050): the ordinary attack's mean and variance, the special's mean,
+	 * variance, land chance, per-roll accuracy and max, and the per-hitsplat cap.
+	 * Nothing else changes, so at the tracker's own state these are the figures
+	 * {@link #averageHitMoments} and {@link #specialAttackMoments} give. A slot is
+	 * -1 where that figure is unknown; null with no stats for the target.
+	 *
+	 * @param base the levels the drains are measured from (the tracker's target)
+	 */
+	double[] figuresAt(int npcId, DrainRule.Target base, DrainRule.State at)
+	{
+		if (monsters.get(npcId) == null || base == null || at == null)
+		{
+			return null;
+		}
+		levelsBase = base;
+		levelsAt = at;
+		try
+		{
+			final double[] out = new double[AT_WIDTH];
+			final DamageMoments ordinary = averageHitMoments(npcId);
+			final DamageMoments special = specialAttackMoments(npcId);
+			final SpecialAttack spec = specialAttack();
+			out[AT_MEAN] = ordinary == null ? -1 : ordinary.mean;
+			out[AT_VARIANCE] = ordinary == null ? -1 : ordinary.variance();
+			out[AT_SPEC_MEAN] = special == null ? -1 : special.mean;
+			out[AT_SPEC_VARIANCE] = special == null ? -1 : special.variance();
+			out[AT_SPEC_LAND] = specialAttackLandChance(npcId);
+			out[AT_SPEC_ACCURACY] = spec == null ? hitChance(npcId) : spec.alwaysHits() ? 1.0 : hitChance(npcId, spec);
+			final int specMax = specialAttackMaxHit(npcId);
+			out[AT_SPEC_MAX] = specMax > 0 ? specMax : maxHit(npcId);
+			out[AT_CAP] = Math.min(damageCap(npcId), overkillCap(npcId));
+			return out;
+		}
+		finally
+		{
+			levelsBase = null;
+			levelsAt = null;
+		}
 	}
 
 	/** One special's damage as moments: {@link #specialAttackAverageHit}'s working, with the second moment beside it. */

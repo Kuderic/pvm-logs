@@ -183,7 +183,9 @@ public class PvmPerformancePlugin extends Plugin
 		// T-017 Part B: recoil and vengeance, at the end for the same reason.
 		+ "reflectDamage,"
 		// T-041: blank where the boss has no attack rules, and on fights saved before them.
-		+ "damageTakenAvoidable,avoidableEatingTicks\n";
+		+ "damageTakenAvoidable,avoidableEatingTicks,"
+		// T-050: blank on fights saved before it and where nothing could be drained. Seconds as luck's are.
+		+ "drainValueDamage,drainValueExpected,specLuckDamage,drainValueSec,drainValueExpectedSec,specLuckSec\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -496,6 +498,11 @@ public class PvmPerformancePlugin extends Plugin
 	private final FightTimeline.Store timelines = new FightTimeline.Store();
 	// What the plugin costs the client (T-045): on only while Debug logging is on. Read by the overlays and the side panel.
 	private final PerfProbe perf = new PerfProbe();
+	// Each fight's expected damage averaged over how the player's own draining specials could have landed (T-050), fed the
+	// bookings below and the drain tracker's events. The lambdas read the injected fields when called.
+	private final DrainLuck drainLuck = new DrainLuck(index -> drain.tracked(index),
+		(npcId, base, state) -> combatCalc.figuresAt(npcId, base, state),
+		(expected, variance) -> session.recordOutcomeShift(expected, variance), perf);
 	// Specials' splats still to come long after their hit: the ancient godsword's 25 (T-037).
 	private final AttackSplats.Delayed delayedSplats = new AttackSplats.Delayed();
 
@@ -642,6 +649,7 @@ public class PvmPerformancePlugin extends Plugin
 		navButton = null;
 		// This session's timelines go with it (T-035): they are never saved.
 		timelines.clear();
+		drainLuck.clear();
 		perf.setOn(false);
 		current = null;
 		lastFinished = null;
@@ -2426,6 +2434,11 @@ public class PvmPerformancePlugin extends Plugin
 			row[EXP_VARIANCE] = expectedVariance;
 			row[EXP_SPEC_VARIANCE] = expectedSpecVariance;
 			expectedByTick.put(client.getTickCount(), row);
+			// The same figures at each state the open fight's outcome distribution holds (T-050), for the attacks made now.
+			if (current != null && !current.isEnded())
+			{
+				drainLuck.snapshot(current, targetIdOn(current, client.getTickCount()), client.getTickCount());
+			}
 			expectedByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
 			// Once per target, and again whenever the version in use changes or the defence has moved (Vardorvis's follows his
 			// hitpoints), so a log shows the figures the attacks were judged by as they changed. Not gated on the debug
@@ -2647,7 +2660,9 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				line.markLatestSpecial();
 			}
-			maxHit = specMaxHit;
+			// A special the table doesn't know is scored with the ordinary figures, its max included: the line read "max 0"
+			// beside the ordinary average (T-050, an Emberlight on the Sire).
+			maxHit = specMaxHit > 0 ? specMaxHit : maxHit;
 			averageHit = specAverageHit;
 			variance = specVariance;
 			expectedChances = specLandChance;
@@ -2656,19 +2671,24 @@ public class PvmPerformancePlugin extends Plugin
 			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance);
 		// Only an ordinary one-splat attack's max can be checked against a single splat (T-056).
 		final boolean checkable = !special && combatCalc.maxIsOneSplat();
+		// The special in hand on the tick it was thrown, for its drain's outcomes (T-050).
+		final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon = special
+			? DrainLuck.weaponFor(weaponByTick.getOrDefault(attackOriginTick, combatCalc.equippedWeaponId())) : null;
 		if (attackObservedLag == MELEE_BOOKING_LAG)
 		{
 			maxHits.scored(fight, fight.getTargetIndex(), client.getTickCount(), maxHit, checkable,
 				combatCalc.wornNow());
 			fight.recordExpected(maxHit, expectedChances, averageHit, variance);
 			session.recordExpected(expectedChances, averageHit, variance);
+			drainLuck.booked(fight, attackOriginTick, client.getTickCount(), special, specWeapon, averageHit, variance);
 		}
 		else
 		{
 			final FightTimeline line = timelines.of(fight);
 			pendingSamples.add(new PendingSample(fight,
 				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance,
-				line == null ? null : line.latest(), checkable, checkable ? combatCalc.wornNow() : null));
+				line == null ? null : line.latest(), checkable, checkable ? combatCalc.wornNow() : null,
+				attackOriginTick, special, specWeapon));
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
@@ -2700,12 +2720,20 @@ public class PvmPerformancePlugin extends Plugin
 		// Whether its max is one splat's, and the gear it was thrown in (T-056's max-hit check).
 		private final boolean checkable;
 		private final java.util.function.Supplier<String> worn;
+		// When it was thrown, whether as a special and with which (T-050).
+		private final int madeTick;
+		private final boolean special;
+		private final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon;
 
 		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit,
-			double variance, FightTimeline.Attack attack, boolean checkable, java.util.function.Supplier<String> worn)
+			double variance, FightTimeline.Attack attack, boolean checkable, java.util.function.Supplier<String> worn,
+			int madeTick, boolean special, net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon)
 		{
 			this.checkable = checkable;
 			this.worn = worn;
+			this.madeTick = madeTick;
+			this.special = special;
+			this.specWeapon = specWeapon;
 			this.variance = variance;
 			this.attack = attack;
 			this.fight = fight;
@@ -2740,6 +2768,8 @@ public class PvmPerformancePlugin extends Plugin
 					line.expectNextFor(sample.attack);
 				}
 				sample.fight.recordExpected(sample.maxHit, sample.accuracy, sample.averageHit, sample.variance);
+				drainLuck.booked(sample.fight, sample.madeTick, client.getTickCount(), sample.special, sample.specWeapon,
+					sample.averageHit, sample.variance);
 			}
 			session.recordExpected(sample.accuracy, sample.averageHit, sample.variance);
 			return;
@@ -3793,6 +3823,8 @@ public class PvmPerformancePlugin extends Plugin
 		drain.onGameTick();
 		// The tick's splats against the max each attack was expected to have (T-056).
 		maxHits.endTick(client.getTickCount());
+		// What they and the party's did to the fights' outcome distributions (T-050).
+		drainLuck.tick(client.getTickCount());
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
 		// A buff whose fade message never came is let go once its duration is well past (T-026).
 		for (String line : gearBonuses.tickBuffs(client.getTickCount()))
@@ -4003,6 +4035,10 @@ public class PvmPerformancePlugin extends Plugin
 		current.noteStartTick(client.getTickCount());
 		timelines.attach(current);
 		perf.fightStarted();
+		// From the target's stats as the drains left them when the fight opened (T-050); started from its base if nothing
+		// has been thrown at it. Nothing is kept for an immune target or one without stats.
+		drain.recordFor(npc, npc.getIndex(), client.getTickCount());
+		drainLuck.start(current, drain.tracked(npc.getIndex()));
 		// A boss the monster data cannot describe says so from the first tick, not only once the fight's numbers show it.
 		if (stats != null)
 		{
@@ -4594,6 +4630,12 @@ public class PvmPerformancePlugin extends Plugin
 			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
 			current.getCombatTicks(), current.getSumExpectedAverageHit());
 		debug.log("%s", luckLine(current));
+		// T-050: how much of that luck was the specials', and what the drains were worth.
+		final String specLuck = drainLuck.end(current);
+		if (specLuck != null)
+		{
+			debug.log("%s", specLuck);
+		}
 		// What the fight cost the client (T-045), while Debug logging is on.
 		for (String line : perf.fightEnded(current.getTargetName()))
 		{
@@ -5083,7 +5125,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
 			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d,%d,%s,%s%n",
+				+ "%d,%d,%d,%d,%d,%s,%s,%s%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -5118,7 +5160,9 @@ public class PvmPerformancePlugin extends Plugin
 				room.getDamageTakenUnprotected(),
 				room.getReflectDamage(),
 				csvExpected(room.getDamageTakenAvoidable(), 0),
-				csvExpected(room.getAvoidableEatingTicks(), 1));
+				csvExpected(room.getAvoidableEatingTicks(), 1),
+				csvDrain(room.getDrainValueDamage(), room.getDrainValueExpected(), room.getSpecLuckDamage(),
+					room::luckSeconds));
 	}
 
 	static String csvRaidRow(String raidName, int raidRun, List<Encounter> rooms)
@@ -5135,7 +5179,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
 			+ String.format("%s,,,,,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d,%d,%s,%s%n",
+				+ "%d,%d,%d,%d,%d,%s,%s,%s%n",
 				started,
 				raid.getDamageDealt(),
 				raid.getDamageTaken(),
@@ -5169,7 +5213,9 @@ public class PvmPerformancePlugin extends Plugin
 				raid.getDamageTakenUnprotected(),
 				raid.getReflectDamage(),
 				csvExpected(raid.getDamageTakenAvoidable(), 0),
-				csvExpected(raid.getAvoidableEatingTicks(), 1));
+				csvExpected(raid.getAvoidableEatingTicks(), 1),
+				csvDrain(raid.getDrainValueDamage(), raid.getDrainValueExpected(), raid.getSpecLuckDamage(),
+					raid::luckSeconds));
 	}
 
 	private static String csvFightRow(String raidName, int raidRun, Fight fight)
@@ -5184,7 +5230,7 @@ public class PvmPerformancePlugin extends Plugin
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
 		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-			+ "%d,%d,%d,%d,%d,%s,%s%n",
+			+ "%d,%d,%d,%d,%d,%s,%s,%s%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -5223,7 +5269,28 @@ public class PvmPerformancePlugin extends Plugin
 			fight.getDamageTakenUnprotected(),
 			fight.getReflectDamage(),
 			csvExpected(fight.getDamageTakenAvoidable(), 0),
-			csvExpected(fight.getAvoidableEatingTicks(), 1));
+			csvExpected(fight.getAvoidableEatingTicks(), 1),
+			csvDrain(fight.getDrainValueDamage(), fight.getDrainValueExpected(), fight.getSpecLuckDamage(),
+				fight::luckSeconds));
+	}
+
+	/**
+	 * T-050's six columns: the drain value realized and averaged, the spec luck,
+	 * then each in seconds. Blank where unknown; signed, since spec luck goes either
+	 * way.
+	 */
+	static String csvDrain(double value, double valueExpected, double specLuck,
+		java.util.function.DoubleUnaryOperator seconds)
+	{
+		return String.join(",", csvSigned(value, 1), csvSigned(valueExpected, 1), csvSigned(specLuck, 1),
+			csvSigned(Double.isNaN(value) ? Double.NaN : seconds.applyAsDouble(value), 1),
+			csvSigned(Double.isNaN(valueExpected) ? Double.NaN : seconds.applyAsDouble(valueExpected), 1),
+			csvSigned(Double.isNaN(specLuck) ? Double.NaN : seconds.applyAsDouble(specLuck), 1));
+	}
+
+	private static String csvSigned(double value, int decimals)
+	{
+		return Double.isNaN(value) || Double.isInfinite(value) ? "" : String.format("%." + decimals + "f", value);
 	}
 
 	/**
