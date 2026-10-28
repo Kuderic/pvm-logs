@@ -105,7 +105,7 @@ public class SettingsLayoutTest
 		assertEquals(Arrays.asList(
 			"showOverlay", "overlayShowLoadout", "overlayBossesOnly", "overlayHoldSeconds",
 			"overlayCovers", "overlayLuck", "overlayParts", "overlayDetails",
-			"panelLive", "panelCharts",
+			"panelLive", "panelCharts", "panelLargerText", "panelSmoothFont",
 			"debugLogging"), keys());
 	}
 
@@ -130,6 +130,9 @@ public class SettingsLayoutTest
 		assertEquals("Summary after the fight", names.get("overlayDetails"));
 		assertEquals("Update during fights", names.get("panelLive"));
 		assertEquals("Charts", names.get("panelCharts"));
+		// T-053.
+		assertEquals("Larger text", names.get("panelLargerText"));
+		assertEquals("Smooth font", names.get("panelSmoothFont"));
 		assertEquals("Debug logging", names.get("debugLogging"));
 		// Eric's standing rule: no "exp" in a label.
 		for (String name : names.values())
@@ -155,6 +158,9 @@ public class SettingsLayoutTest
 		assertTrue(d.overlayDetails());
 		assertTrue(d.panelLive());
 		assertTrue(d.panelCharts());
+		// T-053: both off, so the panel looks as it always has.
+		assertFalse(d.panelLargerText());
+		assertFalse(d.panelSmoothFont());
 		assertFalse(d.debugLogging());
 	}
 

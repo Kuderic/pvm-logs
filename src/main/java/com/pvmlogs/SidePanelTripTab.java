@@ -27,6 +27,12 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 	/** T-046: the tab paints in software and reaches the screen as one image; see {@link SidePanelBuffer}. */
 	private final SidePanelBuffer buffer = new SidePanelBuffer();
 
+	/** For tests: the tab's cached image. */
+	SidePanelBuffer buffer()
+	{
+		return buffer;
+	}
+
 	/** The strain probe's timers for the buffer (T-046); null in tests. */
 	void setPerf(PerfProbe perf)
 	{
@@ -79,6 +85,14 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		}
 		// One paint pass for the whole update (T-046 follow-up), as the Fight tab does.
 		repaint();
+	}
+
+	/** The text settings changed (T-053): as the Fight tab's {@code restyle}. */
+	void restyle(TripTab last)
+	{
+		buffer.drop();
+		structure = null;
+		apply(last);
 	}
 
 	int builds()
@@ -260,7 +274,7 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 
 		int clockWidth()
 		{
-			return clock.getFontMetrics(clock.getFont()).stringWidth(clock.getText());
+			return SidePanelStyle.metrics(clock, clock.getFont()).stringWidth(clock.getText());
 		}
 
 		void setColumns(int clockWidth, int chipWidth)
@@ -268,8 +282,10 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 			// Columns only widen (T-046): a running room's clock ticking over needs no layout until it outgrows them.
 			if (chipWidth > chipBox.getPreferredSize().width || clockWidth > clock.getPreferredSize().width)
 			{
-				chipBox.setPreferredSize(new Dimension(Math.max(chipWidth, chipBox.getPreferredSize().width), 14));
-				clock.setPreferredSize(new Dimension(Math.max(clockWidth, clock.getPreferredSize().width), 16));
+				chipBox.setPreferredSize(new Dimension(Math.max(chipWidth, chipBox.getPreferredSize().width),
+					SidePanelStyle.Type.SMALL.lineHeight() + 2));
+				clock.setPreferredSize(new Dimension(Math.max(clockWidth, clock.getPreferredSize().width),
+					SidePanelStyle.Type.TITLE.lineHeight()));
 				SidePanelParts.relayout(this);
 			}
 		}
@@ -277,7 +293,7 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		@Override
 		public Dimension getPreferredSize()
 		{
-			return new Dimension(SidePanelStyle.CONTENT_WIDTH, 26);
+			return new Dimension(SidePanelStyle.CONTENT_WIDTH, SidePanelKillRow.rowHeight());
 		}
 	}
 

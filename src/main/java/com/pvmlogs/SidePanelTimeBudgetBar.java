@@ -25,15 +25,39 @@ import javax.swing.JComponent;
  */
 final class SidePanelTimeBudgetBar extends JComponent
 {
-	/** The clock and end labels' baseline, above the bar. */
-	static final int LABEL_BASELINE = 10;
-	static final int BAR_TOP = 16;
 	static final int BAR_HEIGHT = 16;
-	static final int HEIGHT = 48;
 	/** The tick: 2 px wide, from a little above the bar to a little below it. */
 	static final int TICK_WIDTH = 2;
-	static final int TICK_TOP = BAR_TOP - 3;
-	static final int TICK_BOTTOM = BAR_TOP + BAR_HEIGHT + 2;
+
+	// T-053: the label rows above and below the bar are Small's line height (12 with the RuneScape fonts, which gives
+	// T-042's 10 / 16 / 48), so larger or smoother text has room.
+
+	/** The clock and end labels' baseline, above the bar. */
+	static int labelBaseline()
+	{
+		return SidePanelStyle.Type.SMALL.lineHeight() - 2;
+	}
+
+	static int barTop()
+	{
+		return SidePanelStyle.Type.SMALL.lineHeight() + 4;
+	}
+
+	static int height()
+	{
+		return barTop() + BAR_HEIGHT + SidePanelStyle.Type.SMALL.lineHeight() + 4;
+	}
+
+	static int tickTop()
+	{
+		return barTop() - 3;
+	}
+
+	static int tickBottom()
+	{
+		return barTop() + BAR_HEIGHT + 2;
+	}
+
 	/** Space between a label and the tick, or between two labels. */
 	static final int GAP = 4;
 	/** Between your clock and the end's label when they share one. */
@@ -49,6 +73,14 @@ final class SidePanelTimeBudgetBar extends JComponent
 		set(budget);
 	}
 
+	/** The text settings changed (T-053): Small's new font, and the label rows' new height. */
+	void restyle()
+	{
+		setFont(SidePanelStyle.Type.SMALL.font());
+		revalidate();
+		repaint();
+	}
+
 	void set(PanelSnapshot.TimeBudget b)
 	{
 		budget = b;
@@ -59,7 +91,7 @@ final class SidePanelTimeBudgetBar extends JComponent
 	@Override
 	public Dimension getPreferredSize()
 	{
-		return new Dimension(SidePanelStyle.CONTENT_WIDTH, HEIGHT);
+		return new Dimension(SidePanelStyle.CONTENT_WIDTH, height());
 	}
 
 	/** Where your real time falls on a bar {@code width} wide: T ÷ (T + L) of it, the end when luck didn't save time. */
@@ -135,14 +167,14 @@ final class SidePanelTimeBudgetBar extends JComponent
 			final double w = s.seconds * scale;
 			if (w > 0)
 			{
-				SidePanelParts.paint(g2, new Rectangle2D.Double(x, BAR_TOP, w, BAR_HEIGHT), s.fill, null);
+				SidePanelParts.paint(g2, new Rectangle2D.Double(x, barTop(), w, BAR_HEIGHT), s.fill, null);
 			}
 			x += w;
 		}
 		final double tick = tickX(budget, width);
 		if (budget.luckSaved > 0 && tick < width)
 		{
-			saved(g2, new Rectangle2D.Double(tick, BAR_TOP, width - tick, BAR_HEIGHT), budget.luckSavedColour);
+			saved(g2, new Rectangle2D.Double(tick, barTop(), width - tick, BAR_HEIGHT), budget.luckSavedColour);
 		}
 		// The average marker, only when it falls on the bar; the row under it says it either way. Dashed and grey, hanging
 		// below the bar, so it never reads as the tick.
@@ -152,21 +184,22 @@ final class SidePanelTimeBudgetBar extends JComponent
 			final double mx = budget.marker * scale;
 			g2.setColor(SidePanelStyle.AVERAGE_MARKER);
 			g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[]{2f, 2f}, 0f));
-			g2.draw(new Line2D.Double(mx, BAR_TOP, mx, BAR_TOP + BAR_HEIGHT + 6));
+			g2.draw(new Line2D.Double(mx, barTop(), mx, barTop() + BAR_HEIGHT + 6));
 		}
 		// Your real time: solid white, over everything on the bar.
 		g2.setColor(SidePanelStyle.CLOCK_TICK);
 		final double tx = Math.max(0, Math.min(width - TICK_WIDTH, tick - TICK_WIDTH / 2.0));
-		g2.fill(new Rectangle2D.Double(tx, TICK_TOP, TICK_WIDTH, TICK_BOTTOM - TICK_TOP));
+		g2.fill(new Rectangle2D.Double(tx, tickTop(), TICK_WIDTH, tickBottom() - tickTop()));
 
 		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+		SidePanelStyle.textHints(g2);
 		g2.setFont(getFont());
-		final FontMetrics fm = g2.getFontMetrics();
+		final FontMetrics fm = SidePanelStyle.metrics(g2, getFont());
 		final Labels l = labels(budget, width, fm);
 		if (l.clock != null)
 		{
 			g2.setColor(SidePanelStyle.VALUE);
-			g2.drawString(l.clock, (int) Math.round(l.clockX), LABEL_BASELINE);
+			g2.drawString(l.clock, (int) Math.round(l.clockX), labelBaseline());
 		}
 		if (l.end != null)
 		{
@@ -175,11 +208,11 @@ final class SidePanelTimeBudgetBar extends JComponent
 			{
 				// Your clock in the tick's white, the rest as the end's label.
 				g2.setColor(SidePanelStyle.VALUE);
-				g2.drawString(budget.clockLabel, ex, LABEL_BASELINE);
+				g2.drawString(budget.clockLabel, ex, labelBaseline());
 				ex += fm.stringWidth(budget.clockLabel);
 			}
 			g2.setColor(SidePanelStyle.SECONDARY);
-			g2.drawString(l.joined ? l.end.substring(budget.clockLabel.length()) : l.end, ex, LABEL_BASELINE);
+			g2.drawString(l.joined ? l.end.substring(budget.clockLabel.length()) : l.end, ex, labelBaseline());
 		}
 		if (marker)
 		{
@@ -188,7 +221,7 @@ final class SidePanelTimeBudgetBar extends JComponent
 			// Right-aligned to the marker, as on the canvas, but never off either edge.
 			final int mtx = (int) Math.max(0, Math.min(width - w, Math.round(mx - 2.5 - w)));
 			g2.setColor(SidePanelStyle.SECONDARY);
-			g2.drawString(markerLabel, mtx, HEIGHT - 1);
+			g2.drawString(markerLabel, mtx, height() - fm.getDescent());
 		}
 		g2.dispose();
 	}

@@ -45,6 +45,12 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	/** T-046: the tab paints in software and reaches the screen as one image; see {@link SidePanelBuffer}. */
 	private final SidePanelBuffer buffer = new SidePanelBuffer();
 
+	/** For tests: the tab's cached image. */
+	SidePanelBuffer buffer()
+	{
+		return buffer;
+	}
+
 	/** The strain probe's timers for the buffer (T-046); null in tests. */
 	void setPerf(PerfProbe perf)
 	{
@@ -215,6 +221,19 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		return builds;
 	}
 
+	/**
+	 * The text settings changed (T-053): the parts that outlive a refresh take the new fonts, the cached image goes, and
+	 * the list is built again once.
+	 */
+	void restyle()
+	{
+		buffer.drop();
+		bossesOnly.setFont(SidePanelStyle.Type.SMALL.font());
+		status.restyle();
+		SidePanelParts.restyle(searchBox);
+		refresh();
+	}
+
 	/** Reads the saved fights again and shows them; Swing's thread. */
 	void refresh()
 	{
@@ -341,7 +360,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			@Override
 			public Dimension getPreferredSize()
 			{
-				return new Dimension(8, 12);
+				return new Dimension(8, SidePanelStyle.Type.SMALL.lineHeight());
 			}
 
 			@Override

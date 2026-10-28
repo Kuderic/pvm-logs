@@ -109,7 +109,8 @@ final class SidePanelText extends JComponent
 	/** The width the text and its second run take. */
 	private int natural()
 	{
-		return getFontMetrics(getFont()).stringWidth(text) + getFontMetrics(suffixFont()).stringWidth(suffix);
+		return SidePanelStyle.metrics(this, getFont()).stringWidth(text)
+			+ SidePanelStyle.metrics(this, suffixFont()).stringWidth(suffix);
 	}
 
 	/**
@@ -121,7 +122,8 @@ final class SidePanelText extends JComponent
 	 */
 	private int moving()
 	{
-		return reservedWidth(getFontMetrics(getFont()), text) + reservedWidth(getFontMetrics(suffixFont()), suffix);
+		return reservedWidth(SidePanelStyle.metrics(this, getFont()), text)
+			+ reservedWidth(SidePanelStyle.metrics(this, suffixFont()), suffix);
 	}
 
 	/** {@code s}'s width with each digit counted at the font's widest digit. */
@@ -142,6 +144,15 @@ final class SidePanelText extends JComponent
 			}
 		}
 		return fm.stringWidth(s) + extra;
+	}
+
+	/** The text settings changed (T-053): the role's new font, and the width it asks for measured again. */
+	void restyle()
+	{
+		setFont(type.font());
+		reserved = 0;
+		revalidate();
+		repaint();
 	}
 
 	/** The second run's font: its own type's, or the first's when it has none or the same. */
@@ -184,10 +195,11 @@ final class SidePanelText extends JComponent
 	@Override
 	protected void paintComponent(Graphics g)
 	{
+		SidePanelStyle.textHints((java.awt.Graphics2D) g);
 		final Font font = getFont();
 		g.setFont(font);
-		final FontMetrics fm = g.getFontMetrics(font);
-		final FontMetrics sm = g.getFontMetrics(suffixFont());
+		final FontMetrics fm = SidePanelStyle.metrics(g, font);
+		final FontMetrics sm = SidePanelStyle.metrics(g, suffixFont());
 		String after = suffix;
 		if (cutSuffixFirst && !after.isEmpty() && fm.stringWidth(text) + sm.stringWidth(after) > getWidth())
 		{
