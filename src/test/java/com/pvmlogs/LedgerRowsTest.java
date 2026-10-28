@@ -1449,4 +1449,183 @@ public class LedgerRowsTest
 			assertEquals(6 * 0.6, n.eatingCost, 1e-12);
 		}
 	}
+
+	// ---- T-043: avoidable eating in Execution, after the fight only ----
+
+	/** 16:03 kill 4 (T-039's figures, 08-boss-stats.md §3.4): 21.6 avoidable of 27 eating ticks, 216 combat ticks, 263 taken, 141 avoidable. */
+	private static FakeScope kill4()
+	{
+		final FakeScope s = LedgerExamples.kill();
+		s.combatTicks = 216;
+		s.ticksLost = 25 + 27;
+		s.ticksLostEating = 27;
+		s.damageTaken = 263;
+		s.avoidableEatingTicks = 21.6;
+		s.damageTakenAvoidable = 141;
+		return s.setup(0.98, 0.85, 2.352, 0);
+	}
+
+	/** Damage taken after a ruled fight: its avoidable part, and the taken figure alone as the narrow form. */
+	private static Row taken(String right, String shortRight)
+	{
+		return new Row(" damage taken", right, DETAIL, DETAIL, NEUTRAL, NEUTRAL, null, shortRight);
+	}
+
+	@Test
+	public void avoidableEatingIsExecutionsFifthPartAfterTheKill()
+	{
+		final FakeScope s = kill4();
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
+		assertEquals(21.6 * 0.6, n.avoidableEatingCost, 1e-9);
+		assertEquals(0.9, n.avoidableEatingShare, 1e-12);
+		assertEquals(n.executionLive * 0.9, n.execution, 1e-12);
+		// The setup's seconds don't move: the avoidable eating is part of the eating they already leave out.
+		assertEquals((216 * 0.6 - 25 * 0.6 - 27 * 0.6) * (1 - 0.98), n.setupCost, 1e-9);
+
+		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
+		final int execution = rows.indexOf(main("Execution", LedgerRows.partPercent(n.execution)));
+		assertTrue(rows.toString(), execution > 0);
+		// uptime, then the fifth part (Cost: 13 s is over 2% of 129.6 s), then prayer, gear, stat boost, damage taken, eating.
+		assertEquals(Arrays.asList(
+			d(" uptime", LedgerRows.withSeconds(LedgerRows.partPercent(n.uptime), n.uptimeCost), COST),
+			d(" avoidable eating", "90% (-13 s)", COST),
+			d(" prayer", "100%"),
+			d(" gear", "100%"),
+			d(" stat boost", "85% (-2 s)"),
+			taken("263 · 141 avoidable", "263"),
+			// 16.2 s of eating, 13.0 of it avoidable: the neutral row keeps the rest.
+			d(" eating", "3 s")), rows.subList(execution + 1, execution + 8));
+	}
+
+	@Test
+	public void midFightNothingNewAndExecutionAsBefore()
+	{
+		// A scope that already reports a figure (a room whose earlier fight ended) still shows nothing while running.
+		final FakeScope s = kill4();
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
+		final List<Row> rows = build(s, State.fight("Vardorvis", false, false, false));
+		assertTrue(rows.contains(main("Execution", LedgerRows.partPercent(n.executionLive))));
+		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING)));
+		assertTrue(rows.contains(d(" damage taken", "263")));
+		// All the eating, as T-038 left it: 16.2 s.
+		assertTrue(rows.contains(d(" eating", "16 s")));
+		// The trip and the raid while a fight runs, too.
+		assertFalse(build(s, State.trip(3, true, false)).stream().anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING)));
+		assertFalse(build(s, State.raid("Tombs of Amascut", 2, true, false)).stream()
+			.anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING)));
+	}
+
+	@Test
+	public void anUnruledBossOrAnOldKillIsUnchanged()
+	{
+		final FakeScope s = kill4();
+		s.avoidableEatingTicks = -1;
+		s.damageTakenAvoidable = -1;
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
+		assertTrue(Double.isNaN(n.avoidableEatingCost));
+		assertTrue(Double.isNaN(n.avoidableEatingShare));
+		assertEquals(n.executionLive, n.execution, 0);
+		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
+		assertTrue(rows.contains(main("Execution", LedgerRows.partPercent(n.executionLive))));
+		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING)));
+		assertTrue(rows.contains(d(" damage taken", "263")));
+		assertTrue(rows.contains(d(" eating", "16 s")));
+	}
+
+	@Test
+	public void noneAvoidableReadsAHundredAndNoCost()
+	{
+		final FakeScope s = kill4();
+		s.avoidableEatingTicks = 0;
+		s.damageTakenAvoidable = 0;
+		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
+		assertTrue(rows.contains(d(" avoidable eating", "100%")));
+		assertTrue(rows.contains(taken("263 · 0 avoidable", "263")));
+		assertTrue(rows.contains(d(" eating", "16 s")));
+		// And under Costing only, a part that cost nothing isn't listed.
+		final Settings costing = new Settings();
+		costing.parts = ExecutionParts.COSTING;
+		assertFalse(LedgerRows.build(s, State.fight("Vardorvis", true, true, false), costing).stream()
+			.anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING)));
+	}
+
+	@Test
+	public void avoidableEatingFollowsTheRowSettings()
+	{
+		final Settings costing = new Settings();
+		costing.parts = ExecutionParts.COSTING;
+		assertTrue(LedgerRows.build(kill4(), State.fight("Vardorvis", true, true, false), costing)
+			.contains(d(" avoidable eating", "90% (-13 s)", COST)));
+		final Settings off = new Settings();
+		off.parts = ExecutionParts.OFF;
+		final List<Row> rows = LedgerRows.build(kill4(), State.fight("Vardorvis", true, true, false), off);
+		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING) || r.left.equals(" damage taken")
+			|| r.left.equals(LedgerRows.EATING)));
+		// Execution still counts it with the rows hidden.
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(kill4());
+		assertTrue(rows.contains(main("Execution", LedgerRows.partPercent(n.execution))));
+	}
+
+	@Test
+	public void aNarrowPanelDropsTheAvoidablePartOfDamageTaken()
+	{
+		final Row taken = build(kill4(), State.fight("Vardorvis", true, true, false)).stream()
+			.filter(r -> r.left.equals(" damage taken")).findFirst().get();
+		assertEquals("263", taken.shortRight);
+		final Row fitted = PvmPerformanceOverlay.fit(taken, t -> t.length() * 7, t -> t.length() * 7, 120);
+		assertEquals("263", fitted.right);
+	}
+
+	/** A fight of {@code ticks} combat ticks, {@code eating} of them eating, ended, with T-041's figures when ruled. */
+	private static Fight ruled(int ticks, int eating, double avoidableTicks, int avoidableHp, boolean rules,
+		SessionTotals trip)
+	{
+		final Fight f = new Fight("Vardorvis", NpcIds.GOBLIN, 1, 700, 0L, null, 0);
+		f.recordAttackMade(false);
+		trip.recordAttackMade(false);
+		for (int i = 1; i < ticks - eating; i++)
+		{
+			f.recordTickSpent();
+			trip.recordTickSpent(true);
+		}
+		for (int i = 0; i < eating; i++)
+		{
+			f.recordTickLost(true);
+			trip.recordTickLost(true, true);
+		}
+		f.recordDamageTaken(avoidableHp * 2, 1L);
+		if (rules)
+		{
+			f.recordAvoidable(1, avoidableHp, java.util.Collections.singletonMap("axe", avoidableHp), avoidableTicks, 40,
+				"default");
+		}
+		f.end(true, 1L);
+		trip.recordFightEnded(true, f, 1L);
+		return f;
+	}
+
+	@Test
+	public void aRoomARaidAndATripSumTheirRuledFightsOnly()
+	{
+		final SessionTotals trip = new SessionTotals(0L);
+		final Encounter room = new Encounter("Vardorvis", null, 0L);
+		// Two ruled kills (10 and 6 avoidable eating ticks) and one unruled fight, which says nothing.
+		room.add(ruled(100, 20, 10, 50, true, trip));
+		room.add(ruled(100, 10, 6, 30, true, trip));
+		room.add(ruled(50, 5, 0, 0, false, trip));
+		final Raid raid = new Raid(RaidType.TOMBS_OF_AMASCUT, 1, 0L);
+		raid.add(room);
+		for (LedgerRows.Scope scope : Arrays.asList(LedgerRows.of(room), LedgerRows.of(raid), LedgerRows.of(trip)))
+		{
+			assertEquals(16, scope.avoidableEatingTicks(), 1e-9);
+			assertEquals(80, scope.damageTakenAvoidable());
+			final LedgerRows.Numbers n = new LedgerRows.Numbers(scope);
+			assertEquals(16 * 0.6, n.avoidableEatingCost, 1e-9);
+			assertEquals(1 - 16.0 / scope.combatTicks(), n.avoidableEatingShare, 1e-12);
+		}
+		// A room with no ruled fight has no figure.
+		final Encounter unruled = new Encounter("Goblin", null, 0L);
+		unruled.add(ruled(50, 5, 0, 0, false, new SessionTotals(0L)));
+		assertTrue(Double.isNaN(new LedgerRows.Numbers(LedgerRows.of(unruled)).avoidableEatingCost));
+	}
 }

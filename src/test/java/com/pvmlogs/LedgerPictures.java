@@ -80,6 +80,27 @@ public final class LedgerPictures
 		// T-030: the burning claws' spec, with its burn.
 		s.put("13-claws", LedgerRows.build(LedgerExamples.midFight(),
 			LedgerRows.State.fight("Vardorvis", false, false, false), all));
+		// T-043: the same kill at a boss with attack rules: 16:03 kill 4's figures (21.6 avoidable of 27 eating ticks over
+		// 216, 263 taken, 141 avoidable), as 08-boss-stats.md section 3.4 draws them.
+		final LedgerExamples.FakeScope ruled = LedgerExamples.kill();
+		ruled.combatTicks = 216;
+		ruled.ticksLost = 25 + 27;
+		ruled.ticksLostEating = 27;
+		ruled.damageTaken = 263;
+		ruled.avoidableEatingTicks = 21.6;
+		ruled.damageTakenAvoidable = 141;
+		ruled.dotTaken = 27;
+		ruled.biggestHitTaken = 41;
+		ruled.damageTakenUnprotected = 85;
+		ruled.damageVariance = 11436;
+		ruled.setup(0.98, 0.85, 2.352, 0);
+		s.put("14-ruled", LedgerRows.build(ruled, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
+		// And unruled (an old kill, or a boss without rules): the same figures, nothing avoidable.
+		ruled.avoidableEatingTicks = -1;
+		ruled.damageTakenAvoidable = -1;
+		s.put("15-unruled", LedgerRows.build(ruled, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
 		// T-022: the loadout overlay under the Ledger, in the states it's worth seeing in. Each is drawn as its own picture,
 		// "<state>.L", which the sheet stacks under the Ledger's as RuneLite stacks the two boxes.
 		final Map<String, List<LedgerRows.Row>> both = new LinkedHashMap<>();

@@ -30,6 +30,9 @@ final class LedgerExamples
 		int healed;
 		int ticksLost;
 		int ticksLostEating;
+		// T-043: unknown unless a test says otherwise, as for a running fight, an unruled boss or an old kill.
+		double avoidableEatingTicks = -1;
+		int damageTakenAvoidable = -1;
 		double efficiency = -1;
 		double boostShare = -1;
 		double boostCostShare = -1;
@@ -178,6 +181,16 @@ final class LedgerExamples
 		public int ticksLostEating()
 		{
 			return ticksLostEating;
+		}
+
+		public double avoidableEatingTicks()
+		{
+			return avoidableEatingTicks;
+		}
+
+		public int damageTakenAvoidable()
+		{
+			return damageTakenAvoidable;
 		}
 
 		/**

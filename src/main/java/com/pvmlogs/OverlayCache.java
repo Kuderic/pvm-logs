@@ -31,7 +31,9 @@ import net.runelite.client.ui.overlay.components.BackgroundComponent;
  * RuneLite's unscaled UI: the whole box is one opaque image, copied in a
  * frame.</li>
  * </ul>
- * Both draw exactly what the panel drew (a test compares the pixels). A rebuild
+ * Both draw exactly what the panel drew (a test compares the pixels). A panel
+ * that draws anything else, or text some other way, is drawn the ordinary way
+ * every frame instead. A rebuild
  * paints the panel twice, as {@code PanelComponent} sizes its background from the
  * layout of its previous render.
  */
@@ -133,13 +135,15 @@ final class OverlayCache
 		List<RecordingGraphics.Op> ops = null;
 		Dimension size = null;
 		final boolean[] unrecorded = {false};
+		final int[] drawn = {0};
 		for (int pass = 0; pass < 2; pass++)
 		{
 			final Graphics2D sg = like(scratch.createGraphics(), g, t);
 			ops = new ArrayList<>();
+			drawn[0] = 0;
 			try
 			{
-				size = paint.apply(new RecordingGraphics(sg, ops, unrecorded));
+				size = paint.apply(new RecordingGraphics(sg, ops, unrecorded, drawn));
 			}
 			finally
 			{
@@ -155,7 +159,9 @@ final class OverlayCache
 		final BackgroundComponent back = new BackgroundComponent();
 		back.setRectangle(new Rectangle(0, 0, size.width, size.height));
 		back.setBackgroundColor(background);
-		if (unrecorded[0])
+		// Anything drawn besides the background and the text (an image, a progress bar, an icon) isn't replayed, so the
+		// box is drawn the ordinary way rather than lose it (#49's review). The background's own calls, counted the same way.
+		if (unrecorded[0] || drawn[0] != backgroundCalls(scratch, g, t, back))
 		{
 			return new Built(size, null, back, null);
 		}
@@ -163,6 +169,22 @@ final class OverlayCache
 		final BufferedImage opaque = background != null && background.getAlpha() == 255
 			? opaqueImage(g, t, size, back, kept) : null;
 		return new Built(size, kept, back, opaque);
+	}
+
+	/** How many shape and fill calls the background makes, through the same recorder. */
+	private static int backgroundCalls(BufferedImage scratch, Graphics2D g, AffineTransform t, BackgroundComponent back)
+	{
+		final int[] drawn = {0};
+		final Graphics2D sg = like(scratch.createGraphics(), g, t);
+		try
+		{
+			back.render(new RecordingGraphics(sg, new ArrayList<>(), new boolean[1], drawn));
+		}
+		finally
+		{
+			sg.dispose();
+		}
+		return drawn[0];
 	}
 
 	/**
