@@ -313,6 +313,8 @@ public class PvmPerformancePlugin extends Plugin
 	private int lastCastBookedTick = Integer.MIN_VALUE;
 	// Expected figures for attacks that have gone out but not yet landed.
 	private final List<PendingSample> pendingSamples = new ArrayList<>();
+	// Hits above the max their attack was expected to have (T-056).
+	private MaxHitCheck maxHits = new MaxHitCheck(null);
 	// The tick a projectile was last taken as mine, so at most one is taken per tick. A player cannot throw two attacks in
 	// one.
 	private int acceptedProjectileTick = Integer.MIN_VALUE;
@@ -583,6 +585,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Turned off and on again, the plugin cannot know what happened in between: Mark of Darkness and Charge read down
 		// until their messages say otherwise (T-026).
 		gearBonuses.resetBuffs("the plugin has just started");
+		maxHits = new MaxHitCheck(line -> debug.log("%s", line));
 		timelines.setClock(client::getTickCount);
 		timelines.setEnabled(config.panelCharts());
 		timelines.setProbe(perf);
@@ -857,6 +860,7 @@ public class PvmPerformancePlugin extends Plugin
 				landedAttack, arrivedFromFlight,
 				onHitpoints ? "" : ", NOT HITPOINTS (" + HitsplatKind.typeName(hitsplat.getHitsplatType()) + ")");
 			current.recordDamageDealt(hitsplat.getAmount(), now, landedAttack);
+			maxHits.splat(npc.getIndex(), client.getTickCount(), hitsplat.getAmount());
 			if (current.isScored())
 			{
 				session.recordAttempt(hitsplat.getAmount(), landedAttack, now);
@@ -1834,6 +1838,7 @@ public class PvmPerformancePlugin extends Plugin
 				: shown == null ? -1 : shown.getTargetId();
 			// What used to be settings, now worked out from the game (T-015).
 			header.add(combatCalc.describeWorkedOut(targetId));
+			header.add(combatCalc.describeWorn());
 			header.add(String.format("fight timeout %d ticks, file logging %b",
 				FIGHT_TIMEOUT_TICKS, debug.isOn()));
 			header.addAll(combatCalc.describeLoadout(targetId));
@@ -2649,8 +2654,12 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f, var %.1f",
 			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance);
+		// Only an ordinary one-splat attack's max can be checked against a single splat (T-056).
+		final boolean checkable = !special && combatCalc.maxIsOneSplat();
 		if (attackObservedLag == MELEE_BOOKING_LAG)
 		{
+			maxHits.scored(fight, fight.getTargetIndex(), client.getTickCount(), maxHit, checkable,
+				combatCalc.wornNow());
 			fight.recordExpected(maxHit, expectedChances, averageHit, variance);
 			session.recordExpected(expectedChances, averageHit, variance);
 		}
@@ -2659,7 +2668,7 @@ public class PvmPerformancePlugin extends Plugin
 			final FightTimeline line = timelines.of(fight);
 			pendingSamples.add(new PendingSample(fight,
 				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance,
-				line == null ? null : line.latest()));
+				line == null ? null : line.latest(), checkable, checkable ? combatCalc.wornNow() : null));
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
@@ -2688,10 +2697,15 @@ public class PvmPerformancePlugin extends Plugin
 		private final double variance;
 		// The attack in the fight's timeline the expectation is for (T-035), or null.
 		private final FightTimeline.Attack attack;
+		// Whether its max is one splat's, and the gear it was thrown in (T-056's max-hit check).
+		private final boolean checkable;
+		private final java.util.function.Supplier<String> worn;
 
 		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit,
-			double variance, FightTimeline.Attack attack)
+			double variance, FightTimeline.Attack attack, boolean checkable, java.util.function.Supplier<String> worn)
 		{
+			this.checkable = checkable;
+			this.worn = worn;
 			this.variance = variance;
 			this.attack = attack;
 			this.fight = fight;
@@ -2715,6 +2729,8 @@ public class PvmPerformancePlugin extends Plugin
 				continue;
 			}
 			pendingSamples.remove(i);
+			maxHits.scored(sample.fight, sample.npcIndex, client.getTickCount(), sample.maxHit, sample.checkable,
+				sample.worn);
 			if (sample.fight != null)
 			{
 				final FightTimeline line = timelines.of(sample.fight);
@@ -3775,6 +3791,8 @@ public class PvmPerformancePlugin extends Plugin
 		trackThrallAndXp();
 		// The specials due this tick land their drains before anything works out an expectation (T-049).
 		drain.onGameTick();
+		// The tick's splats against the max each attack was expected to have (T-056).
+		maxHits.endTick(client.getTickCount());
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
 		// A buff whose fade message never came is let go once its duration is well past (T-026).
 		for (String line : gearBonuses.tickBuffs(client.getTickCount()))
@@ -4004,6 +4022,8 @@ public class PvmPerformancePlugin extends Plugin
 			current.getGroupName(), current.encounterName(), raidType);
 		debug.log("  %s", monsterStats.describe(npc.getId()));
 		debug.log("  %s", combatCalc.describeWorkedOut(npc.getId()));
+		// What is worn, by item id (T-056): which variant of a piece a bonus missed.
+		debug.log("  %s", combatCalc.describeWorn());
 	}
 
 	// Opens a fight as soon as the player targets something attackable, so the overlay is up while the first attack is
@@ -4401,10 +4421,13 @@ public class PvmPerformancePlugin extends Plugin
 			current.getUnclassifiedDamage(), current.getHealed(), counted, healed, net, full, fullFrom,
 			died && full > 0 ? String.format(", diff %+d (%.1f%%)", net - full, 100.0 * (net - full) / full) : "",
 			health.lastHudHp(index), health.remaining(index, tick), health.source(index, tick));
-		debug.log("STATS CHECK %s: landed %d of %d against %.1f expected (variance %.2f): %s",
+		maxHits.endTick(client.getTickCount());
+		final int overMax = maxHits.exceeded(current);
+		maxHits.forget(current);
+		debug.log("STATS CHECK %s: landed %d of %d against %.1f expected (variance %.2f): %s; %d %s over the expected max",
 			current.getTargetName(), current.getHits(), current.getExpectedTargetSamples(),
 			current.getSumExpectedLanded(), current.getSumExpectedLandedVariance(),
-			verdict == null ? "consistent with luck" : "TRIPPED");
+			verdict == null ? "consistent with luck" : "TRIPPED", overMax, overMax == 1 ? "hit" : "hits");
 	}
 
 	/**
