@@ -43,6 +43,17 @@ final class SidePanelStyle
 	static final Color UNSCORED = ColorScheme.MEDIUM_GRAY_COLOR;
 	/** The time budget's eating stretch (T-038): a light, neutral grey, apart from the unscored grey and luck's stripes. */
 	static final Color EATING = new Color(0xA8A8A8);
+	/**
+	 * T-042: laid over the time budget's segments past your clock, where luck
+	 * saved the time: the card's colour at 60%, so they show at about 40%.
+	 */
+	static final Color SAVED_DIM = alpha(CARD, 0.6);
+	/** T-042: the light stripes over that stretch, in Better (or the average grey) at this opacity. */
+	static final double SAVED_STRIPE_ALPHA = 0.6;
+	/** T-042: the tick at your real time on the time budget's bar. */
+	static final Color CLOCK_TICK = VALUE;
+	/** The time budget's dashed average marker: grey, apart from the clock's white tick (T-042). */
+	static final Color AVERAGE_MARKER = SECONDARY;
 	static final Color NOTE_CARD = new Color(0x232A30);
 	static final Color CHIP_COST = new Color(0x4A3320);
 	static final Color CHIP_BETTER = new Color(0x173F40);

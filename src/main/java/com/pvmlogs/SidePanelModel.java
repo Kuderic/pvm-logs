@@ -53,6 +53,10 @@ final class SidePanelModel
 		+ "their luck is in seconds only.";
 	static final String NOT_A_KILL = "not a kill, so no average to compare";
 	static final String RAID_NO_AVERAGE = "no average yet: raid level isn't recorded";
+	/** T-042: the time budget bar's end when luck saved time, after its clock. */
+	static final String AT_AVERAGE_LUCK = " at average luck";
+	/** T-042: luck's row's hint when luck saved time, before your clock: the stretch past it. */
+	static final String PAST = "past ";
 	/** The luck curve's marker stays inside the drawing. */
 	static final double CURVE_Z_LIMIT = 2.9;
 
@@ -803,6 +807,12 @@ final class SidePanelModel
 		segments.add(new Segment(Math.max(0, -l), averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER));
 		segments.add(new Segment(u, Fill.UNSCORED));
 		final double total = t + Math.max(0, l);
+		final double luckSaved = luckKnown && l > 0 ? l : 0;
+		// T-042: the bar marks your real time with a tick; when luck saved time it runs on to the time at average luck,
+		// labelled. Not when the two would read as the same clock (luck saved under a second).
+		final String clockLabel = LedgerRows.duration(t);
+		final String endLabel = luckSaved > 0 && !LedgerRows.duration(total).equals(clockLabel)
+			? LedgerRows.duration(total) + AT_AVERAGE_LUCK : null;
 
 		final List<BudgetRow> rows = new ArrayList<>();
 		final String bestLabel = in.unscored && in.kind == Kind.ROOM ? "best play on the " + in.scoredName : "best play";
@@ -827,9 +837,12 @@ final class SidePanelModel
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
 		// slower)", so a saving doesn't read like a cost.
-		final Fill luckSwatch = averageBand ? Fill.LUCK_AVERAGE : l > 0 ? Fill.LUCK_FASTER : Fill.LUCK_SLOWER;
+		// T-042: time luck saved is the striped stretch past your clock, in the middle half too (grey stripes there), and
+		// the row says it's the part past your time.
+		final Fill luckSwatch = luckSaved > 0 ? Fill.LUCK_FASTER : averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER;
 		final boolean middleHalf = luckKnown && averageBand && !Double.isNaN(n.percentile);
-		rows.add(new BudgetRow(luckSwatch, Text.small(middleHalf ? "luck average" : "luck", SidePanelStyle.BODY), null,
+		rows.add(new BudgetRow(luckSwatch, Text.small(middleHalf ? "luck average" : "luck", SidePanelStyle.BODY),
+			endLabel == null ? null : Text.small(PAST + clockLabel, SidePanelStyle.MUTED),
 			Text.small(luckKnown ? LedgerRows.fasterOrSlower(l) : LedgerRows.UNKNOWN,
 				luckKnown ? SidePanelStyle.of(luckColour) : SidePanelStyle.VALUE)));
 		if (u > 0)
@@ -866,9 +879,9 @@ final class SidePanelModel
 						r)))));
 			}
 		}
-		final double luckSaved = luckKnown && l > 0 ? l : 0;
 		return new PanelSnapshot.TimeBudget(segments, total, t, luckSaved,
-			averageBand ? SidePanelStyle.AVERAGE_STRIPE : SidePanelStyle.BETTER, marker, rows, average, note);
+			averageBand ? SidePanelStyle.AVERAGE_STRIPE : SidePanelStyle.BETTER, clockLabel, endLabel, marker, rows, average,
+			note);
 	}
 
 	/** {@code 23 s slower}, {@code 5 s faster}, {@code even}: this kill's time against a usual one. */

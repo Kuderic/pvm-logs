@@ -276,7 +276,10 @@ final class PanelSnapshot
 		UNSCORED,
 		/** Time spent eating (T-038): neutral, neither kept nor a cost. */
 		EATING,
-		/** Only as a row's swatch: the time luck saved is an outline past the clock, not a stretch of the bar. */
+		/**
+		 * Only as a row's swatch (T-042): the time luck saved, drawn on the bar as
+		 * the stretch past your clock, dimmed under light stripes.
+		 */
 		LUCK_FASTER
 	}
 
@@ -315,12 +318,16 @@ final class PanelSnapshot
 		final List<Segment> segments;
 		/** The bar's whole length in seconds: T + max(0, L). */
 		final double total;
-		/** The clock T: where the outline for the time luck saved starts. */
+		/** The clock T: where the tick for your real time sits, and the time luck saved starts. */
 		final double clock;
-		/** Seconds the rolls saved (drawn as an outline past the clock), 0 for none. */
+		/** Seconds the rolls saved (the dimmed, striped stretch past the clock), 0 for none. */
 		final double luckSaved;
-		/** The outline's colour: Better, or the average grey in the middle half. */
+		/** The stripes' colour over that stretch: Better, or the average grey in the middle half. */
 		final Color luckSavedColour;
+		/** The tick's label: your clock, as the title shows it ({@code 1:16}). */
+		final String clockLabel;
+		/** The bar's end when luck saved time ({@code 1:31 at average luck}); null when it didn't. */
+		final String endLabel;
 		/** Your average's clock, for the dashed marker; NaN for none. */
 		final double marker;
 		final List<BudgetRow> rows;
@@ -330,13 +337,15 @@ final class PanelSnapshot
 		final String note;
 
 		TimeBudget(List<Segment> segments, double total, double clock, double luckSaved, Color luckSavedColour,
-			double marker, List<BudgetRow> rows, List<Row> average, String note)
+			String clockLabel, String endLabel, double marker, List<BudgetRow> rows, List<Row> average, String note)
 		{
 			this.segments = list(segments);
 			this.total = total;
 			this.clock = clock;
 			this.luckSaved = luckSaved;
 			this.luckSavedColour = luckSavedColour;
+			this.clockLabel = clockLabel;
+			this.endLabel = endLabel;
 			this.marker = marker;
 			this.rows = list(rows);
 			this.average = list(average);
