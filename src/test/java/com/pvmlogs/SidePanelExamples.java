@@ -98,6 +98,7 @@ final class SidePanelExamples
 		in.killed = false;
 		in.endMillis = at(15, 44);
 		in.scoredDot = 40;
+		in.scoredDotByKind = kinds("burn", 40);
 		in.hitsTaken = 16;
 		return in;
 	}
@@ -141,6 +142,7 @@ final class SidePanelExamples
 		in.endMillis = at(15, 2);
 		in.unscored = true;
 		in.scoredDot = 8;
+		in.scoredDotByKind = kinds("burn", 8);
 		in.hitsTaken = 41;
 		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(109, 104, 116), 8);
 		final SidePanelModel.Target sire = new SidePanelModel.Target();
@@ -218,6 +220,8 @@ final class SidePanelExamples
 		in.hitsTaken = 88;
 		in.scoredThrall = in.thrall = 290;
 		in.scoredDot = in.dot = 60;
+		// As LedgerExamples.trip's: 20 burn and 40 venom (T-062).
+		in.scoredDotByKind = in.dotByKind = kinds("burn", 20, "venom", 40);
 		final List<PanelSnapshot.TripRow> rows = new ArrayList<>();
 		rows.add(tripRow("Vardorvis", false, "2:16", "bottom 20%", LedgerRows.Colour.COST));
 		rows.add(tripRow("Vardorvis", false, "1:52", "average", LedgerRows.Colour.NEUTRAL));
@@ -303,6 +307,7 @@ final class SidePanelExamples
 		in.endMillis = at(20, 15);
 		in.scoredThrall = 49;
 		in.scoredDot = 47;
+		in.scoredDotByKind = kinds("burn", 47);
 		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(105, 98, 112), 10);
 		in.luckRemoved = new LedgerHistory.Spread(106, 100, 112);
 		return in;
@@ -452,6 +457,72 @@ final class SidePanelExamples
 		final SidePanelModel.Input in = trip();
 		in.drain = drain(-1, -1, -1, -1, 0, 338, 26.9, 13, 1.1);
 		return in;
+	}
+
+	// ---- T-063: damage over time by kind ----
+
+	/** A kill with this damage over time dealt and taken, by kind; the remainder is what has no kind. */
+	static SidePanelModel.Input dotKill(String boss, int dealt, Map<String, Integer> dealtByKind, int taken,
+		Map<String, Integer> takenByKind)
+	{
+		final SidePanelModel.Input in = dead();
+		in.name = boss;
+		in.scoredName = boss;
+		final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) in.scope;
+		s.dotDamage = dealt;
+		s.dotDamageByKind = new LinkedHashMap<>(dealtByKind);
+		s.dotTaken = taken;
+		s.dotTakenByKind = new LinkedHashMap<>(takenByKind);
+		in.scoredDot = dealt;
+		in.scoredDotByKind = dealtByKind;
+		return in;
+	}
+
+	/** Zulrah: 30 venom dealt (the blowpipe), 25 poison taken. */
+	static SidePanelModel.Input venomDealtPoisonTaken()
+	{
+		return dotKill("Zulrah", 30, kinds("venom", 30), 25, kinds("poison", 25));
+	}
+
+	/** Burning claws at Vardorvis: 47 burn. */
+	static SidePanelModel.Input burnClaws()
+	{
+		return dotKill("Vardorvis", 47, kinds("burn", 47), 0, kinds());
+	}
+
+	/** Two kinds dealt: 8 burn and 30 venom, so the tile says 38 DoT. */
+	static SidePanelModel.Input twoKindsDealt()
+	{
+		return dotKill("Vardorvis", 38, kinds("burn", 8, "venom", 30), 0, kinds());
+	}
+
+	/** A kill saved before T-062: totals, no kinds. */
+	static SidePanelModel.Input oldKill()
+	{
+		return dotKill("Vardorvis", 40, kinds(), 12, kinds());
+	}
+
+	/** A trip mixing old and new kills: 20 burn and 40 venom from new ones, 40 with no kind from old. */
+	static SidePanelModel.Input tripMixedOldAndNew()
+	{
+		final SidePanelModel.Input in = trip();
+		final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) in.scope;
+		s.dotDamage = 100;
+		s.dotDamageByKind = kinds("burn", 20, "venom", 40);
+		in.scoredDot = in.dot = 100;
+		in.scoredDotByKind = in.dotByKind = kinds("burn", 20, "venom", 40);
+		return in;
+	}
+
+	/** T-063: damage over time by kind, {@code kinds("burn", 8, "venom", 30)}. */
+	static Map<String, Integer> kinds(Object... kindsAndAmounts)
+	{
+		final Map<String, Integer> m = new LinkedHashMap<>();
+		for (int i = 0; i < kindsAndAmounts.length; i += 2)
+		{
+			m.put((String) kindsAndAmounts[i], (Integer) kindsAndAmounts[i + 1]);
+		}
+		return m;
 	}
 
 	private static SidePanelModel.Input room(String name, LedgerExamples.FakeScope scope)

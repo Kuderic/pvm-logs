@@ -81,6 +81,12 @@ public final class SidePanelPictures
 			write(out, "14d-immune", scale, render(SidePanelExamples.immune(), scale));
 			write(out, "14e-live-defence", scale, render(SidePanelExamples.liveDrained(), scale));
 			write(out, "14f-trip-drains", scale, renderTrip(SidePanelExamples.tripWithDrains(), scale));
+			// T-063: damage over time, a line a kind.
+			write(out, "15a-venom-dealt-poison-taken", scale, render(SidePanelExamples.venomDealtPoisonTaken(), scale));
+			write(out, "15b-burn-claws", scale, render(SidePanelExamples.burnClaws(), scale));
+			write(out, "15c-two-kinds-dealt", scale, render(SidePanelExamples.twoKindsDealt(), scale));
+			write(out, "15d-old-kill", scale, render(SidePanelExamples.oldKill(), scale));
+			write(out, "15e-trip-old-and-new", scale, renderTrip(SidePanelExamples.tripMixedOldAndNew(), scale));
 		}
 	}
 

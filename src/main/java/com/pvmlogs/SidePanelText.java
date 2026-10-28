@@ -27,6 +27,8 @@ final class SidePanelText extends JComponent
 	private final boolean right;
 	/** A hint after a label gives way before the label does; a name's {@code (dead)} doesn't. */
 	private boolean cutSuffixFirst;
+	/** T-063: a shorter text drawn instead when the text doesn't fit ({@code +80 thrall, 38 DoT}); null for none. */
+	private String shortText;
 	/**
 	 * T-046: the widest this text has been, which is the width it asks for. It
 	 * never shrinks, so a value that grows back to an earlier width (a clock's
@@ -161,6 +163,19 @@ final class SidePanelText extends JComponent
 		return suffixType == null || suffixType == type ? getFont() : suffixType.font();
 	}
 
+	/**
+	 * T-063: a shorter form, drawn when the text doesn't fit its width and this does, instead of cutting the text. It
+	 * asks for no width of its own, so changing it lays nothing out.
+	 */
+	void setShort(String s)
+	{
+		if (!Objects.equals(s, shortText))
+		{
+			shortText = s;
+			repaint();
+		}
+	}
+
 	/** The second run is cut before the first: for hints, which matter less than what they follow. */
 	SidePanelText cutSuffixFirst()
 	{
@@ -212,7 +227,9 @@ final class SidePanelText extends JComponent
 		}
 		final int suffixWidth = sm.stringWidth(after);
 		final int room = Math.max(0, getWidth() - suffixWidth);
-		final String shown = LedgerRows.cut(text, fm::stringWidth, room);
+		// The short form where the text would be cut (T-063), cut itself only if even it doesn't fit.
+		final String full = shortText != null && fm.stringWidth(text) > room ? shortText : text;
+		final String shown = LedgerRows.cut(full, fm::stringWidth, room);
 		final int width = fm.stringWidth(shown) + suffixWidth;
 		final int x = right ? Math.max(0, getWidth() - width) : 0;
 		final int baseline = getHeight() - fm.getDescent();
@@ -225,5 +242,14 @@ final class SidePanelText extends JComponent
 			g.drawString(after, x + fm.stringWidth(shown), baseline);
 		}
 		setToolTipText(shown.equals(text) && after.equals(suffix) ? null : text + suffix);
+		lastShown = shown;
+	}
+
+	/** What the last paint drew of the first run, for tests. */
+	private String lastShown;
+
+	String lastShown()
+	{
+		return lastShown;
 	}
 }

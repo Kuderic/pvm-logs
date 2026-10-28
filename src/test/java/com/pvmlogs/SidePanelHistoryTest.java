@@ -393,9 +393,10 @@ public class SidePanelHistoryTest
 		assertEquals("12:40", t.header.clock.text);
 		assertEquals("6 kills · 1 ended", t.roomsHint.text);
 		assertEquals(4, t.tiles.size());
-		assertEquals("+290 thrall, 60 burn", t.tiles.get(1).sub.text);
-		assertEquals(Arrays.asList("thrall dmg", "burn/poison dmg"), Arrays.asList(t.other.rows.get(0).left.text,
-			t.other.rows.get(1).left.text));
+		// Two kinds of damage over time: the tile says DoT, the rows split it (T-063).
+		assertEquals("+290 thrall, 60 DoT", t.tiles.get(1).sub.text);
+		assertEquals(Arrays.asList("thrall dmg", "burn dmg", "venom dmg"), Arrays.asList(t.other.rows.get(0).left.text,
+			t.other.rows.get(1).left.text, t.other.rows.get(2).left.text));
 		// The trip's figures are the overlay's trip figures.
 		final List<LedgerRows.Row> overlay = LedgerRows.build(SidePanelExamples.trip().scope,
 			LedgerRows.State.trip(6, false, false), new LedgerRows.Settings());
