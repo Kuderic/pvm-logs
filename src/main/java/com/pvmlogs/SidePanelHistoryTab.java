@@ -58,6 +58,22 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		ZoneId zone();
 
 		void exportNpc(String name);
+
+		/**
+		 * A saved room's timeline view, for its damage rows, chart and strip
+		 * (T-036): built where the store lives and handed back on Swing's thread.
+		 * Empty when the room's fights have none.
+		 */
+		default void charts(Encounter room, java.util.function.Consumer<FightTimeline.View> done)
+		{
+			done.accept(FightTimeline.View.EMPTY);
+		}
+
+		/** The damage rows' icons. */
+		default SidePanelIcons icons()
+		{
+			return SidePanelIcons.NONE;
+		}
 	}
 
 	/** No saved fights: the panel before the plugin is wired, tests, renders. */
@@ -110,6 +126,9 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	private int shownKills = SidePanelHistory.FIRST_KILLS;
 	private Fight selectedKill;
 	private Fight openKill;
+	/** The open kill's timeline view once the client thread has sent it (T-036), and whose it is. */
+	private FightTimeline.View openView;
+	private Fight openViewFor;
 
 	private int builds;
 
@@ -400,10 +419,26 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			}
 		});
 		content.add(back);
-		final SidePanelFightTab view = new SidePanelFightTab(actions, folds, true);
+		final SidePanelFightTab view = new SidePanelFightTab(actions, folds, true, source.icons());
+		final Fight first = room.getFights().get(0);
+		final boolean known = openViewFor == first;
 		view.apply(SidePanelModel.fight(SidePanelHistory.savedKill(history, room, source.sessionStart(), source.now(),
-			source.zone(), source.versions())));
+			source.zone(), source.versions(), known ? openView : null)));
 		content.add(view);
+		if (!known && SidePanelHistory.fromThisSession(room, source.sessionStart()))
+		{
+			// This session's kill: ask for its charts, and show them when they come. Last, so a source that answers at
+			// once (tests) rebuilds the view rather than having it added twice.
+			source.charts(room, v ->
+			{
+				openView = v;
+				openViewFor = first;
+				if (openKill == first)
+				{
+					refresh();
+				}
+			});
+		}
 	}
 
 	// ---- all bosses ----

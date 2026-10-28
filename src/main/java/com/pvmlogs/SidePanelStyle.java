@@ -89,6 +89,14 @@ final class SidePanelStyle
 		return colour == LedgerRows.Colour.BETTER ? CHIP_BETTER : CHIP_NEUTRAL;
 	}
 
+	/** A colour mixed {@code share} of the way toward white: a special's colour from its style's (spec section 2). */
+	static Color towardWhite(Color c, double share)
+	{
+		return new Color((int) Math.round(c.getRed() + (255 - c.getRed()) * share),
+			(int) Math.round(c.getGreen() + (255 - c.getGreen()) * share),
+			(int) Math.round(c.getBlue() + (255 - c.getBlue()) * share));
+	}
+
 	/** A colour at a share of its opacity, for the curve's bands and the rows' share bars. */
 	static Color alpha(Color c, double opacity)
 	{

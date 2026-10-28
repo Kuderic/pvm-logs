@@ -59,6 +59,9 @@ class PvmPerformancePanel extends PluginPanel
 	private Fight averageHistoryHead;
 	private LedgerHistory.Average average;
 	private LedgerHistory.Spread luckRemoved;
+	// The chart's scope and how much of its series the last snapshot sent (spec 5.1): the next sends from a few ticks back.
+	private Object chartScope;
+	private int chartSent;
 
 	// Swing's thread only.
 	private PanelSnapshot shown;
@@ -67,6 +70,10 @@ class PvmPerformancePanel extends PluginPanel
 	private final long sessionStart = System.currentTimeMillis();
 	/** The boss rules, for version names ("Post-quest"); null in tests. */
 	private final MonsterStatsProvider monsterStats;
+	/** The Damage rows' icons, from RuneLite's item and sprite managers; none in tests. */
+	private final SidePanelIcons icons;
+	/** Ticks the chart resends behind the last one sent, for a splat that lands a tick late. */
+	static final int CHART_RESEND = 4;
 
 	// The trip's saved rooms, kept until the history or the trip changes (client thread).
 	private List<SidePanelHistory.KillRow> tripSaved = java.util.Collections.emptyList();
@@ -94,6 +101,7 @@ class PvmPerformancePanel extends PluginPanel
 		this.config = config;
 		this.clientThread = clientThread;
 		this.monsterStats = instance(plugin, MonsterStatsProvider.class);
+		this.icons = icons(plugin);
 
 		setBackground(SidePanelStyle.PANEL);
 		setLayout(new BorderLayout());
@@ -101,7 +109,7 @@ class PvmPerformancePanel extends PluginPanel
 		final SidePanelSection.Folds folds = configManager == null ? new SidePanelSection.MemoryFolds()
 			: new ConfigFolds(configManager);
 		final SidePanelFightTab.Actions actions = new Actions();
-		fightTab = new SidePanelFightTab(actions, folds);
+		fightTab = new SidePanelFightTab(actions, folds, false, icons);
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
 			: new HistorySource(), actions, folds);
 		tripTab = new SidePanelTripTab(actions, folds);
@@ -331,6 +339,7 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			in.kind = SidePanelModel.Kind.RAID;
 			SidePanelModel.fillRaid(in, raid);
+			charts(in, raid, FightTimeline.raid(raid, plugin.getTimelines()));
 			in.ended = fight.isEnded();
 			in.warning = plugin.getStatsWarning(fight);
 			return in;
@@ -343,6 +352,7 @@ class PvmPerformancePanel extends PluginPanel
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
 		in.version = version(room.getFights(), in.maxHp);
+		charts(in, room, FightTimeline.room(room, plugin.getTimelines()));
 		final boolean current = contains(room, fight);
 		in.ended = !current || fight.isEnded();
 		in.killed = in.ended && room.isKilled();
@@ -360,6 +370,55 @@ class PvmPerformancePanel extends PluginPanel
 			in.luckRemoved = luckRemoved;
 		}
 		return in;
+	}
+
+	/**
+	 * The scope's timeline view for the Damage rows, chart and strip (T-036), and
+	 * the index its series are sent from: a few ticks behind the last snapshot's
+	 * end on the same scope, else 0, which starts Swing's copy over. Client thread.
+	 */
+	private void charts(SidePanelModel.Input in, Object scope, FightTimeline.View view)
+	{
+		in.charts = config == null || config.panelCharts();
+		if (!in.charts || view.states.length == 0)
+		{
+			in.view = null;
+			chartScope = null;
+			chartSent = 0;
+			return;
+		}
+		in.view = view;
+		final Object key = Arrays.asList(scope, view.startTick);
+		in.chartFrom = key.equals(chartScope) ? Math.max(0, Math.min(chartSent, view.states.length) - CHART_RESEND) : 0;
+		chartScope = key;
+		chartSent = view.states.length;
+	}
+
+	/** RuneLite's item images and spell sprites, delivered on Swing's thread; none without a plugin. */
+	private static SidePanelIcons icons(PvmPerformancePlugin plugin)
+	{
+		final net.runelite.client.game.ItemManager items = instance(plugin, net.runelite.client.game.ItemManager.class);
+		final net.runelite.client.game.SpriteManager sprites = instance(plugin, net.runelite.client.game.SpriteManager.class);
+		if (items == null || sprites == null)
+		{
+			return SidePanelIcons.NONE;
+		}
+		return new SidePanelIcons()
+		{
+			@Override
+			public void item(int itemId, java.util.function.Consumer<java.awt.image.BufferedImage> done)
+			{
+				final net.runelite.client.util.AsyncBufferedImage image = items.getImage(itemId);
+				image.onLoaded(() -> SwingUtilities.invokeLater(() -> done.accept(image)));
+				done.accept(image);
+			}
+
+			@Override
+			public void sprite(int spriteId, java.util.function.Consumer<java.awt.image.BufferedImage> done)
+			{
+				sprites.getSpriteAsync(spriteId, 0, img -> SwingUtilities.invokeLater(() -> done.accept(img)));
+			}
+		};
 	}
 
 	/** The boss version's name for these fights at this full HP, from the boss rules; null where they don't say. */
@@ -496,6 +555,28 @@ class PvmPerformancePanel extends PluginPanel
 		public void exportNpc(String name)
 		{
 			plugin.exportNpc(name);
+		}
+
+		@Override
+		public void charts(Encounter room, java.util.function.Consumer<FightTimeline.View> done)
+		{
+			// The store is the client thread's: the view is built there and handed back to Swing's.
+			if (clientThread == null || (config != null && !config.panelCharts()))
+			{
+				done.accept(FightTimeline.View.EMPTY);
+				return;
+			}
+			clientThread.invokeLater(() ->
+			{
+				final FightTimeline.View view = FightTimeline.room(room, plugin.getTimelines());
+				SwingUtilities.invokeLater(() -> done.accept(view));
+			});
+		}
+
+		@Override
+		public SidePanelIcons icons()
+		{
+			return icons;
 		}
 	}
 

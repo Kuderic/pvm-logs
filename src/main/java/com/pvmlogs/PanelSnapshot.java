@@ -378,8 +378,17 @@ final class PanelSnapshot
 		final String share;
 		final double shareFraction;
 		final Color colour;
+		/** The row's icon: an item's image ({@code ItemManager}), else a sprite ({@code SpriteManager}); -1 for none. */
+		final int itemId;
+		final int spriteId;
 
 		Source(String name, String sub, String damage, String share, double shareFraction, Color colour)
+		{
+			this(name, sub, damage, share, shareFraction, colour, -1, -1);
+		}
+
+		Source(String name, String sub, String damage, String share, double shareFraction, Color colour, int itemId,
+			int spriteId)
 		{
 			this.name = name;
 			this.sub = sub;
@@ -387,6 +396,65 @@ final class PanelSnapshot
 			this.share = share;
 			this.shareFraction = shareFraction;
 			this.colour = colour;
+			this.itemId = itemId;
+			this.spriteId = spriteId;
+		}
+	}
+
+	/**
+	 * The damage chart's and tick strip's data for one tick (T-036; spec §3.1 and
+	 * §5.1): the series from index {@link #from} to {@link #length}, as the
+	 * panel's copy of them is extended a tick at a time. {@code from} 0 means a
+	 * fresh scope: start over.
+	 */
+	static final class Chart
+	{
+		final int from;
+		final int length;
+		/** Cumulative weapon damage, expected damage and its variance, per tick from {@link #from}. */
+		final float[] damage;
+		final float[] expected;
+		final float[] variance;
+		/** {@link FightTimeline}'s tick states from {@link #from}. */
+		final byte[] states;
+		/** The style of the attack on each tick from {@link #from}: {@code FightTimeline.Style} ordinal + 1, 0 for none. */
+		final byte[] styles;
+		/** The actual line's colour: luck's, white when neutral. */
+		final Color actual;
+		/** False under the stats warning: no expected line or range ("expected hidden"). */
+		final boolean expectedShown;
+		/** False when the spread isn't known: no range. */
+		final boolean rangeShown;
+		/** {@code 0:00} and the clock, under the chart. */
+		final String end;
+		final String youLegend;
+		final String expectedLegend;
+		/** The strip's legend counts. */
+		final int lost;
+		final int eating;
+		/** The colour most attacks were in, for the legend's "attack" swatch. */
+		final Color attackColour;
+
+		Chart(int from, int length, float[] damage, float[] expected, float[] variance, byte[] states, byte[] styles,
+			Color actual, boolean expectedShown, boolean rangeShown, String end, String youLegend, String expectedLegend,
+			int lost, int eating, Color attackColour)
+		{
+			this.from = from;
+			this.length = length;
+			this.damage = damage;
+			this.expected = expected;
+			this.variance = variance;
+			this.states = states;
+			this.styles = styles;
+			this.actual = actual;
+			this.expectedShown = expectedShown;
+			this.rangeShown = rangeShown;
+			this.end = end;
+			this.youLegend = youLegend;
+			this.expectedLegend = expectedLegend;
+			this.lost = lost;
+			this.eating = eating;
+			this.attackColour = attackColour;
 		}
 	}
 
@@ -492,6 +560,8 @@ final class PanelSnapshot
 		final Text noCurveHint;
 		final Parts execution;
 		final Sources damage;
+		/** The damage chart and tick strip (T-036); null with no in-memory data or with charts off. */
+		final Chart chart;
 		/** The "later" card in the damage rows' place, for a saved kill from before this session (T-034); null for none. */
 		final String later;
 		final Rows details;
@@ -516,6 +586,7 @@ final class PanelSnapshot
 			noCurveHint = b.noCurveHint;
 			execution = b.execution;
 			damage = b.damage;
+			chart = b.chart;
 			later = b.later;
 			details = b.details;
 			taken = b.taken;
@@ -550,6 +621,8 @@ final class PanelSnapshot
 			s.append(execution == null ? "" : "|e" + execution.parts.size());
 			s.append(damage == null ? "" : "|d" + damage.rows.size());
 			s.append(later == null ? "" : "|lt");
+			s.append(chart == null ? "" : chart.expectedShown ? "|ch" : "|chx");
+			s.append(chart != null && chart.rangeShown ? "r" : "");
 			s.append(details == null ? "" : "|D" + details.rows.size());
 			s.append(taken == null ? "" : "|k" + taken.rows.size());
 			if (loadout != null)
@@ -580,6 +653,7 @@ final class PanelSnapshot
 		Text noCurveHint;
 		Parts execution;
 		Sources damage;
+		Chart chart;
 		String later;
 		Rows details;
 		Rows taken;

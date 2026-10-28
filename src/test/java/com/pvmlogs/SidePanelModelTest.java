@@ -367,7 +367,7 @@ public class SidePanelModelTest
 		final SidePanelModel.Input a = SidePanelExamples.live();
 		final SidePanelModel.Input b = SidePanelExamples.live();
 		((LedgerExamples.FakeScope) b.scope).combatTicks += 1;
-		((LedgerExamples.FakeScope) b.scope).damage += 30;
+		b.scoredThrall += 12;
 		assertEquals(tab(a).structure(), tab(b).structure());
 		assertFalse(tab(a).structure().equals(tab(SidePanelExamples.dead()).structure()));
 	}

@@ -383,25 +383,48 @@ final class SidePanelParts
 		}
 	}
 
-	/** A damage source row, loa-logs style: the share painted behind the row in the source's colour. */
+	/**
+	 * A damage source row, loa-logs style (spec 3.1): the share painted behind the
+	 * row in the source's colour at 30%, a 36 × 32 icon, name and sub-line on the
+	 * left, damage and share on the right. The icon is an item's image or a
+	 * spell's sprite, loaded through {@link SidePanelIcons}; until it arrives (or
+	 * with none) a swatch of the source's colour stands in.
+	 */
 	static final class SourceRowView extends JPanel
 	{
+		static final int ICON_WIDTH = 36;
+		static final int ICON_HEIGHT = 32;
+
+		private final SidePanelIcons icons;
 		private final Line top;
 		private final Line bottom;
+		private final Icon icon = new Icon();
 		private double share;
 		private Color colour;
+		private int itemId = Integer.MIN_VALUE;
+		private int spriteId = Integer.MIN_VALUE;
 
 		SourceRowView(PanelSnapshot.Source s)
 		{
-			super(new SidePanelStack(3));
+			this(s, SidePanelIcons.NONE);
+		}
+
+		SourceRowView(PanelSnapshot.Source s, SidePanelIcons icons)
+		{
+			super(new BorderLayout(6, 0));
+			this.icons = icons == null ? SidePanelIcons.NONE : icons;
 			setOpaque(false);
-			setBorder(new EmptyBorder(4, SidePanelStyle.CARD_PAD_H, 4, SidePanelStyle.CARD_PAD_H));
+			setBorder(new EmptyBorder(2, 2, 2, 6));
+			final JPanel text = stack(3);
+			text.setBorder(new EmptyBorder(2, 0, 2, 0));
 			top = new Line(PanelSnapshot.Text.body(s.name, SidePanelStyle.VALUE),
 				PanelSnapshot.Text.title(s.damage, SidePanelStyle.VALUE));
 			bottom = new Line(PanelSnapshot.Text.small(s.sub, SidePanelStyle.SECONDARY),
 				PanelSnapshot.Text.small(s.share, SidePanelStyle.SECONDARY));
-			add(top);
-			add(bottom);
+			text.add(top);
+			text.add(bottom);
+			add(icon, BorderLayout.WEST);
+			add(text, BorderLayout.CENTER);
 			set(s);
 		}
 
@@ -415,8 +438,40 @@ final class SidePanelParts
 			{
 				share = s.shareFraction;
 				colour = s.colour;
+				icon.colour = s.colour;
 				repaint();
 			}
+			if (s.itemId != itemId || s.spriteId != spriteId)
+			{
+				itemId = s.itemId;
+				spriteId = s.spriteId;
+				icon.image = null;
+				icon.repaint();
+				final int wantItem = itemId;
+				final int wantSprite = spriteId;
+				final java.util.function.Consumer<java.awt.image.BufferedImage> done = img ->
+				{
+					// Only if the row still shows the same source: a late icon for a row reused for another is dropped.
+					if (img != null && itemId == wantItem && spriteId == wantSprite)
+					{
+						icon.image = img;
+						icon.repaint();
+					}
+				};
+				if (itemId >= 0)
+				{
+					icons.item(itemId, done);
+				}
+				else if (spriteId >= 0)
+				{
+					icons.sprite(spriteId, done);
+				}
+			}
+		}
+
+		boolean hasIcon()
+		{
+			return icon.image != null;
 		}
 
 		@Override
@@ -426,6 +481,149 @@ final class SidePanelParts
 			g.fillRect(0, 0, getWidth(), getHeight());
 			g.setColor(SidePanelStyle.alpha(colour, 0.30));
 			g.fillRect(0, 0, (int) Math.round(getWidth() * Math.max(0, Math.min(1, share))), getHeight());
+		}
+
+		/** The 36 × 32 icon box: the image centred, or a small swatch in the source's colour. */
+		private static final class Icon extends javax.swing.JComponent
+		{
+			java.awt.image.BufferedImage image;
+			Color colour = SidePanelStyle.SECONDARY;
+
+			@Override
+			public Dimension getPreferredSize()
+			{
+				return new Dimension(ICON_WIDTH, ICON_HEIGHT);
+			}
+
+			@Override
+			protected void paintComponent(Graphics g)
+			{
+				g.setColor(new Color(0x2A2A2A));
+				g.fillRect(0, 0, getWidth(), getHeight());
+				if (image != null)
+				{
+					g.drawImage(image, (getWidth() - image.getWidth()) / 2, (getHeight() - image.getHeight()) / 2, null);
+					return;
+				}
+				g.setColor(colour);
+				g.fillRect(getWidth() / 2 - 4, getHeight() / 2 - 4, 8, 8);
+			}
+		}
+	}
+
+	/**
+	 * A chart's legend: swatches and words left to right, wrapping onto a second
+	 * line when they don't fit. Painted by hand so its height is known before
+	 * the panel lays it out, as {@link Paragraph}'s is.
+	 */
+	static final class Legend extends javax.swing.JComponent
+	{
+		/** One entry: a swatch (a colour, or striped, or none) and its words. */
+		static final class Item
+		{
+			final Color swatch;
+			final boolean striped;
+			final String text;
+			final Color textColour;
+
+			Item(Color swatch, boolean striped, String text, Color textColour)
+			{
+				this.swatch = swatch;
+				this.striped = striped;
+				this.text = text;
+				this.textColour = textColour;
+			}
+		}
+
+		private static final int SWATCH = 8;
+		private static final int GAP = 9;
+		private java.util.List<Item> items = new ArrayList<>();
+		private final int defaultWidth;
+
+		Legend(int defaultWidth)
+		{
+			this.defaultWidth = defaultWidth;
+			setOpaque(false);
+			setFont(SidePanelStyle.Type.SMALL.font());
+		}
+
+		void set(java.util.List<Item> newItems)
+		{
+			final boolean relayout = newItems.size() != items.size();
+			items = newItems;
+			if (relayout)
+			{
+				revalidate();
+			}
+			repaint();
+		}
+
+		private int itemWidth(FontMetrics fm, Item it)
+		{
+			return (it.swatch == null ? 0 : SWATCH + 3) + fm.stringWidth(it.text);
+		}
+
+		private int lines(int width)
+		{
+			final FontMetrics fm = getFontMetrics(getFont());
+			int lines = 1;
+			int x = 0;
+			for (Item it : items)
+			{
+				final int w = itemWidth(fm, it);
+				if (x > 0 && x + w > width)
+				{
+					lines++;
+					x = 0;
+				}
+				x += w + GAP;
+			}
+			return lines;
+		}
+
+		@Override
+		public Dimension getPreferredSize()
+		{
+			final int width = getWidth() > 0 ? getWidth() : defaultWidth;
+			final int n = lines(width);
+			return new Dimension(defaultWidth, n * 12 + (n - 1) * 3);
+		}
+
+		@Override
+		protected void paintComponent(Graphics g)
+		{
+			final Graphics2D g2 = (Graphics2D) g;
+			g2.setFont(getFont());
+			final FontMetrics fm = g2.getFontMetrics();
+			int x = 0;
+			int y = 0;
+			for (Item it : items)
+			{
+				final int w = itemWidth(fm, it);
+				if (x > 0 && x + w > getWidth())
+				{
+					x = 0;
+					y += 15;
+				}
+				int tx = x;
+				if (it.swatch != null)
+				{
+					final java.awt.geom.Rectangle2D.Double r = new java.awt.geom.Rectangle2D.Double(x, y + 2, SWATCH, SWATCH);
+					if (it.striped)
+					{
+						stripes(g2, r, SidePanelStyle.COST_STRIPE_GROUND, it.swatch);
+					}
+					else
+					{
+						g2.setColor(it.swatch);
+						g2.fill(r);
+					}
+					tx += SWATCH + 3;
+				}
+				g2.setColor(it.textColour);
+				g2.drawString(it.text, tx, y + 12 - fm.getDescent());
+				x += w + GAP;
+			}
 		}
 	}
 

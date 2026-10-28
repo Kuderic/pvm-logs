@@ -80,6 +80,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	};
 
 	private final Actions actions;
+	/** Where the Damage rows' icons come from (T-036). */
+	private final SidePanelIcons icons;
+	/** Swing's copy of the chart's series, extended a tick at a time (spec 5.1); kept across rebuilds. */
+	private final SidePanelChartData chartData = new SidePanelChartData();
 	private final SidePanelSection.Folds folds;
 	private final List<Consumer<FightTab>> updaters = new ArrayList<>();
 	private String structure;
@@ -99,9 +103,15 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	 */
 	SidePanelFightTab(Actions actions, SidePanelSection.Folds folds, boolean nested)
 	{
+		this(actions, folds, nested, SidePanelIcons.NONE);
+	}
+
+	SidePanelFightTab(Actions actions, SidePanelSection.Folds folds, boolean nested, SidePanelIcons icons)
+	{
 		super(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
 		this.actions = actions;
 		this.folds = folds;
+		this.icons = icons == null ? SidePanelIcons.NONE : icons;
 		setBackground(SidePanelStyle.PANEL);
 		setBorder(nested ? new EmptyBorder(0, 0, 0, 0)
 			: new EmptyBorder(SidePanelStyle.BLOCK_GAP, SidePanelStyle.SIDE_BORDER, 10, SidePanelStyle.SIDE_BORDER));
@@ -111,6 +121,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	/** Shows the snapshot: new components only when its structure differs from the last one's. */
 	void apply(FightTab tab)
 	{
+		// The chart's tail goes into the copy every snapshot, whatever else changes, so no tick is skipped.
+		chartData.apply(tab.chart);
 		final String s = tab.structure();
 		if (!s.equals(structure))
 		{
@@ -175,6 +187,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				execution(tab);
 				damage(tab);
 				later(tab);
+				chart(tab);
+				strip(tab);
 				rowsSection(tab, "details", "Details", tab.details, t -> t.details);
 				rowsSection(tab, "taken", "Damage taken", tab.taken, t -> t.taken);
 				break;
@@ -510,6 +524,83 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
+	/** Damage over time (T-036): the chart in a card, its two ends' times under it, and a legend. */
+	private void chart(FightTab tab)
+	{
+		if (tab.chart == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(5);
+		final SidePanelDamageChart chart = new SidePanelDamageChart(chartData);
+		card.add(chart);
+		final SidePanelParts.Line ends = new SidePanelParts.Line(Text.small("0:00", SidePanelStyle.MUTED),
+			Text.small(tab.chart.end, SidePanelStyle.MUTED));
+		card.add(ends);
+		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
+		card.add(legend);
+		add(new SidePanelSection("chart", "Damage over time", Text.small("weapon", SidePanelStyle.SECONDARY), card, folds));
+		updaters.add(t ->
+		{
+			ends.set(new PanelSnapshot.Row(Text.small("0:00", SidePanelStyle.MUTED), Text.small(t.chart.end,
+				SidePanelStyle.MUTED)));
+			final List<SidePanelParts.Legend.Item> items = new ArrayList<>(3);
+			items.add(new SidePanelParts.Legend.Item(t.chart.actual, false, t.chart.youLegend, SidePanelStyle.SECONDARY));
+			if (t.chart.expectedShown)
+			{
+				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.SECONDARY, false, t.chart.expectedLegend,
+					SidePanelStyle.SECONDARY));
+				if (t.chart.rangeShown)
+				{
+					items.add(new SidePanelParts.Legend.Item(new Color(0x4A4A4A), false, "typical range",
+						SidePanelStyle.SECONDARY));
+				}
+			}
+			else
+			{
+				items.add(new SidePanelParts.Legend.Item(null, false, "expected hidden", SidePanelStyle.MUTED));
+			}
+			legend.set(items);
+			chart.repaint();
+		});
+	}
+
+	/** Ticks (T-036): the tick strip in a card and its legend with counts. */
+	private void strip(FightTab tab)
+	{
+		if (tab.chart == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(5);
+		final SidePanelTickStrip strip = new SidePanelTickStrip(chartData);
+		card.add(strip);
+		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
+		card.add(legend);
+		add(new SidePanelSection("ticks", "Ticks", Text.small("36 s a row", SidePanelStyle.SECONDARY), card, folds));
+		final int[] rows = {SidePanelTickStrip.rows(chartData.length())};
+		updaters.add(t ->
+		{
+			final List<SidePanelParts.Legend.Item> items = new ArrayList<>(4);
+			items.add(new SidePanelParts.Legend.Item(t.chart.attackColour, false, "attack", SidePanelStyle.SECONDARY));
+			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.towardWhite(t.chart.attackColour, 0.7), false, "spec",
+				SidePanelStyle.SECONDARY));
+			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, false, "lost " + t.chart.lost,
+				SidePanelStyle.SECONDARY));
+			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, true, "eating " + t.chart.eating,
+				SidePanelStyle.SECONDARY));
+			legend.set(items);
+			// A new row of ticks every 36 s: the card grows.
+			final int now = SidePanelTickStrip.rows(chartData.length());
+			if (now != rows[0])
+			{
+				rows[0] = now;
+				strip.revalidate();
+			}
+			strip.repaint();
+		});
+	}
+
 	/** A saved kill's dashed card in the damage rows' place (spec 3.2), with the canvas's title. */
 	private void later(FightTab tab)
 	{
@@ -540,7 +631,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final List<SidePanelParts.SourceRowView> rows = new ArrayList<>();
 		for (PanelSnapshot.Source s : tab.damage.rows)
 		{
-			final SidePanelParts.SourceRowView v = new SidePanelParts.SourceRowView(s);
+			final SidePanelParts.SourceRowView v = new SidePanelParts.SourceRowView(s, icons);
 			rows.add(v);
 			list.add(v);
 		}
