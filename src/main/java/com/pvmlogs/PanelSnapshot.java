@@ -41,14 +41,22 @@ final class PanelSnapshot
 		final String clock;
 		final Text chip;
 		final Color chipFill;
+		/** The boss's icon, a hiscores sprite, or {@link SidePanelBossIcons#NONE} (T-054). */
+		final int icon;
 
 		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill)
+		{
+			this(name, ended, clock, chip, chipFill, SidePanelBossIcons.NONE);
+		}
+
+		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill, int icon)
 		{
 			this.name = name;
 			this.ended = ended;
 			this.clock = clock;
 			this.chip = chip;
 			this.chipFill = chipFill;
+			this.icon = icon;
 		}
 	}
 
@@ -214,13 +222,21 @@ final class PanelSnapshot
 		final Text suffix;
 		final Text sub;
 		final Text clock;
+		/** The boss's icon before its name, a hiscores sprite, or {@link SidePanelBossIcons#NONE} (T-054). */
+		final int icon;
 
 		Header(Text name, Text suffix, Text sub, Text clock)
+		{
+			this(name, suffix, sub, clock, SidePanelBossIcons.NONE);
+		}
+
+		Header(Text name, Text suffix, Text sub, Text clock, int icon)
 		{
 			this.name = name;
 			this.suffix = suffix;
 			this.sub = sub;
 			this.clock = clock;
+			this.icon = icon;
 		}
 	}
 
@@ -625,6 +641,8 @@ final class PanelSnapshot
 			final StringBuilder s = new StringBuilder(state.name());
 			s.append(wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room");
 			s.append(header == null ? "" : "|h");
+			// Whether the header has an icon's box (T-054); which icon is a value, set in place.
+			s.append(header == null || header.icon == SidePanelBossIcons.NONE ? "" : "i");
 			s.append(banner == null ? "" : "|w");
 			s.append(unscoredNote == null ? "" : "|u");
 			s.append(targets == null ? "" : "|t" + targets.rows.size());

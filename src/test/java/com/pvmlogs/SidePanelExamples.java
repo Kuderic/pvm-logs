@@ -234,7 +234,8 @@ final class SidePanelExamples
 		LedgerRows.Colour colour)
 	{
 		return new PanelSnapshot.TripRow(name, ended, clock, PanelSnapshot.Text.small(chip, colour == LedgerRows.Colour.NEUTRAL
-			? SidePanelStyle.BODY : SidePanelStyle.of(colour)), SidePanelStyle.chip(colour));
+			? SidePanelStyle.BODY : SidePanelStyle.of(colour)), SidePanelStyle.chip(colour),
+			SidePanelBossIcons.sprite(name, null));
 	}
 
 	/** Every state in the spec's order, keyed by the render's file name. */

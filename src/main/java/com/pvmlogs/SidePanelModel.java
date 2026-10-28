@@ -116,6 +116,8 @@ final class SidePanelModel
 		Kind kind = Kind.EMPTY;
 		/** The room's name, the target's before the first attack, or the raid's. */
 		String name;
+		/** The raid the room or scope is in, or null: a raid's rooms show its icon (T-054). */
+		RaidType raidType;
 		boolean ended;
 		boolean killed;
 		/** {@code getStatsWarning(fight)}, or null. */
@@ -205,6 +207,7 @@ final class SidePanelModel
 		in.unscored = anyUnscored(fights);
 		in.hitsTaken = room.getHitsTaken();
 		in.inRaid = room.getRaid() != null;
+		in.raidType = room.getRaid();
 		in.takenByAttack = room.getDamageTakenByAttack();
 		fillOther(in, fights);
 		in.targets = targets(fights);
@@ -215,6 +218,7 @@ final class SidePanelModel
 	{
 		in.scope = LedgerRows.of(raid);
 		in.name = raid.getName();
+		in.raidType = raid.getType();
 		in.roomCount = raid.getEncounters().size();
 		in.inRaid = true;
 		in.hitsTaken = raid.getHitsTaken();
@@ -437,7 +441,8 @@ final class SidePanelModel
 		sub.add("no attacks yet");
 		b.header = new PanelSnapshot.Header(Text.title(in.name, SidePanelStyle.VALUE), Text.NONE,
 			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
-			new Text(LedgerRows.clock(0), SidePanelStyle.UNSCORED, SidePanelStyle.Type.CLOCK));
+			new Text(LedgerRows.clock(0), SidePanelStyle.UNSCORED, SidePanelStyle.Type.CLOCK),
+			SidePanelBossIcons.sprite(in.name, in.raidType));
 		if (in.warning != null)
 		{
 			b.banner = new PanelSnapshot.Banner(WARNING_BODY, in.warning);
@@ -562,7 +567,8 @@ final class SidePanelModel
 		}
 		return new PanelSnapshot.Header(Text.title(in.name, SidePanelStyle.VALUE), suffix,
 			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
-			new Text(LedgerRows.clock(s.combatTicks()), SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK));
+			new Text(LedgerRows.clock(s.combatTicks()), SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK),
+			SidePanelBossIcons.sprite(in.name, in.raidType));
 	}
 
 	/** Luck's colour role: by the percentile when it's known (T-029), else by the seconds, as the overlay goes. */
@@ -635,7 +641,8 @@ final class SidePanelModel
 	/** A trip row from a rebuilt or running room: texts only. The running one is never "(ended)". */
 	static PanelSnapshot.TripRow tripRow(SidePanelHistory.KillRow r)
 	{
-		return new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill);
+		return new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill,
+			r.room == null ? SidePanelBossIcons.NONE : SidePanelBossIcons.sprite(r.room.getName(), r.room.getRaid()));
 	}
 
 	// ---- tiles ----

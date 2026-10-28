@@ -359,6 +359,13 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		left.add(name);
 		left.add(sub);
 		final SidePanelText clock = new SidePanelText(tab.header.clock, true);
+		// The boss's game icon before its name (T-054), only when it has one; the structure says whether.
+		final SidePanelBossIcons.View icon = tab.header.icon == SidePanelBossIcons.NONE ? null
+			: new SidePanelBossIcons.View(tab.header.icon, SidePanelBossIcons.HEADER_BOX);
+		if (icon != null)
+		{
+			header.add(icon, BorderLayout.WEST);
+		}
 		header.add(left, BorderLayout.CENTER);
 		header.add(clock, BorderLayout.EAST);
 		add(header);
@@ -367,6 +374,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			name.set(t.header.name, t.header.suffix);
 			sub.set(t.header.sub);
 			clock.set(t.header.clock);
+			if (icon != null)
+			{
+				icon.set(t.header.icon);
+			}
 		});
 	}
 

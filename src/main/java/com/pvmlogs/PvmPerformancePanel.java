@@ -131,6 +131,11 @@ class PvmPerformancePanel extends PluginPanel
 		this.clientThread = clientThread;
 		this.monsterStats = instance(plugin, MonsterStatsProvider.class);
 		this.icons = icons(plugin);
+		// The boss icons' sprites (T-054). Tests and renders give their own, so only a running client's replaces them.
+		if (icons != SidePanelIcons.NONE)
+		{
+			SidePanelBossIcons.setSource(icons);
+		}
 		this.perf = plugin == null ? null : plugin.getPerf();
 
 		setBackground(SidePanelStyle.PANEL);
@@ -470,6 +475,7 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			in.kind = SidePanelModel.Kind.PRE_ATTACK;
 			in.name = fight.encounterName();
+			in.raidType = raid == null ? null : raid.getType();
 			in.maxHp = fight.getMaxHp();
 			in.version = version(java.util.Collections.singletonList(fight), in.maxHp);
 			in.warning = plugin.getStatsWarning(fight);
