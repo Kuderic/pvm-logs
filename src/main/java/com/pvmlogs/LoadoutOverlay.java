@@ -34,6 +34,8 @@ class LoadoutOverlay extends OverlayPanel
 	// tick at a time, and render runs 50+ times a second.
 	private final PvmPerformanceOverlay.OncePerKey<PvmPerformanceOverlay.Lines> lines =
 		new PvmPerformanceOverlay.OncePerKey<>();
+	// And drawn from what it drew last time until those lines change (T-047).
+	private final OverlayCache drawn = new OverlayCache();
 
 	@Inject
 	LoadoutOverlay(PvmPerformancePlugin plugin, PvmPerformanceConfig config, Client client)
@@ -76,9 +78,17 @@ class LoadoutOverlay extends OverlayPanel
 		{
 			return null;
 		}
+		return drawn.draw(graphics, built.look(getPreferredSize()), PvmPerformanceOverlay.background(this),
+			g -> paint(g, built));
+	}
+
+	/** The panel drawn the ordinary way: what {@link OverlayCache} records, or falls back to. */
+	private Dimension paint(Graphics2D g, PvmPerformanceOverlay.Lines built)
+	{
+		panelComponent.getChildren().clear();
 		panelComponent.getChildren().addAll(built.components);
 		panelComponent.setPreferredSize(new Dimension(built.width, 0));
-		return super.render(graphics);
+		return super.render(g);
 	}
 
 	/** The plugin's figures for the loadout against the current target. */
