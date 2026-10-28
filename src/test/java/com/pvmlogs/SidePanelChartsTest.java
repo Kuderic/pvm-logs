@@ -282,6 +282,21 @@ public class SidePanelChartsTest
 	}
 
 	@Test
+	public void theStripsColours()
+	{
+		// Spec §2, with T-038: eating is neutral (the time budget's eating grey), not a cost like a lost tick.
+		final byte melee = (byte) (FightTimeline.Style.MELEE.ordinal() + 1);
+		assertEquals(SidePanelStyle.EATING, SidePanelTickStrip.colour(FightTimeline.EATING, (byte) 0));
+		assertEquals(SidePanelStyle.COST, SidePanelTickStrip.colour(FightTimeline.LOST, (byte) 0));
+		assertFalse(SidePanelStyle.EATING.equals(SidePanelStyle.COST));
+		assertEquals(SidePanelStyle.MELEE, SidePanelTickStrip.colour(FightTimeline.ATTACK, melee));
+		assertEquals(SidePanelStyle.towardWhite(SidePanelStyle.MELEE, 0.7), SidePanelTickStrip.colour(FightTimeline.SPECIAL,
+			melee));
+		assertEquals(SidePanelStyle.TRACK, SidePanelTickStrip.colour(FightTimeline.COOLDOWN, (byte) 0));
+		assertEquals(SidePanelStyle.UNSCORED, SidePanelTickStrip.colour(FightTimeline.UNSCORED, (byte) 0));
+	}
+
+	@Test
 	public void theWarningHidesExpectedAndTheRange()
 	{
 		final SidePanelTimelineExamples.Built live = SidePanelTimelineExamples.live();
