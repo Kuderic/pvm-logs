@@ -27,6 +27,12 @@ final class LedgerRows
 	static final double SECONDS_PER_TICK = 0.6;
 	/** The eating row's label (T-038). */
 	static final String EATING = " eating";
+	/** T-051's rows: the target's Defence and Magic, the drains' worth over a raid or trip, and the specials' luck. */
+	static final String DEFENCE = " defence";
+	static final String MAGIC = " magic";
+	static final String DEFENCE_DRAINS = " defence drains";
+	static final String SPECS = " specs";
+	private static final String ARROW = " \u2192 ";
 	/** Execution's fifth part after a ruled fight (T-043). */
 	static final String AVOIDABLE_EATING = " avoidable eating";
 
@@ -289,6 +295,48 @@ final class LedgerRows
 		{
 			return -1;
 		}
+
+		/** T-049/T-051: the target's Defence as the scope's first recorded fight opened; -1 unknown or many targets. */
+		default int defenceStart()
+		{
+			return -1;
+		}
+
+		/** Its Defence as the scope's last recorded fight ended; -1 unknown. */
+		default int defenceEnd()
+		{
+			return -1;
+		}
+
+		/** Its Magic as the first recorded fight opened; -1 unknown. */
+		default int magicStart()
+		{
+			return -1;
+		}
+
+		/** Its Magic as the last recorded fight ended; -1 unknown. */
+		default int magicEnd()
+		{
+			return -1;
+		}
+
+		/** T-050/T-051: what the drains were worth in damage, realized; NaN unknown (old kills, nothing drainable). */
+		default double drainValueDamage()
+		{
+			return Double.NaN;
+		}
+
+		/** T-050/T-051: the specials' share of luck in damage, E(realized) - E(averaged); NaN unknown. */
+		default double specLuckDamage()
+		{
+			return Double.NaN;
+		}
+
+		/** T-050/T-051: damage as seconds, the way the scope's luck turns damage into time; NaN without a rate. */
+		default double luckSeconds(double damage)
+		{
+			return Double.NaN;
+		}
 	}
 
 	static Scope of(Encounter room)
@@ -438,6 +486,41 @@ final class LedgerRows
 			public int damageTakenAvoidable()
 			{
 				return room.getDamageTakenAvoidable();
+			}
+
+			public int defenceStart()
+			{
+				return room.getDefenceStart();
+			}
+
+			public int defenceEnd()
+			{
+				return room.getDefenceEnd();
+			}
+
+			public int magicStart()
+			{
+				return room.getMagicStart();
+			}
+
+			public int magicEnd()
+			{
+				return room.getMagicEnd();
+			}
+
+			public double drainValueDamage()
+			{
+				return room.getDrainValueDamage();
+			}
+
+			public double specLuckDamage()
+			{
+				return room.getSpecLuckDamage();
+			}
+
+			public double luckSeconds(double damage)
+			{
+				return room.luckSeconds(damage);
 			}
 		};
 	}
@@ -589,6 +672,22 @@ final class LedgerRows
 			public int damageTakenAvoidable()
 			{
 				return raid.getDamageTakenAvoidable();
+			}
+
+			// T-051: the drains summed; a raid or a trip has many targets, so no single Defence path.
+			public double drainValueDamage()
+			{
+				return raid.getDrainValueDamage();
+			}
+
+			public double specLuckDamage()
+			{
+				return raid.getSpecLuckDamage();
+			}
+
+			public double luckSeconds(double damage)
+			{
+				return raid.luckSeconds(damage);
 			}
 		};
 	}
@@ -745,6 +844,22 @@ final class LedgerRows
 			{
 				return trip.getDamageTakenAvoidable();
 			}
+
+			// T-051: the drains summed; a raid or a trip has many targets, so no single Defence path.
+			public double drainValueDamage()
+			{
+				return trip.getDrainValueDamage();
+			}
+
+			public double specLuckDamage()
+			{
+				return trip.getSpecLuckDamage();
+			}
+
+			public double luckSeconds(double damage)
+			{
+				return trip.luckSeconds(damage);
+			}
 		};
 	}
 
@@ -801,9 +916,17 @@ final class LedgerRows
 		final boolean warning;
 		/** Your usual kill on this boss, or null with too few kills to say. */
 		final LedgerHistory.Average average;
+		/** T-051: the running fight's target as tracked now, or null: nothing drained yet, immune, or not running. */
+		final LiveDrain drain;
 
 		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
 			LedgerHistory.Average average)
+		{
+			this(view, name, count, ended, killed, warning, average, null);
+		}
+
+		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
+			LedgerHistory.Average average, LiveDrain drain)
 		{
 			this.view = view;
 			this.name = name == null ? "" : name;
@@ -812,6 +935,7 @@ final class LedgerRows
 			this.killed = killed;
 			this.warning = warning;
 			this.average = average;
+			this.drain = drain;
 		}
 
 		static State preAttack(String name)
@@ -837,7 +961,44 @@ final class LedgerRows
 		/** The same state with your usual time on the boss, for the details after a kill. */
 		State withAverage(LedgerHistory.Average average)
 		{
-			return new State(view, name, count, ended, killed, warning, average);
+			return new State(view, name, count, ended, killed, warning, average, drain);
+		}
+
+		/** The same state with the running fight's tracked Defence and Magic (T-051). */
+		State withDrain(LiveDrain drain)
+		{
+			return new State(view, name, count, ended, killed, warning, average, drain);
+		}
+	}
+
+	/**
+	 * A running fight's target as T-049 tracks it, for the live readout (T-051):
+	 * its Defence and Magic now, as the raid scales them, and their floors. Only
+	 * the player's and the party's own specials move these.
+	 */
+	static final class LiveDrain
+	{
+		final int defence;
+		final int defenceBase;
+		final int defenceFloor;
+		final int magic;
+		final int magicBase;
+		final int magicFloor;
+
+		LiveDrain(int defence, int defenceBase, int defenceFloor, int magic, int magicBase, int magicFloor)
+		{
+			this.defence = defence;
+			this.defenceBase = defenceBase;
+			this.defenceFloor = defenceFloor;
+			this.magic = magic;
+			this.magicBase = magicBase;
+			this.magicFloor = magicFloor;
+		}
+
+		/** Whether anything has been taken off it: before that, and once it has all come back, nothing shows. */
+		boolean drained()
+		{
+			return defence != defenceBase || magic != magicBase;
 		}
 	}
 
@@ -1174,6 +1335,7 @@ final class LedgerRows
 			final String band = Double.isNaN(n.luck) || Double.isNaN(n.percentile) ? null : band(n.percentile);
 			rows.add(new Row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour, null,
 				band));
+			specs(rows, n, scope, state);
 		}
 		if (state.warning)
 		{
@@ -1196,6 +1358,10 @@ final class LedgerRows
 				rows.add(detail(" no monster data yet", "", Colour.NEUTRAL));
 			}
 		}
+		if (!state.warning)
+		{
+			drain(rows, n, scope, state);
+		}
 		// The main rows' labels are bold (Eric, 2026-10-26); their sub-rows stay in the detail font.
 		rows.add(main("DPS", Double.isNaN(n.dps) ? UNKNOWN : oneDecimal(n.dps)));
 		// T-043: avoidable eating counts once the fight is over, at a boss with attack rules, and only then: nothing about
@@ -1210,6 +1376,90 @@ final class LedgerRows
 			rows.add(damageTaken(scope, avoidable));
 			eating(rows, n, avoidable);
 		}
+	}
+
+	/**
+	 * T-051: under Luck after the fight, {@code  specs  +5 s}: the specials'
+	 * share of luck (T-050), coloured as luck is. Hidden when it rounds to none,
+	 * which it does with no draining specials of the player's own (the party's
+	 * drains are no one's luck).
+	 */
+	private static void specs(List<Row> rows, Numbers n, Scope scope, State state)
+	{
+		if (!state.ended)
+		{
+			return;
+		}
+		final double seconds = scope.luckSeconds(scope.specLuckDamage());
+		if (Double.isNaN(seconds) || roundHalfAway(seconds) == 0)
+		{
+			return;
+		}
+		rows.add(detail(SPECS, signedSeconds(seconds), luckColour(seconds, n.clock)));
+	}
+
+	/**
+	 * T-051: the target's Defence under Damage/expected, as the drains are what
+	 * moves the expected. Live, once a drain has been tracked on it: {@code
+	 * defence  145 / 215}, or {@code 145 (floor)}, and Magic the same way when it
+	 * was drained. After the fight: {@code defence  215 → 145 · +14 s}, with what
+	 * the drains were worth (T-050); a raid or a trip, which has many targets,
+	 * shows the worth alone. Nothing for an immune or untracked target, or a kill
+	 * saved before T-049.
+	 */
+	private static void drain(List<Row> rows, Numbers n, Scope scope, State state)
+	{
+		if (!state.ended)
+		{
+			final LiveDrain live = state.drain;
+			if (live != null && live.drained())
+			{
+				rows.add(detail(DEFENCE, level(live.defence, live.defenceBase, live.defenceFloor), Colour.NEUTRAL));
+				if (live.magic != live.magicBase)
+				{
+					rows.add(detail(MAGIC, level(live.magic, live.magicBase, live.magicFloor), Colour.NEUTRAL));
+				}
+			}
+			return;
+		}
+		final double seconds = scope.luckSeconds(scope.drainValueDamage());
+		final String worth = Double.isNaN(seconds) || roundHalfAway(seconds) == 0 ? "" : signedSeconds(seconds);
+		final int start = scope.defenceStart();
+		final int end = scope.defenceEnd();
+		final boolean defenceMoved = start >= 0 && end >= 0 && start != end;
+		final boolean magicMoved = scope.magicStart() >= 0 && scope.magicEnd() >= 0
+			&& scope.magicStart() != scope.magicEnd();
+		if (start < 0)
+		{
+			// A raid or a trip: the drains' worth over its fights.
+			if (!worth.isEmpty())
+			{
+				rows.add(detail(DEFENCE_DRAINS, worth, Colour.NEUTRAL));
+			}
+			return;
+		}
+		if (defenceMoved || !worth.isEmpty() && !magicMoved)
+		{
+			rows.add(detail(DEFENCE, start + ARROW + end + (worth.isEmpty() ? "" : DOT + worth), Colour.NEUTRAL));
+		}
+		if (magicMoved)
+		{
+			rows.add(detail(MAGIC, scope.magicStart() + ARROW + scope.magicEnd()
+				+ (defenceMoved || worth.isEmpty() ? "" : DOT + worth), Colour.NEUTRAL));
+		}
+	}
+
+	/** {@code 145 / 215}, or {@code 145 (floor)} once it can go no lower. */
+	static String level(int now, int base, int floor)
+	{
+		return now <= floor ? now + " (floor)" : now + " / " + base;
+	}
+
+	/** {@code +14 s} or {@code -5 s}: positive is time saved. */
+	static String signedSeconds(double seconds)
+	{
+		final long s = roundHalfAway(seconds);
+		return (s > 0 ? "+" : "-") + Math.abs(s) + " s";
 	}
 
 	/**

@@ -101,6 +101,31 @@ public final class LedgerPictures
 		ruled.damageTakenAvoidable = -1;
 		s.put("15-unruled", LedgerRows.build(ruled, LedgerRows.State.fight("Vardorvis", true, true, false)
 			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
+		// T-051: tracked Defence. Live after a hammer (215 to 145), live at the floor with Magic drained, then after the kill
+		// with two hammers (one landed: the drains worth 14 s, the specs 5 s faster), and after a kill the party drained.
+		final LedgerExamples.FakeScope live = LedgerExamples.midFight();
+		live.damageVariance = 6000;
+		s.put("16-live-drain", LedgerRows.build(live, LedgerRows.State.fight("Vardorvis", false, false, false)
+			.withDrain(new LedgerRows.LiveDrain(145, 215, 0, 150, 150, 0)), all));
+		s.put("17-live-floor", LedgerRows.build(live, LedgerRows.State.fight("Vardorvis", false, false, false)
+			.withDrain(new LedgerRows.LiveDrain(150, 215, 150, 120, 150, 0)), all));
+		final LedgerExamples.FakeScope drained = LedgerExamples.kill();
+		drained.damageVariance = 11436;
+		drained.dotTaken = 27;
+		drained.biggestHitTaken = 41;
+		drained.damageTakenUnprotected = 85;
+		drained.defenceStart = 215;
+		drained.defenceEnd = 145;
+		drained.magicStart = 150;
+		drained.magicEnd = 150;
+		drained.secondsPerDamage = 14.0 / 182;
+		drained.drainValueDamage = 182;
+		drained.specLuckDamage = 65;
+		s.put("18-drained-kill", LedgerRows.build(drained, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
+		drained.specLuckDamage = 0;
+		s.put("19-party-drained", LedgerRows.build(drained, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
 		// T-022: the loadout overlay under the Ledger, in the states it's worth seeing in. Each is drawn as its own picture,
 		// "<state>.L", which the sheet stacks under the Ledger's as RuneLite stacks the two boxes.
 		final Map<String, List<LedgerRows.Row>> both = new LinkedHashMap<>();

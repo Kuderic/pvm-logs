@@ -33,6 +33,14 @@ final class LedgerExamples
 		// T-043: unknown unless a test says otherwise, as for a running fight, an unruled boss or an old kill.
 		double avoidableEatingTicks = -1;
 		int damageTakenAvoidable = -1;
+		// T-051: unknown unless a test says otherwise; seconds come from a fixed rate per damage.
+		int defenceStart = -1;
+		int defenceEnd = -1;
+		int magicStart = -1;
+		int magicEnd = -1;
+		double drainValueDamage = Double.NaN;
+		double specLuckDamage = Double.NaN;
+		double secondsPerDamage = Double.NaN;
 		double efficiency = -1;
 		double boostShare = -1;
 		double boostCostShare = -1;
@@ -191,6 +199,41 @@ final class LedgerExamples
 		public int damageTakenAvoidable()
 		{
 			return damageTakenAvoidable;
+		}
+
+		public int defenceStart()
+		{
+			return defenceStart;
+		}
+
+		public int defenceEnd()
+		{
+			return defenceEnd;
+		}
+
+		public int magicStart()
+		{
+			return magicStart;
+		}
+
+		public int magicEnd()
+		{
+			return magicEnd;
+		}
+
+		public double drainValueDamage()
+		{
+			return drainValueDamage;
+		}
+
+		public double specLuckDamage()
+		{
+			return specLuckDamage;
+		}
+
+		public double luckSeconds(double damage)
+		{
+			return damage * secondsPerDamage;
 		}
 
 		/**

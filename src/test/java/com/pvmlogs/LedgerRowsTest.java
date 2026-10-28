@@ -1628,4 +1628,248 @@ public class LedgerRowsTest
 		unruled.add(ruled(50, 5, 0, 0, false, new SessionTotals(0L)));
 		assertTrue(Double.isNaN(new LedgerRows.Numbers(LedgerRows.of(unruled)).avoidableEatingCost));
 	}
+
+	// ---- T-051: tracked defence, live and after the kill ----
+
+	/** Vardorvis-like numbers on a drainable boss: Defence 215, floor 0; Magic 150. */
+	private static LedgerRows.LiveDrain live(int defence, int floor, int magic)
+	{
+		return new LedgerRows.LiveDrain(defence, 215, floor, magic, 150, 0);
+	}
+
+	private static List<Row> running(FakeScope s, LedgerRows.LiveDrain drain)
+	{
+		return build(s, State.fight("Vardorvis", false, false, false).withDrain(drain));
+	}
+
+	/** The rows right after Damage/expected. */
+	private static List<Row> afterDamage(List<Row> rows, int count)
+	{
+		for (int i = 0; i < rows.size(); i++)
+		{
+			if (rows.get(i).left.equals("Damage/expected"))
+			{
+				return rows.subList(i + 1, i + 1 + count);
+			}
+		}
+		throw new AssertionError(rows.toString());
+	}
+
+	@Test
+	public void liveNothingUntilADrainIsTracked()
+	{
+		assertFalse(running(LedgerExamples.midFight(), null).stream().anyMatch(r -> r.left.equals(LedgerRows.DEFENCE)));
+		// Tracked but nothing taken off yet (or all of it back): still nothing.
+		assertFalse(running(LedgerExamples.midFight(), live(215, 0, 150)).stream()
+			.anyMatch(r -> r.left.equals(LedgerRows.DEFENCE)));
+	}
+
+	@Test
+	public void liveTrackedOverBaseUnderDamageExpected()
+	{
+		final List<Row> rows = running(LedgerExamples.midFight(), live(145, 0, 150));
+		assertEquals(Arrays.asList(d(" defence", "145 / 215"), main("DPS", "5.1")), afterDamage(rows, 2));
+	}
+
+	@Test
+	public void liveAtTheFloorAndMagicWhenDrained()
+	{
+		final List<Row> rows = running(LedgerExamples.midFight(), live(150, 150, 120));
+		assertEquals(Arrays.asList(d(" defence", "150 (floor)"), d(" magic", "120 / 150")), afterDamage(rows, 2));
+		assertEquals("0 (floor)", LedgerRows.level(0, 215, 0));
+	}
+
+	@Test
+	public void liveShowsTheLiveRowEvenWhereTheScopeHasAnEndedFightsPath()
+	{
+		final FakeScope s = drained();
+		final List<Row> rows = running(s, live(180, 0, 150));
+		assertEquals(d(" defence", "180 / 215"), afterDamage(rows, 1).get(0));
+		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
+	}
+
+	/** The kill after two hammers, one landed: 215 to 145, the drains worth 182 damage (14 s), the specs 65 (5 s). */
+	private static FakeScope drained()
+	{
+		final FakeScope s = LedgerExamples.kill();
+		s.defenceStart = 215;
+		s.defenceEnd = 145;
+		s.magicStart = 150;
+		s.magicEnd = 150;
+		s.secondsPerDamage = 14.0 / 182;
+		s.drainValueDamage = 182;
+		s.specLuckDamage = 65;
+		return s;
+	}
+
+	@Test
+	public void afterTheKillThePathTheWorthAndTheSpecs()
+	{
+		final List<Row> rows = build(drained(), State.fight("Vardorvis", true, true, false));
+		assertEquals(d(" defence", "215 \u2192 145 \u00b7 +14 s"), afterDamage(rows, 1).get(0));
+		// Under Luck: 5 s is over a second and 2% of the 136.8 s clock, so Better.
+		final int luck = rows.indexOf(rows.stream().filter(r -> r.left.equals("Luck")).findFirst().get());
+		assertEquals(d(" specs", "+5 s", BETTER), rows.get(luck + 1));
+	}
+
+	@Test
+	public void specsThatCostTimeReadMinus()
+	{
+		final FakeScope s = drained();
+		s.specLuckDamage = -65;
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" specs", "-5 s", COST)));
+	}
+
+	@Test
+	public void noOwnSpecialsNoSpecsRow()
+	{
+		// The party drained it: the drains are worth time, but no one's luck.
+		final FakeScope s = drained();
+		s.specLuckDamage = 0;
+		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
+		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
+		assertTrue(rows.contains(d(" defence", "215 \u2192 145 \u00b7 +14 s")));
+		// Under half a second: hidden too.
+		s.specLuckDamage = 6;
+		assertFalse(build(s, State.fight("Vardorvis", true, true, false)).stream()
+			.anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
+	}
+
+	@Test
+	public void magicDrainedAfterTheKill()
+	{
+		final FakeScope s = drained();
+		s.magicEnd = 120;
+		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145 \u00b7 +14 s"), d(" magic", "150 \u2192 120")),
+			afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 2));
+		// Magic alone drained: the worth goes on its row.
+		s.defenceEnd = 215;
+		assertEquals(d(" magic", "150 \u2192 120 \u00b7 +14 s"),
+			afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 1).get(0));
+	}
+
+	@Test
+	public void anImmuneOrUntrackedBossOrAnOldKillShowsNothing()
+	{
+		// Old kill, or nothing drainable: every figure unknown.
+		final List<Row> old = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false));
+		assertFalse(old.stream().anyMatch(r -> r.left.equals(LedgerRows.DEFENCE) || r.left.equals(LedgerRows.SPECS)
+			|| r.left.equals(LedgerRows.MAGIC)));
+		// An immune boss: its Defence never moves and the drains are worth nothing.
+		final FakeScope immune = drained();
+		immune.defenceEnd = 215;
+		immune.drainValueDamage = 0;
+		immune.specLuckDamage = 0;
+		assertFalse(build(immune, State.fight("Vardorvis", true, true, false)).stream()
+			.anyMatch(r -> r.left.equals(LedgerRows.DEFENCE) || r.left.equals(LedgerRows.SPECS)));
+		// Live: the tracker's immune target gives no readout.
+		final DrainRule.Target target = new DrainRule.Target(215, 150, 0, 0, 0, 0, 215, 150, true, false, false, false);
+		final DrainTracker.Tracked t = new DrainTracker.Tracked(5, 12223, "Vardorvis", target);
+		assertNull(PvmPerformanceOverlay.liveDrain(t));
+		assertNull(PvmPerformanceOverlay.liveDrain((DrainTracker.Tracked) null));
+	}
+
+	@Test
+	public void theTrackersFiguresBecomeTheLiveRow()
+	{
+		final DrainRule.Target target = new DrainRule.Target(215, 150, 0, 0, 0, 0, 0, 0, false, false, false, false);
+		final DrainTracker.Tracked t = new DrainTracker.Tracked(5, 12223, "Vardorvis", target);
+		// Not yet drained.
+		assertNull(PvmPerformanceOverlay.liveDrain(t));
+		t.state = new DrainRule.State(145, 150, 0, 0, 0, 0);
+		final LedgerRows.LiveDrain live = PvmPerformanceOverlay.liveDrain(t);
+		assertEquals(145, live.defence);
+		assertEquals(215, live.defenceBase);
+		assertEquals(0, live.defenceFloor);
+	}
+
+	@Test
+	public void underTheWarningNothingOfTheDrains()
+	{
+		final List<Row> rows = build(drained(), State.fight("Vardorvis", true, true, true));
+		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.DEFENCE) || r.left.equals(LedgerRows.SPECS)));
+		assertFalse(build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, true)
+			.withDrain(live(145, 0, 150))).stream().anyMatch(r -> r.left.equals(LedgerRows.DEFENCE)));
+	}
+
+	@Test
+	public void specsFollowTheLuckSetting()
+	{
+		final Settings noLuck = new Settings();
+		noLuck.luck = false;
+		final List<Row> rows = LedgerRows.build(drained(), State.fight("Vardorvis", true, true, false), noLuck);
+		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
+		// The Defence row isn't luck: it stays.
+		assertTrue(rows.contains(d(" defence", "215 \u2192 145 \u00b7 +14 s")));
+	}
+
+	@Test
+	public void aRaidOrATripShowsTheDrainsWorth()
+	{
+		final FakeScope s = drained();
+		s.defenceStart = -1;
+		s.defenceEnd = -1;
+		s.magicStart = -1;
+		s.magicEnd = -1;
+		s.drainValueDamage = 520;
+		for (State state : Arrays.asList(State.trip(3, false, false), State.raid("Tombs of Amascut", 3, false, false)))
+		{
+			final List<Row> rows = build(s, state);
+			assertTrue(rows.toString(), rows.contains(d(" defence drains", "+40 s")));
+			assertTrue(rows.contains(d(" specs", "+5 s", BETTER)));
+		}
+		// While a fight runs: only the live row, if any.
+		assertFalse(build(s, State.trip(3, true, false)).stream().anyMatch(r -> r.left.equals(LedgerRows.DEFENCE_DRAINS)));
+	}
+
+	/** A scored fight on Defence 215 that ended at {@code end}, worth {@code value} damage, {@code specLuck} of it luck. */
+	private static Fight drainedFight(int end, double value, double specLuck, SessionTotals trip)
+	{
+		final Fight f = new Fight("Vardorvis", NpcIds.GOBLIN, 1, 700, 0L, null, 0);
+		f.recordAttackMade(false);
+		trip.recordAttackMade(false);
+		for (int i = 0; i < 99; i++)
+		{
+			f.recordTickSpent();
+			trip.recordTickSpent(true);
+		}
+		f.recordExpected(40, 0.7, 14, 150);
+		trip.recordExpected(0.7, 14, 150);
+		final DrainRecord r = new DrainRecord();
+		r.defenceBase = 215;
+		r.defenceStart = 215;
+		r.defenceEnd = end;
+		r.magicBase = 150;
+		r.magicStart = 150;
+		r.magicEnd = 150;
+		f.recordDrain(r);
+		// No variance shift; spec luck is -expectedShift.
+		f.recordSpecOutcomes(-specLuck, 0, value, value - specLuck);
+		f.end(true, 1L);
+		trip.recordFightEnded(true, f, 1L);
+		return f;
+	}
+
+	@Test
+	public void aRoomARaidAndATripSumTheDrainsAndTheSpecs()
+	{
+		final SessionTotals trip = new SessionTotals(0L);
+		final Encounter room = new Encounter("Vardorvis", null, 0L);
+		room.add(drainedFight(180, 100, 20, trip));
+		room.add(drainedFight(145, 82, -5, trip));
+		final Raid raid = new Raid(RaidType.TOMBS_OF_AMASCUT, 1, 0L);
+		raid.add(room);
+		for (LedgerRows.Scope scope : Arrays.asList(LedgerRows.of(room), LedgerRows.of(raid), LedgerRows.of(trip)))
+		{
+			assertEquals(182, scope.drainValueDamage(), 1e-9);
+			assertEquals(15, scope.specLuckDamage(), 1e-9);
+			// The seconds as luck turns damage into time: the scored clock over expected plus other damage.
+			final LedgerRows.Numbers n = new LedgerRows.Numbers(scope);
+			assertEquals(n.scoredClock * 182 / (n.expected + n.other), scope.luckSeconds(182), 1e-9);
+		}
+		// The room's path: the first fight's start to the last fight's end.
+		assertEquals(215, LedgerRows.of(room).defenceStart());
+		assertEquals(145, LedgerRows.of(room).defenceEnd());
+		assertEquals(-1, LedgerRows.of(raid).defenceStart());
+	}
 }
