@@ -42,6 +42,28 @@ import net.runelite.client.ui.components.IconTextField;
  */
 final class SidePanelHistoryTab extends JPanel implements Scrollable
 {
+	/** T-046: the tab paints in software and reaches the screen as one image; see {@link SidePanelBuffer}. */
+	private final SidePanelBuffer buffer = new SidePanelBuffer();
+
+	/** The strain probe's timers for the buffer (T-046); null in tests. */
+	void setPerf(PerfProbe perf)
+	{
+		buffer.setPerf(perf);
+	}
+
+	/** Its children's repaints come through {@link #paint}, so they're buffered too. */
+	@Override
+	public boolean isPaintingOrigin()
+	{
+		return isOpaque();
+	}
+
+	@Override
+	public void paint(java.awt.Graphics g)
+	{
+		buffer.paint(this, g, super::paint);
+	}
+
 	/** Where the tab reads the saved fights and what it needs to show them; the plugin in the client. */
 	interface Source
 	{

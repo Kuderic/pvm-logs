@@ -164,6 +164,8 @@ final class SidePanelModel
 		 * past the store's cap, or with charts off).
 		 */
 		FightTimeline.View view;
+		/** T-046: the Damage rows the panel kept for {@link #view}; null to add up the view's attacks here. */
+		List<WeaponRow> weaponRows;
 		/** The chart's series are sent from this index; 0 starts the panel's copy over (spec 5.1). */
 		int chartFrom;
 		/** The "Charts" setting: off, no damage chart or tick strip. */
@@ -1041,7 +1043,8 @@ final class SidePanelModel
 	 */
 	static PanelSnapshot.Sources damage(LedgerRows.Numbers n, Input in, boolean warning)
 	{
-		final List<WeaponRow> weapons = weaponRows(in.view);
+		// The panel keeps the rows' sums between snapshots (T-046); a saved kill and the tests add up the whole list.
+		final List<WeaponRow> weapons = in.weaponRows != null ? in.weaponRows : weaponRows(in.view);
 		int attributed = 0;
 		for (WeaponRow w : weapons)
 		{
@@ -1103,28 +1106,7 @@ final class SidePanelModel
 		final Map<String, WeaponRow> byKey = new LinkedHashMap<>();
 		for (FightTimeline.Attack a : view.attacks)
 		{
-			final WeaponRow w = byKey.computeIfAbsent(a.rowKey(), k -> new WeaponRow());
-			w.name = LedgerRows.attackLabel(a.key) == null ? a.key : LedgerRows.attackLabel(a.key);
-			w.special = a.special;
-			w.attacks++;
-			w.damage += a.damage;
-			if (a.mean >= 0)
-			{
-				w.expected += a.mean;
-				w.expectedKnown = true;
-			}
-			if (a.itemId >= 0)
-			{
-				w.itemId = a.itemId;
-			}
-			if (a.spell != null)
-			{
-				w.spell = a.spell;
-			}
-			if (a.style != FightTimeline.Style.UNKNOWN)
-			{
-				w.style = a.style;
-			}
+			SidePanelWeaponRows.add(byKey, a);
 		}
 		rows.addAll(byKey.values());
 		return rows;

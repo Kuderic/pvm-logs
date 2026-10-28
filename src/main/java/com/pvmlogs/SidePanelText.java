@@ -27,6 +27,12 @@ final class SidePanelText extends JComponent
 	private final boolean right;
 	/** A hint after a label gives way before the label does; a name's {@code (dead)} doesn't. */
 	private boolean cutSuffixFirst;
+	/**
+	 * T-046: the widest this text has been, which is the width it asks for. It
+	 * never shrinks, so a value that grows back to an earlier width (a clock's
+	 * digits, a damage total) needs no layout.
+	 */
+	private int reserved;
 
 	SidePanelText(SidePanelStyle.Type type, boolean right)
 	{
@@ -71,9 +77,71 @@ final class SidePanelText extends JComponent
 		}
 		if (width)
 		{
-			revalidate();
+			// Layout only when the text outgrows the space it has (T-046): within it, it's painted where it belongs. Once
+			// laid out, a changing value reserves room for its widest digits, so it doesn't ask again until it gains one.
+			final int needed = getWidth() > 0 ? moving() : natural();
+			if (needed > reserved)
+			{
+				reserved = needed;
+				if (needed > getWidth())
+				{
+					SidePanelParts.relayout(this);
+				}
+			}
 		}
 		repaint();
+	}
+
+	/** T-046: takes room for its widest digits now, laying out if that's more than it has. */
+	void reserveDigits()
+	{
+		final int needed = moving();
+		if (needed > reserved)
+		{
+			reserved = needed;
+			if (needed > getWidth())
+			{
+				SidePanelParts.relayout(this);
+			}
+		}
+	}
+
+	/** The width the text and its second run take. */
+	private int natural()
+	{
+		return getFontMetrics(getFont()).stringWidth(text) + getFontMetrics(suffixFont()).stringWidth(suffix);
+	}
+
+	/**
+	 * The width a changing value keeps (T-046): every digit as wide as the widest.
+	 * RuneLite's fonts give digits different widths, and a clock going from 1:18
+	 * to 1:24 shouldn't lay the panel out. Only a value gaining a digit (999 to
+	 * 1,000) needs more room. A text that never changes keeps its own width, so a
+	 * view at rest looks as it always did.
+	 */
+	private int moving()
+	{
+		return reservedWidth(getFontMetrics(getFont()), text) + reservedWidth(getFontMetrics(suffixFont()), suffix);
+	}
+
+	/** {@code s}'s width with each digit counted at the font's widest digit. */
+	static int reservedWidth(FontMetrics fm, String s)
+	{
+		int widest = 0;
+		for (char d = '0'; d <= '9'; d++)
+		{
+			widest = Math.max(widest, fm.charWidth(d));
+		}
+		int extra = 0;
+		for (int i = 0; i < s.length(); i++)
+		{
+			final char c = s.charAt(i);
+			if (c >= '0' && c <= '9')
+			{
+				extra += widest - fm.charWidth(c);
+			}
+		}
+		return fm.stringWidth(s) + extra;
 	}
 
 	/** The second run's font: its own type's, or the first's when it has none or the same. */
@@ -97,8 +165,8 @@ final class SidePanelText extends JComponent
 	@Override
 	public Dimension getPreferredSize()
 	{
-		final FontMetrics fm = getFontMetrics(getFont());
-		return new Dimension(fm.stringWidth(text) + getFontMetrics(suffixFont()).stringWidth(suffix), type.lineHeight());
+		reserved = Math.max(reserved, natural());
+		return new Dimension(reserved, type.lineHeight());
 	}
 
 	@Override

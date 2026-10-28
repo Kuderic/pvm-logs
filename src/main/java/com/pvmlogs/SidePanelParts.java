@@ -109,11 +109,34 @@ final class SidePanelParts
 		}
 	}
 
+	/** How many times a value asked for layout (Swing's thread); tests read it across a fight's updates. */
+	static int relayouts;
+
+	/**
+	 * T-046: a component's size changed and its parent should lay it out again.
+	 * Only when it's on screen: one in a folded section, or a tab that isn't
+	 * showing, is marked for the next layout without asking for one now.
+	 */
+	static void relayout(JComponent c)
+	{
+		relayouts++;
+		if (c.isShowing())
+		{
+			c.revalidate();
+		}
+		else
+		{
+			c.invalidate();
+		}
+	}
+
 	/** A luck chip in a list: a small word on a fill (spec section 2). */
 	static final class Chip extends JComponent
 	{
 		private PanelSnapshot.Text text = PanelSnapshot.Text.NONE;
 		private Color fill;
+		/** The widest it has been (T-046): it asks for that, so it lays out again only when it grows past it. */
+		private int reserved;
 
 		Chip()
 		{
@@ -124,25 +147,57 @@ final class SidePanelParts
 		void set(PanelSnapshot.Text t, Color fill)
 		{
 			final PanelSnapshot.Text now = t == null ? PanelSnapshot.Text.NONE : t;
-			final boolean width = !now.text.equals(text.text);
+			final boolean width = !now.text.equals(text.text) || (fill == null) != (this.fill == null);
+			final boolean wasEmpty = text.isEmpty();
 			text = now;
 			this.fill = fill;
 			if (width)
 			{
-				revalidate();
+				// As a text does (T-046): once laid out, a changing chip reserves room for its widest digits.
+				final int needed = getWidth() > 0 ? moving() : natural();
+				// Its height differs when empty, so turning empty or not lays out too.
+				if (needed > reserved || wasEmpty != text.isEmpty())
+				{
+					reserved = Math.max(reserved, needed);
+					if (needed > getWidth() || wasEmpty != text.isEmpty())
+					{
+						relayout(this);
+					}
+				}
 			}
 			repaint();
+		}
+
+		/** T-046: takes room for its widest digits now, laying out if that's more than it has. */
+		void reserveDigits()
+		{
+			final int needed = moving();
+			if (needed > reserved)
+			{
+				reserved = needed;
+				if (needed > getWidth())
+				{
+					relayout(this);
+				}
+			}
+		}
+
+		private int natural()
+		{
+			return text.isEmpty() ? 0 : getFontMetrics(getFont()).stringWidth(text.text) + (fill == null ? 0 : 8);
+		}
+
+		private int moving()
+		{
+			return text.isEmpty() ? 0 : SidePanelText.reservedWidth(getFontMetrics(getFont()), text.text)
+				+ (fill == null ? 0 : 8);
 		}
 
 		@Override
 		public Dimension getPreferredSize()
 		{
-			if (text.isEmpty())
-			{
-				return new Dimension(0, 12);
-			}
-			final FontMetrics fm = getFontMetrics(getFont());
-			return new Dimension(fm.stringWidth(text.text) + (fill == null ? 0 : 8), 14);
+			reserved = Math.max(reserved, natural());
+			return new Dimension(reserved, text.isEmpty() ? 12 : 14);
 		}
 
 		@Override
@@ -199,14 +254,30 @@ final class SidePanelParts
 			{
 				return;
 			}
-			final boolean relayout = !t.equals(text);
+			// Layout only when the new text takes a different number of lines (T-046).
+			final int width = getWidth() > 0 ? getWidth() : defaultWidth;
+			final boolean relayout = !t.equals(text) && lines(width).size() != linesOf(t, width);
 			text = t;
 			colour = newColour;
 			if (relayout)
 			{
-				revalidate();
+				relayout(this);
 			}
 			repaint();
+		}
+
+		private int linesOf(String other, int width)
+		{
+			final String was = text;
+			text = other;
+			try
+			{
+				return lines(width).size();
+			}
+			finally
+			{
+				text = was;
+			}
 		}
 
 		List<String> lines(int width)
@@ -553,11 +624,13 @@ final class SidePanelParts
 
 		void set(java.util.List<Item> newItems)
 		{
-			final boolean relayout = newItems.size() != items.size();
+			// Layout only when the legend takes a different number of lines (T-046): its counts change in place.
+			final int width = getWidth() > 0 ? getWidth() : defaultWidth;
+			final int before = lines(width);
 			items = newItems;
-			if (relayout)
+			if (lines(width) != before)
 			{
-				revalidate();
+				relayout(this);
 			}
 			repaint();
 		}

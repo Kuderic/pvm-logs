@@ -161,6 +161,16 @@ public class PanelStrainWorstCaseTest
 			new PanelSnapshot(SidePanelModel.fight(in), SidePanelModel.trip(trip));
 		});
 
+		// T-046: what the panel builds now: the visible tab's part only, the Damage rows' sums kept between builds.
+		final SidePanelWeaponRows kept = new SidePanelWeaponRows();
+		time(what + ": snapshot build, a tick's, Fight tab only, Damage rows kept (T-046)", () ->
+		{
+			in.view = view.get();
+			in.weaponRows = kept.rows(what, in.view);
+			new PanelSnapshot(SidePanelModel.fight(in), null);
+		});
+		in.weaponRows = null;
+
 		time(what + ": the timeline view alone", () -> view.get());
 		time(what + ": the Fight tab's model alone, a tick's", () -> SidePanelModel.fight(in));
 		time(what + ": the Trip tab's model alone", () -> SidePanelModel.trip(trip));

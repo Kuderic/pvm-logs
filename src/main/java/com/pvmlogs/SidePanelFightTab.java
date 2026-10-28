@@ -33,6 +33,29 @@ import javax.swing.border.EmptyBorder;
  */
 final class SidePanelFightTab extends JPanel implements Scrollable
 {
+	/** T-046: the tab paints in software and reaches the screen as one image; see {@link SidePanelBuffer}. */
+	private final SidePanelBuffer buffer = new SidePanelBuffer();
+
+	/** The strain probe's timers for the buffer (T-046); null in tests. */
+	void setPerf(PerfProbe perf)
+	{
+		buffer.setPerf(perf);
+		this.perf = perf;
+	}
+
+	/** Its children's repaints come through {@link #paint}, so they're buffered too. */
+	@Override
+	public boolean isPaintingOrigin()
+	{
+		return isOpaque();
+	}
+
+	@Override
+	public void paint(java.awt.Graphics g)
+	{
+		buffer.paint(this, g, super::paint);
+	}
+
 	/** What the tab's buttons do; the panel passes them on to the plugin. */
 	interface Actions
 	{
@@ -80,6 +103,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	};
 
 	private final Actions actions;
+	/** The strain probe (T-046), handed to the chart and strip when they're built; null in tests. */
+	private PerfProbe perf;
 	/** Where the Damage rows' icons come from (T-036). */
 	private final SidePanelIcons icons;
 	/** Swing's copy of the chart's series, extended a tick at a time (spec 5.1); kept across rebuilds. */
@@ -88,6 +113,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private final List<Consumer<FightTab>> updaters = new ArrayList<>();
 	private String structure;
 	private int builds;
+	/** Whether this build's values have reserved their widest digits (T-046). */
+	private boolean reserved;
 	/** The status line under the empty state's tools ("Exported 12 fights"), kept across rebuilds. */
 	private String status = "";
 	private SidePanelText statusLine;
@@ -128,10 +155,37 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			structure = s;
 			rebuild(tab);
+			reserved = false;
+		}
+		else if (!reserved && tab.state == PanelSnapshot.State.LIVE && getWidth() > 0)
+		{
+			// The first update of a running fight after a build (T-046): every value takes room for its widest digits now,
+			// in one layout pass, so none asks again until it gains a digit.
+			reserved = true;
+			reserveDigits(this);
 		}
 		for (Consumer<FightTab> u : updaters)
 		{
 			u.accept(tab);
+		}
+	}
+
+	private static void reserveDigits(java.awt.Container c)
+	{
+		for (java.awt.Component k : c.getComponents())
+		{
+			if (k instanceof SidePanelText)
+			{
+				((SidePanelText) k).reserveDigits();
+			}
+			else if (k instanceof SidePanelParts.Chip)
+			{
+				((SidePanelParts.Chip) k).reserveDigits();
+			}
+			else if (k instanceof java.awt.Container)
+			{
+				reserveDigits((java.awt.Container) k);
+			}
 		}
 	}
 
@@ -533,6 +587,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		final JPanel card = SidePanelParts.card(5);
 		final SidePanelDamageChart chart = new SidePanelDamageChart(chartData);
+		chart.setPerf(perf);
 		card.add(chart);
 		final SidePanelParts.Line ends = new SidePanelParts.Line(Text.small("0:00", SidePanelStyle.MUTED),
 			Text.small(tab.chart.end, SidePanelStyle.MUTED));
@@ -561,7 +616,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				items.add(new SidePanelParts.Legend.Item(null, false, "expected hidden", SidePanelStyle.MUTED));
 			}
 			legend.set(items);
-			chart.repaint();
+			chart.update();
 		});
 	}
 
@@ -574,6 +629,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		final JPanel card = SidePanelParts.card(5);
 		final SidePanelTickStrip strip = new SidePanelTickStrip(chartData);
+		strip.setPerf(perf);
 		card.add(strip);
 		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(legend);
@@ -595,9 +651,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			if (now != rows[0])
 			{
 				rows[0] = now;
-				strip.revalidate();
+				SidePanelParts.relayout(strip);
 			}
-			strip.repaint();
+			strip.update();
 		});
 	}
 
