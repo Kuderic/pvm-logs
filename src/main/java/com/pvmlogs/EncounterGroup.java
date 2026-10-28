@@ -17,6 +17,7 @@ final class EncounterGroup
 	private static final Set<Integer> UNATTACKABLE = buildUnattackable();
 	private static final Set<Integer> ADDS = buildAdds();
 	private static final Map<String, DeathClose> CLOSES_ON_DEATH = buildClosesOnDeath();
+	private static final Map<String, Falls> FALLS = buildFalls();
 
 	private EncounterGroup()
 	{
@@ -81,6 +82,73 @@ final class EncounterGroup
 		{
 			return fell ? fallen.contains(npcId) : live.contains(npcId);
 		}
+	}
+
+	/**
+	 * What one of a group's NPCs going down (dying, or changing into its beaten
+	 * form) does to a fight open on another of them (T-064).
+	 */
+	enum FallKind
+	{
+		/**
+		 * The group is one boss in parts: any of {@link Falls#boss} going down is the boss down, and ends a fight on any
+		 * of them (the Hueycoatl's head, body and tail). Its adds' going down ends nothing but a fight on themselves.
+		 */
+		ONE_BOSS,
+		/**
+		 * Separate monsters fought as one encounter (the Royal Titans, the Chambers' vanguards): one going down ends only
+		 * a fight on itself.
+		 */
+		SEPARATE
+	}
+
+	/** A group's fall rule: its kind, and which of its NPCs are the boss rather than its adds. */
+	static final class Falls
+	{
+		final FallKind kind;
+		final Set<Integer> boss;
+
+		Falls(FallKind kind, Set<Integer> boss)
+		{
+			this.kind = kind;
+			this.boss = boss;
+		}
+	}
+
+	/** The fall rule of this NPC's group, or null if it has none (it stands alone). */
+	static Falls falls(int npcId)
+	{
+		final String group = GROUPS.get(npcId);
+		return group == null ? null : FALLS.get(group);
+	}
+
+	/**
+	 * Whether {@code fallenId}, another NPC than the fight's target, going down
+	 * ends the fight open on {@code targetId} as a kill (T-064): only where both
+	 * are one boss and the fallen one is a part of it, not an add. A partner's
+	 * titan, or a Kraken tentacle dying to venom, no longer ends your fight.
+	 */
+	static boolean otherFallEndsFight(int fallenId, int targetId)
+	{
+		if (!sameGroup(fallenId, targetId))
+		{
+			return false;
+		}
+		final Falls rule = falls(fallenId);
+		return rule != null && rule.kind == FallKind.ONE_BOSS && rule.boss.contains(fallenId)
+			&& !UNSCORED.contains(fallenId);
+	}
+
+	/** Every group's name, for the audit test. */
+	static Set<String> groupNames()
+	{
+		return new HashSet<>(GROUPS.values());
+	}
+
+	/** A group's fall rule by its name, or null; for the audit test. */
+	static Falls fallsOf(String group)
+	{
+		return FALLS.get(group);
 	}
 
 	/** The death rule of this NPC's group, or null if its room closes on loot or not at all. */
@@ -526,6 +594,105 @@ final class EncounterGroup
 		rules.put("The Royal Titans", new DeathClose(2, ids(NpcID.RT_FIRE_QUEEN, NpcID.RT_ICE_KING),
 			ids(NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE)));
 		return Collections.unmodifiableMap(rules);
+	}
+
+	/**
+	 * T-064's audit: every group, with what one of its NPCs going down does to a
+	 * fight open on another. ONE_BOSS lists the boss's own NPCs (its forms and
+	 * parts); the rest of the group are its adds. SEPARATE groups are monsters
+	 * fought together, each its own fight to the end. EncounterGroupFallsTest
+	 * fails if a group is added without a rule.
+	 */
+	private static Map<String, Falls> buildFalls()
+	{
+		final Map<String, Falls> rules = new HashMap<>();
+		// The Chambers.
+		separate(rules, "Vanguards");
+		oneBoss(rules, "Vasa Nistirio", NpcID.RAIDS_VASANISTIRIO_DORMANT, NpcID.RAIDS_VASANISTIRIO_WALKING,
+			NpcID.RAIDS_VASANISTIRIO_HEALING);
+		oneBoss(rules, "Tekton", NpcID.RAIDS_TEKTON_WAITING, NpcID.RAIDS_TEKTON_HAMMERING,
+			NpcID.RAIDS_TEKTON_WALKING_STANDARD, NpcID.RAIDS_TEKTON_FIGHTING_STANDARD,
+			NpcID.RAIDS_TEKTON_WALKING_ENRAGED, NpcID.RAIDS_TEKTON_FIGHTING_ENRAGED);
+		// The portal is what closes the room; the vespine soldiers are adds.
+		oneBoss(rules, "Vespula", NpcID.RAIDS_VESPULA_FLYING, NpcID.RAIDS_VESPULA_WALKING,
+			NpcID.RAIDS_VESPULA_ENRAGED, NpcID.RAIDS_VESPULA_PORTAL);
+		separate(rules, "Guardians");
+		separate(rules, "Lizardman shamans");
+		separate(rules, "Skeletal mystics");
+		separate(rules, "Tightrope");
+		separate(rules, "Great Olm (hands)");
+		separate(rules, "Muttadiles");
+		// The Nightmares: her forms are the boss; the totems, husks, parasites and sleepwalkers are adds.
+		oneBoss(rules, "Phosani's Nightmare", NpcID.NIGHTMARE_CHALLENGE_INITIAL, NpcID.NIGHTMARE_CHALLENGE_BLAST,
+			NpcID.NIGHTMARE_CHALLENGE_PHASE_01, NpcID.NIGHTMARE_CHALLENGE_PHASE_02,
+			NpcID.NIGHTMARE_CHALLENGE_PHASE_03, NpcID.NIGHTMARE_CHALLENGE_PHASE_04,
+			NpcID.NIGHTMARE_CHALLENGE_PHASE_05,
+			NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_01, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_02,
+			NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_03, NpcID.NIGHTMARE_CHALLENGE_WEAK_PHASE_04);
+		oneBoss(rules, "The Nightmare", NpcID.NIGHTMARE_INITIAL, NpcID.NIGHTMARE_BLAST,
+			NpcID.NIGHTMARE_PHASE_01, NpcID.NIGHTMARE_PHASE_02, NpcID.NIGHTMARE_PHASE_03,
+			NpcID.NIGHTMARE_WEAK_PHASE_01, NpcID.NIGHTMARE_WEAK_PHASE_02, NpcID.NIGHTMARE_WEAK_PHASE_03);
+		oneBoss(rules, "Yama", NpcID.YAMA);
+		// The Tombs.
+		oneBoss(rules, "Zebak", NpcID.TOA_ZEBAK, NpcID.TOA_ZEBAK_ENRAGED);
+		// Akkha's shadows are killed during his fight: adds, not him.
+		oneBoss(rules, "Akkha", NpcID.AKKHA_SPAWN, NpcID.AKKHA_MELEE, NpcID.AKKHA_RANGE, NpcID.AKKHA_MAGE,
+			NpcID.AKKHA_ENRAGE_SPAWN, NpcID.AKKHA_ENRAGE_INITIAL, NpcID.AKKHA_ENRAGE, NpcID.AKKHA_ENRAGE_DUMMY);
+		oneBoss(rules, "Kephri", NpcID.TOA_KEPHRI_BOSS_SHIELDED, NpcID.TOA_KEPHRI_BOSS_WEAK,
+			NpcID.TOA_KEPHRI_BOSS_ENRAGE);
+		separate(rules, "Baboons");
+		oneBoss(rules, "Ba-Ba", NpcID.TOA_BABA, NpcID.TOA_BABA_DIGGING);
+		// The Wardens, as before: their obelisks, the wardens' forms and cores, one fight in phases. Unchanged for want of a
+		// log of them.
+		oneBossAll(rules, "Wardens");
+		// The Theatre.
+		separate(rules, "Nylocas (melee)");
+		separate(rules, "Nylocas (ranged)");
+		separate(rules, "Nylocas (magic)");
+		oneBossAll(rules, "Nylocas Vasilias");
+		oneBossAll(rules, "Nylocas Prinkipas");
+		oneBossAll(rules, "Xarpus");
+		oneBoss(rules, "The Maiden of Sugadinti", NpcID.TOB_MAIDEN_100, NpcID.TOB_MAIDEN_70, NpcID.TOB_MAIDEN_50,
+			NpcID.TOB_MAIDEN_30, NpcID.TOB_MAIDEN_100_STORY, NpcID.TOB_MAIDEN_70_STORY, NpcID.TOB_MAIDEN_50_STORY,
+			NpcID.TOB_MAIDEN_30_STORY, NpcID.TOB_MAIDEN_100_HARD, NpcID.TOB_MAIDEN_70_HARD, NpcID.TOB_MAIDEN_50_HARD,
+			NpcID.TOB_MAIDEN_30_HARD);
+		// Outside the raids.
+		oneBoss(rules, "Hespori", NpcID.HESPORI);
+		oneBoss(rules, "Hespori (A Night at the Theatre)", NpcID.TOBQUEST_HESPORI);
+		// Dusk and Dawn are two bosses: Dawn falling in phase three ends only a fight on her.
+		separate(rules, "Grotesque Guardians");
+		separate(rules, "The Royal Titans");
+		oneBoss(rules, "Kraken", NpcID.SLAYER_KRAKEN_BOSS, NpcID.SLAYER_KRAKEN_BOSS_WHIRLPOOL);
+		// One snake: the head, the tail and the body segments are all it.
+		oneBossAll(rules, "The Hueycoatl");
+		oneBoss(rules, "Abyssal Sire", NpcID.ABYSSALSIRE_SIRE_STASIS_SLEEPING, NpcID.ABYSSALSIRE_SIRE_STASIS_AWAKE,
+			NpcID.ABYSSALSIRE_SIRE_STASIS_STUNNED, NpcID.ABYSSALSIRE_SIRE_PUPPET, NpcID.ABYSSALSIRE_SIRE_WANDERING,
+			NpcID.ABYSSALSIRE_SIRE_PANICKING, NpcID.ABYSSALSIRE_SIRE_APOCALYPSE);
+		return Collections.unmodifiableMap(rules);
+	}
+
+	private static void oneBoss(Map<String, Falls> rules, String group, int... boss)
+	{
+		rules.put(group, new Falls(FallKind.ONE_BOSS, ids(boss)));
+	}
+
+	// One boss whose every NPC in the group is it.
+	private static void oneBossAll(Map<String, Falls> rules, String group)
+	{
+		final Set<Integer> all = new HashSet<>();
+		GROUPS.forEach((id, name) ->
+		{
+			if (name.equals(group))
+			{
+				all.add(id);
+			}
+		});
+		rules.put(group, new Falls(FallKind.ONE_BOSS, Collections.unmodifiableSet(all)));
+	}
+
+	private static void separate(Map<String, Falls> rules, String group)
+	{
+		rules.put(group, new Falls(FallKind.SEPARATE, ids()));
 	}
 
 	private static Set<Integer> ids(int... npcIds)

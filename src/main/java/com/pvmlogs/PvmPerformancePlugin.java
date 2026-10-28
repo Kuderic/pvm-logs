@@ -3070,9 +3070,11 @@ public class PvmPerformancePlugin extends Plugin
 			castsAwaiting.removeIf(cast -> cast.npcIndex == npc.getIndex());
 		}
 		// A boss never removed from the scene announces its defeat by changing into a beaten form. That is the kill, and it
-		// beats waiting for loot: in a group there may be no drop for this player at all.
+		// beats waiting for loot: in a group there may be no drop for this player at all. Another NPC of the group falling
+		// ends the fight only where it is the same boss (T-064): a partner's titan falling leaves yours to fight on.
 		if (EncounterGroup.isDefeated(npc.getId())
-			&& EncounterGroup.sameGroup(npc.getId(), current.getTargetId()))
+			&& (current.getTargetIndex() == npc.getIndex()
+			|| EncounterGroup.otherFallEndsFight(npc.getId(), current.getTargetId())))
 		{
 			finalizeFight(true, System.currentTimeMillis(), "changed into its beaten form");
 		}
@@ -3393,9 +3395,9 @@ public class PvmPerformancePlugin extends Plugin
 		// is open on a body segment, so the death despawns an index the fight never heard of. Only a death, and only within
 		// the group, so an add dying beside a boss cannot claim it - nor one of the group's own adds: an unscored npc is
 		// never the boss. With the Abyssal Sire's spawns in its group, every spawn that died would otherwise have ended the
-		// fight on the Sire as a kill (T-020).
-		if (npc.isDead() && EncounterGroup.sameGroup(npc.getId(), current.getTargetId())
-			&& !EncounterGroup.isUnscored(npc.getId()))
+		// fight on the Sire as a kill (T-020). And only a part of the same boss (T-064): a Kraken tentacle dying, or a partner's
+		// titan, is not the boss you are fighting.
+		if (npc.isDead() && EncounterGroup.otherFallEndsFight(npc.getId(), current.getTargetId()))
 		{
 			finalizeFight(true, System.currentTimeMillis(), "another part of the same boss died");
 		}
