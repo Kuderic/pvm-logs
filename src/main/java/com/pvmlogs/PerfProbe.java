@@ -71,7 +71,14 @@ final class PerfProbe
 	{
 		APPLY("panel apply"),
 		PAINT_AFTER_APPLY("panel repaint after apply"),
-		PAINT_FULL("panel full paint (paintChildren)");
+		PAINT_FULL("panel full paint (paintChildren)"),
+		// T-046: a tab's paint split into its software render and the one copy to the screen; layout passes; the chart's
+		// and the strip's cached images brought up to date.
+		VIEW_RENDER("panel software render"),
+		VIEW_BLIT("panel copy to screen"),
+		LAYOUT("panel layout pass"),
+		CHART_DRAW("damage chart image"),
+		STRIP_DRAW("tick strip image");
 
 		final String label;
 

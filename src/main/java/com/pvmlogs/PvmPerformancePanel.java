@@ -66,6 +66,8 @@ class PvmPerformancePanel extends PluginPanel
 	// The chart's scope and how much of its series the last snapshot sent (spec 5.1): the next sends from a few ticks back.
 	private Object chartScope;
 	private int chartSent;
+	/** The Damage rows' sums, kept between snapshots so a long fight's build costs what a short one's does (T-046). */
+	private final SidePanelWeaponRows weaponRows = new SidePanelWeaponRows();
 
 	// Swing's thread only.
 	private PanelSnapshot shown;
@@ -78,6 +80,22 @@ class PvmPerformancePanel extends PluginPanel
 	private final SidePanelIcons icons;
 	/** Ticks the chart resends behind the last one sent, for a splat that lands a tick late. */
 	static final int CHART_RESEND = 4;
+	/**
+	 * T-046: while a fight runs, a snapshot is built and applied at most once
+	 * every this many ticks (3 s). The fight ending, opening the panel, a tab
+	 * switch and a fold update at once.
+	 */
+	static final int UPDATE_TICKS = 5;
+	/** The tabs, as {@link #visibleTab} holds them. */
+	static final int FIGHT_TAB = 0;
+	static final int HISTORY_TAB = 1;
+	static final int TRIP_TAB = 2;
+
+	/** The tab on show (Swing's thread writes it): only its part of a snapshot is built (T-046). */
+	private volatile int visibleTab = FIGHT_TAB;
+	// Client thread only: ticks seen, and the tick the last snapshot was built on.
+	private long ticks;
+	private long builtAt = Long.MIN_VALUE / 2;
 
 	// The trip's saved rooms, kept until the history or the trip changes (client thread).
 	private List<SidePanelHistory.KillRow> tripSaved = java.util.Collections.emptyList();
@@ -111,27 +129,48 @@ class PvmPerformancePanel extends PluginPanel
 		setBackground(SidePanelStyle.PANEL);
 		setLayout(new BorderLayout());
 
-		final SidePanelSection.Folds folds = configManager == null ? new SidePanelSection.MemoryFolds()
+		final SidePanelSection.Folds stored = configManager == null ? new SidePanelSection.MemoryFolds()
 			: new ConfigFolds(configManager);
+		// A fold updates at once (T-046): an unfolded section shows this tick's figures, not those of up to 3 s ago.
+		final SidePanelSection.Folds folds = new SidePanelSection.Folds()
+		{
+			@Override
+			public boolean isFolded(String id)
+			{
+				return stored.isFolded(id);
+			}
+
+			@Override
+			public void setFolded(String id, boolean folded)
+			{
+				stored.setFolded(id, folded);
+				requestUpdate();
+			}
+		};
 		final SidePanelFightTab.Actions actions = new Actions();
 		fightTab = new SidePanelFightTab(actions, folds, false, icons);
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
 			: new HistorySource(), actions, folds);
 		tripTab = new SidePanelTripTab(actions, folds);
+		fightTab.setPerf(perf);
+		historyTab.setPerf(perf);
+		tripTab.setPerf(perf);
 
 		final JPanel display = new JPanel(new BorderLayout());
 		display.setBackground(SidePanelStyle.PANEL);
 		tabs = new MaterialTabGroup(display);
 		tabs.setBorder(new EmptyBorder(4, SidePanelStyle.SIDE_BORDER, 0, SidePanelStyle.SIDE_BORDER));
 		tabs.setBackground(SidePanelStyle.PANEL);
-		final MaterialTab fight = new MaterialTab("Fight", tabs, scroll(fightTab));
-		final MaterialTab history = new MaterialTab("History", tabs, scroll(historyTab));
-		final MaterialTab trip = new MaterialTab("Trip", tabs, scroll(tripTab));
+		final MaterialTab fight = new MaterialTab("Fight", tabs, scroll(fightTab, perf));
+		final MaterialTab history = new MaterialTab("History", tabs, scroll(historyTab, perf));
+		final MaterialTab trip = new MaterialTab("Trip", tabs, scroll(tripTab, perf));
+		fight.setOnSelectEvent(() -> show(FIGHT_TAB));
 		history.setOnSelectEvent(() ->
 		{
 			historyTab.refresh();
-			return true;
+			return show(HISTORY_TAB);
 		});
+		trip.setOnSelectEvent(() -> show(TRIP_TAB));
 		fightButton = fight;
 		historyButton = history;
 		tabs.addTab(fight);
@@ -152,15 +191,56 @@ class PvmPerformancePanel extends PluginPanel
 		return plugin == null || plugin.getInjector() == null ? null : plugin.getInjector().getInstance(type);
 	}
 
-	/** A tab's content in its own scroll pane, vertical as needed and never horizontal (spec section 1). */
-	private static JScrollPane scroll(JComponent view)
+	/**
+	 * A tab's content in its own scroll pane, vertical as needed and never horizontal (spec section 1). The scroll pane is
+	 * the tab's validate root: each layout pass it runs is timed (T-046).
+	 */
+	private static JScrollPane scroll(JComponent view, PerfProbe perf)
 	{
 		final JScrollPane scroll = new JScrollPane(view, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER)
+		{
+			@Override
+			public void validate()
+			{
+				final long started = PerfProbe.start(perf);
+				super.validate();
+				if (started != 0L)
+				{
+					perf.stopSwing(PerfProbe.SwingSlot.LAYOUT, started);
+				}
+			}
+		};
 		scroll.setBorder(new EmptyBorder(0, 0, 0, 0));
 		scroll.getVerticalScrollBar().setUnitIncrement(16);
 		scroll.getViewport().setBackground(SidePanelStyle.PANEL);
 		return scroll;
+	}
+
+	/** A tab was picked (Swing's thread): only its part is built from now on, starting at once. */
+	private boolean show(int tab)
+	{
+		if (visibleTab != tab)
+		{
+			visibleTab = tab;
+			requestUpdate();
+		}
+		return true;
+	}
+
+	/** The next snapshot is built whatever the interval or its key says, as soon as the client thread can (T-046). */
+	private void requestUpdate()
+	{
+		dirty = true;
+		if (clientThread != null && active)
+		{
+			clientThread.invokeLater(this::onTick);
+		}
+	}
+
+	int visibleTab()
+	{
+		return visibleTab;
 	}
 
 	// ---- open and closed ----
@@ -213,14 +293,18 @@ class PvmPerformancePanel extends PluginPanel
 
 	/**
 	 * The end of {@code onGameTick}, on the client thread (spec 5.1 step 1). Does
-	 * nothing while the panel is closed, or when nothing on show changed this
-	 * tick; with "Update during fights" off, a running fight's figures wait for
-	 * its end.
+	 * nothing while the panel is closed or on the History tab, or when nothing on
+	 * show changed; while a fight runs, builds at most every {@link #UPDATE_TICKS}
+	 * ticks (T-046), and with "Update during fights" off not until its end. Only
+	 * the visible tab's part of the snapshot is built.
 	 */
 	void onTick()
 	{
-		if (!active || plugin == null)
+		ticks++;
+		final int tab = visibleTab;
+		if (!active || plugin == null || tab == HISTORY_TAB)
 		{
+			// History changes only when a fight is saved, which refresh() handles; a switch back builds at once.
 			return;
 		}
 		final Fight fight = plugin.getDisplayFight();
@@ -235,27 +319,47 @@ class PvmPerformancePanel extends PluginPanel
 
 		final SessionTotals trip = plugin.getSession();
 		final List<Object> shape = Arrays.asList(fight, fight != null && fight.isEnded(), pre, room, raid, whole,
-			history.size(), head, trip.getStartMillis());
-		final List<Object> key = key(shape, fight, room, raid, whole, pre);
+			history.size(), head, trip.getStartMillis(), tab);
 		final boolean force = dirty;
-		if (!force && key.equals(lastKey))
+		final boolean fighting = fight != null && !fight.isEnded() && !pre;
+		if (!due(force, fighting, shape.equals(lastShape), config == null || config.panelLive(), ticks - builtAt))
 		{
 			return;
 		}
-		final boolean fighting = fight != null && !fight.isEnded() && !pre;
-		if (!force && fighting && config != null && !config.panelLive() && shape.equals(lastShape))
+		final List<Object> key = key(shape, fight, room, raid, whole, pre);
+		if (!force && key.equals(lastKey))
 		{
 			return;
 		}
 		dirty = false;
 		lastKey = key;
 		lastShape = shape;
+		builtAt = ticks;
 
-		final SidePanelModel.Input in = read(fight, display, room, raid, whole, pre, history);
-		final boolean running = fight != null && !fight.isEnded() && !pre;
-		final PanelSnapshot snapshot = new PanelSnapshot(SidePanelModel.fight(in),
-			SidePanelModel.trip(readTrip(trip, history, head, running ? display : null)));
+		final PanelSnapshot snapshot;
+		if (tab == TRIP_TAB)
+		{
+			snapshot = new PanelSnapshot(null, SidePanelModel.trip(readTrip(trip, history, head, fighting ? display : null)));
+		}
+		else
+		{
+			snapshot = new PanelSnapshot(SidePanelModel.fight(read(fight, display, room, raid, whole, pre, history)), null);
+		}
 		SwingUtilities.invokeLater(() -> apply(snapshot));
+	}
+
+	/**
+	 * Whether this tick builds a snapshot, before its key is compared (T-046). Out of a fight, on a change of what's on
+	 * show (a fight starting or ending, a tab), or when forced (opening, a fold): yes. The same fight still running: with
+	 * "Update during fights" off, not until it ends; on, every {@link #UPDATE_TICKS} ticks.
+	 */
+	static boolean due(boolean force, boolean fighting, boolean sameShape, boolean live, long ticksSinceBuild)
+	{
+		if (force || !fighting || !sameShape)
+		{
+			return true;
+		}
+		return live && ticksSinceBuild >= UPDATE_TICKS;
 	}
 
 	/** Whether the switch reads Whole raid: the player's last choice, else whether the overlay covers the whole raid. */
@@ -396,6 +500,7 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.view = view;
 		final Object key = Arrays.asList(scope, view.startTick);
+		in.weaponRows = weaponRows.rows(key, view);
 		in.chartFrom = key.equals(chartScope) ? Math.max(0, Math.min(chartSent, view.states.length) - CHART_RESEND) : 0;
 		chartScope = key;
 		chartSent = view.states.length;
@@ -497,7 +602,10 @@ class PvmPerformancePanel extends PluginPanel
 	{
 		final long started = PerfProbe.start(perf);
 		shown = snapshot;
-		fightTab.apply(snapshot.fight);
+		if (snapshot.fight != null)
+		{
+			fightTab.apply(snapshot.fight);
+		}
 		tripTab.apply(snapshot.trip);
 		if (started != 0L)
 		{

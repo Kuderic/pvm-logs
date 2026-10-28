@@ -24,6 +24,28 @@ import javax.swing.border.EmptyBorder;
  */
 final class SidePanelTripTab extends JPanel implements Scrollable
 {
+	/** T-046: the tab paints in software and reaches the screen as one image; see {@link SidePanelBuffer}. */
+	private final SidePanelBuffer buffer = new SidePanelBuffer();
+
+	/** The strain probe's timers for the buffer (T-046); null in tests. */
+	void setPerf(PerfProbe perf)
+	{
+		buffer.setPerf(perf);
+	}
+
+	/** Its children's repaints come through {@link #paint}, so they're buffered too. */
+	@Override
+	public boolean isPaintingOrigin()
+	{
+		return isOpaque();
+	}
+
+	@Override
+	public void paint(java.awt.Graphics g)
+	{
+		buffer.paint(this, g, super::paint);
+	}
+
 	private final SidePanelFightTab.Actions actions;
 	private final SidePanelSection.Folds folds;
 	private final List<Consumer<TripTab>> updaters = new ArrayList<>();
@@ -241,11 +263,12 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 
 		void setColumns(int clockWidth, int chipWidth)
 		{
-			if (chipBox.getPreferredSize().width != chipWidth || clock.getPreferredSize().width != clockWidth)
+			// Columns only widen (T-046): a running room's clock ticking over needs no layout until it outgrows them.
+			if (chipWidth > chipBox.getPreferredSize().width || clockWidth > clock.getPreferredSize().width)
 			{
-				chipBox.setPreferredSize(new Dimension(chipWidth, 14));
-				clock.setPreferredSize(new Dimension(clockWidth, 16));
-				revalidate();
+				chipBox.setPreferredSize(new Dimension(Math.max(chipWidth, chipBox.getPreferredSize().width), 14));
+				clock.setPreferredSize(new Dimension(Math.max(clockWidth, clock.getPreferredSize().width), 16));
+				SidePanelParts.relayout(this);
 			}
 		}
 

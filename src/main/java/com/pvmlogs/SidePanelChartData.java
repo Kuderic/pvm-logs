@@ -18,6 +18,9 @@ final class SidePanelChartData
 	private byte[] styles = new byte[256];
 	private int length;
 	private PanelSnapshot.Chart last;
+	/** T-046: bumped by every snapshot that brings series, and by every one that starts them over. */
+	private int version;
+	private int scopes;
 
 	void apply(PanelSnapshot.Chart c)
 	{
@@ -25,9 +28,11 @@ final class SidePanelChartData
 		{
 			return;
 		}
+		version++;
 		if (c.from == 0)
 		{
 			length = 0;
+			scopes++;
 		}
 		if (c.length > damage.length)
 		{
@@ -51,6 +56,18 @@ final class SidePanelChartData
 	int length()
 	{
 		return length;
+	}
+
+	/** Changes with every snapshot applied: the chart's and strip's images are behind when theirs differs (T-046). */
+	int version()
+	{
+		return version;
+	}
+
+	/** Changes when a snapshot starts the series over (a new scope): the images are drawn again from the start. */
+	int scopes()
+	{
+		return scopes;
 	}
 
 	float damage(int i)
