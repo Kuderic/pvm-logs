@@ -86,9 +86,9 @@ public class SidePanelTimeBudgetTest
 				// Every bar marks your time: on its own, or first in the end's label.
 				assertTrue(at, l.clock != null || l.joined && l.end.startsWith(b.clockLabel));
 				// The average marker's label is on its own line under the bar, the clock's above it.
-				assertTrue(at, SidePanelTimeBudgetBar.LABEL_BASELINE + fm.getDescent()
-					<= SidePanelTimeBudgetBar.HEIGHT - 1 - fm.getAscent());
-				assertTrue(at, SidePanelTimeBudgetBar.LABEL_BASELINE < SidePanelTimeBudgetBar.TICK_TOP);
+				assertTrue(at, SidePanelTimeBudgetBar.labelBaseline() + fm.getDescent()
+					<= SidePanelTimeBudgetBar.height() - 1 - fm.getAscent());
+				assertTrue(at, SidePanelTimeBudgetBar.labelBaseline() < SidePanelTimeBudgetBar.tickTop());
 			}
 		}
 		// 2 s: too close to share the row apart, so one label: "1:16 · 1:18 at average luck".
@@ -109,8 +109,8 @@ public class SidePanelTimeBudgetTest
 			final Set<Integer> full = new HashSet<>(Arrays.asList(SidePanelStyle.KEPT.getRGB(),
 				SidePanelStyle.MINOR_COST.getRGB(), SidePanelStyle.COST.getRGB(), SidePanelStyle.EATING.getRGB(),
 				SidePanelStyle.BETTER.getRGB()));
-			final int top = SidePanelTimeBudgetBar.BAR_TOP * scale;
-			final int bottom = (SidePanelTimeBudgetBar.BAR_TOP + SidePanelTimeBudgetBar.BAR_HEIGHT) * scale - 1;
+			final int top = SidePanelTimeBudgetBar.barTop() * scale;
+			final int bottom = (SidePanelTimeBudgetBar.barTop() + SidePanelTimeBudgetBar.BAR_HEIGHT) * scale - 1;
 			// Before the tick, best play at full strength, and the losses too (uptime's orange just left of the tick).
 			assertEquals(SidePanelStyle.KEPT.getRGB(), img.getRGB(10 * scale, top + 4 * scale));
 			final double seconds = W / b.total;
@@ -220,14 +220,14 @@ public class SidePanelTimeBudgetTest
 	private static BufferedImage paint(PanelSnapshot.TimeBudget b, int scale)
 	{
 		final SidePanelTimeBudgetBar bar = new SidePanelTimeBudgetBar(b);
-		bar.setSize(W, SidePanelTimeBudgetBar.HEIGHT);
-		final BufferedImage img = new BufferedImage(W * scale, SidePanelTimeBudgetBar.HEIGHT * scale,
+		bar.setSize(W, SidePanelTimeBudgetBar.height());
+		final BufferedImage img = new BufferedImage(W * scale, SidePanelTimeBudgetBar.height() * scale,
 			BufferedImage.TYPE_INT_RGB);
 		final Graphics2D g = img.createGraphics();
 		g.scale(scale, scale);
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
 		g.setColor(SidePanelStyle.CARD);
-		g.fillRect(0, 0, W, SidePanelTimeBudgetBar.HEIGHT);
+		g.fillRect(0, 0, W, SidePanelTimeBudgetBar.height());
 		bar.printAll(g);
 		g.dispose();
 		return img;

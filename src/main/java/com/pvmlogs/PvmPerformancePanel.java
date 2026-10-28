@@ -71,6 +71,11 @@ class PvmPerformancePanel extends PluginPanel
 
 	// Swing's thread only.
 	private PanelSnapshot shown;
+	/** Each tab's last part, kept so a change of the text settings builds it again at once (T-053). */
+	private PanelSnapshot.FightTab lastFight;
+	private PanelSnapshot.TripTab lastTrip;
+	/** How many times the text settings were applied to built tabs, for tests (T-053). */
+	private int restyles;
 
 	/** When this panel, and so this RuneLite session's plugin, started: History's "later" card goes by it. */
 	private final long sessionStart = System.currentTimeMillis();
@@ -130,6 +135,8 @@ class PvmPerformancePanel extends PluginPanel
 
 		setBackground(SidePanelStyle.PANEL);
 		setLayout(new BorderLayout());
+		// The text settings before anything is built (T-053), so nothing is built twice.
+		SidePanelStyle.setText(config != null && config.panelLargerText(), config != null && config.panelSmoothFont());
 
 		final SidePanelSection.Folds stored = configManager == null ? new SidePanelSection.MemoryFolds()
 			: new ConfigFolds(configManager);
@@ -267,6 +274,11 @@ class PvmPerformancePanel extends PluginPanel
 	@Override
 	public void onActivate()
 	{
+		// The settings are a panel of their own in RuneLite's sidebar, so a change there is seen when this one opens again.
+		if (config != null)
+		{
+			setText(config.panelLargerText(), config.panelSmoothFont());
+		}
 		active = true;
 		dirty = true;
 		// One full snapshot now rather than at the next tick, which never comes on the login screen.
@@ -658,11 +670,44 @@ class PvmPerformancePanel extends PluginPanel
 
 	// ---- Swing's thread ----
 
+	/**
+	 * The "Larger text" and "Smooth font" settings (T-053), Swing's thread. When they changed: the fonts and line heights
+	 * are made once, each tab is built again once from its last snapshot in them, every cached image holding text is
+	 * dropped, and the panel is laid out and repainted once. Nothing happens when they're as they were.
+	 */
+	boolean setText(boolean larger, boolean smooth)
+	{
+		if (!SidePanelStyle.setText(larger, smooth))
+		{
+			return false;
+		}
+		restyles++;
+		fightTab.restyle(lastFight);
+		tripTab.restyle(lastTrip);
+		historyTab.restyle();
+		revalidate();
+		repaint();
+		return true;
+	}
+
+	int restyles()
+	{
+		return restyles;
+	}
+
 	/** Shows a snapshot (spec 5.1 step 2). Swing's thread only. */
 	void apply(PanelSnapshot snapshot)
 	{
 		final long started = PerfProbe.start(perf);
 		shown = snapshot;
+		if (snapshot.fight != null)
+		{
+			lastFight = snapshot.fight;
+		}
+		if (snapshot.trip != null)
+		{
+			lastTrip = snapshot.trip;
+		}
 		if (snapshot.fight != null)
 		{
 			fightTab.apply(snapshot.fight);

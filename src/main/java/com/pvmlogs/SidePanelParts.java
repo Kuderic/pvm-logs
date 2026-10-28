@@ -48,6 +48,38 @@ final class SidePanelParts
 	}
 
 	/** A label on the left (cut to fit, with an optional second run) and a value on the right. */
+	/** T-053: every text part under {@code c} takes its role's new font and line height. */
+	static void restyle(java.awt.Container c)
+	{
+		for (java.awt.Component k : c.getComponents())
+		{
+			if (k instanceof SidePanelText)
+			{
+				((SidePanelText) k).restyle();
+			}
+			else if (k instanceof Chip)
+			{
+				((Chip) k).restyle();
+			}
+			else if (k instanceof Paragraph)
+			{
+				((Paragraph) k).restyle();
+			}
+			else if (k instanceof Legend)
+			{
+				((Legend) k).restyle();
+			}
+			else if (k instanceof SidePanelTimeBudgetBar)
+			{
+				((SidePanelTimeBudgetBar) k).restyle();
+			}
+			else if (k instanceof java.awt.Container)
+			{
+				restyle((java.awt.Container) k);
+			}
+		}
+	}
+
 	static final class Line extends JPanel
 	{
 		final SidePanelText left;
@@ -169,6 +201,15 @@ final class SidePanelParts
 			repaint();
 		}
 
+		/** T-053: Small's new font; the width it asks for is measured again. */
+		void restyle()
+		{
+			setFont(SidePanelStyle.Type.SMALL.font());
+			reserved = 0;
+			revalidate();
+			repaint();
+		}
+
 		/** T-046: takes room for its widest digits now, laying out if that's more than it has. */
 		void reserveDigits()
 		{
@@ -198,7 +239,8 @@ final class SidePanelParts
 		public Dimension getPreferredSize()
 		{
 			reserved = Math.max(reserved, natural());
-			return new Dimension(reserved, text.isEmpty() ? 12 : 14);
+			final int line = SidePanelStyle.Type.SMALL.lineHeight();
+			return new Dimension(reserved, text.isEmpty() ? line : line + 2);
 		}
 
 		@Override
@@ -208,6 +250,7 @@ final class SidePanelParts
 			{
 				return;
 			}
+			SidePanelStyle.textHints((Graphics2D) g);
 			final FontMetrics fm = g.getFontMetrics(getFont());
 			final int w = fm.stringWidth(text.text) + (fill == null ? 0 : 8);
 			final int x = getWidth() - w;
@@ -234,8 +277,8 @@ final class SidePanelParts
 		private final SidePanelStyle.Type type;
 		/** The width it's laid out for before the panel has one: the card's inside. */
 		private final int defaultWidth;
-		/** Small text wraps on 14 px lines, as the canvas sets its notes. */
-		private final int lineHeight;
+		/** Small text wraps on 14 px lines with the RuneScape font, as the canvas sets its notes; 2 more than its line. */
+		private int lineHeight;
 
 		Paragraph(String text, Color colour, SidePanelStyle.Type type, int defaultWidth)
 		{
@@ -243,9 +286,23 @@ final class SidePanelParts
 			this.colour = colour;
 			this.type = type;
 			this.defaultWidth = defaultWidth;
-			this.lineHeight = type == SidePanelStyle.Type.SMALL ? 14 : type.lineHeight();
+			this.lineHeight = lineHeight(type);
 			setOpaque(false);
 			setFont(type.font());
+		}
+
+		private static int lineHeight(SidePanelStyle.Type type)
+		{
+			return type == SidePanelStyle.Type.SMALL ? type.lineHeight() + 2 : type.lineHeight();
+		}
+
+		/** T-053: the role's new font and line height. */
+		void restyle()
+		{
+			lineHeight = lineHeight(type);
+			setFont(type.font());
+			revalidate();
+			repaint();
 		}
 
 		void set(String newText, Color newColour)
@@ -317,6 +374,7 @@ final class SidePanelParts
 		@Override
 		protected void paintComponent(Graphics g)
 		{
+			SidePanelStyle.textHints((Graphics2D) g);
 			final FontMetrics fm = g.getFontMetrics(getFont());
 			g.setFont(getFont());
 			g.setColor(colour);
@@ -623,6 +681,14 @@ final class SidePanelParts
 			setFont(SidePanelStyle.Type.SMALL.font());
 		}
 
+		/** T-053: Small's new font and line height. */
+		void restyle()
+		{
+			setFont(SidePanelStyle.Type.SMALL.font());
+			revalidate();
+			repaint();
+		}
+
 		void set(java.util.List<Item> newItems)
 		{
 			// Layout only when the legend takes a different number of lines (T-046): its counts change in place.
@@ -634,6 +700,12 @@ final class SidePanelParts
 				relayout(this);
 			}
 			repaint();
+		}
+
+		/** A line of the legend: Small's line height (T-053; 12 with the RuneScape fonts). */
+		private static int line()
+		{
+			return SidePanelStyle.Type.SMALL.lineHeight();
 		}
 
 		private int itemWidth(FontMetrics fm, Item it)
@@ -664,13 +736,14 @@ final class SidePanelParts
 		{
 			final int width = getWidth() > 0 ? getWidth() : defaultWidth;
 			final int n = lines(width);
-			return new Dimension(defaultWidth, n * 12 + (n - 1) * 3);
+			return new Dimension(defaultWidth, n * line() + (n - 1) * 3);
 		}
 
 		@Override
 		protected void paintComponent(Graphics g)
 		{
 			final Graphics2D g2 = (Graphics2D) g;
+			SidePanelStyle.textHints(g2);
 			g2.setFont(getFont());
 			final FontMetrics fm = g2.getFontMetrics();
 			int x = 0;
@@ -681,12 +754,13 @@ final class SidePanelParts
 				if (x > 0 && x + w > getWidth())
 				{
 					x = 0;
-					y += 15;
+					y += line() + 3;
 				}
 				int tx = x;
 				if (it.swatch != null)
 				{
-					final java.awt.geom.Rectangle2D.Double r = new java.awt.geom.Rectangle2D.Double(x, y + 2, SWATCH, SWATCH);
+					final java.awt.geom.Rectangle2D.Double r = new java.awt.geom.Rectangle2D.Double(x, y + (line() - SWATCH) / 2,
+						SWATCH, SWATCH);
 					if (it.striped)
 					{
 						stripes(g2, r, SidePanelStyle.COST_STRIPE_GROUND, it.swatch);
@@ -699,7 +773,7 @@ final class SidePanelParts
 					tx += SWATCH + 3;
 				}
 				g2.setColor(it.textColour);
-				g2.drawString(it.text, tx, y + 12 - fm.getDescent());
+				g2.drawString(it.text, tx, y + line() - fm.getDescent());
 				x += w + GAP;
 			}
 		}

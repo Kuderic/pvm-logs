@@ -42,6 +42,11 @@ public final class SidePanelPictures
 		final Path out = Paths.get(args.length > 0 ? args[0] : "build/side-panel-renders");
 		Files.createDirectories(out);
 		RuneLiteLAF.setup();
+		if (args.length > 1 && "text".equals(args[1]))
+		{
+			textModes(out);
+			return;
+		}
 		for (int scale = 1; scale <= 2; scale++)
 		{
 			for (Map.Entry<String, SidePanelModel.Input> e : SidePanelExamples.states().entrySet())
@@ -67,9 +72,49 @@ public final class SidePanelPictures
 		}
 	}
 
-	private static void write(Path out, String name, int scale, BufferedImage img) throws IOException
+	/** T-053's text settings for the renders: both off draws exactly as before. */
+	private static boolean larger;
+	private static boolean smooth;
+
+	/** The panel in the renders' text settings: built again in them, as the setting changing in game does. */
+	private static PvmPerformancePanel styled(PvmPerformancePanel panel)
 	{
-		final Path file = out.resolve(name + "@" + scale + "x.png");
+		panel.setText(larger, smooth);
+		return panel;
+	}
+
+	/**
+	 * T-053 item 10: Fight live, after a kill, Trip and History in each of the four text settings, at 1×, 1.5× and 2×,
+	 * each mode in a folder of its own.
+	 */
+	private static void textModes(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger", "smooth", "smooth-larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			larger = m == 1 || m == 3;
+			smooth = m >= 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 1.5, 2})
+			{
+				write(dir, "a-live", scale, render(SidePanelExamples.live(), scale));
+				write(dir, "b-ended", scale, render(SidePanelExamples.ended(), scale));
+				write(dir, "c-ruled-kill", scale, render(SidePanelExamples.ruledKill(true), scale));
+				write(dir, "d-trip", scale, renderTrip(SidePanelExamples.trip(), scale));
+				write(dir, "e-history", scale, renderHistory(false, scale));
+				write(dir, "f-saved-kill", scale, renderSavedThisSession(scale));
+			}
+		}
+		larger = false;
+		smooth = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	private static void write(Path out, String name, double scale, BufferedImage img) throws IOException
+	{
+		final String x = scale == Math.rint(scale) ? String.valueOf((int) scale) : String.valueOf(scale);
+		final Path file = out.resolve(name + "@" + x + "x.png");
 		try (OutputStream o = Files.newOutputStream(file))
 		{
 			ImageIO.write(img, "png", o);
@@ -116,16 +161,17 @@ public final class SidePanelPictures
 	}
 
 	/** State 9: the Trip tab showing this input. */
-	static BufferedImage renderTrip(SidePanelModel.Input in, int scale)
+	static BufferedImage renderTrip(SidePanelModel.Input in, double scale)
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), SidePanelModel.trip(in)));
+		styled(panel);
 		panel.tabs().select(panel.tabs().getTab(2));
 		return draw(panel.tabs(), panel.tripTab(), scale);
 	}
 
 	/** States 10 and 11: the History tab on the fixtures, or the 26 Oct kill opened from it. */
-	static BufferedImage renderHistory(boolean savedKill, int scale)
+	static BufferedImage renderHistory(boolean savedKill, double scale)
 	{
 		final SidePanelHistoryTab.Source source = source();
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source);
@@ -138,11 +184,12 @@ public final class SidePanelPictures
 			final java.util.List<Fight> h = source.history();
 			tab.open(h.get(h.size() - 1));
 		}
+		styled(panel);
 		return draw(panel.tabs(), tab, scale);
 	}
 
 	/** A kill from this session, opened from History: its timeline comes with it (T-036). */
-	static BufferedImage renderSavedThisSession(int scale)
+	static BufferedImage renderSavedThisSession(double scale)
 	{
 		final SidePanelTimelineExamples.Built kill = SidePanelTimelineExamples.kill();
 		kill.fight.end(true, SidePanelExamples.at(15, 31));
@@ -187,6 +234,7 @@ public final class SidePanelPictures
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source);
 		panel.tabs().select(panel.tabs().getTab(1));
 		panel.historyTab().open(kill.fight);
+		styled(panel);
 		return draw(panel.tabs(), panel.historyTab(), scale);
 	}
 
@@ -195,7 +243,7 @@ public final class SidePanelPictures
 	 * from History with its charts and the rules' avoidable names: 5 of its 7
 	 * eating ticks for the avoidable hits.
 	 */
-	static BufferedImage renderRuledSavedKill(int scale)
+	static BufferedImage renderRuledSavedKill(double scale)
 	{
 		final SidePanelTimelineExamples.Built kill = SidePanelTimelineExamples.kill();
 		final java.util.Map<String, Integer> by = new java.util.LinkedHashMap<>();
@@ -267,19 +315,21 @@ public final class SidePanelPictures
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source);
 		panel.tabs().select(panel.tabs().getTab(1));
 		panel.historyTab().open(kill.fight);
+		styled(panel);
 		return draw(panel.tabs(), panel.historyTab(), scale);
 	}
 
 	/** The panel showing this input's snapshot, drawn at {@code scale}. */
-	static BufferedImage render(SidePanelModel.Input in, int scale)
+	static BufferedImage render(SidePanelModel.Input in, double scale)
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
 		return draw(panel.tabs(), panel.fightTab(), scale);
 	}
 
 	/** The tab bar across the sidebar, a tab's content under it, RuneLite's scrollbar beside it. */
-	static BufferedImage draw(JComponent tabs, JComponent content, int scale)
+	static BufferedImage draw(JComponent tabs, JComponent content, double scale)
 	{
 		tabs.setSize(SIDEBAR, tabs.getPreferredSize().height);
 		layout(tabs);
@@ -292,7 +342,8 @@ public final class SidePanelPictures
 
 		final int w = SIDEBAR;
 		final int h = tabs.getHeight() + contentHeight;
-		final BufferedImage img = new BufferedImage(w * scale, h * scale, BufferedImage.TYPE_INT_RGB);
+		final BufferedImage img = new BufferedImage((int) Math.ceil(w * scale), (int) Math.ceil(h * scale),
+			BufferedImage.TYPE_INT_RGB);
 		final Graphics2D g = img.createGraphics();
 		g.scale(scale, scale);
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);

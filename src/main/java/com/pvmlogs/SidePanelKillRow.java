@@ -29,7 +29,8 @@ final class SidePanelKillRow extends JPanel
 		final JPanel left = new JPanel(new BorderLayout(6, 0));
 		left.setOpaque(false);
 		final SidePanelText clock = new SidePanelText(Text.title(row.clock, SidePanelStyle.VALUE), false);
-		clock.setPreferredSize(new Dimension(40, 16));
+		clock.setPreferredSize(new Dimension(SidePanelStyle.columnWidth(SidePanelStyle.Type.TITLE, "0:00", 40),
+			SidePanelStyle.Type.TITLE.lineHeight()));
 		left.add(clock, BorderLayout.WEST);
 		left.add(new SidePanelText(Text.small(row.date, SidePanelStyle.SECONDARY), false), BorderLayout.CENTER);
 		r.add(left, BorderLayout.CENTER);
@@ -48,7 +49,8 @@ final class SidePanelKillRow extends JPanel
 		if (execution)
 		{
 			final SidePanelText exec = new SidePanelText(Text.small(row.execution, SidePanelStyle.BODY), true);
-			exec.setPreferredSize(new Dimension(30, 12));
+			exec.setPreferredSize(new Dimension(SidePanelStyle.columnWidth(SidePanelStyle.Type.SMALL, "100%", 30),
+				SidePanelStyle.Type.SMALL.lineHeight()));
 			right.add(exec, BorderLayout.EAST);
 		}
 		return right;
@@ -98,11 +100,17 @@ final class SidePanelKillRow extends JPanel
 		return selected;
 	}
 
+	/** 26 with the RuneScape fonts: a title line and 5 px above and below (T-053). */
+	static int rowHeight()
+	{
+		return Math.max(26, SidePanelStyle.Type.TITLE.lineHeight() + 10);
+	}
+
 	@Override
 	public Dimension getPreferredSize()
 	{
 		final Dimension d = super.getPreferredSize();
-		return new Dimension(SidePanelStyle.CONTENT_WIDTH, Math.max(d.height, 26));
+		return new Dimension(SidePanelStyle.CONTENT_WIDTH, Math.max(d.height, rowHeight()));
 	}
 
 	@Override

@@ -205,6 +205,31 @@ public interface PvmPerformanceConfig extends Config
 		return true;
 	}
 
+	// T-053 (side panel chat): the side panel's text. Read when the panel opens.
+	@ConfigItem(
+		keyName = "panelLargerText",
+		name = "Larger text",
+		description = "Bigger text in the side panel. Sharp at 100% and 200% scaling.",
+		position = 3,
+		section = SIDE_PANEL_SECTION
+	)
+	default boolean panelLargerText()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "panelSmoothFont",
+		name = "Smooth font",
+		description = "Draws the side panel in your system's font, so it stays sharp at 125% or 150% scaling.",
+		position = 4,
+		section = SIDE_PANEL_SECTION
+	)
+	default boolean panelSmoothFont()
+	{
+		return false;
+	}
+
 	// ---- Data & debugging ----
 
 	@ConfigSection(

@@ -47,6 +47,12 @@ final class SidePanelBuffer
 		return image == null ? new java.awt.Dimension() : new java.awt.Dimension(image.getWidth(), image.getHeight());
 	}
 
+	/** The text settings changed (T-053): the image holds text in the old fonts, so it goes. */
+	void drop()
+	{
+		image = null;
+	}
+
 	void paint(JComponent c, Graphics g, Painter direct)
 	{
 		if (painting || !c.isOpaque() || c.isPaintingForPrint() || !(g instanceof Graphics2D))

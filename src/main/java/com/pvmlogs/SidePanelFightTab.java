@@ -36,6 +36,12 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	/** T-046: the tab paints in software and reaches the screen as one image; see {@link SidePanelBuffer}. */
 	private final SidePanelBuffer buffer = new SidePanelBuffer();
 
+	/** For tests: the tab's cached image. */
+	SidePanelBuffer buffer()
+	{
+		return buffer;
+	}
+
 	/** The strain probe's timers for the buffer (T-046); null in tests. */
 	void setPerf(PerfProbe perf)
 	{
@@ -195,6 +201,20 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			{
 				reserveDigits((java.awt.Container) k);
 			}
+		}
+	}
+
+	/**
+	 * The text settings changed (T-053): the cached image goes, and the last snapshot is built again, once, in the new
+	 * fonts and line heights. Nothing is rebuilt before a snapshot has come.
+	 */
+	void restyle(FightTab last)
+	{
+		buffer.drop();
+		structure = null;
+		if (last != null)
+		{
+			apply(last);
 		}
 	}
 
@@ -532,7 +552,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final JPanel card = SidePanelParts.card(5);
 		final SidePanelLuckCurve curve = new SidePanelLuckCurve(tab.curve.z);
 		card.add(curve);
-		final JPanel legend = new JPanel(new GridLayout(1, 3, 0, 0));
+		final JPanel legend = new JPanel(new LegendCells());
 		legend.setOpaque(false);
 		legend.add(new SidePanelText(Text.small("bottom 25%", SidePanelStyle.COST), false));
 		final SidePanelText middle = new SidePanelText(Text.small("middle half", SidePanelStyle.SECONDARY), false);
@@ -550,6 +570,78 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			caption.set(t.curve.caption, SidePanelStyle.SECONDARY);
 			section.setHint(t.curve.headerValue);
 		});
+	}
+
+	/**
+	 * The curve legend's three words (T-053): three equal cells, as a {@code GridLayout(1, 3)} lays them, except that a
+	 * side word wider than its cell (larger text, the system font) keeps its whole width, and the middle one moves clear
+	 * of it. With the RuneScape fonts every word fits, so it lays out exactly as the grid did.
+	 */
+	static final class LegendCells implements java.awt.LayoutManager
+	{
+		public void addLayoutComponent(String name, java.awt.Component c)
+		{
+		}
+
+		public void removeLayoutComponent(java.awt.Component c)
+		{
+		}
+
+		public java.awt.Dimension preferredLayoutSize(java.awt.Container parent)
+		{
+			int w = 0;
+			int h = 0;
+			for (java.awt.Component c : parent.getComponents())
+			{
+				final java.awt.Dimension d = c.getPreferredSize();
+				w = Math.max(w, d.width);
+				h = Math.max(h, d.height);
+			}
+			final java.awt.Insets in = parent.getInsets();
+			return new java.awt.Dimension(w * 3 + in.left + in.right, h + in.top + in.bottom);
+		}
+
+		public java.awt.Dimension minimumLayoutSize(java.awt.Container parent)
+		{
+			return preferredLayoutSize(parent);
+		}
+
+		public void layoutContainer(java.awt.Container parent)
+		{
+			if (parent.getComponentCount() != 3)
+			{
+				return;
+			}
+			final java.awt.Insets in = parent.getInsets();
+			final int w = parent.getWidth() - in.left - in.right;
+			final int h = parent.getHeight() - in.top - in.bottom;
+			// As GridLayout: equal cells, the odd pixels split either side.
+			final int cell = w / 3;
+			final int x0 = in.left + (w - cell * 3) / 2;
+			final int end = x0 + cell * 3;
+			final java.awt.Component left = parent.getComponent(0);
+			final java.awt.Component middle = parent.getComponent(1);
+			final java.awt.Component right = parent.getComponent(2);
+			final int lw = Math.max(cell, left.getPreferredSize().width);
+			final int rw = Math.max(cell, right.getPreferredSize().width);
+			left.setBounds(x0, in.top, lw, h);
+			right.setBounds(end - rw, in.top, rw, h);
+			// The middle word's own width, centred in the middle cell, moved right of the left word or left of the right one.
+			final int mw = middle.getPreferredSize().width;
+			int mx = x0 + cell;
+			final int textX = mx + (cell - mw) / 2;
+			final int leftEnd = x0 + left.getPreferredSize().width + 4;
+			final int rightStart = end - right.getPreferredSize().width - 4;
+			if (textX < leftEnd)
+			{
+				mx += leftEnd - textX;
+			}
+			else if (textX + mw > rightStart)
+			{
+				mx -= textX + mw - rightStart;
+			}
+			middle.setBounds(mx, in.top, cell, h);
+		}
 	}
 
 	/** A text centred in its cell: the curve legend's middle word. */

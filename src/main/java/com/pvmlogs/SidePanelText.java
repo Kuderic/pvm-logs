@@ -144,6 +144,15 @@ final class SidePanelText extends JComponent
 		return fm.stringWidth(s) + extra;
 	}
 
+	/** The text settings changed (T-053): the role's new font, and the width it asks for measured again. */
+	void restyle()
+	{
+		setFont(type.font());
+		reserved = 0;
+		revalidate();
+		repaint();
+	}
+
 	/** The second run's font: its own type's, or the first's when it has none or the same. */
 	private Font suffixFont()
 	{
@@ -184,6 +193,7 @@ final class SidePanelText extends JComponent
 	@Override
 	protected void paintComponent(Graphics g)
 	{
+		SidePanelStyle.textHints((java.awt.Graphics2D) g);
 		final Font font = getFont();
 		g.setFont(font);
 		final FontMetrics fm = g.getFontMetrics(font);
