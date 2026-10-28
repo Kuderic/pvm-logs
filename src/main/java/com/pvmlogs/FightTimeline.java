@@ -288,6 +288,55 @@ final class FightTimeline
 		{
 			credit(attack, early[0], early[1]);
 		}
+		// Splats still waiting under an earlier tick were never this attack's, nor any later one's (T-059).
+		settleBefore(thrownTick, attack);
+	}
+
+	/**
+	 * At the fight's end: every splat still waiting goes to the last attack
+	 * thrown on or before its tick (T-059). What has none stays, for
+	 * {@link #unmatched()} to report.
+	 */
+	void settle()
+	{
+		settleBefore(Integer.MAX_VALUE, null);
+	}
+
+	// Each splat waiting under a tick before this one to the last attack thrown on or before it, never a later one.
+	private void settleBefore(int tick, Attack except)
+	{
+		if (waiting.isEmpty())
+		{
+			return;
+		}
+		for (java.util.Iterator<Map.Entry<Integer, int[]>> it = waiting.entrySet().iterator(); it.hasNext(); )
+		{
+			final Map.Entry<Integer, int[]> e = it.next();
+			if (e.getKey() == Integer.MIN_VALUE || e.getKey() >= tick)
+			{
+				continue;
+			}
+			final Attack before = lastThrownBy(e.getKey(), except);
+			if (before != null)
+			{
+				it.remove();
+				credit(before, e.getValue()[0], e.getValue()[1]);
+			}
+		}
+	}
+
+	// The last attack thrown on or before this tick, the one just booked aside.
+	private Attack lastThrownBy(int tick, Attack except)
+	{
+		for (int i = attacks.size() - 1; i >= 0; i--)
+		{
+			final Attack a = attacks.get(i);
+			if (a != except && a.thrownTick != Integer.MIN_VALUE && a.thrownTick <= tick)
+			{
+				return a;
+			}
+		}
+		return null;
 	}
 
 	/** The attack just booked was the special: marks it and its tick. */
@@ -386,6 +435,29 @@ final class FightTimeline
 	 * attack's booking, or with no attack to give them to. With it, the attacks'
 	 * damage adds up to {@link #totalDamage()}.
 	 */
+	/**
+	 * The splats still waiting, as {thrown tick, damage} ({@code Integer.MIN_VALUE}
+	 * for none): logged at the fight's end as {@code TIMELINE UNMATCHED} (T-059),
+	 * so damage the Damage card can only show as "Not matched to an attack" says
+	 * where it came from.
+	 */
+	java.util.List<int[]> unmatched()
+	{
+		final java.util.List<int[]> out = new ArrayList<>();
+		for (Map.Entry<Integer, int[]> e : new java.util.TreeMap<>(waiting).entrySet())
+		{
+			if (e.getValue()[0] != 0)
+			{
+				out.add(new int[]{e.getKey(), e.getValue()[0]});
+			}
+		}
+		if (pending && pendingAmount != 0)
+		{
+			out.add(new int[]{Integer.MIN_VALUE, pendingAmount});
+		}
+		return out;
+	}
+
 	int unattributedDamage()
 	{
 		int total = pending ? pendingAmount : 0;
