@@ -26,6 +26,13 @@ class SessionTotals
 	private int hitsTaken;
 	private int biggestHitTaken;
 	private int damageTakenUnprotected;
+	// T-041: the trip's scored fights that ended at a boss with attack rules, and what Fight's avoidable figures add up
+	// to over them. Added as each fight ends, never while it runs. The getters read -1 while there are none.
+	private int ruledFights;
+	private int damageTakenAvoidable;
+	private double avoidableEatingTicks;
+	private final java.util.Map<String, Integer> damageTakenByAttack = new java.util.LinkedHashMap<>();
+	private int attackRulesVersion;
 	private int attempts;
 	private int targets;
 	private int hits;
@@ -85,6 +92,11 @@ class SessionTotals
 		hitsTaken = 0;
 		biggestHitTaken = 0;
 		damageTakenUnprotected = 0;
+		ruledFights = 0;
+		damageTakenAvoidable = 0;
+		avoidableEatingTicks = 0;
+		damageTakenByAttack.clear();
+		attackRulesVersion = 0;
 		attempts = 0;
 		targets = 0;
 		hits = 0;
@@ -118,7 +130,35 @@ class SessionTotals
 		{
 			kills++;
 		}
+		// The avoidable figures exist only once the fight has ended (T-041); a scored fight's go into the trip, like its
+		// damage taken.
+		if (fight != null && fight.isScored() && fight.hasAvoidable())
+		{
+			ruledFights++;
+			damageTakenAvoidable += fight.getDamageTakenAvoidable();
+			avoidableEatingTicks += fight.getAvoidableEatingTicks();
+			fight.getDamageTakenByAttack().forEach((name, hp) -> damageTakenByAttack.merge(name, hp, Integer::sum));
+			attackRulesVersion = Math.max(attackRulesVersion, fight.getAttackRulesVersion());
+		}
 		noteActivity(now);
+	}
+
+	/** The avoidable part of the damage taken over the trip's ended fights with attack rules (T-041), or -1 with none. */
+	int getDamageTakenAvoidable()
+	{
+		return ruledFights > 0 ? damageTakenAvoidable : -1;
+	}
+
+	/** The eating ticks the avoidable hits cost over the same fights (T-041), or -1 with none. */
+	double getAvoidableEatingTicks()
+	{
+		return ruledFights > 0 ? Math.round(avoidableEatingTicks * 10) / 10.0 : -1;
+	}
+
+	/** HP taken by attack over the same fights (T-041). */
+	java.util.Map<String, Integer> getDamageTakenByAttack()
+	{
+		return java.util.Collections.unmodifiableMap(damageTakenByAttack);
 	}
 
 	/**

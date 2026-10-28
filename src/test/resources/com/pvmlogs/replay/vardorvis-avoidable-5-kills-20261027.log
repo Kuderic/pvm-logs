@@ -1,0 +1,406 @@
+# 160306 kill 4
+[1984] fight START Vardorvis (npc 12223, index 34203, maxHp 700) group=null room=Vardorvis raid=null
+[1988] TAKEN 0 type 12 hit (zero), protect melee, hp 90, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-1
+[1993] TAKEN 3 type 16 hit (damage), protect melee, hp 90, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[1993] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 678 left (bar)
+[1993] EAT Surge potion(4) (delay 0) on tick 1992, clicked 1992: a potion, no delay
+[1998] TAKEN 0 type 12 hit (zero), protect melee, hp 87, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2003] TAKEN 0 type 12 hit (zero), protect melee, hp 87, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2008] TAKEN 1 type 16 hit (damage), protect melee, hp 90, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2013] TAKEN 7 type 16 hit (damage), protect melee, hp 89, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2013] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 566 left (bar)
+[2016] TAKEN 6 type 16 hit (damage), protect none, hp 82, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-4, proj 2521 from no source at me t-3 lands t-1
+[2019] TAKEN 30 type 16 hit (damage), protect none, hp 76, from npc 12223 #34203 (target), npc 8738 #59636; target proj 2521 from no source at me t-6 lands t-4, anim 10341 t-2, anim 10340 t-1
+[2019] splat 15 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 530 left (bar)
+[2020] TAKEN 23 type 16 hit (damage), protect none, hp 46, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-3, anim 10340 t-2
+[2021] splat 11 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 544 left (bar)
+[2024] TAKEN 5 type 16 hit (damage), protect melee, hp 23, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10342 t-1
+[2024] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 542 left (bar)
+[2025] EAT Shark (delay 3) on tick 2024, clicked 2024: attack pending, due 2025 -> 2028
+[2026] tick LOST (eating 1/3): overdue since 2025 + lag 1
+[2027] tick LOST (eating 2/3): overdue since 2025 + lag 1
+[2028] tick LOST (eating 3/3): overdue since 2025 + lag 1
+[2029] TAKEN 0 type 12 hit (zero), protect melee, hp 46, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[2034] TAKEN 7 type 16 hit (damage), protect melee, hp 46, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10344 t-6, anim 10340 t-1
+[2034] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 509 left (bar)
+[2036] EAT Shark (delay 3) on tick 2035, clicked 2034: attack pending, due 2036 -> 2039
+[2037] tick LOST (eating 1/3): overdue since 2036 + lag 1
+[2038] tick LOST (eating 2/3): overdue since 2036 + lag 1
+[2039] TAKEN 5 type 16 hit (damage), protect melee, hp 59, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2039] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 512 left (bar)
+[2039] tick LOST (eating 3/3): overdue since 2036 + lag 1
+[2041] EAT Shark (delay 3) on tick 2040, clicked 2037: attack pending, due 2043 -> 2046
+[2044] TAKEN 1 type 16 hit (damage), protect melee, hp 74, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2044] tick LOST (eating 1/3): overdue since 2043 + lag 1
+[2045] tick LOST (eating 2/3): overdue since 2043 + lag 1
+[2046] tick LOST (eating 3/3): overdue since 2043 + lag 1
+[2050] TAKEN 6 type 16 hit (damage), protect melee, hp 73, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-2, anim 10340 t-1
+[2050] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 472 left (bar)
+[2055] TAKEN 5 type 16 hit (damage), protect melee, hp 67, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2055] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 438 left (bar)
+[2060] TAKEN 3 type 16 hit (damage), protect melee, hp 73, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2060] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 357 left (bar)
+[2065] TAKEN 0 type 12 hit (zero), protect melee, hp 70, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2070] TAKEN 1 type 16 hit (damage), protect melee, hp 70, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2073] TAKEN 13 type 16 hit (damage), protect melee, hp 69, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-4, proj 2521 from no source at me t-3 lands t-1
+[2075] TAKEN 7 type 16 hit (damage), protect melee, hp 56, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2075] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 293 left (bar)
+[2078] TAKEN 3 type 67 dot (bleed), protect melee, hp 49, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-4
+[2079] TAKEN 3 type 67 dot (bleed), protect melee, hp 46, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-5
+[2082] TAKEN 7 type 16 hit (damage), protect melee, hp 43, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1
+[2082] TAKEN 3 type 67 dot (bleed), protect melee, hp 43, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1
+[2082] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 261 left (bar)
+[2083] TAKEN 26 type 16 hit (damage), protect melee, hp 33, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-4, anim 10341 t-3, anim 10340 t-2
+[2084] TAKEN 3 type 67 dot (bleed), protect melee, hp 7, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-5, anim 10341 t-4, anim 10340 t-3
+[2084] splat 13 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 234 left (bar)
+[2085] EAT Shark (delay 3) on tick 2084, clicked 2084: attack pending, due 2086 -> 2089
+[2087] TAKEN 0 type 12 hit (zero), protect melee, hp 25, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2087] tick LOST (eating 1/6): overdue since 2086 + lag 1
+[2088] EAT Shark (delay 3) on tick 2087, clicked 2087: attack pending, due 2089 -> 2092
+[2088] tick LOST (eating 2/6): overdue since 2086 + lag 1
+[2089] TAKEN 3 type 67 dot (bleed), protect missiles, hp 45, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-3, proj 2521 from no source at me t-2 lands t+0
+[2089] tick LOST (eating 3/6): overdue since 2086 + lag 1
+[2090] tick LOST (eating 4/9): overdue since 2086 + lag 1
+[2091] EAT Shark (delay 3) on tick 2090, clicked 2089: attack pending, due 2092 -> 2095
+[2091] tick LOST (eating 5/9): overdue since 2086 + lag 1
+[2092] TAKEN 8 type 16 hit (damage), protect melee, hp 62, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2092] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 244 left (bar)
+[2092] tick LOST (eating 6/9): overdue since 2086 + lag 1
+[2093] tick LOST (eating 7/9): overdue since 2086 + lag 1
+[2094] tick LOST (eating 8/9): overdue since 2086 + lag 1
+[2095] tick LOST (eating 9/9): overdue since 2086 + lag 1
+[2097] TAKEN 1 type 16 hit (damage), protect melee, hp 54, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2102] TAKEN 0 type 12 hit (zero), protect melee, hp 53, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2102] EAT Prayer potion(4) (delay 0) on tick 2101, clicked 2101: a potion, no delay
+[2107] TAKEN 4 type 16 hit (damage), protect melee, hp 57, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2107] TAKEN 13 type 16 hit (damage), protect melee, hp 57, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2107] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 188 left (bar)
+[2113] TAKEN 3 type 67 dot (bleed), protect melee, hp 40, from npc 12223 #34203 (target), npc 8738 #59636; target proj 2521 from no source at me t-6 lands t-4, anim 10341 t-2, anim 10341 t-1
+[2114] TAKEN 0 type 12 hit (zero), protect melee, hp 37, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1
+[2115] TAKEN 3 type 67 dot (bleed), protect melee, hp 37, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-4, anim 10341 t-3, anim 10340 t-2
+[2116] TAKEN 3 type 67 dot (bleed), protect melee, hp 34, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-5, anim 10341 t-4, anim 10340 t-3
+[2118] TAKEN 3 type 67 dot (bleed), protect melee, hp 31, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-6, anim 10340 t-5
+[2119] TAKEN 0 type 12 hit (zero), protect melee, hp 48, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2119] EAT Shark (delay 3) on tick 2118, clicked 2118: attack pending, due 2121 -> 2124
+[2122] tick LOST (eating 1/3): overdue since 2121 + lag 1
+[2123] TAKEN 3 type 67 dot (bleed), protect melee, hp 48, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-5
+[2123] tick LOST (eating 2/3): overdue since 2121 + lag 1
+[2124] TAKEN 7 type 16 hit (damage), protect melee, hp 45, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2124] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 137 left (bar)
+[2124] tick LOST (eating 3/3): overdue since 2121 + lag 1
+[2129] TAKEN 1 type 16 hit (damage), protect melee, hp 38, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2134] TAKEN 2 type 16 hit (damage), protect melee, hp 37, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2134] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 120 left (bar)
+[2139] TAKEN 7 type 16 hit (damage), protect melee, hp 35, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2139] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 118 left (bar)
+[2143] EAT Shark (delay 3) on tick 2142, clicked 2142: attack pending, due 2145 -> 2148
+[2146] TAKEN 3 type 16 hit (damage), protect melee, hp 48, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2146] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 116 left (bar)
+[2146] tick LOST (eating 1/3): overdue since 2145 + lag 1
+[2147] tick LOST (eating 2/3): overdue since 2145 + lag 1
+[2148] tick LOST (eating 3/3): overdue since 2145 + lag 1
+[2151] TAKEN 6 type 16 hit (damage), protect melee, hp 45, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2151] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 101 left (bar)
+[2156] TAKEN 10 type 16 hit (damage), protect melee, hp 39, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2156] splat 5 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 100 left (bar)
+[2161] TAKEN 0 type 12 hit (zero), protect melee, hp 29, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2162] EAT Shark (delay 3) on tick 2161, clicked 2161: attack pending, due 2164 -> 2167
+[2164] EAT Prayer potion(3) (delay 0) on tick 2163, clicked 2163: a potion, no delay
+[2165] tick LOST (eating 1/3): overdue since 2164 + lag 1
+[2166] TAKEN 8 type 16 hit (damage), protect melee, hp 49, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2166] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 56 left (bar)
+[2166] tick LOST (eating 2/3): overdue since 2164 + lag 1
+[2167] tick LOST (eating 3/3): overdue since 2164 + lag 1
+[2171] TAKEN 1 type 16 hit (damage), protect melee, hp 41, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2179] TAKEN 0 type 12 hit (zero), protect melee, hp 49, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10341 t-4, anim 10341 t-2, anim 10340 t-1
+[2184] TAKEN 0 type 12 hit (zero), protect melee, hp 49, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1
+[2189] TAKEN 0 type 12 hit (zero), protect melee, hp 50, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2194] TAKEN 6 type 16 hit (damage), protect melee, hp 50, from npc 12223 #34203 (target), npc 8738 #59636; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2194] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 34203): HEAL, target has 18 left (bar)
+[2200] fight END Vardorvis (npc 12223) target died: attempts=45 made=45 damage=703 thrallDamage=78 hits=27 ticksLost=32 combatTicks=209 expDamage=697.0
+# 160306 kill 8
+[3513] fight START Vardorvis (npc 12223, index 62488, maxHp 700) group=null room=Vardorvis raid=null
+[3516] TAKEN 3 type 16 hit (damage), protect melee, hp 99, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-1
+[3516] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 656 left (bar)
+[3521] TAKEN 0 type 12 hit (zero), protect melee, hp 96, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3522] EAT Surge potion(4) (delay 0) on tick 3521, clicked 3520: a potion, no delay
+[3526] TAKEN 0 type 12 hit (zero), protect melee, hp 96, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3531] TAKEN 0 type 12 hit (zero), protect melee, hp 96, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3536] TAKEN 0 type 12 hit (zero), protect melee, hp 96, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3541] TAKEN 4 type 16 hit (damage), protect melee, hp 96, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[3541] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 562 left (bar)
+[3544] TAKEN 6 type 16 hit (damage), protect none, hp 92, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-4, proj 2521 from no source at me t-3 lands t-1
+[3544] TAKEN 29 type 16 hit (damage), protect none, hp 92, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-4, proj 2521 from no source at me t-3 lands t-1
+[3546] TAKEN 3 type 67 dot (bleed), protect none, hp 57, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10341 t-1
+[3547] TAKEN 3 type 67 dot (bleed), protect none, hp 54, from npc 12223 #62488 (target), npc 8738 #54652; target proj 2521 from no source at me t-6 lands t-4, anim 10341 t-2
+[3548] TAKEN 1 type 16 hit (damage), protect melee, hp 51, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10341 t-3, anim 10340 t-1
+[3548] TAKEN 3 type 67 dot (bleed), protect melee, hp 51, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10341 t-3, anim 10340 t-1
+[3549] TAKEN 3 type 67 dot (bleed), protect melee, hp 47, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10341 t-4, anim 10340 t-2
+[3550] TAKEN 3 type 67 dot (bleed), protect melee, hp 44, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10341 t-5, anim 10340 t-3
+[3552] EAT Shark (delay 3) on tick 3551, clicked 3551: weapon ready (due 3544), no delay
+[3553] TAKEN 0 type 12 hit (zero), protect melee, hp 61, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3555] TAKEN 3 type 67 dot (bleed), protect melee, hp 61, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-3
+[3556] EAT Shark (delay 3) on tick 3555, clicked 3555: attack pending, due 3557 -> 3560
+[3558] TAKEN 3 type 16 hit (damage), protect melee, hp 78, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3558] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 563 left (bar)
+[3558] tick LOST (eating 1/3): overdue since 3557 + lag 1
+[3559] tick LOST (eating 2/3): overdue since 3557 + lag 1
+[3560] TAKEN 3 type 67 dot (bleed), protect melee, hp 75, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-3
+[3560] tick LOST (eating 3/3): overdue since 3557 + lag 1
+[3563] TAKEN 1 type 16 hit (damage), protect melee, hp 72, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[3568] TAKEN 6 type 16 hit (damage), protect melee, hp 71, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[3568] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 542 left (bar)
+[3573] TAKEN 0 type 12 hit (zero), protect melee, hp 78, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3578] TAKEN 0 type 12 hit (zero), protect melee, hp 78, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10342 t-1
+[3583] TAKEN 6 type 16 hit (damage), protect melee, hp 79, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[3583] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 481 left (bar)
+[3590] TAKEN 1 type 16 hit (damage), protect melee, hp 73, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[3595] TAKEN 8 type 16 hit (damage), protect melee, hp 72, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[3595] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 428 left (bar)
+[3600] TAKEN 4 type 16 hit (damage), protect melee, hp 64, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3600] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 389 left (bar)
+[3605] TAKEN 8 type 16 hit (damage), protect melee, hp 60, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3605] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 385 left (bar)
+[3610] TAKEN 1 type 16 hit (damage), protect melee, hp 52, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3615] TAKEN 0 type 12 hit (zero), protect melee, hp 51, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10342 t-1
+[3620] TAKEN 1 type 16 hit (damage), protect melee, hp 51, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[3627] TAKEN 3 type 16 hit (damage), protect melee, hp 50, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[3627] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 221 left (bar)
+[3632] TAKEN 2 type 16 hit (damage), protect melee, hp 59, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[3632] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 179 left (bar)
+[3637] TAKEN 4 type 16 hit (damage), protect melee, hp 57, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3637] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 172 left (bar)
+[3642] TAKEN 0 type 12 hit (zero), protect melee, hp 53, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[3647] TAKEN 9 type 16 hit (damage), protect melee, hp 53, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[3647] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 125 left (bar)
+[3652] TAKEN 7 type 16 hit (damage), protect melee, hp 44, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, anim 10340 t-1
+[3652] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 100 left (bar)
+[3660] TAKEN 1 type 16 hit (damage), protect melee, hp 41, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10341 t-4, anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[3665] TAKEN 8 type 16 hit (damage), protect melee, hp 40, from npc 12223 #62488 (target), npc 8738 #54652; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[3665] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 62488): HEAL, target has 51 left (bar)
+[3674] fight END Vardorvis (npc 12223) target died: attempts=35 made=35 damage=667 thrallDamage=68 hits=27 ticksLost=19 combatTicks=156 expDamage=554.6
+# 170329 kill 4
+[1069] fight START Vardorvis (npc 12223, index 65238, maxHp 700) group=null room=Vardorvis raid=null
+[1075] TAKEN 4 type 16 hit (damage), protect melee, hp 94, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-1
+[1075] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 666 left (bar)
+[1075] EAT Surge potion(3) (delay 0) on tick 1074, clicked 1073: a potion, no delay
+[1080] TAKEN 4 type 16 hit (damage), protect melee, hp 90, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1080] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 668 left (bar)
+[1085] TAKEN 0 type 12 hit (zero), protect melee, hp 86, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1090] TAKEN 8 type 16 hit (damage), protect melee, hp 87, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1090] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 594 left (bar)
+[1095] TAKEN 8 type 16 hit (damage), protect melee, hp 79, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1095] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 598 left (bar)
+[1100] TAKEN 5 type 16 hit (damage), protect melee, hp 71, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1100] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 599 left (bar)
+[1106] TAKEN 8 type 16 hit (damage), protect melee, hp 66, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10341 t-2, anim 10340 t-1
+[1106] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 582 left (bar)
+[1111] TAKEN 0 type 12 hit (zero), protect melee, hp 58, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1116] TAKEN 1 type 16 hit (damage), protect melee, hp 58, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1116] TAKEN 14 type 16 hit (damage), protect melee, hp 58, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1119] EAT Shark (delay 3) on tick 1118, clicked 1118: attack pending, due 1120 -> 1123
+[1121] TAKEN 0 type 12 hit (zero), protect melee, hp 63, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1121] TAKEN 3 type 67 dot (bleed), protect melee, hp 63, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1121] tick LOST (eating 1/3): overdue since 1120 + lag 1
+[1122] TAKEN 3 type 67 dot (bleed), protect melee, hp 60, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-2, proj 2521 from no source at me t-1 lands t+1
+[1122] tick LOST (eating 2/3): overdue since 1120 + lag 1
+[1123] tick LOST (eating 3/3): overdue since 1120 + lag 1
+[1126] TAKEN 2 type 16 hit (damage), protect melee, hp 57, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1126] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 518 left (bar)
+[1127] TAKEN 3 type 67 dot (bleed), protect melee, hp 55, from npc 12223 #65238 (target), npc 8738 #62843; target proj 2521 from no source at me t-6 lands t-4, anim 10340 t-2
+[1129] TAKEN 12 type 16 hit (damage), protect melee, hp 52, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-4
+[1131] TAKEN 3 type 67 dot (bleed), protect melee, hp 40, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10341 t-1
+[1132] TAKEN 3 type 67 dot (bleed), protect melee, hp 37, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10341 t-2
+[1133] TAKEN 5 type 16 hit (damage), protect melee, hp 34, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10341 t-3, anim 10340 t-1
+[1133] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 469 left (bar)
+[1136] EAT Shark (delay 3) on tick 1135, clicked 1134: attack pending, due 1137 -> 1140
+[1138] TAKEN 4 type 16 hit (damage), protect melee, hp 49, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1138] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 440 left (bar)
+[1138] tick LOST (eating 1/6): overdue since 1137 + lag 1
+[1139] EAT Shark (delay 3) on tick 1138, clicked 1138: attack pending, due 1140 -> 1143
+[1139] tick LOST (eating 2/6): overdue since 1137 + lag 1
+[1140] tick LOST (eating 3/6): overdue since 1137 + lag 1
+[1141] tick LOST (eating 4/6): overdue since 1137 + lag 1
+[1142] tick LOST (eating 5/6): overdue since 1137 + lag 1
+[1143] TAKEN 0 type 12 hit (zero), protect melee, hp 65, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1143] tick LOST (eating 6/6): overdue since 1137 + lag 1
+[1148] TAKEN 0 type 12 hit (zero), protect melee, hp 71, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1153] TAKEN 4 type 16 hit (damage), protect melee, hp 71, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1153] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 376 left (bar)
+[1158] TAKEN 3 type 16 hit (damage), protect melee, hp 77, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1158] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 343 left (bar)
+[1163] TAKEN 8 type 16 hit (damage), protect melee, hp 74, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10342 t-1
+[1163] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 309 left (bar)
+[1168] TAKEN 8 type 16 hit (damage), protect melee, hp 75, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[1168] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 279 left (bar)
+[1175] TAKEN 0 type 12 hit (zero), protect melee, hp 67, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10341 t-3, anim 10341 t-2, proj 2521 from no source at me t+0 lands t+2
+[1180] TAKEN 6 type 16 hit (damage), protect melee, hp 92, from npc 12223 #65238 (target), npc 8738 #62843; target proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1180] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 216 left (bar)
+[1185] TAKEN 5 type 16 hit (damage), protect melee, hp 86, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1
+[1185] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 173 left (bar)
+[1190] TAKEN 0 type 12 hit (zero), protect melee, hp 84, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1194] TAKEN 14 type 16 hit (damage), protect melee, hp 84, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-5, proj 2521 from no source at me t-4 lands t-2
+[1195] TAKEN 0 type 12 hit (zero), protect melee, hp 70, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1196] TAKEN 3 type 67 dot (bleed), protect melee, hp 70, from npc 12223 #65238 (target), npc 8738 #62843; target proj 2521 from no source at me t-6 lands t-4, anim 10340 t-2
+[1198] TAKEN 3 type 67 dot (bleed), protect melee, hp 67, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-4
+[1200] TAKEN 0 type 12 hit (zero), protect melee, hp 64, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10342 t-1
+[1200] TAKEN 3 type 67 dot (bleed), protect melee, hp 64, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10342 t-1
+[1205] TAKEN 4 type 16 hit (damage), protect melee, hp 61, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[1205] TAKEN 3 type 67 dot (bleed), protect melee, hp 61, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[1205] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 144 left (bar)
+[1210] TAKEN 3 type 67 dot (bleed), protect melee, hp 54, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10344 t-6, anim 10341 t-1
+[1212] TAKEN 3 type 16 hit (damage), protect melee, hp 51, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1212] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 143 left (bar)
+[1217] TAKEN 2 type 16 hit (damage), protect melee, hp 48, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1217] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 144 left (bar)
+[1222] TAKEN 0 type 12 hit (zero), protect melee, hp 46, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1227] TAKEN 0 type 12 hit (zero), protect melee, hp 46, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1232] TAKEN 2 type 16 hit (damage), protect melee, hp 46, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1232] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 88 left (bar)
+[1233] EAT Prayer potion(4) (delay 0) on tick 1232, clicked 1232: a potion, no delay
+[1237] TAKEN 8 type 16 hit (damage), protect melee, hp 44, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1237] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65238): HEAL, target has 51 left (bar)
+[1245] TAKEN 0 type 12 hit (zero), protect melee, hp 36, from npc 12223 #65238 (target), npc 8738 #62843; target anim 10341 t-4, anim 10341 t-3, anim 10341 t-2, anim 10340 t-1
+[1254] fight END Vardorvis (npc 12223) target died: attempts=42 made=42 damage=690 thrallDamage=58 hits=25 ticksLost=11 combatTicks=176 expDamage=664.9
+# 170329 kill 6
+[1646] fight START Vardorvis (npc 12223, index 46608, maxHp 700) group=null room=Vardorvis raid=null
+[1650] TAKEN 0 type 12 hit (zero), protect melee, hp 97, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-1
+[1650] EAT Surge potion(3) (delay 0) on tick 1649, clicked 1649: a potion, no delay
+[1655] TAKEN 7 type 16 hit (damage), protect melee, hp 97, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1655] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 621 left (bar)
+[1660] TAKEN 7 type 16 hit (damage), protect melee, hp 90, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1660] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 581 left (bar)
+[1665] TAKEN 0 type 12 hit (zero), protect melee, hp 91, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1670] TAKEN 6 type 16 hit (damage), protect melee, hp 91, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1670] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 539 left (bar)
+[1675] TAKEN 5 type 16 hit (damage), protect melee, hp 86, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1675] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 538 left (bar)
+[1681] TAKEN 0 type 12 hit (zero), protect melee, hp 90, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10341 t-2, anim 10340 t-1
+[1686] TAKEN 3 type 16 hit (damage), protect melee, hp 91, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10342 t-1
+[1686] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 490 left (bar)
+[1691] TAKEN 8 type 16 hit (damage), protect melee, hp 88, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[1691] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 488 left (bar)
+[1696] TAKEN 3 type 16 hit (damage), protect melee, hp 80, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10344 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1696] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 473 left (bar)
+[1701] TAKEN 0 type 12 hit (zero), protect melee, hp 77, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1706] TAKEN 7 type 16 hit (damage), protect melee, hp 77, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1706] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 452 left (bar)
+[1713] TAKEN 3 type 16 hit (damage), protect melee, hp 70, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1
+[1713] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 449 left (bar)
+[1718] TAKEN 0 type 12 hit (zero), protect melee, hp 67, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1723] TAKEN 7 type 16 hit (damage), protect melee, hp 67, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1723] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 407 left (bar)
+[1728] TAKEN 4 type 16 hit (damage), protect melee, hp 60, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1728] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 398 left (bar)
+[1733] TAKEN 6 type 16 hit (damage), protect melee, hp 56, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10342 t-1
+[1733] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 397 left (bar)
+[1738] TAKEN 4 type 16 hit (damage), protect melee, hp 50, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[1738] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 400 left (bar)
+[1739] EAT Shark (delay 3) on tick 1738, clicked 1738: weapon ready (due 1734), no delay
+[1742] EAT Prayer potion(3) (delay 0) on tick 1741, clicked 1740: a potion, no delay
+[1745] TAKEN 2 type 16 hit (damage), protect melee, hp 66, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1745] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 395 left (bar)
+[1750] TAKEN 7 type 16 hit (damage), protect melee, hp 64, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1750] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 360 left (bar)
+[1755] TAKEN 1 type 16 hit (damage), protect melee, hp 57, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1760] TAKEN 1 type 16 hit (damage), protect melee, hp 56, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1765] TAKEN 8 type 16 hit (damage), protect melee, hp 55, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1765] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 275 left (bar)
+[1770] TAKEN 6 type 16 hit (damage), protect melee, hp 47, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1770] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 274 left (bar)
+[1775] TAKEN 0 type 12 hit (zero), protect melee, hp 42, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1782] TAKEN 2 type 16 hit (damage), protect melee, hp 42, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1782] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 238 left (bar)
+[1787] TAKEN 1 type 16 hit (damage), protect melee, hp 40, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1792] TAKEN 0 type 12 hit (zero), protect melee, hp 39, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1797] TAKEN 9 type 16 hit (damage), protect melee, hp 39, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10342 t-1
+[1797] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 155 left (bar)
+[1802] TAKEN 1 type 16 hit (damage), protect melee, hp 30, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[1807] TAKEN 9 type 16 hit (damage), protect melee, hp 29, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10344 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1807] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 153 left (bar)
+[1814] TAKEN 8 type 16 hit (damage), protect melee, hp 20, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1
+[1814] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 75 left (bar)
+[1819] TAKEN 7 type 16 hit (damage), protect melee, hp 12, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[1819] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 77 left (bar)
+[1824] TAKEN 5 type 16 hit (damage), protect melee, hp 25, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[1824] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 35 left (bar)
+[1824] EAT Shark (delay 3) on tick 1823, clicked 1823: attack pending, due 1823 -> 1826
+[1824] tick LOST (eating 1/3): overdue since 1823 + lag 1
+[1825] tick LOST (eating 2/3): overdue since 1823 + lag 1
+[1826] tick LOST (eating 3/3): overdue since 1823 + lag 1
+[1829] TAKEN 3 type 16 hit (damage), protect melee, hp 20, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1829] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 36 left (bar)
+[1834] TAKEN 1 type 16 hit (damage), protect melee, hp 17, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1839] TAKEN 3 type 16 hit (damage), protect melee, hp 16, from npc 12223 #46608 (target), npc 8738 #44722; target anim 10340 t-6, anim 10340 t-1
+[1839] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 46608): HEAL, target has 10 left (bar)
+[1846] fight END Vardorvis (npc 12223) target died: attempts=46 made=46 damage=656 thrallDamage=76 hits=32 ticksLost=12 combatTicks=193 expDamage=716.5
+# 170329 kill 9
+[2445] fight START Vardorvis (npc 12223, index 65377, maxHp 700) group=null room=Vardorvis raid=null
+[2448] EAT Surge potion(4) (delay 0) on tick 2447, clicked 2447: a potion, no delay
+[2449] TAKEN 0 type 12 hit (zero), protect melee, hp 99, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-1
+[2454] TAKEN 0 type 12 hit (zero), protect melee, hp 99, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2459] TAKEN 0 type 12 hit (zero), protect melee, hp 99, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2464] TAKEN 0 type 12 hit (zero), protect melee, hp 99, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2469] TAKEN 0 type 12 hit (zero), protect melee, hp 99, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2474] TAKEN 20 type 16 hit (damage), protect melee, hp 99, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2474] splat 10 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 586 left (bar)
+[2480] TAKEN 0 type 12 hit (zero), protect melee, hp 79, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2485] TAKEN 0 type 12 hit (zero), protect melee, hp 79, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2490] TAKEN 5 type 16 hit (damage), protect melee, hp 79, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2490] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 535 left (bar)
+[2495] TAKEN 0 type 12 hit (zero), protect melee, hp 74, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2500] TAKEN 2 type 16 hit (damage), protect melee, hp 74, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2500] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 508 left (bar)
+[2505] TAKEN 5 type 16 hit (damage), protect melee, hp 72, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2505] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 483 left (bar)
+[2510] TAKEN 0 type 12 hit (zero), protect melee, hp 67, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10342 t-1
+[2515] TAKEN 8 type 16 hit (damage), protect melee, hp 67, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[2515] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 414 left (bar)
+[2522] TAKEN 7 type 16 hit (damage), protect melee, hp 59, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10341 t-3, anim 10340 t-1
+[2522] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 395 left (bar)
+[2527] TAKEN 5 type 16 hit (damage), protect melee, hp 52, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2527] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 389 left (bar)
+[2532] TAKEN 0 type 12 hit (zero), protect melee, hp 47, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2537] TAKEN 0 type 12 hit (zero), protect melee, hp 47, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2538] EAT Shark (delay 3) on tick 2537, clicked 2536: attack pending, due 2538 -> 2541
+[2539] tick LOST (eating 1/3): overdue since 2538 + lag 1
+[2540] tick LOST (eating 2/3): overdue since 2538 + lag 1
+[2541] tick LOST (eating 3/3): overdue since 2538 + lag 1
+[2542] TAKEN 0 type 12 hit (zero), protect melee, hp 67, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2547] TAKEN 8 type 16 hit (damage), protect melee, hp 67, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10342 t-1
+[2547] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 378 left (bar)
+[2552] TAKEN 6 type 16 hit (damage), protect melee, hp 59, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[2552] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 382 left (bar)
+[2559] TAKEN 0 type 12 hit (zero), protect melee, hp 53, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10341 t-3, anim 10341 t-2, proj 2521 from no source at me t+0 lands t+2
+[2564] TAKEN 0 type 12 hit (zero), protect melee, hp 53, from npc 8738 #63368, npc 12223 #65377 (target); target proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2569] TAKEN 0 type 12 hit (zero), protect melee, hp 53, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2574] TAKEN 0 type 12 hit (zero), protect melee, hp 54, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2579] TAKEN 0 type 12 hit (zero), protect melee, hp 54, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2584] TAKEN 0 type 12 hit (zero), protect melee, hp 54, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2589] TAKEN 0 type 12 hit (zero), protect melee, hp 54, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10342 t-1
+[2594] TAKEN 0 type 12 hit (zero), protect melee, hp 54, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10342 t-6, anim 10343 t-4, anim 10344 t-1
+[2596] EAT Shark (delay 3) on tick 2595, clicked 2595: weapon ready (due 2593), no delay
+[2599] EAT Prayer potion(4) (delay 0) on tick 2598, clicked 2597: a potion, no delay
+[2601] TAKEN 7 type 16 hit (damage), protect melee, hp 74, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2601] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 219 left (bar)
+[2606] TAKEN 8 type 16 hit (damage), protect melee, hp 67, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2606] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 212 left (bar)
+[2611] TAKEN 7 type 16 hit (damage), protect melee, hp 59, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1
+[2611] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 184 left (bar)
+[2616] TAKEN 1 type 16 hit (damage), protect melee, hp 52, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2621] TAKEN 1 type 16 hit (damage), protect melee, hp 51, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2626] TAKEN 4 type 16 hit (damage), protect melee, hp 50, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10342 t-1
+[2626] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 123 left (bar)
+[2631] TAKEN 7 type 16 hit (damage), protect melee, hp 46, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10342 t-6, anim 10343 t-4
+[2631] splat 3 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 125 left (bar)
+[2639] TAKEN 0 type 12 hit (zero), protect melee, hp 39, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10341 t-4, anim 10341 t-3, anim 10341 t-2, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2644] TAKEN 5 type 16 hit (damage), protect melee, hp 39, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2644] splat 2 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 62 left (bar)
+[2649] TAKEN 8 type 16 hit (damage), protect melee, hp 34, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10340 t-1, proj 2521 from no source at me t+0 lands t+2
+[2649] splat 4 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 49 left (bar)
+[2654] TAKEN 1 type 16 hit (damage), protect melee, hp 26, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, proj 2521 from no source at me t-5 lands t-3, anim 10340 t-1
+[2659] TAKEN 2 type 16 hit (damage), protect melee, hp 25, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10340 t-6, anim 10342 t-1
+[2659] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 17 left (bar)
+[2664] TAKEN 3 type 16 hit (damage), protect melee, hp 23, from npc 8738 #63368, npc 12223 #65377 (target); target anim 10342 t-6, anim 10343 t-4
+[2664] splat 1 heal (type 6, no owner) on Vardorvis (npc 12223, index 65377): HEAL, target has 18 left (bar)
+[2671] fight END Vardorvis (npc 12223) target died: attempts=54 made=54 damage=676 thrallDamage=68 hits=31 ticksLost=7 combatTicks=220 expDamage=854.6

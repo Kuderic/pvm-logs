@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "portedFrom": {
     "repo": "weirdgloop/osrs-dps-calc",
     "paths": ["src/lib/scaling", "src/lib/constants.ts"],
@@ -13,10 +13,35 @@
       "defenceDrainImmune": true,
       "variants": [
         { "version": "Quest", "maxHp": 500, "scaleWithHp": { "strength": [210, 280], "defence": [180, 130] } },
-        { "version": "Post-quest", "maxHp": 700, "default": true, "scaleWithHp": { "strength": [270, 360], "defence": [215, 145] } },
+        { "version": "Post-quest", "maxHp": 700, "default": true, "scaleWithHp": { "strength": [270, 360], "defence": [215, 145] },
+          "attacksOnPlayer": {
+            "rulesVersion": 1,
+            "bossHeal": { "share": 0.5, "withinTicks": 2, "splat": [16] },
+            "waitTicks": 6,
+            "attacks": [
+              { "name": "bleed", "splat": [67], "avoidable": "always", "evidence": "certain: splat type 67" },
+              { "name": "head", "projectile": { "ids": [2521], "landedTicksBefore": [1, 1] }, "bossHeals": false,
+                "overheadNot": "melee", "minDamage": 1, "maxDamage": 10, "avoidable": "always",
+                "evidence": "measured, n=4: gaze landed, small, no heal" },
+              { "name": "axe", "bossHeals": false, "followedBy": { "splat": [67], "withinTicks": [1, 6] }, "minDamage": 1,
+                "avoidable": "always", "evidence": "strong: no heal, bleed follows" },
+              { "name": "melee", "anim": { "ids": [10340, 10342, 10344], "ticksBefore": [1, 1] },
+                "prayer": "melee", "prayedMax": 10, "prayedShare": 0.25, "avoidable": "offPrayer",
+                "evidence": "certain: melee anim a tick before" },
+              { "name": "melee", "anim": { "ids": [10343], "ticksBefore": [0, 5] }, "bossHeals": true, "maxDamage": 10,
+                "prayer": "melee", "prayedMax": 10, "prayedShare": 0.25, "avoidable": "offPrayer",
+                "evidence": "inferred: during the strangle" },
+              { "name": "spike", "anim": { "ids": [10341], "ticksBefore": [0, 5] }, "avoidable": "always",
+                "evidence": "strong: dash before" },
+              { "name": "spike", "bossHeals": true, "minDamage": 11, "avoidable": "always",
+                "evidence": "inferred: heals, no dash seen" }
+            ],
+            "unnamed": "chip"
+          }
+        },
         { "version": "Awakened", "maxHp": 1400, "scaleWithHp": { "strength": [391, 522], "defence": [268, 181] } }
       ],
-      "notes": "Strength and defence move linearly from full hitpoints to none (DPS calc scaling/Vardorvis.ts). The stats file stores both as 0. Defence cannot be drained (DPS calc DefenceReduction.ts floor = current defence)."
+      "notes": "Strength and defence move linearly from full hitpoints to none (DPS calc scaling/Vardorvis.ts). The stats file stores both as 0. Defence cannot be drained (DPS calc DefenceReduction.ts floor = current defence). attacksOnPlayer (T-041): from T-039's 23 kills of Eric's 2026-10-27 logs and the OSRS Wiki's Vardorvis and Vardorvis/Strategies pages (read 2026-10-27); every id in it was seen in those logs. Melee and spikes heal him half the hit, axes and his head's gaze do not; an axe's bleed (splat 67) follows it within 6 ticks; Protect from Melee lets a quarter of his melee through, at most 10. A failed strangle has never been logged, so it is not named: it counts as chip until a log shows it."
     },
     {
       "name": "Araxxor",

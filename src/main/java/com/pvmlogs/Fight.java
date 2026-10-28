@@ -75,6 +75,18 @@ class Fight
 	private int biggestHitTaken;
 	// The part of damageTaken taken with no protection prayer up (DamageTaken.PROTECTION), by the server's varbits.
 	private int damageTakenUnprotected;
+	// What the hits on the player were, at a boss whose rules describe its attacks (T-041, boss-rules.json schema 3): the
+	// rules' version, the avoidable part of the damage taken (off prayer, only what the prayer would have stopped), HP by
+	// attack, the eating ticks the avoidable hits cost by the hitpoints replay, and the eating line it used with where that
+	// came from. Set once, as the fight ends. A fight with no such rules, and every fight saved before T-041, has version 0,
+	// and the getters below read -1 (unknown) for it, as they do for every fight still running: nothing about boss attacks
+	// is readable live (Jagex's guidelines).
+	private int attackRulesVersion;
+	private int damageTakenAvoidable;
+	private java.util.Map<String, Integer> damageTakenByAttack;
+	private double avoidableEatingTicks;
+	private int eatLineHp;
+	private String eatLineSource;
 	// One attempt per attack thrown, and a hit for each attack that landed anything. accuracy = hits / attempts.
 	private int attempts;
 	private int hits;
@@ -378,6 +390,74 @@ class Fight
 	void closeRoom()
 	{
 		closedRoom = true;
+	}
+
+	/**
+	 * What the hits on the player came to (T-041), recorded once, as the fight
+	 * ends. Readable only once it has.
+	 *
+	 * @param rulesVersion the attack rules' version; 0 records nothing
+	 * @param avoidable    the avoidable part of the damage taken, rounded to whole hitpoints here
+	 * @param byAttack     HP taken by attack
+	 * @param eatingTicks  the eating ticks the avoidable hits cost, to 1 decimal
+	 * @param line         the eating line the replay used, with where it came from
+	 */
+	void recordAvoidable(int rulesVersion, double avoidable, java.util.Map<String, Integer> byAttack, double eatingTicks,
+		int line, String lineSource)
+	{
+		if (rulesVersion <= 0)
+		{
+			return;
+		}
+		attackRulesVersion = rulesVersion;
+		damageTakenAvoidable = (int) Math.round(Math.max(0, avoidable));
+		damageTakenByAttack = byAttack == null ? null : new java.util.LinkedHashMap<>(byAttack);
+		avoidableEatingTicks = Math.round(Math.max(0, eatingTicks) * 10) / 10.0;
+		eatLineHp = line;
+		eatLineSource = lineSource;
+	}
+
+	/** Whether this fight's avoidable figures can be read: it has ended, at a boss with attack rules (T-041). */
+	boolean hasAvoidable()
+	{
+		return ended && attackRulesVersion > 0;
+	}
+
+	/** The attack rules' version this fight was classed by, or 0: no rules, saved before T-041, or still running. */
+	int getAttackRulesVersion()
+	{
+		return ended ? attackRulesVersion : 0;
+	}
+
+	/** The avoidable part of the damage taken, or -1 (unknown) while the fight runs or with no attack rules. */
+	int getDamageTakenAvoidable()
+	{
+		return hasAvoidable() ? damageTakenAvoidable : -1;
+	}
+
+	/** HP taken by attack ({@code melee}, {@code melee off prayer}, {@code axe}, ...); empty while running or with no rules. */
+	java.util.Map<String, Integer> getDamageTakenByAttack()
+	{
+		return hasAvoidable() && damageTakenByAttack != null ? java.util.Collections.unmodifiableMap(damageTakenByAttack)
+			: java.util.Collections.emptyMap();
+	}
+
+	/** The eating ticks the avoidable hits cost, or -1 (unknown) while the fight runs or with no attack rules. */
+	double getAvoidableEatingTicks()
+	{
+		return hasAvoidable() ? avoidableEatingTicks : -1;
+	}
+
+	/** The eating line the replay used, or -1 (unknown) while the fight runs or with no attack rules. */
+	int getEatLineHp()
+	{
+		return hasAvoidable() ? eatLineHp : -1;
+	}
+
+	/** Where the line came from ({@link AvoidableEating#LINE_THIS_KILL} and the others), or null when unknown. */
+	String getEatLineSource()
+	{
+		return hasAvoidable() ? eatLineSource : null;
 	}
 
 	void end(boolean died, long now)
