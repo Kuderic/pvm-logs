@@ -86,7 +86,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 		// saved width goes in as a number: RuneLite may resize the Dimension it hands back in place.
 		final List<Object> key = Arrays.asList(client.getTickCount(), fight, fight.isEnded(), fight.getAttacksMade(),
 			fight.getDamageDealt(), fight.getThrallDamage(), fight.getDotDamage(), fight.getHealed(), room,
-			config.overlaySessionTotals(), config.raidScope(), config.overlayLuck(), config.overlayParts(),
+			config.overlayCovers(), config.overlayLuck(), config.overlayParts(),
 			config.overlayDetails(), font, savedWidth(getPreferredSize()));
 		final Lines built = lines.get(key, () -> build(graphics, fight, room));
 		if (built == null)
@@ -124,8 +124,9 @@ class PvmPerformanceOverlay extends OverlayPanel
 		else
 		{
 			final boolean running = !fight.isEnded();
-			final SessionTotals session = config.overlaySessionTotals() ? plugin.getSession() : null;
-			final Raid raid = session == null && config.raidScope() == RaidScope.RAID ? plugin.getCurrentRaid() : null;
+			final OverlayCovers covers = config.overlayCovers();
+			final SessionTotals session = covers == OverlayCovers.TRIP ? plugin.getSession() : null;
+			final Raid raid = covers == OverlayCovers.RAID ? plugin.getCurrentRaid() : null;
 			if (session != null)
 			{
 				scope = LedgerRows.of(session);
@@ -289,12 +290,12 @@ class PvmPerformanceOverlay extends OverlayPanel
 	/**
 	 * Whether either overlay has a fight to show (T-022: the Ledger and the
 	 * loadout overlay both go by this). A finished fight is left up so the kill
-	 * can be read, until the fight timeout says the fighting is over, the same
-	 * clock that ended the fight itself; and "bosses only" hides both off a boss.
+	 * can be read, for "Keep last fight up (s)" (T-040; until the next fight at
+	 * 0); and "bosses only" hides both off a boss.
 	 */
 	static boolean onShow(Fight fight, PvmPerformanceConfig config, long now)
 	{
-		return onShow(fight, config.fightTimeoutTicks(), config.overlayBossesOnly(), isBossFight(fight), now);
+		return onShow(fight, config.overlayHoldSeconds(), config.overlayBossesOnly(), isBossFight(fight), now);
 	}
 
 	/**
@@ -310,13 +311,14 @@ class PvmPerformanceOverlay extends OverlayPanel
 	}
 
 	/** {@link #onShow(Fight, PvmPerformanceConfig, long)} with the answers read out. */
-	static boolean onShow(Fight fight, int timeoutTicks, boolean bossesOnly, boolean boss, long now)
+	static boolean onShow(Fight fight, int holdSeconds, boolean bossesOnly, boolean boss, long now)
 	{
 		if (fight == null)
 		{
 			return false;
 		}
-		if (fight.isEnded() && now - fight.getEndMillis() > timeoutTicks * 600L)
+		// 0 holds it until the next fight takes its place.
+		if (fight.isEnded() && holdSeconds > 0 && now - fight.getEndMillis() > holdSeconds * 1000L)
 		{
 			return false;
 		}

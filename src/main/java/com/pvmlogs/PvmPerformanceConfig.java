@@ -4,7 +4,18 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Range;
 
+/**
+ * The settings, by module (T-040): the two overlays together, then the fight
+ * overlay's own, the side panel, and a closed Data &amp; debugging section.
+ * <p>
+ * Keys are users' saved values: a kept setting keeps its key whatever it is
+ * now called. A setting whose meaning changed gets a new key, and
+ * {@link SettingsMigrations} carries the old value over once. RuneLite writes
+ * every setting's default into the saved config when the plugin loads, so a
+ * changed default reaches new installs only.
+ */
 @ConfigGroup(PvmPerformanceConfig.GROUP)
 public interface PvmPerformanceConfig extends Config
 {
@@ -25,11 +36,25 @@ public interface PvmPerformanceConfig extends Config
 	 */
 	String INTERNAL_NAME = "pvm-performance-tracker";
 
+	/** How long a finished fight stays on the overlays at most (T-040): 600 s. */
+	int MAX_HOLD_SECONDS = 600;
+
+	// ---- Overlays: what applies to both boxes ----
+
+	@ConfigSection(
+		name = "Overlays",
+		description = "The two boxes over the game: the fight overlay and the loadout overlay",
+		position = 0
+	)
+	String OVERLAYS_SECTION = "overlays";
+
 	@ConfigItem(
 		keyName = "showOverlay",
-		name = "Show overlay",
-		description = "Show the live performance overlay while fighting",
-		position = 1
+		name = "Show fight overlay",
+		description = "The box with Luck, Damage/expected, DPS and Execution for the fight you're in, and its Summary "
+			+ "once it ends",
+		position = 1,
+		section = OVERLAYS_SECTION
 	)
 	default boolean showOverlay()
 	{
@@ -37,37 +62,79 @@ public interface PvmPerformanceConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "overlayBossesOnly",
-		name = "Overlay: bosses only",
-		description = "Only show the overlays while fighting a boss (from the hiscores list)",
-		position = 2
-	)
-	default boolean overlayBossesOnly()
-	{
-		return false;
-	}
-
-	// The overlay's content settings share position 3, so they sit together and in name order (T-014).
-	// "Loadout only" (key overlayExpectedOnly) is gone (T-022): "Show overlay" off with the loadout overlay on does the
-	// same. LoadoutOverlay.migrateLoadoutOnly moves it once.
-	@ConfigItem(
 		keyName = "overlayShowLoadout",
 		name = "Show loadout overlay",
-		description = "Show a second box with your attack's expected DPS, max hit, accuracy and spec against the "
-			+ "target, before, during and after the fight. Drag it anywhere",
-		position = 1
+		description = "A second box with your attack's expected DPS, max hit, accuracy and spec against the target, "
+			+ "before, during and after the fight. Drag it anywhere",
+		position = 2,
+		section = OVERLAYS_SECTION
 	)
 	default boolean overlayShowLoadout()
 	{
 		return true;
 	}
 
+	// On for new installs (Eric, 2026-10-27, T-040). Everyone who has run the plugin already has false saved, as RuneLite
+	// writes the defaults on load, so they keep it.
+	@ConfigItem(
+		keyName = "overlayBossesOnly",
+		name = "Bosses only",
+		description = "Show the overlays only while fighting a boss, or anything in a boss's room. The side panel and "
+			+ "your history still record every fight",
+		position = 3,
+		section = OVERLAYS_SECTION
+	)
+	default boolean overlayBossesOnly()
+	{
+		return true;
+	}
+
+	// The second job of the old "Fight timeout (ticks)" (T-040). Its first, ending a quiet fight, is the plugin's
+	// FIGHT_TIMEOUT_TICKS now. SettingsMigrations carries a saved timeout over.
+	@Range(min = 0, max = MAX_HOLD_SECONDS)
+	@ConfigItem(
+		keyName = "overlayHoldSeconds",
+		name = "Keep last fight up (s)",
+		description = "How long a finished fight stays on the overlays. 0 keeps it up until your next fight",
+		position = 4,
+		section = OVERLAYS_SECTION
+	)
+	default int overlayHoldSeconds()
+	{
+		return 60;
+	}
+
+	// ---- Fight overlay: what it adds up, and which rows it shows ----
+
+	@ConfigSection(
+		name = "Fight overlay",
+		description = "What the fight overlay adds up, and which rows it shows",
+		position = 1
+	)
+	String FIGHT_OVERLAY_SECTION = "fightOverlay";
+
+	// Arodab's "Overlay: whole trip" and "Inside a raid, show" as one choice (T-040); SettingsMigrations carries them
+	// over.
+	@ConfigItem(
+		keyName = "overlayCovers",
+		name = "Covers",
+		description = "This fight: the fight you're in, with a boss's adds and phases (in a raid, the room). Whole raid: "
+			+ "the raid so far. Whole trip: every fight since the trip started; start a new one from the side panel",
+		position = 1,
+		section = FIGHT_OVERLAY_SECTION
+	)
+	default OverlayCovers overlayCovers()
+	{
+		return OverlayCovers.FIGHT;
+	}
+
 	@ConfigItem(
 		keyName = "overlayLuck",
-		name = "Show luck",
-		description = "Show how many seconds the rolls saved or cost: your damage against what your attacks were "
-			+ "expected to deal",
-		position = 3
+		name = "Luck",
+		description = "Whether the rolls went your way: top or bottom N% of fights like this, and the seconds they saved "
+			+ "or cost",
+		position = 2,
+		section = FIGHT_OVERLAY_SECTION
 	)
 	default boolean overlayLuck()
 	{
@@ -76,10 +143,11 @@ public interface PvmPerformanceConfig extends Config
 
 	@ConfigItem(
 		keyName = "overlayParts",
-		name = "Execution parts",
-		description = "Under Execution, list uptime, prayer, gear and stat boost with the seconds each cost, then the "
-			+ "damage you took and the time spent eating. Costing only lists the parts that cost real time",
-		position = 3
+		name = "Under Execution",
+		description = "The rows under Execution: uptime, prayer, gear and stat boost with the seconds each cost, then "
+			+ "damage taken and eating. Costing only lists the parts that cost real time. Off leaves Execution alone",
+		position = 3,
+		section = FIGHT_OVERLAY_SECTION
 	)
 	default ExecutionParts overlayParts()
 	{
@@ -88,73 +156,25 @@ public interface PvmPerformanceConfig extends Config
 
 	@ConfigItem(
 		keyName = "overlayDetails",
-		name = "Details after the fight",
-		description = "Once the fight ends, add your average time, hits against expected, thrall, recoil and "
-			+ "burn/poison damage, what the boss healed, and a breakdown of the damage you took",
-		position = 3
+		name = "Summary after the fight",
+		description = "Once the fight ends: your average time, hits against expected, thrall, recoil and burn damage, "
+			+ "what the boss healed, and the damage you took",
+		position = 4,
+		section = FIGHT_OVERLAY_SECTION
 	)
 	default boolean overlayDetails()
 	{
 		return true;
 	}
 
-	@ConfigItem(
-		keyName = "overlaySessionTotals",
-		name = "Overlay: whole trip",
-		description = "Keep the overlay running across kills instead of resetting each fight, "
-			+ "so a whole trip can be judged rather than one kill. Reset it from the side panel",
-		position = 4
-	)
-	default boolean overlaySessionTotals()
-	{
-		return false;
-	}
+	// ---- Side panel (side-panel-design.md §7, T-033) ----
 
-	@ConfigItem(
-		keyName = "raidScope",
-		name = "Inside a raid, show",
-		description = "Whether the overlay reports the room being fought or the whole raid so far",
-		position = 5
-	)
-	default RaidScope raidScope()
-	{
-		return RaidScope.ROOM;
-	}
-
-	@ConfigItem(
-		keyName = "fightTimeoutTicks",
-		name = "Fight timeout (ticks)",
-		description = "End the current fight after this many game ticks with no damage dealt. Also how long a finished "
-			+ "fight stays on the overlay: at 100 that is a minute after the kill",
-		position = 11
-	)
-	default int fightTimeoutTicks()
-	{
-		// Ten was too eager. A fight is not over because nothing landed for six seconds - a safespot, a phase, a walk back
-		// into range - and every fight it ended early took its ticks with it.
-		return 100;
-	}
-
-	@ConfigItem(
-		keyName = "debugLogging",
-		name = "Debug logging",
-		description = "Stream everything the tracker sees - fights, attacks, hitsplats, every tick and why it counted - "
-			+ "to a file beside the CSV exports, for as long as it is on. You usually do not need this: the side panel's "
-			+ "Save debug log button writes out the last few thousand lines whenever you ask, with no warning needed. "
-			+ "Use this one for a session spent chasing something, or when the client is crashing",
-		position = 12
-	)
-	default boolean debugLogging()
-	{
-		return false;
-	}
-
-	// The side panel's settings (side-panel-design.md §7, T-033). Folded sections are remembered under hidden
-	// "panelFold.<id>" keys in this group, which the settings panel doesn't list.
+	// Folded sections are remembered under hidden "panelFold.<id>" keys in this group, which the settings panel doesn't
+	// list.
 	@ConfigSection(
 		name = "Side panel",
 		description = "The side panel's Fight, History and Trip tabs",
-		position = 13
+		position = 2
 	)
 	String SIDE_PANEL_SECTION = "sidePanel";
 
@@ -183,5 +203,30 @@ public interface PvmPerformanceConfig extends Config
 	default boolean panelCharts()
 	{
 		return true;
+	}
+
+	// ---- Data & debugging ----
+
+	@ConfigSection(
+		name = "Data & debugging",
+		description = "Files for chasing a problem",
+		position = 3,
+		closedByDefault = true
+	)
+	String DATA_SECTION = "data";
+
+	@ConfigItem(
+		keyName = "debugLogging",
+		name = "Debug logging",
+		description = "Stream everything the tracker sees - fights, attacks, hitsplats, every tick and why it counted - "
+			+ "to a file beside the CSV exports, for as long as it is on. You usually do not need this: the side panel's "
+			+ "Save debug log button writes out the last few thousand lines whenever you ask, with no warning needed. "
+			+ "Use this one for a session spent chasing something, or when the client is crashing",
+		position = 1,
+		section = DATA_SECTION
+	)
+	default boolean debugLogging()
+	{
+		return false;
 	}
 }

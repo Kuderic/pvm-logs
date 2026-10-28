@@ -97,6 +97,10 @@ import net.runelite.client.util.Text;
 public class PvmPerformancePlugin extends Plugin
 {
 	private static final int MAX_HISTORY = 500;
+	// No damage either way for this long, with the player not targeting it, and the fight is over (T-040: fixed, was
+	// Arodab's "Fight timeout (ticks)" setting). Fights end on kill, loot, despawn, target changes and logout; this is
+	// for one walked away from, so it stays long: a safespot or a phase walk mustn't end one.
+	static final int FIGHT_TIMEOUT_TICKS = 100;
 	// Single-NPC bosses from the RuneLite hiscore list. Raid and minigame entries are on that list too but never match a
 	// combat NPC, so they fall out here and are handled separately.
 	private static final Set<String> BOSS_NAMES = buildBossNames();
@@ -568,7 +572,7 @@ public class PvmPerformancePlugin extends Plugin
 		gearBonuses.resetBuffs("the plugin has just started");
 		timelines.setClock(client::getTickCount);
 		timelines.setEnabled(config.panelCharts());
-		LoadoutOverlay.migrateLoadoutOnly(LoadoutOverlay.Settings.of(configManager));
+		SettingsMigrations.run(SettingsMigrations.Settings.of(configManager));
 		overlayManager.add(overlay);
 		overlayManager.add(loadoutOverlay);
 
@@ -1658,7 +1662,7 @@ public class PvmPerformancePlugin extends Plugin
 			// What used to be settings, now worked out from the game (T-015).
 			header.add(combatCalc.describeWorkedOut(targetId));
 			header.add(String.format("fight timeout %d ticks, file logging %b",
-				config.fightTimeoutTicks(), debug.isOn()));
+				FIGHT_TIMEOUT_TICKS, debug.isOn()));
 			header.addAll(combatCalc.describeLoadout(targetId));
 			executor.execute(() ->
 			{
@@ -3487,7 +3491,7 @@ public class PvmPerformancePlugin extends Plugin
 				// safespotted ones too: no damage passes either way while the target is out of reach, so the clock ran out
 				// while the player stood there doing exactly what the fight asks of them, and every tick after that went
 				// uncounted.
-				if (idle > config.fightTimeoutTicks() * 600L && !isTargeting(current.getTargetIndex()))
+				if (idle > FIGHT_TIMEOUT_TICKS * 600L && !isTargeting(current.getTargetIndex()))
 				{
 					finalizeFight(false, current.getLastActivityMillis(),
 						"idle " + (idle / 600L) + " ticks with no damage either way");
