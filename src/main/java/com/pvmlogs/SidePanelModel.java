@@ -794,8 +794,13 @@ final class SidePanelModel
 		final boolean bestKnown = luckKnown && best >= 0;
 		final boolean averageBand = luckColour == LedgerRows.Colour.NEUTRAL;
 
+		final double luckSaved = luckKnown && l > 0 ? l : 0;
+		// When luck saved time, only best play got shorter: the losses happened inside your real time, so they're drawn
+		// before the tick and best play's last L seconds go past it, dimmed (Eric, 2026-10-27, after T-042). Up to the
+		// tick: (B - L) + Cu + Ce + Cb + Cp + Cg + U = T.
+		final double bestBeforeTick = Math.max(0, best - luckSaved);
 		final List<Segment> segments = new ArrayList<>();
-		segments.add(new Segment(Math.max(0, best), Fill.KEPT));
+		segments.add(new Segment(bestBeforeTick, Fill.KEPT));
 		for (int i = 0; i < costs.length; i++)
 		{
 			segments.add(new Segment(costs[i], LedgerRows.isCosting(costs[i], n.clock) ? Fill.COST : Fill.MINOR_COST));
@@ -806,8 +811,11 @@ final class SidePanelModel
 		}
 		segments.add(new Segment(Math.max(0, -l), averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER));
 		segments.add(new Segment(u, Fill.UNSCORED));
+		if (luckSaved > 0)
+		{
+			segments.add(new Segment(Math.max(0, best) - bestBeforeTick, Fill.KEPT));
+		}
 		final double total = t + Math.max(0, l);
-		final double luckSaved = luckKnown && l > 0 ? l : 0;
 		// T-042: the bar marks your real time with a tick; when luck saved time it runs on to the time at average luck,
 		// labelled. Not when the two would read as the same clock (luck saved under a second).
 		final String clockLabel = LedgerRows.duration(t);
