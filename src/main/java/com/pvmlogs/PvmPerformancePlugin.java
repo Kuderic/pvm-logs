@@ -74,6 +74,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStack;
 import net.runelite.client.game.NPCManager;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.hiscore.HiscoreSkillType;
@@ -3124,9 +3125,13 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final NPC npc = event.getNpc();
 		final long now = System.currentTimeMillis();
-		if (current != null && !current.isEnded()
-			&& (current.getTargetIndex() == npc.getIndex()
-			|| EncounterGroup.sameGroup(npc.getId(), current.getTargetId())))
+		final boolean add = !EncounterGroup.lootIsTheKill(npc.getId());
+		if (add || currentEncounter != null && currentEncounter.holds(npc.getId()))
+		{
+			debug.log("LOOT from %s (npc %d, index %d)%s: %s", npc.getName(), npc.getId(), npc.getIndex(),
+				add ? ", an add's: not the kill" : "", lootItems(event.getItems()));
+		}
+		if (lootEndsFight(current, npc.getId(), npc.getIndex()))
 		{
 			finalizeFight(true, now, "loot received");
 		}
@@ -3134,8 +3139,9 @@ public class PvmPerformancePlugin extends Plugin
 		// trip in the room the first kill opened, and the overlay read as a running total with the trip totals off. The loot
 		// drop is the one event that says a KILL happened rather than a part of the boss dying - several deaths are one
 		// Hueycoatl - and no loot fires inside a raid, so Olm and the Nylocas are untouched. Ended rather than dropped, so
-		// the kill stays on the overlay to read.
-		if (currentEncounter != null && !currentEncounter.isEnded() && currentEncounter.holds(npc.getId()))
+		// the kill stays on the overlay to read. An add's drop is not the kill (T-055): the Sire's scions and spawns drop
+		// loot mid-kill.
+		if (currentEncounter != null && currentEncounter.closesOnLootFrom(npc.getId()))
 		{
 			debug.log("LOOT from %s (npc %d, index %d): room '%s' closed with %d fights", npc.getName(), npc.getId(),
 				npc.getIndex(), currentEncounter.getName(), currentEncounter.getFights().size());
@@ -3148,6 +3154,38 @@ public class PvmPerformancePlugin extends Plugin
 				held.get(held.size() - 1).closeRoom();
 			}
 		}
+	}
+
+	/**
+	 * Whether loot from this NPC ends the fight open on {@code current} (T-055):
+	 * its own loot always does; another NPC's only when it is part of the same
+	 * boss and not one of its adds. An add's drop ends the add's own fight and
+	 * nothing else.
+	 */
+	static boolean lootEndsFight(Fight current, int npcId, int npcIndex)
+	{
+		return current != null && !current.isEnded()
+			&& (current.getTargetIndex() == npcIndex
+			|| EncounterGroup.lootIsTheKill(npcId) && EncounterGroup.sameGroup(npcId, current.getTargetId()));
+	}
+
+	// What a drop held, for the LOOT line: "id x quantity" each, so the next log says what an add left.
+	private static String lootItems(java.util.Collection<ItemStack> items)
+	{
+		if (items == null || items.isEmpty())
+		{
+			return "no items";
+		}
+		final StringBuilder b = new StringBuilder();
+		for (ItemStack item : items)
+		{
+			if (b.length() > 0)
+			{
+				b.append(", ");
+			}
+			b.append("item ").append(item.getId()).append(" x").append(item.getQuantity());
+		}
+		return b.toString();
 	}
 
 	@Subscribe

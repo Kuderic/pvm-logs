@@ -15,6 +15,7 @@ final class EncounterGroup
 	private static final Set<Integer> IGNORED = buildIgnored();
 	private static final Set<Integer> UNSCORED = buildUnscored();
 	private static final Set<Integer> UNATTACKABLE = buildUnattackable();
+	private static final Set<Integer> ADDS = buildAdds();
 
 	private EncounterGroup()
 	{
@@ -40,6 +41,19 @@ final class EncounterGroup
 	static boolean isIgnored(int npcId)
 	{
 		return IGNORED.contains(npcId);
+	}
+
+	/**
+	 * Whether loot from this NPC is its boss's kill (T-055). It is, for every NPC
+	 * but a boss's adds: their drops end only their own fight and never close the
+	 * room. The Abyssal Sire's scions and spawns drop loot mid-kill (Eric's logs of
+	 * 2026-10-28: a scion's in phase 2 split one kill into two rooms, a spawn's
+	 * ended the Sire's own fight), so a drop from anything in a boss's group was
+	 * not enough to mean the boss was dead.
+	 */
+	static boolean lootIsTheKill(int npcId)
+	{
+		return !ADDS.contains(npcId);
 	}
 
 	// NPCs that are part of the room but must not be scored: the time spent on them counts, the damage does not.
@@ -299,6 +313,36 @@ final class EncounterGroup
 		}
 		final String group = GROUPS.get(npcId);
 		return "The Nightmare".equals(group) || "Phosani's Nightmare".equals(group) ? group : null;
+	}
+
+	/**
+	 * A boss's adds, grouped with it so its room holds them, whose loot is never
+	 * the boss's kill (T-055). Only groups outside the raids are listed: no loot
+	 * event fires inside one. Each group's boss is the rest of it; for the Sire
+	 * the kill's drop comes from its last form, 5908 (both of Eric's kills of
+	 * 2026-10-28). The Hueycoatl has no adds - every part of it is the snake, and
+	 * the one drop is the kill whichever part it comes from.
+	 */
+	private static Set<Integer> buildAdds()
+	{
+		return Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+			// The Abyssal Sire's respiratory systems, spawns and scions: the scions' and spawns' drops are in the logs.
+			NpcID.ABYSSALSIRE_LUNG, NpcID.ABYSSALSIRE_LUNG_DYING,
+			NpcID.ABYSSALSIRE_SPAWN, NpcID.ABYSSALSIRE_SPAWN_DYING,
+			NpcID.ABYSSALSIRE_SCION, NpcID.ABYSSALSIRE_SCION_DYING,
+			// Yama's Judge.
+			NpcID.YAMA_JUDGE_OF_YAMA, NpcID.LEAGUE6_JUDGE_OF_YAMA,
+			// Hespori's flowers.
+			NpcID.HESPORI_HEALER_ACTIVE, NpcID.HESPORI_HEALER_INACTIVE,
+			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE, NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
+			// Phosani's adds, and both Nightmares' totems.
+			NpcID.NIGHTMARE_CHALLENGE_HUSK_MAGIC, NpcID.NIGHTMARE_CHALLENGE_HUSK_RANGED,
+			NpcID.NIGHTMARE_CHALLENGE_PARASITE, NpcID.NIGHTMARE_CHALLENGE_PARASITE_WEAK,
+			NpcID.NIGHTMARE_CHALLENGE_SLEEPWALKER,
+			NpcID.NIGHTMARE_TOTEM_1_READY, NpcID.NIGHTMARE_TOTEM_1_CHARGED,
+			NpcID.NIGHTMARE_TOTEM_2_READY, NpcID.NIGHTMARE_TOTEM_2_CHARGED,
+			NpcID.NIGHTMARE_TOTEM_3_READY, NpcID.NIGHTMARE_TOTEM_3_CHARGED,
+			NpcID.NIGHTMARE_TOTEM_4_READY, NpcID.NIGHTMARE_TOTEM_4_CHARGED)));
 	}
 
 	private static Set<Integer> buildUnscored()
