@@ -350,6 +350,9 @@ final class AttackSplats
 	static final class Burst
 	{
 		private final int thrownTick;
+		// The tick the attack was booked as thrown on (T-059): what the timeline knows it by. The same as thrownTick but for
+		// a projectile, whose throw is read from its start cycle and whose booking is two ticks before it surfaced.
+		private final int bookedTick;
 		private final int startTick;
 		private final AttackSplats ordinary;
 		private final AttackSplats specialSplats;
@@ -371,6 +374,14 @@ final class AttackSplats
 		Burst(int thrownTick, int startTick, AttackSplats ordinary, AttackSplats special, boolean isSpecial,
 			String weapon)
 		{
+			this(thrownTick, startTick, ordinary, special, isSpecial, weapon, thrownTick);
+		}
+
+		/** As above, with the tick the attack was booked as thrown on, where that differs. */
+		Burst(int thrownTick, int startTick, AttackSplats ordinary, AttackSplats special, boolean isSpecial,
+			String weapon, int bookedTick)
+		{
+			this.bookedTick = bookedTick;
 			this.thrownTick = thrownTick;
 			this.startTick = startTick;
 			this.ordinary = ordinary;
@@ -399,6 +410,12 @@ final class AttackSplats
 		int thrownTick()
 		{
 			return thrownTick;
+		}
+
+		/** The tick the attack was booked as thrown on: its key in the fight's timeline (T-059). */
+		int bookedTick()
+		{
+			return bookedTick;
 		}
 
 		int startTick()

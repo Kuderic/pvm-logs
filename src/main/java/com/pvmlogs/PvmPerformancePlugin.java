@@ -570,14 +570,18 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final int lands;
 		final int thrownTick;
+		// The tick its attack is booked as thrown on (T-059): for a projectile, two ticks before it surfaced, where its
+		// thrownTick comes from its start cycle, usually the tick it surfaced. The timeline knows the attack by this one.
+		final int bookedTick;
 		final AttackSplats ordinary;
 		final AttackSplats special;
 		final String weapon;
 
-		PendingHit(int lands, int thrownTick, AttackSplats ordinary, AttackSplats special, String weapon)
+		PendingHit(int lands, int thrownTick, int bookedTick, AttackSplats ordinary, AttackSplats special, String weapon)
 		{
 			this.lands = lands;
 			this.thrownTick = thrownTick;
+			this.bookedTick = bookedTick;
 			this.ordinary = ordinary;
 			this.special = special;
 			this.weapon = weapon;
@@ -1368,12 +1372,12 @@ public class PvmPerformancePlugin extends Plugin
 		if (flight != null)
 		{
 			bursts.put(index, new AttackSplats.Burst(flight.thrownTick, tick, flight.ordinary, flight.special,
-				AttackSplats.specialNear(recentSpecDrops, flight.thrownTick), flight.weapon));
+				AttackSplats.specialNear(recentSpecDrops, flight.thrownTick), flight.weapon, flight.bookedTick));
 			return;
 		}
 		if (bookedThrownTick != Integer.MIN_VALUE)
 		{
-			final PendingHit blow = attackThrownOn(bookedThrownTick, tick, npc.getId());
+			final PendingHit blow = attackThrownOn(bookedThrownTick, tick, npc.getId(), bookedThrownTick);
 			bursts.put(index, new AttackSplats.Burst(bookedThrownTick, tick, blow.ordinary, blow.special,
 				AttackSplats.specialNear(recentSpecDrops, bookedThrownTick), blow.weapon));
 			return;
@@ -1402,7 +1406,7 @@ public class PvmPerformancePlugin extends Plugin
 	 * and the larger count kept, so a switch never costs an attack its own
 	 * splats. The weapon named is the one with the most.
 	 */
-	private PendingHit attackThrownOn(int thrownTick, int lands, int npcId)
+	private PendingHit attackThrownOn(int thrownTick, int lands, int npcId, int bookedTick)
 	{
 		final List<Integer> held = new ArrayList<>();
 		for (int t = thrownTick - 1; t <= thrownTick; t++)
@@ -1434,7 +1438,7 @@ public class PvmPerformancePlugin extends Plugin
 				namedCount = Math.max(o.count, s.count);
 			}
 		}
-		return new PendingHit(lands, thrownTick, ordinary, special, combatCalc.itemLabel(named));
+		return new PendingHit(lands, thrownTick, bookedTick, ordinary, special, combatCalc.itemLabel(named));
 	}
 
 	// The energy can be read after the attack's first splat, so an attack counted as ordinary may turn out a special.
@@ -1979,7 +1983,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final int lands = landingTick(projectile);
 		pendingMineHits.computeIfAbsent(npc.getIndex(), k -> new ArrayList<>())
-			.add(attackThrownOn(startTick(projectile), lands, npc.getId()));
+			.add(attackThrownOn(startTick(projectile), lands, npc.getId(), projectileBookedTick(client.getTickCount())));
 		debug.log("projectile %d taken as mine, aimed at npc %d (index %d), lands tick %d",
 			projectile.getId(), npc.getId(), npc.getIndex(), lands);
 		recordAttackObserved(true, npc);
@@ -2573,7 +2577,8 @@ public class PvmPerformancePlugin extends Plugin
 		return moments == null ? -1 : moments.variance();
 	}
 
-	private void sampleExpected(Fight fight)
+	/** @param attackTick the tick the attack is booked as thrown on: the timeline knows it by this (T-059) */
+	private void sampleExpected(Fight fight, int attackTick)
 	{
 		// The id the target wore when the attack left, which the tick cache's rows are keyed by too (T-020).
 		final int targetId = targetIdOn(fight, attackOriginTick);
@@ -2664,7 +2669,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
 			specFiredTick = Integer.MIN_VALUE;
-			expectDelayedSplat(fight);
+			expectDelayedSplat(fight, attackTick);
 			final FightTimeline line = timelines.of(fight);
 			if (line != null)
 			{
@@ -2823,15 +2828,17 @@ public class PvmPerformancePlugin extends Plugin
 	/** The trip totals shown when the overlay is set to whole-trip mode. */
 	// The special just booked puts a splat down long after its hit (T-037): the ancient godsword's 25, eight ticks from the
 	// booking, which for a melee special is its hit's tick.
-	private void expectDelayedSplat(Fight fight)
+	private void expectDelayedSplat(Fight fight, int attackTick)
 	{
 		final Integer held = weaponByTick.get(attackOriginTick);
 		final SpecialAttack special = SpecialAttack.forItem(held != null ? held : combatCalc.equippedWeaponId());
 		final int delay = AttackSplats.delayedSplatTicks(special);
 		if (delay > 0)
 		{
+			// Under the tick the attack is booked as thrown on, which the timeline knows it by (T-059): attackOriginTick is the
+			// tick its splat landed on for a melee blow, so the 25 waited under a tick no attack had.
 			delayedSplats.expect(fight.getTargetIndex(), client.getTickCount() + delay, AttackSplats.BLOOD_SACRIFICE_DAMAGE,
-				attackOriginTick);
+				attackTick);
 		}
 	}
 
@@ -2926,7 +2933,7 @@ public class PvmPerformancePlugin extends Plugin
 			return;
 		}
 		final AttackSplats.Burst burst = bursts.get(npcIndex);
-		line.attributeSplat(burst == null ? Integer.MIN_VALUE : burst.thrownTick());
+		line.attributeSplat(burst == null ? Integer.MIN_VALUE : burst.bookedTick());
 	}
 
 	SessionTotals getSession()
@@ -3425,7 +3432,7 @@ public class PvmPerformancePlugin extends Plugin
 				record(prayed, switched, actualSetup, idealSetup, boostCost, switchCost);
 				// Sampled on the tick the attack went out, so the figures describe the loadout that threw it and one attack takes
 				// one sample however it ends.
-				sampleExpected(attacker);
+				sampleExpected(attacker, attackTick);
 			}
 			else
 			{
@@ -4327,6 +4334,14 @@ public class PvmPerformancePlugin extends Plugin
 		damageByIndex.merge(npc.getIndex(), damage, Integer::sum);
 		health.damage(npc.getIndex(), npc.getId(), damage, tick);
 		current.recordExtraTarget(damage, now, newTarget, landed);
+		// The attack whose splat on the fight's target it lands beside (T-059): a chinchompa's collateral otherwise waited for
+		// the next damage and went to whatever attack was latest by then. With no splat on the target this tick, the latest.
+		final FightTimeline line = timelines.of(current);
+		if (line != null)
+		{
+			final AttackSplats.Burst beside = bursts.get(current.getTargetIndex());
+			line.attributeSplat(beside != null && beside.belongsOn(tick) ? beside.bookedTick() : Integer.MIN_VALUE);
+		}
 		if (current.isScored())
 		{
 			session.recordExtraTarget(damage, newTarget, landed, now);
@@ -4673,6 +4688,16 @@ public class PvmPerformancePlugin extends Plugin
 			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
 			current.getCombatTicks(), current.getSumExpectedAverageHit());
 		debug.log("%s", luckLine(current));
+		// T-059: weapon damage the timeline could give no attack, which the Damage card shows as "Not matched to an attack".
+		final FightTimeline ended = timelines.of(current);
+		if (ended != null)
+		{
+			ended.settle();
+			for (int[] left : ended.unmatched())
+			{
+				debug.log("TIMELINE UNMATCHED %d thrown %s", left[1], left[0] == Integer.MIN_VALUE ? "none" : left[0]);
+			}
+		}
 		// T-050: how much of that luck was the specials', and what the drains were worth.
 		final String specLuck = drainLuck.end(current);
 		if (specLuck != null)
@@ -4816,6 +4841,18 @@ public class PvmPerformancePlugin extends Plugin
 
 	// The tick a projectile was fired on, from the cycle it started. Cycles run at 20ms and ticks at 600, so thirty of the
 	// former make one of the latter.
+	/**
+	 * The tick a projectile's attack is booked as thrown on: two ticks before it
+	 * surfaced (recordAttackObserved), whatever its start cycle says. Its
+	 * splats are credited to the attack by this tick (T-059): taken from the
+	 * start cycle, usually the tick it surfaced, every bow of faerdhinen splat
+	 * waited under a tick no attack had and showed as "Not matched to an attack".
+	 */
+	static int projectileBookedTick(int surfacedTick)
+	{
+		return surfacedTick - PROJECTILE_BOOKING_LAG;
+	}
+
 	private int startTick(Projectile projectile)
 	{
 		final int cyclesAgo = Math.max(0, client.getGameCycle() - projectile.getStartCycle());
