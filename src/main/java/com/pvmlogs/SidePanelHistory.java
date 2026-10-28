@@ -139,14 +139,22 @@ final class SidePanelHistory
 		/** The adds fought in its rooms, by name, in the order first fought. */
 		final List<String> adds;
 		final boolean boss;
+		/** The boss's icon, a hiscores sprite, or {@link SidePanelBossIcons#NONE} (T-054). */
+		final int icon;
 
 		BossEntry(String name, int kills, String average, List<String> adds, boolean boss)
+		{
+			this(name, kills, average, adds, boss, SidePanelBossIcons.sprite(name, null));
+		}
+
+		BossEntry(String name, int kills, String average, List<String> adds, boolean boss, int icon)
 		{
 			this.name = name;
 			this.kills = kills;
 			this.average = average;
 			this.adds = Collections.unmodifiableList(adds);
 			this.boss = boss;
+			this.icon = icon;
 		}
 
 		/** The right side: {@code 23 · 1:49} for a boss with an average, else {@code 12 kills}. */
@@ -216,7 +224,7 @@ final class SidePanelHistory
 			final LedgerHistory.Average a = latestKill == null ? null
 				: LedgerHistory.of(history, LedgerHistory.Like.of(latestKill), null);
 			out.add(new BossEntry(name, kills, a == null ? null : LedgerRows.duration(a.actual.median),
-				new ArrayList<>(adds), boss));
+				new ArrayList<>(adds), boss, icon(name, rooms)));
 		}
 		return out;
 	}
@@ -306,9 +314,12 @@ final class SidePanelHistory
 		final List<Tile> tiles;
 		/** Null under two like kills (spec: hidden). */
 		final Spark spark;
+		/** The boss's icon beside its name (T-054). */
+		final int icon;
 
-		Card(String name, int kills, List<Version> versions, int selected, List<Tile> tiles, Spark spark)
+		Card(String name, int kills, List<Version> versions, int selected, List<Tile> tiles, Spark spark, int icon)
 		{
+			this.icon = icon;
 			this.name = name;
 			this.kills = kills;
 			this.versions = Collections.unmodifiableList(versions);
@@ -445,7 +456,21 @@ final class SidePanelHistory
 		final LedgerHistory.Like like = versions.isEmpty() ? null : versions.get(selected).like;
 		final Usual usual = like == null ? null : usual(history, like);
 		final int likeCount = like == null ? 0 : likeKills(history, like).size();
-		return new Card(name, kills.size(), versions, selected, tiles(usual, likeCount), spark(history, like));
+		return new Card(name, kills.size(), versions, selected, tiles(usual, likeCount), spark(history, like),
+			icon(name, rooms));
+	}
+
+	/** T-054: the icon for rooms of this name, by their raid when they were fought in one. */
+	static int icon(String name, List<Encounter> rooms)
+	{
+		for (Encounter r : rooms)
+		{
+			if (r.getRaid() != null)
+			{
+				return SidePanelBossIcons.sprite(name, r.getRaid());
+			}
+		}
+		return SidePanelBossIcons.sprite(name, null);
 	}
 
 	static String key(LedgerHistory.Like like)

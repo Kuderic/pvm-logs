@@ -47,6 +47,11 @@ public final class SidePanelPictures
 			textModes(out);
 			return;
 		}
+		if (args.length > 2 && "icons".equals(args[1]))
+		{
+			bossIcons(out, Paths.get(args[2]));
+			return;
+		}
 		for (int scale = 1; scale <= 2; scale++)
 		{
 			for (Map.Entry<String, SidePanelModel.Input> e : SidePanelExamples.states().entrySet())
@@ -109,6 +114,60 @@ public final class SidePanelPictures
 		larger = false;
 		smooth = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-054: the boss icons in Fight (live, after a kill, a raid), Trip and History, with T-053's settings off, Smooth,
+	 * and Smooth + Larger, at 1×, 1.5× and 2×. The renders have no game cache, so the sprites come from {@code
+	 * sprites}: a PNG per sprite id ({@code 5634.png}), stand-ins for what the game serves.
+	 */
+	private static void bossIcons(Path out, Path sprites) throws IOException
+	{
+		SidePanelBossIcons.setSource(new SidePanelIcons()
+		{
+			@Override
+			public void item(int itemId, java.util.function.Consumer<BufferedImage> done)
+			{
+			}
+
+			@Override
+			public void sprite(int spriteId, java.util.function.Consumer<BufferedImage> done)
+			{
+				final Path f = sprites.resolve(spriteId + ".png");
+				if (Files.exists(f))
+				{
+					try (java.io.InputStream in = Files.newInputStream(f))
+					{
+						done.accept(ImageIO.read(in));
+					}
+					catch (IOException e)
+					{
+						throw new java.io.UncheckedIOException(e);
+					}
+				}
+			}
+		});
+		final String[] modes = {"normal", "smooth", "smooth-larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			larger = m == 2;
+			smooth = m >= 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 1.5, 2})
+			{
+				write(dir, "a-live", scale, render(SidePanelExamples.live(), scale));
+				write(dir, "b-ruled-kill", scale, render(SidePanelExamples.ruledKill(true), scale));
+				write(dir, "c-raid", scale, render(SidePanelExamples.raid(), scale));
+				write(dir, "d-trip", scale, renderTrip(SidePanelExamples.trip(), scale));
+				write(dir, "e-history", scale, renderHistory(false, scale));
+				write(dir, "f-saved-kill", scale, renderSavedThisSession(scale));
+			}
+		}
+		larger = false;
+		smooth = false;
+		SidePanelStyle.setText(false, false);
+		SidePanelBossIcons.setSource(SidePanelIcons.NONE);
 	}
 
 	private static void write(Path out, String name, double scale, BufferedImage img) throws IOException

@@ -301,8 +301,9 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel box = SidePanelParts.card(6);
-		box.add(new SidePanelParts.Line(Text.title(card.name, SidePanelStyle.VALUE),
-			Text.small(card.kills + (card.kills == 1 ? " kill" : " kills"), SidePanelStyle.SECONDARY)));
+		final SidePanelParts.Line title = new SidePanelParts.Line(Text.title(card.name, SidePanelStyle.VALUE),
+			Text.small(card.kills + (card.kills == 1 ? " kill" : " kills"), SidePanelStyle.SECONDARY));
+		box.add(card.icon == SidePanelBossIcons.NONE ? title : withIcon(card.icon, title));
 		if (!card.versions.isEmpty())
 		{
 			final JComboBox<SidePanelHistory.Version> picker = new JComboBox<>(
@@ -504,10 +505,20 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			Text.small("kills · average", SidePanelStyle.SECONDARY), list, folds));
 	}
 
+	/** A line with the boss's icon before it (T-054). */
+	private static JPanel withIcon(int sprite, JComponent line)
+	{
+		final JPanel p = new JPanel(new BorderLayout(6, 0));
+		p.setOpaque(false);
+		p.add(new SidePanelBossIcons.View(sprite, SidePanelBossIcons.ROW_BOX), BorderLayout.WEST);
+		p.add(line, BorderLayout.CENTER);
+		return p;
+	}
+
 	private JPanel bossRow(SidePanelHistory.BossEntry b)
 	{
 		final boolean picked = b.name.equals(boss);
-		final JPanel row = new JPanel(new SidePanelStack(3))
+		final JPanel row = new JPanel(new BorderLayout(6, 0))
 		{
 			private boolean hover;
 
@@ -540,13 +551,19 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		row.setOpaque(false);
 		row.setBorder(new EmptyBorder(SidePanelStyle.CARD_PAD_V, SidePanelStyle.CARD_PAD_H, SidePanelStyle.CARD_PAD_V,
 			SidePanelStyle.CARD_PAD_H));
-		row.add(new SidePanelParts.Line(Text.body(b.name, SidePanelStyle.VALUE), Text.small(b.right(), SidePanelStyle.BODY)));
+		// The boss's icon (T-054) in a box kept for every row, so the names line up; empty for one without.
+		row.add(new SidePanelBossIcons.View(b.icon, SidePanelBossIcons.ROW_BOX), BorderLayout.WEST);
+		final JPanel text = new JPanel(new SidePanelStack(3));
+		text.setOpaque(false);
+		text.add(new SidePanelParts.Line(Text.body(b.name, SidePanelStyle.VALUE),
+			Text.small(b.right(), SidePanelStyle.BODY)));
 		final String sub = b.sub();
 		if (!sub.isEmpty())
 		{
 			// Secondary rather than Muted on the picked row (spec section 2: Muted is too faint on #3C3C3C).
-			row.add(new SidePanelText(Text.small(sub, picked ? SidePanelStyle.SECONDARY : SidePanelStyle.MUTED), false));
+			text.add(new SidePanelText(Text.small(sub, picked ? SidePanelStyle.SECONDARY : SidePanelStyle.MUTED), false));
 		}
+		row.add(text, BorderLayout.CENTER);
 		row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		row.setToolTipText("Show " + b.name + ". Right-click to export its fights to CSV");
 		final JPopupMenu menu = new JPopupMenu();

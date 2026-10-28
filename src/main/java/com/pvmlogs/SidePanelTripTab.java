@@ -243,12 +243,16 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		private final SidePanelText clock = new SidePanelText(SidePanelStyle.Type.TITLE, true);
 		private final SidePanelParts.Chip chip = new SidePanelParts.Chip();
 		private final JPanel chipBox = new JPanel(new BorderLayout());
+		/** The boss's icon (T-054); its box is kept, empty, for a room without one, so the names line up. */
+		private final SidePanelBossIcons.View icon = new SidePanelBossIcons.View(SidePanelBossIcons.NONE,
+			SidePanelBossIcons.ROW_BOX);
 
 		RowView()
 		{
 			super(new BorderLayout(4, 0));
 			setBackground(SidePanelStyle.CARD);
 			setBorder(new EmptyBorder(5, SidePanelStyle.CARD_PAD_H, 5, 6));
+			add(icon, BorderLayout.WEST);
 			add(name, BorderLayout.CENTER);
 			final JPanel right = new JPanel(new BorderLayout(4, 0));
 			right.setOpaque(false);
@@ -265,6 +269,7 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 			name.set(Text.body(r.name, c), r.ended ? Text.small(" (ended)", SidePanelStyle.SECONDARY) : null);
 			clock.set(Text.title(r.clock, c));
 			chip.set(r.chip, r.chipFill);
+			icon.set(r.icon);
 		}
 
 		int chipWidth()
