@@ -1,7 +1,7 @@
 package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.Assert.assertNotNull;
 import com.google.gson.Gson;
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,24 +20,18 @@ import org.junit.Test;
  * with the bundled rules) gives for the same kills.
  *
  * <p>The excerpt holds only the lines the two read: fight START and END, TAKEN,
- * Vardorvis's heals, EAT and the eating ticks. Until it is committed, the test
- * reads it from {@code PVM_AVOIDABLE_FIXTURE} and is skipped without it.
+ * Vardorvis's heals, EAT and the eating ticks (Eric OK'd it as a fixture,
+ * 2026-10-27).
  */
 public class AvoidableReplayTest
 {
 	static final String FIXTURE = "replay/vardorvis-avoidable-5-kills-20261027.log";
 
-	private static Reader fixture() throws IOException
+	private static Reader fixture()
 	{
 		final InputStream in = AvoidableReplayTest.class.getResourceAsStream(FIXTURE);
-		if (in != null)
-		{
-			return new InputStreamReader(in, StandardCharsets.UTF_8);
-		}
-		final String path = System.getenv("PVM_AVOIDABLE_FIXTURE");
-		assumeTrue("fixture " + FIXTURE + " not committed and PVM_AVOIDABLE_FIXTURE not set", path != null);
-		return new StringReader(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)),
-			StandardCharsets.UTF_8));
+		assertNotNull(FIXTURE, in);
+		return new InputStreamReader(in, StandardCharsets.UTF_8);
 	}
 
 	static BossRules.AttacksOnPlayer vardorvis()
