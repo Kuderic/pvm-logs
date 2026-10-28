@@ -387,6 +387,54 @@ class CombatCalc
 		return memoLoadout;
 	}
 
+	/**
+	 * What is worn, slot by slot, with each item's id (T-056): so a log can say
+	 * which variant of a piece a bonus missed. Empty slots are left out.
+	 */
+	static String describe(Loadout gear)
+	{
+		if (gear == null)
+		{
+			return "nothing known";
+		}
+		final StringBuilder b = new StringBuilder();
+		for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
+		{
+			final int id = gear.id(slot);
+			if (id < 0)
+			{
+				continue;
+			}
+			if (b.length() > 0)
+			{
+				b.append(", ");
+			}
+			final String name = gear.name(slot);
+			b.append(slot.name().toLowerCase(Locale.ROOT)).append(' ').append(name == null ? "?" : name)
+				.append(" #").append(id);
+		}
+		return b.length() == 0 ? "nothing worn" : b.toString();
+	}
+
+	/** The worn gear as one line, for the fight-start log and the saved log's header. */
+	String describeWorn()
+	{
+		return "GEAR worn: " + describe(gear());
+	}
+
+	/** The gear worn now, described only when asked: what a MAX EXCEEDED line names. */
+	java.util.function.Supplier<String> wornNow()
+	{
+		final Loadout snapshot = gear();
+		return () -> describe(snapshot);
+	}
+
+	/** Whether the ordinary attack's max is one hitsplat's: not a scythe, dark bow or other multi-hit weapon (T-056). */
+	boolean maxIsOneSplat()
+	{
+		return ordinaryShape() == OrdinaryShape.ONE;
+	}
+
 	// Points every figure at a different loadout. Everything derived from the gear goes with it, or the swap is half
 	// applied - the bonuses and the max hit are memoised per tick.
 	private void useLoadout(Loadout gear)
@@ -1387,7 +1435,8 @@ class CombatCalc
 	private boolean isFangEquipped()
 	{
 		final int weapon = weaponItemId();
-		return weapon == ItemID.OSMUMTENS_FANG || weapon == ItemID.OSMUMTENS_FANG_ORNAMENT;
+		return weapon == ItemID.OSMUMTENS_FANG || weapon == ItemID.OSMUMTENS_FANG_ORNAMENT
+			|| weapon == ItemID.BR_OSMUMTENS_FANG;
 	}
 
 	private double meleeAccuracyPrayer()
@@ -2253,7 +2302,8 @@ class CombatCalc
 				client.getRealSkillLevel(Skill.PRAYER) - client.getBoostedSkillLevel(Skill.PRAYER));
 			return (int) (unmitigatedMaxHit(npcId) * (1.0 + 0.005 * missingPrayer));
 		}
-		if (weapon == ItemID.NIGHTMARE_STAFF_VOLATILE || weapon == ItemID.DEADMAN_BLIGHTED_VOLATILE_STAFF)
+		if (weapon == ItemID.NIGHTMARE_STAFF_VOLATILE || weapon == ItemID.DEADMAN_BLIGHTED_VOLATILE_STAFF
+			|| weapon == ItemID.BR_NIGHTMARE_STAFF_VOLATILE || weapon == ItemID.DEADMAN_NIGHTMARE_STAFF_VOLATILE)
 		{
 			final int magic = boostedLevel(Skill.MAGIC);
 			// The spec is its own attack, not a spell, so no ancient bonus applies.
@@ -4039,13 +4089,22 @@ class CombatCalc
 	 * The bows and crossbows that make their own ammunition, so the ammo slot is
 	 * only being carried rather than drawn from.
 	 */
-	private static final Set<Integer> AMMOLESS_BOWS = Collections.unmodifiableSet(
-		new HashSet<>(Arrays.asList(
-			ItemID.CRYSTAL_BOW, ItemID.CRYSTAL_BOW_2500,
-			ItemID.BOW_OF_FAERDHINEN, ItemID.BOW_OF_FAERDHINEN_INFINITE,
-			ItemID.BOW_OF_FAERDHINEN_INFINITE_ITHELL, ItemID.BOW_OF_FAERDHINEN_INFINITE_IORWERTH,
-			ItemID.BOW_OF_FAERDHINEN_INFINITE_TRAHAEARN, ItemID.BOW_OF_FAERDHINEN_INFINITE_CADARN,
-			ItemID.WILD_CAVE_WEBWEAVER_CHARGED)));
+	private static final Set<Integer> AMMOLESS_BOWS = ammolessBows();
+
+	// The crystal bow and every bow of faerdhinen, colours included (T-056: the Crwys, Meilyr, Amlodd, Deadman and BR bows
+	// were missing, so their ammo slot was summed into the max), and the charged webweaver bow.
+	private static Set<Integer> ammolessBows()
+	{
+		final Set<Integer> bows = new HashSet<>(GearBonusCalc.CRYSTAL_BOWS);
+		bows.add(ItemID.WILD_CAVE_WEBWEAVER_CHARGED);
+		return Collections.unmodifiableSet(bows);
+	}
+
+	/** Whether this weapon makes its own ammunition, so the ammo slot is only carried. */
+	static boolean isAmmoless(int weapon)
+	{
+		return AMMOLESS_BOWS.contains(weapon);
+	}
 
 	/**
 	 * Whether anything worn in the ammo slot actually feeds this weapon.

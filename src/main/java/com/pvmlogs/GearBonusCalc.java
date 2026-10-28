@@ -2,6 +2,7 @@ package com.pvmlogs;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -283,26 +284,67 @@ class GearBonusCalc
 			? GearBonus.of(1.0, 1.05) : GearBonus.NONE;
 	}
 
-	/** Crystal armour only does anything alongside a crystal bow or bow of faerdhinen. */
-	private GearBonus crystalBonus(Loadout gear)
+	/**
+	 * The bows crystal armour works with (T-056): the crystal bow and every active
+	 * bow of faerdhinen, by item id, so the colours count too. A name test missed
+	 * them: "Bow of faerdhinen (c)" matched, the recoloured armour did not. Not
+	 * the inactive bows, which cannot attack, nor the historical and imbued crystal
+	 * bows (4212-4223, 11748-11758), which the wiki and the DPS calculator leave
+	 * out. The Deadman and BR copies are in: they are the same bow, and Eric's
+	 * Deadman-coloured armour is worn outside Deadman.
+	 */
+	static final Set<Integer> CRYSTAL_BOWS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		ItemID.CRYSTAL_BOW, ItemID.CRYSTAL_BOW_2500,
+		ItemID.BOW_OF_FAERDHINEN, ItemID.BOW_OF_FAERDHINEN_INFINITE,
+		ItemID.BOW_OF_FAERDHINEN_INFINITE_ITHELL, ItemID.BOW_OF_FAERDHINEN_INFINITE_IORWERTH,
+		ItemID.BOW_OF_FAERDHINEN_INFINITE_TRAHAEARN, ItemID.BOW_OF_FAERDHINEN_INFINITE_CADARN,
+		ItemID.BOW_OF_FAERDHINEN_INFINITE_CRWYS, ItemID.BOW_OF_FAERDHINEN_INFINITE_MEILYR,
+		ItemID.BOW_OF_FAERDHINEN_INFINITE_AMLODD, ItemID.BOW_OF_FAERDHINEN_INFINITE_DEADMAN,
+		ItemID.BR_BOW_OF_FAERDHINEN)));
+
+	/** Every active crystal helm: the plain one, the seven elf-clan colours, Deadman and BR. Never the inactive. */
+	static final Set<Integer> CRYSTAL_HELMS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		ItemID.CRYSTAL_HELMET, ItemID.CRYSTAL_HELMET_HEFIN, ItemID.CRYSTAL_HELMET_ITHELL,
+		ItemID.CRYSTAL_HELMET_IORWERTH, ItemID.CRYSTAL_HELMET_TRAHAEARN, ItemID.CRYSTAL_HELMET_CADARN,
+		ItemID.CRYSTAL_HELMET_CRWYS, ItemID.CRYSTAL_HELMET_AMLODD, ItemID.CRYSTAL_HELMET_DEADMAN,
+		ItemID.BR_CRYSTAL_HELMET)));
+
+	/** Every active crystal body. */
+	static final Set<Integer> CRYSTAL_BODIES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		ItemID.CRYSTAL_CHESTPLATE, ItemID.CRYSTAL_CHESTPLATE_HEFIN, ItemID.CRYSTAL_CHESTPLATE_ITHELL,
+		ItemID.CRYSTAL_CHESTPLATE_IORWERTH, ItemID.CRYSTAL_CHESTPLATE_TRAHAEARN, ItemID.CRYSTAL_CHESTPLATE_CADARN,
+		ItemID.CRYSTAL_CHESTPLATE_CRWYS, ItemID.CRYSTAL_CHESTPLATE_AMLODD, ItemID.CRYSTAL_CHESTPLATE_DEADMAN,
+		ItemID.BR_CRYSTAL_CHESTPLATE)));
+
+	/** Every active pair of crystal legs. */
+	static final Set<Integer> CRYSTAL_LEGS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		ItemID.CRYSTAL_PLATELEGS, ItemID.CRYSTAL_PLATELEGS_HEFIN, ItemID.CRYSTAL_PLATELEGS_ITHELL,
+		ItemID.CRYSTAL_PLATELEGS_IORWERTH, ItemID.CRYSTAL_PLATELEGS_TRAHAEARN, ItemID.CRYSTAL_PLATELEGS_CADARN,
+		ItemID.CRYSTAL_PLATELEGS_CRWYS, ItemID.CRYSTAL_PLATELEGS_AMLODD, ItemID.CRYSTAL_PLATELEGS_DEADMAN,
+		ItemID.BR_CRYSTAL_PLATELEGS)));
+
+	/**
+	 * Crystal armour only does anything alongside a crystal bow or bow of
+	 * faerdhinen: 5% accuracy for the helm, 15% for the body, 10% for the legs,
+	 * and half of each in damage (wiki, Crystal armour). Recolouring "only
+	 * changes appearance".
+	 */
+	static GearBonus crystalBonus(Loadout gear)
 	{
-		final String weapon = gear.name(EquipmentInventorySlot.WEAPON);
-		if (weapon == null || weapon.contains("inactive")
-			|| !(weapon.equals("Crystal bow") || weapon.startsWith("Bow of faerdhinen")))
+		if (!CRYSTAL_BOWS.contains(gear.id(EquipmentInventorySlot.WEAPON)))
 		{
 			return GearBonus.NONE;
 		}
 		double accuracy = 0.0;
-		// The uncharged pieces share the name with "(inactive)" appended, so an exact match is what excludes them.
-		if ("Crystal helm".equals(gear.name(EquipmentInventorySlot.HEAD)))
+		if (CRYSTAL_HELMS.contains(gear.id(EquipmentInventorySlot.HEAD)))
 		{
 			accuracy += 0.05;
 		}
-		if ("Crystal body".equals(gear.name(EquipmentInventorySlot.BODY)))
+		if (CRYSTAL_BODIES.contains(gear.id(EquipmentInventorySlot.BODY)))
 		{
 			accuracy += 0.15;
 		}
-		if ("Crystal legs".equals(gear.name(EquipmentInventorySlot.LEGS)))
+		if (CRYSTAL_LEGS.contains(gear.id(EquipmentInventorySlot.LEGS)))
 		{
 			accuracy += 0.10;
 		}
@@ -310,7 +352,7 @@ class GearBonusCalc
 		return accuracy == 0.0 ? GearBonus.NONE : GearBonus.of(1.0 + accuracy, 1.0 + accuracy / 2.0);
 	}
 
-	private GearBonus inquisitorsBonus(AttackType type, Loadout gear)
+	static GearBonus inquisitorsBonus(AttackType type, Loadout gear)
 	{
 		if (type != AttackType.CRUSH)
 		{
@@ -319,22 +361,26 @@ class GearBonusCalc
 		// The July 2026 update folded the old set effect into the hauberk and plateskirt, so the pieces are purely additive:
 		// 0.5% for the helm, 1% each for the other two.
 		double bonus = 0.0;
-		if (gear.id(EquipmentInventorySlot.HEAD) == ItemID.INQUISITORS_HELM)
+		// The BR copies are the same pieces (T-056).
+		final int head = gear.id(EquipmentInventorySlot.HEAD);
+		final int body = gear.id(EquipmentInventorySlot.BODY);
+		final int legs = gear.id(EquipmentInventorySlot.LEGS);
+		if (head == ItemID.INQUISITORS_HELM || head == ItemID.BR_INQUISITORS_HELM)
 		{
 			bonus += 0.005;
 		}
-		if (gear.id(EquipmentInventorySlot.BODY) == ItemID.INQUISITORS_BODY)
+		if (body == ItemID.INQUISITORS_BODY || body == ItemID.BR_INQUISITORS_BODY)
 		{
 			bonus += 0.01;
 		}
-		if (gear.id(EquipmentInventorySlot.LEGS) == ItemID.INQUISITORS_SKIRT)
+		if (legs == ItemID.INQUISITORS_SKIRT || legs == ItemID.BR_INQUISITORS_SKIRT)
 		{
 			bonus += 0.01;
 		}
 		return bonus == 0.0 ? GearBonus.NONE : GearBonus.symmetric(1.0 + bonus);
 	}
 
-	private GearBonus obsidianBonus(AttackType type, Loadout gear)
+	static GearBonus obsidianBonus(AttackType type, Loadout gear)
 	{
 		if (!type.isMelee() || !isObsidianWeapon(gear.id(EquipmentInventorySlot.WEAPON)))
 		{
@@ -347,7 +393,9 @@ class GearBonusCalc
 		{
 			total = total.combine(GearBonus.symmetric(1.1));
 		}
-		if (gear.id(EquipmentInventorySlot.AMULET) == ItemID.JEWL_BESERKER_NECKLACE)
+		// The ornamented necklace (or) too (T-056).
+		final int amulet = gear.id(EquipmentInventorySlot.AMULET);
+		if (amulet == ItemID.JEWL_BESERKER_NECKLACE || amulet == ItemID.JEWL_BESERKER_NECKLACE_ORNAMENT)
 		{
 			total = total.combine(GearBonus.of(1.0, 1.2));
 		}
@@ -403,6 +451,12 @@ class GearBonusCalc
 		return GearBonus.NONE;
 	}
 
+	// The Deadman copy is the same bow (T-056).
+	static boolean isTwistedBow(int weapon)
+	{
+		return weapon == ItemID.TWISTED_BOW || weapon == ItemID.DEADMAN_BLIGHTED_TWISTED_BOW;
+	}
+
 	private static boolean isPurgingStaff(int weapon)
 	{
 		return weapon == ItemID.PURGING_STAFF || weapon == ItemID.BR_PURGING_STAFF;
@@ -419,7 +473,7 @@ class GearBonusCalc
 	private boolean stacksAdditivelyWithBlackMask(Loadout gear)
 	{
 		final int weapon = gear.id(EquipmentInventorySlot.WEAPON);
-		return isDragonHunterCrossbow(weapon) || "Scorching bow".equals(gear.name(EquipmentInventorySlot.WEAPON));
+		return isDragonHunterCrossbow(weapon) || weapon == ItemID.SCORCHING_BOW;
 	}
 
 	/** Sums two damage bonuses rather than multiplying them; accuracy still multiplies. */
@@ -509,6 +563,8 @@ class GearBonusCalc
 				case ItemID.ARCLIGHT_INACTIVE:
 				case ItemID.DARKLIGHT:
 				case ItemID.SILVERLIGHT:
+				// The black-dyed Silverlight from Shadow of the Storm: the same sword (T-056).
+				case ItemID.AGRITH_SILVERLIGHT_DYED:
 					return GearBonus.of(1.0, 1.6);
 				case ItemID.BONE_CLAWS:
 				case ItemID.BR_BONE_CLAWS:
@@ -600,7 +656,7 @@ class GearBonusCalc
 	private GearBonus twistedBowBonus(AttackType type, MonsterStatsProvider.MonsterStats npc, Loadout gear)
 	{
 		if (npc == null || type != AttackType.RANGED
-			|| gear.id(EquipmentInventorySlot.WEAPON) != ItemID.TWISTED_BOW)
+			|| !isTwistedBow(gear.id(EquipmentInventorySlot.WEAPON)))
 		{
 			return GearBonus.NONE;
 		}
