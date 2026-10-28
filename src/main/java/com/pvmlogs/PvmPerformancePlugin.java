@@ -3023,6 +3023,7 @@ public class PvmPerformancePlugin extends Plugin
 		damageModifiers.onNpcChanged(npc);
 		if (current == null || current.isEnded())
 		{
+			closeRoomOnFall(npc);
 			return;
 		}
 		if (current.getTargetIndex() == npc.getIndex())
@@ -3042,6 +3043,16 @@ public class PvmPerformancePlugin extends Plugin
 			&& EncounterGroup.sameGroup(npc.getId(), current.getTargetId()))
 		{
 			finalizeFight(true, System.currentTimeMillis(), "changed into its beaten form");
+		}
+		closeRoomOnFall(npc);
+	}
+
+	// A Royal Titan lies beaten rather than despawning (T-061): the second to fall closes the room.
+	private void closeRoomOnFall(NPC npc)
+	{
+		if (EncounterGroup.isDefeated(npc.getId()))
+		{
+			closeRoomOnDeath(npc, true, System.currentTimeMillis());
 		}
 	}
 
@@ -3236,14 +3247,36 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			debug.log("LOOT from %s (npc %d, index %d): room '%s' closed with %d fights", npc.getName(), npc.getId(),
 				npc.getIndex(), currentEncounter.getName(), currentEncounter.getFights().size());
-			currentEncounter.end(now);
-			// The export rebuilds its rooms from the fights alone, so the fight the kill closed on carries the boundary into the
-			// file.
-			final List<Fight> held = currentEncounter.getFights();
-			if (!held.isEmpty())
-			{
-				held.get(held.size() - 1).closeRoom();
-			}
+			closeRoom(now);
+		}
+	}
+
+	/**
+	 * A part of the room went down (T-061): for a boss that drops no loot event,
+	 * that is what closes the room - Hespori at its death, the Royal Titans at the
+	 * second titan's. {@code fell}: it changed into its beaten form rather than
+	 * despawning dead.
+	 */
+	private void closeRoomOnDeath(NPC npc, boolean fell, long now)
+	{
+		if (currentEncounter != null && currentEncounter.closesOnDeathOf(npc.getId(), npc.getIndex(), fell))
+		{
+			debug.log("DEATH of %s (npc %d, index %d)%s: room '%s' closed with %d fights", npc.getName(), npc.getId(),
+				npc.getIndex(), fell ? ", fallen" : "", currentEncounter.getName(), currentEncounter.getFights().size());
+			closeRoom(now);
+		}
+	}
+
+	// Ends the room open now on its kill. Ended rather than dropped, so the kill stays on the overlay to read.
+	private void closeRoom(long now)
+	{
+		currentEncounter.end(now);
+		// The export rebuilds its rooms from the fights alone, so the fight the kill closed on carries the boundary into the
+		// file.
+		final List<Fight> held = currentEncounter.getFights();
+		if (!held.isEmpty())
+		{
+			held.get(held.size() - 1).closeRoom();
 		}
 	}
 
@@ -3291,6 +3324,11 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final NPC npc = event.getNpc();
 		closeOnDespawn(npc);
+		// After the fight on it is closed. Whatever was fighting it: a death a party member landed counts as well.
+		if (npc.isDead())
+		{
+			closeRoomOnDeath(npc, false, System.currentTimeMillis());
+		}
 		// The drain dies with the NPC, as its stats do: after the fight on it has been closed, which saves them.
 		drain.forget(npc);
 		damageModifiers.forget(npc);

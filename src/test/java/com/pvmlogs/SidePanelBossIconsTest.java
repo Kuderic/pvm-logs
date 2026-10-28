@@ -170,6 +170,10 @@ public class SidePanelBossIconsTest
 		m.put("Xarpus", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("The Maiden of Sugadinti", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("Hespori", HiscoreSkill.HESPORI);
+		// T-061's groups.
+		m.put("Grotesque Guardians", HiscoreSkill.GROTESQUE_GUARDIANS);
+		m.put("The Royal Titans", HiscoreSkill.THE_ROYAL_TITANS);
+		m.put("Kraken", HiscoreSkill.KRAKEN);
 		// Bosses whose NPCs are named otherwise.
 		m.put("Dusk", HiscoreSkill.GROTESQUE_GUARDIANS);
 		m.put("Dawn", HiscoreSkill.GROTESQUE_GUARDIANS);
