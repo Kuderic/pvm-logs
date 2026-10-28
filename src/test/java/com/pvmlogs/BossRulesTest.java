@@ -166,14 +166,60 @@ public class BossRulesTest
 		return Filepath.Unchecked.getRooted(file.getParent()).joinSegment(file.getFileName().toString());
 	}
 
-	/** Schema 2 only adds optional fields, so a hotfix file written for schema 1 still loads. */
+	/** Schemas 2 and 3 only add optional fields, so a hotfix file written for schema 1 still loads. */
 	@Test
 	public void aSchemaOneFileStillLoads()
 	{
 		final BossRules.RulesFile old = BossRules.read(GSON, new StringReader(
 			"{\"schemaVersion\":1,\"bosses\":[{\"name\":\"Vardorvis\",\"npcIds\":[12223]}]}"));
 		assertNotNull(old);
-		assertEquals(2, BossRules.SCHEMA_VERSION);
+		assertEquals(3, BossRules.SCHEMA_VERSION);
+	}
+
+	/**
+	 * T-041: a schema-2 file - the one bundled before T-041, a variant with no
+	 * attacksOnPlayer - still loads, and its bosses simply have no attack rules.
+	 */
+	@Test
+	public void aSchemaTwoFileStillLoadsWithNoAttackRules()
+	{
+		final BossRules.RulesFile two = BossRules.read(GSON, new StringReader("{\"schemaVersion\":2,\"bosses\":["
+			+ "{\"name\":\"Vardorvis\",\"npcIds\":[12223],\"variants\":[{\"version\":\"Post-quest\",\"maxHp\":700,"
+			+ "\"default\":true,\"scaleWithHp\":{\"strength\":[270,360],\"defence\":[215,145]}}]},"
+			+ "{\"name\":\"Abyssal Sire\",\"npcIds\":[5886],\"versionByNpcId\":{\"5886\":\"Phase 1\"},"
+			+ "\"countedHpMargin\":30}]}"));
+		assertNotNull(two);
+		final BossRules rules = BossRules.merge(two, null);
+		final BossRules.Boss vardorvis = rules.forNpc(12223);
+		assertEquals(215, BossRules.scaleWithHp(BossRules.choose(vardorvis, 700).scaleWithHp.defence, 700, 700));
+		assertNull(BossRules.attacksFor(vardorvis, 700));
+		assertNull(BossRules.attacksFor(rules.forNpc(5886), 400));
+		assertEquals(30, rules.forNpc(5886).countedHpMargin);
+	}
+
+	/** T-041: the bundled Vardorvis rules read as T-039 wrote them. */
+	@Test
+	public void vardorvisPostQuestDescribesItsAttacks()
+	{
+		final BossRules.AttacksOnPlayer attacks = BossRules.attacksFor(bundled().forNpc(12223), 700);
+		assertNotNull(attacks);
+		assertEquals(1, attacks.rulesVersion);
+		assertEquals(6, attacks.waitTicks);
+		assertEquals(0.5, attacks.bossHeal.share, 0);
+		assertEquals(2, attacks.bossHeal.withinTicks);
+		final StringBuilder names = new StringBuilder();
+		for (BossRules.AttackRule rule : attacks.attacks)
+		{
+			names.append(rule.name).append(' ').append(rule.avoidable).append("; ");
+		}
+		assertEquals("bleed always; head always; axe always; melee offPrayer; melee offPrayer; spike always; "
+			+ "spike always; ", names.toString());
+		final BossRules.AttackRule melee = attacks.attacks.get(3);
+		assertEquals(0.25, melee.prayedShare, 0);
+		assertEquals(10, melee.prayedMax);
+		// The gaze's "landedTicksBefore" reads into the same field as an animation's "ticksBefore".
+		assertEquals(1, attacks.attacks.get(1).projectile.ticksBefore[0]);
+		assertEquals("chip", attacks.unnamed);
 	}
 
 	/** The Sire's ids and versions, from the wiki's Abyssal Sire page (id1 to id4). */

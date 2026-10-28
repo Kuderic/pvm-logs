@@ -274,6 +274,64 @@ class Encounter
 	}
 
 	/**
+	 * The avoidable part of the damage taken (T-041), over the fights that have
+	 * ended at a boss with attack rules, or -1 with none: a fight still running
+	 * counts nothing yet.
+	 */
+	int getDamageTakenAvoidable()
+	{
+		int total = 0;
+		boolean any = false;
+		for (Fight fight : fights)
+		{
+			if (fight.hasAvoidable())
+			{
+				total += fight.getDamageTakenAvoidable();
+				any = true;
+			}
+		}
+		return any ? total : -1;
+	}
+
+	/** The eating ticks the avoidable hits cost (T-041), as {@link #getDamageTakenAvoidable}, or -1. */
+	double getAvoidableEatingTicks()
+	{
+		double total = 0;
+		boolean any = false;
+		for (Fight fight : fights)
+		{
+			if (fight.hasAvoidable())
+			{
+				total += fight.getAvoidableEatingTicks();
+				any = true;
+			}
+		}
+		return any ? Math.round(total * 10) / 10.0 : -1;
+	}
+
+	/** HP taken by attack (T-041) over the same fights; empty with none. */
+	java.util.Map<String, Integer> getDamageTakenByAttack()
+	{
+		final java.util.Map<String, Integer> total = new java.util.LinkedHashMap<>();
+		for (Fight fight : fights)
+		{
+			fight.getDamageTakenByAttack().forEach((name, hp) -> total.merge(name, hp, Integer::sum));
+		}
+		return total;
+	}
+
+	/** The newest attack rules any of its ended fights was classed by, or 0 for none (T-041). */
+	int getAttackRulesVersion()
+	{
+		int version = 0;
+		for (Fight fight : fights)
+		{
+			version = Math.max(version, fight.getAttackRulesVersion());
+		}
+		return version;
+	}
+
+	/**
 	 * Attacks that got an answer. One nulled by the kill has no outcome to be
 	 * right or wrong about, and left in here it reads as a miss that dealt
 	 * nothing.

@@ -60,11 +60,16 @@ import net.runelite.client.util.Filepath;
  * <li>{@code xpBonus}: the experience bonus the game pays on this boss, where the
  * wiki formula on a version's stats says otherwise.</li>
  * </ul>
+ *
+ * <p>Schema 3 (T-041, from T-039's research) adds one optional field to a version,
+ * {@code attacksOnPlayer}: how to tell the boss's attacks on the player apart from
+ * what the client sees, and which of them were avoidable. {@link AttackClassifier}
+ * reads it. A schema-2 file has none and reads the same.
  */
 @Slf4j
 class BossRules
 {
-	static final int SCHEMA_VERSION = 2;
+	static final int SCHEMA_VERSION = 3;
 
 	static final class Variant
 	{
@@ -73,6 +78,86 @@ class BossRules
 		@SerializedName("default")
 		boolean byDefault;
 		ScaleWithHp scaleWithHp;
+		/** Schema 3: the version's attacks on the player, or null where none are described. */
+		AttacksOnPlayer attacksOnPlayer;
+	}
+
+	/**
+	 * Schema 3 (T-041): how a version's hits on the player are named, as data. Each
+	 * hit is checked against {@link #attacks} in order and the first that fits names
+	 * it; one that fits none is {@link #unnamed}.
+	 */
+	static final class AttacksOnPlayer
+	{
+		/** Saved with every kill classed by these rules, so a kill classed by older rules can be told apart. */
+		int rulesVersion;
+		/** The boss heals off its own hits: which hits it heals for, and how soon the heal splat comes. */
+		BossHeal bossHeal;
+		/** How many ticks a hit waits for the evidence after it (a bleed, a heal) before it is named. */
+		int waitTicks;
+		List<AttackRule> attacks;
+		/** What a hit that fits no attack counts as. Only {@code chip} (never avoidable) is understood. */
+		String unnamed;
+	}
+
+	static final class BossHeal
+	{
+		/** The share of the hit the boss heals, rounded down: 0.5 for Vardorvis. */
+		double share;
+		/** The heal splat lands on the hit's tick or up to this many ticks after it. */
+		int withinTicks;
+		/** The hitsplat types the boss heals off: his hits, not the bleed they leave. Any when left out. */
+		int[] splat;
+	}
+
+	/**
+	 * One attack, and the conditions a hit must meet to be it. Every condition given
+	 * must hold; one left out is not checked.
+	 */
+	static final class AttackRule
+	{
+		/** The class it is saved under, e.g. {@code melee}; an {@code offPrayer} attack off prayer is {@code melee off prayer}. */
+		String name;
+		/** The hitsplat types it can show as; any when left out. */
+		int[] splat;
+		/** At least / at most this much damage. */
+		Integer minDamage;
+		Integer maxDamage;
+		/** Whether the boss healed off it (see {@link AttacksOnPlayer#bossHeal}). A hit too small to heal fits neither. */
+		Boolean bossHeals;
+		/** The target started one of these animations in the range of ticks before the hit (its latest such one). */
+		ActionCondition anim;
+		/** One of these projectiles landed in the range of ticks before the hit. */
+		ActionCondition projectile;
+		/** A splat of one of these types lands on the player in the range of ticks after it: an axe's bleed. */
+		FollowedBy followedBy;
+		/** The overhead up at the hit must not protect from this style ({@code melee}, {@code missiles}, {@code magic}). */
+		String overheadNot;
+		/** The style its protection prayer is, for {@code offPrayer}. */
+		String prayer;
+		/** The most a hit gets through that prayer; more under it means the prayer came up too late. */
+		int prayedMax;
+		/** The share of the hit the prayer lets through: 0.25 for Vardorvis's melee. */
+		double prayedShare;
+		/** {@code always}, {@code offPrayer} (only off prayer, only the part the prayer stops) or {@code never}. */
+		String avoidable;
+		/** What the debug log says it was named by. */
+		String evidence;
+	}
+
+	static final class ActionCondition
+	{
+		int[] ids;
+		/** [nearest, furthest] ticks before the hit; for a projectile, when it landed. */
+		@SerializedName(value = "ticksBefore", alternate = {"landedTicksBefore"})
+		int[] ticksBefore;
+	}
+
+	static final class FollowedBy
+	{
+		int[] splat;
+		/** [nearest, furthest] ticks after the hit. */
+		int[] withinTicks;
 	}
 
 	static final class ScaleWithHp
@@ -281,6 +366,16 @@ class BossRules
 			to |= id == toId;
 		}
 		return from && !to;
+	}
+
+	/**
+	 * The attacks on the player for the version this full hitpoints picks (see
+	 * {@link #choose}), or null where that version describes none.
+	 */
+	static AttacksOnPlayer attacksFor(Boss boss, int observedMaxHp)
+	{
+		final Variant variant = choose(boss, observedMaxHp);
+		return variant == null ? null : variant.attacksOnPlayer;
 	}
 
 	/** The rule's variant with this version name, or null. */

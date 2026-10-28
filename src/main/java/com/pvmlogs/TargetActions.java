@@ -1,9 +1,12 @@
 package com.pvmlogs;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -13,13 +16,54 @@ import java.util.Set;
  * <p>The game never says which attack a splat on the player came from, or its
  * style. Logging what the target was doing beside each splat gives a later,
  * per-boss task the raw facts to learn which animation and projectile is which
- * style. This is for the debug log only: nothing about boss behaviour reaches the
- * overlay (Jagex's guidelines).
+ * style. The same facts, as {@link Action}s, are what {@link AttackClassifier} names
+ * each hit by (T-041). Nothing about boss behaviour reaches a live display
+ * (Jagex's guidelines).
  */
 final class TargetActions
 {
 	/** How far back the TAKEN line looks. A projectile can fly four or five ticks. */
 	static final int KEEP_TICKS = 6;
+
+	/**
+	 * One thing the target did, relative to a hit on the player (T-041): an
+	 * animation it started, or a projectile, with when it was seen and, for a
+	 * projectile, when it lands. Ticks are relative to the hit: -1 is the tick
+	 * before it.
+	 */
+	static final class Action
+	{
+		final boolean projectile;
+		final int id;
+		final int relativeTick;
+		// Only for a projectile; Integer.MIN_VALUE for an animation.
+		final int landsRelative;
+
+		Action(boolean projectile, int id, int relativeTick, int landsRelative)
+		{
+			this.projectile = projectile;
+			this.id = id;
+			this.relativeTick = relativeTick;
+			this.landsRelative = landsRelative;
+		}
+
+		static Action animation(int id, int relativeTick)
+		{
+			return new Action(false, id, relativeTick, Integer.MIN_VALUE);
+		}
+
+		static Action projectile(int id, int relativeTick, int landsRelative)
+		{
+			return new Action(true, id, relativeTick, landsRelative);
+		}
+
+		@Override
+		public String toString()
+		{
+			return (projectile ? "proj " : "anim ") + id + " t" + relativeTick
+				+ (projectile ? " lands t" + landsRelative : "");
+		}
+	}
 
 	private static final class Seen
 	{
@@ -30,14 +74,17 @@ final class TargetActions
 		final int landsTick;
 		// The projectile's identity, or null for an animation.
 		final Long key;
+		// The animation or projectile id.
+		final int id;
 
-		Seen(int tick, int targetIndex, String text, int landsTick, Long key)
+		Seen(int tick, int targetIndex, String text, int landsTick, Long key, int id)
 		{
 			this.tick = tick;
 			this.targetIndex = targetIndex;
 			this.text = text;
 			this.landsTick = landsTick;
 			this.key = key;
+			this.id = id;
 		}
 	}
 
@@ -52,7 +99,7 @@ final class TargetActions
 		{
 			return;
 		}
-		add(new Seen(tick, targetIndex, "anim " + animation, Integer.MIN_VALUE, null));
+		add(new Seen(tick, targetIndex, "anim " + animation, Integer.MIN_VALUE, null, animation));
 	}
 
 	/**
@@ -76,7 +123,7 @@ final class TargetActions
 			text.append(" from ").append(from);
 		}
 		text.append(" at ").append(at);
-		add(new Seen(tick, targetIndex, text.toString(), landsTick, key));
+		add(new Seen(tick, targetIndex, text.toString(), landsTick, key, id));
 	}
 
 	private void add(Seen entry)
@@ -130,6 +177,30 @@ final class TargetActions
 			}
 		}
 		return out.toString();
+	}
+
+	/**
+	 * The same entries {@link #describe} lists, as {@link Action}s relative to
+	 * {@code tick}, oldest first. Empty when nothing was seen.
+	 */
+	List<Action> actions(int tick, int targetIndex)
+	{
+		List<Action> out = null;
+		for (Seen entry : seen)
+		{
+			final int ago = tick - entry.tick;
+			if (entry.targetIndex != targetIndex || ago < 0 || ago > KEEP_TICKS)
+			{
+				continue;
+			}
+			if (out == null)
+			{
+				out = new ArrayList<>(4);
+			}
+			out.add(entry.key == null ? Action.animation(entry.id, entry.tick - tick)
+				: Action.projectile(entry.id, entry.tick - tick, entry.landsTick - tick));
+		}
+		return out == null ? Collections.emptyList() : out;
 	}
 
 	private static String relative(int delta)

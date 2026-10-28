@@ -180,7 +180,9 @@ public class PvmPerformancePlugin extends Plugin
 		// T-018, at the end so no older column moves. damageTaken above is hits only from T-018 on.
 		+ "dotTaken,hitsTaken,biggestHitTaken,damageTakenUnprotected,"
 		// T-017 Part B: recoil and vengeance, at the end for the same reason.
-		+ "reflectDamage\n";
+		+ "reflectDamage,"
+		// T-041: blank where the boss has no attack rules, and on fights saved before them.
+		+ "damageTakenAvoidable,avoidableEatingTicks\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -528,8 +530,15 @@ public class PvmPerformancePlugin extends Plugin
 	// Splats on me (T-018): their kinds, what they add to the fight, and the hit damage tick by tick for recoil and
 	// vengeance to be matched against (T-017 Part B: damageTakenOn).
 	private final DamageTaken taken = new DamageTaken();
-	// The fight target's animations and projectiles of the last few ticks, for the TAKEN line only (T-018).
+	// The fight target's animations and projectiles of the last few ticks, for the TAKEN line (T-018) and, at a boss with
+	// attack rules, for naming each hit (T-041).
 	private final TargetActions targetSeen = new TargetActions();
+	// T-041: the open fight's hit names and hitpoints replay, at a boss whose rules describe its attacks on the player
+	// (boss-rules.json schema 3). Fed by read-only hooks; read only as the fight ends, never while it runs (Jagex's
+	// guidelines). Both null when the fight's boss has no such rules. avoidableFight is the fight they were made for.
+	private Fight avoidableFight;
+	private AttackClassifier attackNames;
+	private AvoidableEating eatingReplay;
 
 	// My in-flight projectiles, each credited once. Keyed by start cycle, id and target rather than by the Projectile,
 	// whose identity the client recycles.
@@ -937,8 +946,137 @@ public class PvmPerformancePlugin extends Plugin
 		final HitsplatKind kind = taken.onSplat(hitsplat.getHitsplatType(), hitsplat.getAmount(), tick,
 			protection != null, fighting ? current : null, session, now);
 		final String target = fighting ? targetSeen.describe(tick, current.getTargetIndex()) : "";
+		// Read before the splat lands (T-039: across 23 kills the field never fell further than the hits explain).
+		final int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
 		debug.log("%s", DamageTaken.line(hitsplat.getAmount(), hitsplat.getHitsplatType(), kind, protection,
-			client.getBoostedSkillLevel(Skill.HITPOINTS), npcsOnMe(), target, fighting));
+			hp, npcsOnMe(), target, fighting));
+		// T-041: a hit or damage over time in the fight is named, later, and counted in the hitpoints replay.
+		if (fighting && (kind == HitsplatKind.HIT_TAKEN || kind == HitsplatKind.DAMAGE_OVER_TIME)
+			&& avoidableTracking(tick - 1, hp))
+		{
+			attackNames.onHit(tick, hitsplat.getAmount(), hitsplat.getHitsplatType(), protection,
+				targetSeen.actions(tick, current.getTargetIndex()));
+			eatingReplay.damage(tick, hitsplat.getAmount());
+		}
+	}
+
+	/**
+	 * Whether the open fight's hits are being named (T-041): its boss's version has
+	 * attack rules. The first time it is asked for a fight, it looks the rules up
+	 * and starts the hitpoints replay at {@code hp}, read at the end of {@code tick}.
+	 */
+	private boolean avoidableTracking(int tick, int hp)
+	{
+		if (current == null || current.isEnded())
+		{
+			return false;
+		}
+		if (avoidableFight != current)
+		{
+			avoidableFight = current;
+			final BossRules.AttacksOnPlayer rules = attackRulesFor(current);
+			attackNames = rules == null ? null : new AttackClassifier(rules);
+			eatingReplay = rules == null ? null : new AvoidableEating(tick, hp);
+			if (rules != null)
+			{
+				debug.log("AVOIDABLE rules v%d for %s (npc %d, %d hp): hits are named %d ticks after they land, read "
+						+ "at the fight's end", rules.rulesVersion, current.getTargetName(), current.getTargetId(),
+					current.getMaxHp(), rules.waitTicks);
+			}
+		}
+		return attackNames != null;
+	}
+
+	/** The attack rules for this fight's boss version, or null. */
+	private BossRules.AttacksOnPlayer attackRulesFor(Fight fight)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		return rules == null ? null
+			: AttackClassifier.usable(BossRules.attacksFor(rules.forNpc(fight.getTargetId()), fight.getMaxHp()));
+	}
+
+	/** Once a tick (T-041): the hitpoints for the replay, and the hits whose evidence is in by now, named. */
+	private void trackAvoidable()
+	{
+		if (!avoidableTracking(client.getTickCount(), client.getBoostedSkillLevel(Skill.HITPOINTS)))
+		{
+			return;
+		}
+		eatingReplay.hitpoints(client.getTickCount(), client.getBoostedSkillLevel(Skill.HITPOINTS));
+		for (AttackClassifier.Named named : attackNames.settle(client.getTickCount()))
+		{
+			eatingReplay.avoidable(named.tick, named.avoidable);
+			debug.log("TAKEN AS tick %d: %d %s", named.tick, named.amount, named.describe());
+		}
+	}
+
+	/**
+	 * The fight is ending (T-041): the hits still waiting are named with what
+	 * there is, the replay runs, and the fight keeps the figures. Only now do they
+	 * become readable.
+	 */
+	private void settleAvoidable(Fight fight)
+	{
+		if (avoidableFight != fight || attackNames == null)
+		{
+			avoidableFight = null;
+			attackNames = null;
+			eatingReplay = null;
+			return;
+		}
+		for (AttackClassifier.Named named : attackNames.settleAll())
+		{
+			eatingReplay.avoidable(named.tick, named.avoidable);
+			debug.log("TAKEN AS tick %d: %d %s (settled at the fight's end)", named.tick, named.amount, named.describe());
+		}
+		// The version is the one the fight ended as: Awakened shares the ids and is only told by its full hitpoints.
+		final BossRules.AttacksOnPlayer rules = attackRulesFor(fight);
+		if (rules == null || rules.rulesVersion != attackNames.rulesVersion())
+		{
+			debug.log("AVOIDABLE %s (npc %d): the version it ended as (%d hp) has no attack rules, nothing kept",
+				fight.getTargetName(), fight.getTargetId(), fight.getMaxHp());
+		}
+		else
+		{
+			final int maxHp = client.getRealSkillLevel(Skill.HITPOINTS);
+			final LedgerHistory.Like like = currentEncounter != null && currentEncounter.getFights().contains(fight)
+				? LedgerHistory.Like.of(currentEncounter)
+				: new LedgerHistory.Like(fight.encounterName(), fight.getMaxHp(), fight.getOthersDamage() == 0);
+			final AvoidableEating.Result result = eatingReplay.finish(maxHp, fight.getTicksLostEating(),
+				() -> AvoidableEating.usualLine(history, like, Collections.singleton(fight)));
+			fight.recordAvoidable(attackNames.rulesVersion(), attackNames.avoidable(), attackNames.damageByClass(),
+				result.avoidableTicks, result.line, result.lineSource);
+			debug.log("%s", avoidableLine(fight, attackNames, result, maxHp));
+		}
+		avoidableFight = null;
+		attackNames = null;
+		eatingReplay = null;
+	}
+
+	/**
+	 * The end-of-fight line (T-041): {@code AVOIDABLE Vardorvis (npc 12223), rules v1: taken 172, avoidable 70.0
+	 * (melee 102, axe 40, bleed 30); eats 3, replay with 3, without 0; line 29 hp (this kill) of 99, food 20; eating 9
+	 * ticks, avoidable 9.0}: HP by class, the food eaten and the two replays' eats, the line and where it came from,
+	 * and what the avoidable hits cost.
+	 */
+	static String avoidableLine(Fight fight, AttackClassifier names, AvoidableEating.Result result, int maxHp)
+	{
+		final StringBuilder classes = new StringBuilder();
+		int taken = 0;
+		for (Map.Entry<String, Integer> e : names.damageByClass().entrySet())
+		{
+			if (classes.length() > 0)
+			{
+				classes.append(", ");
+			}
+			classes.append(e.getKey()).append(' ').append(e.getValue());
+			taken += e.getValue();
+		}
+		return String.format("AVOIDABLE %s (npc %d), rules v%d: taken %d, avoidable %.1f (%s); eats %d, replay with %d, "
+				+ "without %d; line %d hp (%s) of %d, food %d; eating %d ticks, avoidable %.1f",
+			fight.getTargetName(), fight.getTargetId(), names.rulesVersion(), taken, names.avoidable(),
+			classes.length() == 0 ? "nothing" : classes, result.eats, result.eatsWith, result.eatsWithout, result.line,
+			result.lineSource, maxHp, result.foodHeal, fight.getTicksLostEating(), result.avoidableTicks);
 	}
 
 	/**
@@ -1114,6 +1252,11 @@ public class PvmPerformancePlugin extends Plugin
 			case HEAL:
 				current.recordHeal(amount);
 				health.heal(index, npc.getId(), amount, tick);
+				// T-041: Vardorvis heals off his melee and spikes, not his axes: that is how they are told apart.
+				if (attackNames != null && avoidableFight == current)
+				{
+					attackNames.onBossHeal(tick, amount);
+				}
 				damageByIndex.compute(index, (i, v) -> Math.max(0, (v == null ? 0 : v) - Math.max(0, amount)));
 				break;
 			case OTHER_PLAYER:
@@ -3436,7 +3579,15 @@ public class PvmPerformancePlugin extends Plugin
 			combatCalc.invalidateInventory();
 			// A clicked food gone, or bitten, is the eat: this tick is when the game processed it.
 			final ItemContainer inventory = event.getItemContainer();
-			foodDelay.inventoryChanged(client.getTickCount(), inventory::count);
+			for (FoodDelay.Eat eat : foodDelay.inventoryChanged(client.getTickCount(), inventory::count))
+			{
+				// T-041: food (not a potion) for the hitpoints replay, once the fight's replay is running.
+				if (eat.delay > 0 && eatingReplay != null && avoidableFight == current && current != null
+					&& !current.isEnded())
+				{
+					eatingReplay.eat(eat.tick);
+				}
+			}
 		}
 	}
 
@@ -3608,6 +3759,8 @@ public class PvmPerformancePlugin extends Plugin
 			prayerUpByTick.keySet().removeIf(t -> client.getTickCount() - t > PRAYER_HISTORY_TICKS);
 		}
 		trackAttackCooldown();
+		// After the tick's splats and eats: the replay's hitpoints, and the hits whose evidence is in (T-041).
+		trackAvoidable();
 
 		// For ranged attacks where the player is right next to the target, the hitsplat can arrive on the exact same tick the
 		// projectile sets off. If it did, the hitsplat's resolvePendingSample call fired empty because trackAttackCooldown
@@ -4369,6 +4522,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		closeTargetHealth(died);
 		debug.log("%s", DamageTaken.summary(current));
+		settleAvoidable(current);
 		current.end(died, now);
 		if (!keepCounts)
 		{
@@ -4848,7 +5002,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
 			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d,%d%n",
+				+ "%d,%d,%d,%d,%d,%s,%s%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -4881,7 +5035,9 @@ public class PvmPerformancePlugin extends Plugin
 				room.getHitsTaken(),
 				room.getBiggestHitTaken(),
 				room.getDamageTakenUnprotected(),
-				room.getReflectDamage());
+				room.getReflectDamage(),
+				csvExpected(room.getDamageTakenAvoidable(), 0),
+				csvExpected(room.getAvoidableEatingTicks(), 1));
 	}
 
 	static String csvRaidRow(String raidName, int raidRun, List<Encounter> rooms)
@@ -4898,7 +5054,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
 			+ String.format("%s,,,,,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d,%d%n",
+				+ "%d,%d,%d,%d,%d,%s,%s%n",
 				started,
 				raid.getDamageDealt(),
 				raid.getDamageTaken(),
@@ -4930,7 +5086,9 @@ public class PvmPerformancePlugin extends Plugin
 				raid.getHitsTaken(),
 				raid.getBiggestHitTaken(),
 				raid.getDamageTakenUnprotected(),
-				raid.getReflectDamage());
+				raid.getReflectDamage(),
+				csvExpected(raid.getDamageTakenAvoidable(), 0),
+				csvExpected(raid.getAvoidableEatingTicks(), 1));
 	}
 
 	private static String csvFightRow(String raidName, int raidRun, Fight fight)
@@ -4945,7 +5103,7 @@ public class PvmPerformancePlugin extends Plugin
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
 		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-			+ "%d,%d,%d,%d,%d%n",
+			+ "%d,%d,%d,%d,%d,%s,%s%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -4982,7 +5140,9 @@ public class PvmPerformancePlugin extends Plugin
 			fight.getHitsTaken(),
 			fight.getBiggestHitTaken(),
 			fight.getDamageTakenUnprotected(),
-			fight.getReflectDamage());
+			fight.getReflectDamage(),
+			csvExpected(fight.getDamageTakenAvoidable(), 0),
+			csvExpected(fight.getAvoidableEatingTicks(), 1));
 	}
 
 	/**

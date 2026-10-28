@@ -139,6 +139,62 @@ class Raid
 		return total;
 	}
 
+	/** The avoidable part of the damage taken across the rooms (T-041), or -1 where none has a figure. */
+	int getDamageTakenAvoidable()
+	{
+		int total = 0;
+		boolean any = false;
+		for (Encounter encounter : encounters)
+		{
+			final int room = encounter.getDamageTakenAvoidable();
+			if (room >= 0)
+			{
+				total += room;
+				any = true;
+			}
+		}
+		return any ? total : -1;
+	}
+
+	/** The eating ticks the avoidable hits cost across the rooms (T-041), or -1 where none has a figure. */
+	double getAvoidableEatingTicks()
+	{
+		double total = 0;
+		boolean any = false;
+		for (Encounter encounter : encounters)
+		{
+			final double room = encounter.getAvoidableEatingTicks();
+			if (room >= 0)
+			{
+				total += room;
+				any = true;
+			}
+		}
+		return any ? Math.round(total * 10) / 10.0 : -1;
+	}
+
+	/** HP taken by attack across the rooms (T-041). */
+	java.util.Map<String, Integer> getDamageTakenByAttack()
+	{
+		final java.util.Map<String, Integer> total = new java.util.LinkedHashMap<>();
+		for (Encounter encounter : encounters)
+		{
+			encounter.getDamageTakenByAttack().forEach((name, hp) -> total.merge(name, hp, Integer::sum));
+		}
+		return total;
+	}
+
+	/** The newest attack rules any room was classed by, or 0 (T-041). */
+	int getAttackRulesVersion()
+	{
+		int version = 0;
+		for (Encounter encounter : encounters)
+		{
+			version = Math.max(version, encounter.getAttackRulesVersion());
+		}
+		return version;
+	}
+
 	/** The first reason any room gives not to trust its expected side, or null. */
 	String getStatsWarning()
 	{

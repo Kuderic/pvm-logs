@@ -188,7 +188,9 @@ public class ReflectTest
 		final Fight f = new Fight("Vardorvis", NpcIds.GOBLIN, 1, 700, 0L, null, 0);
 		f.recordReflectDamage(13);
 		f.end(true, 1200L);
-		final String row = PvmPerformancePlugin.csvRow(f).trim();
-		assertEquals("13", row.substring(row.lastIndexOf(',') + 1));
+		// Its own column, which T-041's two avoidable columns now follow.
+		final String[] cells = ("fight,,,\"room\"," + PvmPerformancePlugin.csvRow(f)).trim().split(",", -1);
+		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
+		assertEquals("13", cells[header.indexOf("reflectDamage")]);
 	}
 }
