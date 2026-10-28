@@ -41,6 +41,8 @@ final class SidePanelStyle
 	static final Color COST_STRIPE_GROUND = new Color(0x5A4530);
 	static final Color AVERAGE_STRIPE = new Color(0x8A8A8A);
 	static final Color UNSCORED = ColorScheme.MEDIUM_GRAY_COLOR;
+	/** The time budget's eating stretch (T-038): a light, neutral grey, apart from the unscored grey and luck's stripes. */
+	static final Color EATING = new Color(0xA8A8A8);
 	static final Color NOTE_CARD = new Color(0x232A30);
 	static final Color CHIP_COST = new Color(0x4A3320);
 	static final Color CHIP_BETTER = new Color(0x173F40);

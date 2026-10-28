@@ -278,6 +278,10 @@ final class SidePanelParts
 				g.setColor(SidePanelStyle.UNSCORED);
 				g.fill(area);
 				break;
+			case EATING:
+				g.setColor(SidePanelStyle.EATING);
+				g.fill(area);
+				break;
 			case LUCK_SLOWER:
 				stripes(g, area, SidePanelStyle.COST_STRIPE_GROUND, SidePanelStyle.COST);
 				break;

@@ -77,8 +77,8 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "overlayParts",
 		name = "Execution parts",
-		description = "Under Execution, list uptime, stat boost, prayer and gear with the seconds each cost. "
-			+ "Costing only lists those that cost real time",
+		description = "Under Execution, list uptime, prayer, gear and stat boost with the seconds each cost, then the "
+			+ "damage you took and the time spent eating. Costing only lists the parts that cost real time",
 		position = 3
 	)
 	default ExecutionParts overlayParts()
@@ -89,8 +89,8 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "overlayDetails",
 		name = "Details after the fight",
-		description = "Once the fight ends, add hits against expected, thrall and burn/poison damage, what the "
-			+ "boss healed and ticks spent eating",
+		description = "Once the fight ends, add your average time, hits against expected, thrall, recoil and "
+			+ "burn/poison damage, what the boss healed, and a breakdown of the damage you took",
 		position = 3
 	)
 	default boolean overlayDetails()
