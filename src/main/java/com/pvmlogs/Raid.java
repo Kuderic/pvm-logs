@@ -74,6 +74,28 @@ class Raid
 		return total;
 	}
 
+	/** {@link #getDotDamage()} by kind (T-062). */
+	java.util.Map<String, Integer> getDotDamageByKind()
+	{
+		final java.util.Map<String, Integer> total = new java.util.LinkedHashMap<>();
+		for (Encounter encounter : encounters)
+		{
+			DotKinds.addAll(total, encounter.getDotDamageByKind());
+		}
+		return total;
+	}
+
+	/** The scored fights' DoT by kind across the rooms (T-062). */
+	java.util.Map<String, Integer> getScoredDotDamageByKind()
+	{
+		final java.util.Map<String, Integer> total = new java.util.LinkedHashMap<>();
+		for (Encounter encounter : encounters)
+		{
+			DotKinds.addAll(total, encounter.getScoredDotDamageByKind());
+		}
+		return total;
+	}
+
 	int getHealed()
 	{
 		int total = 0;
@@ -102,6 +124,17 @@ class Raid
 		for (Encounter encounter : encounters)
 		{
 			total += encounter.getDotTaken();
+		}
+		return total;
+	}
+
+	/** {@link #getDotTaken()} by kind (T-062). */
+	java.util.Map<String, Integer> getDotTakenByKind()
+	{
+		final java.util.Map<String, Integer> total = new java.util.LinkedHashMap<>();
+		for (Encounter encounter : encounters)
+		{
+			DotKinds.addAll(total, encounter.getDotTakenByKind());
 		}
 		return total;
 	}

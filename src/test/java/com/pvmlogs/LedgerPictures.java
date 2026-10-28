@@ -43,6 +43,8 @@ public final class LedgerPictures
 		// T-019: illustrative damage taken after the fight.
 		final LedgerExamples.FakeScope dead = LedgerExamples.kill();
 		dead.dotTaken = 27;
+		// T-062: Vardorvis's axes bleed.
+		dead.dotTakenByKind.put("bleed", 27);
 		dead.biggestHitTaken = 41;
 		dead.damageTakenUnprotected = 85;
 		// 688 against 778 over 11,436: the bottom 20%.
@@ -112,6 +114,7 @@ public final class LedgerPictures
 		final LedgerExamples.FakeScope drained = LedgerExamples.kill();
 		drained.damageVariance = 11436;
 		drained.dotTaken = 27;
+		drained.dotTakenByKind.put("bleed", 27);
 		drained.biggestHitTaken = 41;
 		drained.damageTakenUnprotected = 85;
 		drained.defenceStart = 215;
@@ -125,6 +128,32 @@ public final class LedgerPictures
 			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
 		drained.specLuckDamage = 0;
 		s.put("19-party-drained", LedgerRows.build(drained, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
+		// T-062, illustrative: venom dealt (a blowpipe at Zulrah) and her poison and venom taken, then a burning-claws kill,
+		// then an old kill (saved before T-062) whose totals have no kind.
+		final LedgerExamples.FakeScope zulrah = LedgerExamples.kill();
+		zulrah.damageVariance = 11436;
+		zulrah.thrallDamage = 0;
+		zulrah.dotDamage = 30;
+		zulrah.dotDamageByKind.put("venom", 30);
+		zulrah.dotTaken = 37;
+		zulrah.dotTakenByKind.put("poison", 25);
+		zulrah.dotTakenByKind.put("venom", 12);
+		zulrah.biggestHitTaken = 41;
+		s.put("20-venom-poison", LedgerRows.build(zulrah, LedgerRows.State.fight("Zulrah", true, true, false), all));
+		final LedgerExamples.FakeScope claws = LedgerExamples.kill();
+		claws.damageVariance = 11436;
+		claws.dotDamage = 49;
+		claws.dotDamageByKind.put("burn", 49);
+		claws.dotTaken = 27;
+		claws.dotTakenByKind.put("bleed", 27);
+		s.put("21-burn-claws", LedgerRows.build(claws, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
+		final LedgerExamples.FakeScope old = LedgerExamples.kill();
+		old.damageVariance = 11436;
+		old.dotDamage = 49;
+		old.dotTaken = 27;
+		s.put("22-old-kill", LedgerRows.build(old, LedgerRows.State.fight("Vardorvis", true, true, false)
 			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
 		// T-022: the loadout overlay under the Ledger, in the states it's worth seeing in. Each is drawn as its own picture,
 		// "<state>.L", which the sheet stacks under the Ledger's as RuneLite stacks the two boxes.

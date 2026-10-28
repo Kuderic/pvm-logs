@@ -237,6 +237,16 @@ final class LedgerRows
 		/** Burn, poison, venom, bleed. */
 		int dotDamage();
 
+		/**
+		 * T-062: {@link #dotDamage()} by kind ({@code burn}, {@code poison},
+		 * {@code venom}, {@code bleed}); the part with no kind (old kills) is what
+		 * the total has beyond these. Empty where nothing is known by kind.
+		 */
+		default java.util.Map<String, Integer> dotDamageByKind()
+		{
+			return java.util.Collections.emptyMap();
+		}
+
 		/** 0 where the scope doesn't keep it (the trip). Only ever shown after the fight. */
 		int healed();
 
@@ -267,6 +277,12 @@ final class LedgerRows
 
 		/** T-018: what poison, venom, burn and bleed took from the player. */
 		int dotTaken();
+
+		/** T-062: {@link #dotTaken()} by kind, as {@link #dotDamageByKind()}. */
+		default java.util.Map<String, Integer> dotTakenByKind()
+		{
+			return java.util.Collections.emptyMap();
+		}
 
 		/** T-018: the biggest single hit the player took. */
 		int biggestHitTaken();
@@ -388,6 +404,12 @@ final class LedgerRows
 				return room.getDotDamage();
 			}
 
+			@Override
+			public java.util.Map<String, Integer> dotDamageByKind()
+			{
+				return room.getDotDamageByKind();
+			}
+
 			public int healed()
 			{
 				return room.getHealed();
@@ -451,6 +473,12 @@ final class LedgerRows
 			public int dotTaken()
 			{
 				return room.getDotTaken();
+			}
+
+			@Override
+			public java.util.Map<String, Integer> dotTakenByKind()
+			{
+				return room.getDotTakenByKind();
 			}
 
 			public int biggestHitTaken()
@@ -574,6 +602,12 @@ final class LedgerRows
 				return raid.getDotDamage();
 			}
 
+			@Override
+			public java.util.Map<String, Integer> dotDamageByKind()
+			{
+				return raid.getDotDamageByKind();
+			}
+
 			public int healed()
 			{
 				return raid.getHealed();
@@ -637,6 +671,12 @@ final class LedgerRows
 			public int dotTaken()
 			{
 				return raid.getDotTaken();
+			}
+
+			@Override
+			public java.util.Map<String, Integer> dotTakenByKind()
+			{
+				return raid.getDotTakenByKind();
 			}
 
 			public int biggestHitTaken()
@@ -744,6 +784,12 @@ final class LedgerRows
 				return trip.getDotDamage();
 			}
 
+			@Override
+			public java.util.Map<String, Integer> dotDamageByKind()
+			{
+				return trip.getDotDamageByKind();
+			}
+
 			public int healed()
 			{
 				// Not kept for the trip (T-014 adds thrall and DoT only), so its row stays hidden there.
@@ -808,6 +854,12 @@ final class LedgerRows
 			public int dotTaken()
 			{
 				return trip.getDotTaken();
+			}
+
+			@Override
+			public java.util.Map<String, Integer> dotTakenByKind()
+			{
+				return trip.getDotTakenByKind();
 			}
 
 			public int biggestHitTaken()
@@ -1561,10 +1613,8 @@ final class LedgerRows
 		{
 			details.add(detail(" recoil/veng dmg", number(s.reflectDamage()), Colour.NEUTRAL));
 		}
-		if (s.dotDamage() > 0)
-		{
-			details.add(detail(" burn/poison dmg", number(s.dotDamage()), Colour.NEUTRAL));
-		}
+		// One row a kind (T-062, Eric 2026-10-28): burn, poison, venom, bleed, then " DoT dmg" for what has no kind.
+		dot(details, s.dotDamageByKind(), s.dotDamage(), " dmg");
 		// The boss's doing rather than the player's, so after the fight only (own-output guardrail).
 		if (s.healed() > 0)
 		{
@@ -1572,11 +1622,8 @@ final class LedgerRows
 		}
 		// What the player took, beyond the live total under Execution (T-019). Nothing on which attack or style hit them:
 		// that needs per-boss data, and would be after the fight only too.
-		if (s.dotTaken() > 0)
-		{
-			// Burn and bleed count too; named to match " burn/poison dmg" above (Eric, 2026-10-27).
-			details.add(detail(" burn/poison taken", number(s.dotTaken()), Colour.NEUTRAL));
-		}
+		// By kind, as dealt is above (T-062).
+		dot(details, s.dotTakenByKind(), s.dotTaken(), " taken");
 		if (s.biggestHitTaken() > 0)
 		{
 			details.add(detail(" biggest hit taken", number(s.biggestHitTaken()), Colour.NEUTRAL));
@@ -1592,6 +1639,19 @@ final class LedgerRows
 			rows.add(blank());
 			rows.add(main(SUMMARY, ""));
 			rows.addAll(details);
+		}
+	}
+
+	/**
+	 * T-062: {@code  burn dmg}, {@code  poison dmg}, {@code  venom dmg},
+	 * {@code  bleed dmg}, then {@code  DoT dmg} for the part of the total with no
+	 * kind (an old kill's); a kind with 0 has no row. The same for taken.
+	 */
+	private static void dot(List<Row> rows, java.util.Map<String, Integer> byKind, int total, String suffix)
+	{
+		for (java.util.Map.Entry<String, Integer> line : DotKinds.split(byKind, total, DotKinds.REMAINDER).entrySet())
+		{
+			rows.add(detail(" " + line.getKey() + suffix, number(line.getValue()), Colour.NEUTRAL));
 		}
 	}
 

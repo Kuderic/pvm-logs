@@ -27,6 +27,9 @@ final class LedgerExamples
 		/** T-029: T-028's damage variance; negative means unknown, as for fights saved before T-028. */
 		double damageVariance = -1;
 		int dotDamage;
+		// T-062: by kind. Empty unless a test or example says otherwise, as for a kill saved before T-062.
+		java.util.Map<String, Integer> dotDamageByKind = new java.util.LinkedHashMap<>();
+		java.util.Map<String, Integer> dotTakenByKind = new java.util.LinkedHashMap<>();
 		int healed;
 		int ticksLost;
 		int ticksLostEating;
@@ -99,6 +102,18 @@ final class LedgerExamples
 		public int dotDamage()
 		{
 			return dotDamage;
+		}
+
+		@Override
+		public java.util.Map<String, Integer> dotDamageByKind()
+		{
+			return dotDamageByKind;
+		}
+
+		@Override
+		public java.util.Map<String, Integer> dotTakenByKind()
+		{
+			return dotTakenByKind;
 		}
 
 		public int healed()
@@ -302,6 +317,7 @@ final class LedgerExamples
 		s.damage = 721;
 		s.expectedDamage = 812;
 		s.dotDamage = 40;
+		s.dotDamageByKind.put("burn", 40);
 		s.healed = 71;
 		s.ticksLost = 14;
 		s.damageTaken = 310;
@@ -322,6 +338,8 @@ final class LedgerExamples
 		s.expectedDamage = 4201;
 		s.thrallDamage = 290;
 		s.dotDamage = 60;
+		s.dotDamageByKind.put("burn", 20);
+		s.dotDamageByKind.put("venom", 40);
 		s.ticksLost = 63;
 		s.ticksLostEating = 11;
 		s.damageTaken = 1404;
