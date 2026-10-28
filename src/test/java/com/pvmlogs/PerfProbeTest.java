@@ -115,7 +115,7 @@ public class PerfProbeTest
 		assertTrue(top, top.startsWith("PERF top by p99: onGameTick 100x p50 0.400"));
 		assertTrue(top, top.indexOf("onGameTick: refreshExpected") < top.indexOf("overlay render"));
 		assertTrue(lines.get(4), lines.get(4).startsWith("PERF Swing's thread: panel apply 1x"));
-		final String budgets = lines.get(5);
+		final String budgets = lines.get(6);
 		assertTrue(budgets, budgets.contains("overlay render p99 0.100 ms < 0.2"));
 		assertTrue(budgets, budgets.contains("worst handler p99 0.400 ms (onGameTick) < 1, worst max 4.000 ms "
 			+ "(onHitsplatApplied) >= 3"));
@@ -136,6 +136,65 @@ public class PerfProbeTest
 		assertEquals("PERF top by p99: nothing ran", lines.get(3));
 		// A second end without a start writes nothing.
 		assertTrue(probe.fightEndedAt("again", MS * 4000).isEmpty());
+	}
+
+	@Test
+	public void inputDelayCountsWaitsOverSixteenAndFiftyMs()
+	{
+		final PerfProbe probe = new PerfProbe();
+		probe.setOn(true);
+		probe.fightStartedAt(0);
+		for (int i = 0; i < 97; i++)
+		{
+			probe.recordInputDelay(2 * MS);
+		}
+		probe.recordInputDelay(20 * MS);
+		probe.recordInputDelay(30 * MS);
+		probe.recordInputDelay(120 * MS);
+		final List<String> lines = probe.fightEndedAt("Vardorvis", MS * 60_000);
+		assertEquals("PERF input delay (Swing's queue, a probe a tick): waited 100x p50 2.000 p99 30.000 max 120.000 ms; "
+			+ "over 16 ms 3, over 50 ms 1", lines.get(5));
+		assertTrue(lines.get(6), lines.get(6).endsWith("input delay p99 30.000 ms >= 16, over 50 ms 1 > 0"));
+		// The next fight starts with none.
+		probe.fightStartedAt(MS * 70_000);
+		final List<String> next = probe.fightEndedAt("Vardorvis", MS * 80_000);
+		assertEquals("PERF input delay (Swing's queue, a probe a tick): waited none; over 16 ms 0, over 50 ms 0",
+			next.get(5));
+	}
+
+	@Test
+	public void theInputProbeRunsOnSwingsQueueOneAtATime() throws Exception
+	{
+		final PerfProbe probe = new PerfProbe();
+		probe.postInputProbe();
+		probe.setOn(true);
+		probe.fightStartedAt(System.nanoTime());
+		final java.util.concurrent.CountDownLatch held = new java.util.concurrent.CountDownLatch(1);
+		final java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		// Swing's thread kept busy: the second tick's probe isn't posted while the first still waits.
+		javax.swing.SwingUtilities.invokeLater(() ->
+		{
+			held.countDown();
+			try
+			{
+				release.await();
+			}
+			catch (InterruptedException e)
+			{
+				Thread.currentThread().interrupt();
+			}
+		});
+		held.await();
+		probe.postInputProbe();
+		Thread.sleep(30);
+		probe.postInputProbe();
+		release.countDown();
+		javax.swing.SwingUtilities.invokeAndWait(() ->
+		{
+		});
+		final String line = probe.fightEndedAt("Vardorvis", System.nanoTime()).get(5);
+		assertTrue(line, line.startsWith("PERF input delay (Swing's queue, a probe a tick): waited 1x"));
+		assertTrue(line, line.endsWith("over 16 ms 1, over 50 ms 0") || line.endsWith("over 16 ms 1, over 50 ms 1"));
 	}
 
 	@Test
