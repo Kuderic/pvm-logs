@@ -289,10 +289,10 @@ final class SidePanelParts
 				stripes(g, area, SidePanelStyle.TRACK, SidePanelStyle.AVERAGE_STRIPE);
 				break;
 			case LUCK_FASTER:
-				final Rectangle2D b = area.getBounds2D();
-				g.setColor(outline == null ? SidePanelStyle.BETTER : outline);
-				g.setStroke(new BasicStroke(1.5f));
-				g.draw(new Rectangle2D.Double(b.getX() + 0.75, b.getY() + 0.75, b.getWidth() - 1.5, b.getHeight() - 1.5));
+				// The legend's swatch for the time luck saved (T-042): best play dimmed under the stripes, as on the bar.
+				g.setColor(SidePanelStyle.KEPT);
+				g.fill(area);
+				SidePanelTimeBudgetBar.saved(g, area, outline);
 				break;
 			default:
 				break;

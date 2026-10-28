@@ -54,6 +54,13 @@ public final class SidePanelPictures
 			write(out, "11-saved-kill", scale, renderHistory(true, scale));
 			// T-036: a kill from this session opened from History, with its rows, chart and strip.
 			write(out, "11b-saved-kill-this-session", scale, renderSavedThisSession(scale));
+			// T-042: "Where the time went" with your real time ticked: luck saved 15 s, 2 s and 60 s, cost 7 s, and the
+			// average marker on the bar.
+			write(out, "12a-luck-saved-15s", scale, render(SidePanelExamples.luckSaved(15), scale));
+			write(out, "12b-luck-saved-2s", scale, render(SidePanelExamples.luckSaved(2), scale));
+			write(out, "12c-luck-saved-60s", scale, render(SidePanelExamples.luckSaved(60), scale));
+			write(out, "12d-luck-slower", scale, render(SidePanelExamples.luckSaved(-7), scale));
+			write(out, "12e-average-on-the-bar", scale, render(SidePanelExamples.luckSavedAverageOnTheBar(), scale));
 		}
 	}
 

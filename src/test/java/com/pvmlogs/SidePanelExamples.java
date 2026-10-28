@@ -269,6 +269,52 @@ final class SidePanelExamples
 		return s;
 	}
 
+	/**
+	 * T-042: Eric's 20:15 kill, shaped on his screenshot: 1:16 on the clock,
+	 * uptime +2 s, eating +2 s, stat boost +1 s, thrall 49 and burn 47, and
+	 * weapon damage set so luck comes to about {@code luckSeconds} (L = T(A − E)
+	 * ÷ (E + O), E 600, O 96). The spread puts 15 s in the top few per cent and
+	 * 2 s in the middle half. Your average 1:45, off the bar.
+	 */
+	static SidePanelModel.Input luckSaved(double luckSeconds)
+	{
+		final LedgerExamples.FakeScope s = new LedgerExamples.FakeScope();
+		s.combatTicks = 127;
+		s.expectedDamage = 600;
+		s.thrallDamage = 49;
+		s.dotDamage = 47;
+		s.damage = (int) Math.round(600 + luckSeconds * 696 / (127 * LedgerRows.SECONDS_PER_TICK));
+		s.damageVariance = 2500;
+		s.healed = 48;
+		s.ticksLost = 7;
+		s.ticksLostEating = 4;
+		s.attacksMade = 41;
+		s.attacksPrayed = 41;
+		s.attacksSwitched = 41;
+		s.hits = 26;
+		s.expectedHits = 25.1;
+		s.damageTaken = 170;
+		s.setup(1 - 1.0 / 72, 0.97, 1.0, 0);
+		final SidePanelModel.Input in = room("Vardorvis", s);
+		in.ended = true;
+		in.killed = true;
+		in.endMillis = at(20, 15);
+		in.scoredThrall = 49;
+		in.scoredDot = 47;
+		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(105, 98, 112), 10);
+		in.luckRemoved = new LedgerHistory.Spread(106, 100, 112);
+		return in;
+	}
+
+	/** T-042: the same kill, luck 15 s faster, against a usual of 1:24 that falls on the bar. */
+	static SidePanelModel.Input luckSavedAverageOnTheBar()
+	{
+		final SidePanelModel.Input in = luckSaved(15);
+		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(84, 80, 90), 10);
+		in.luckRemoved = new LedgerHistory.Spread(88, 84, 92);
+		return in;
+	}
+
 	private static SidePanelModel.Input room(String name, LedgerExamples.FakeScope scope)
 	{
 		final SidePanelModel.Input in = base();
