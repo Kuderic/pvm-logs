@@ -27,6 +27,8 @@ final class LedgerRows
 	static final double SECONDS_PER_TICK = 0.6;
 	/** The eating row's label (T-038). */
 	static final String EATING = " eating";
+	/** Execution's fifth part after a ruled fight (T-043). */
+	static final String AVOIDABLE_EATING = " avoidable eating";
 
 	// The thresholds that decide what is coloured. All in one place: they were set on two of Eric's fights and will be
 	// tuned on more.
@@ -271,6 +273,22 @@ final class LedgerRows
 		double expectedHits();
 
 		int ticksLostEating();
+
+		/**
+		 * T-041/T-043: the eating ticks the avoidable hits cost, over the ended
+		 * fights at a boss with attack rules; -1 when none (a running fight, no
+		 * rules, a kill saved before T-041).
+		 */
+		default double avoidableEatingTicks()
+		{
+			return -1;
+		}
+
+		/** T-041/T-043: the avoidable part of {@link #damageTaken()}, over the same fights; -1 when none. */
+		default int damageTakenAvoidable()
+		{
+			return -1;
+		}
 	}
 
 	static Scope of(Encounter room)
@@ -410,6 +428,16 @@ final class LedgerRows
 			public int ticksLostEating()
 			{
 				return room.getTicksLostEating();
+			}
+
+			public double avoidableEatingTicks()
+			{
+				return room.getAvoidableEatingTicks();
+			}
+
+			public int damageTakenAvoidable()
+			{
+				return room.getDamageTakenAvoidable();
 			}
 		};
 	}
@@ -551,6 +579,16 @@ final class LedgerRows
 			public int ticksLostEating()
 			{
 				return raid.getTicksLostEating();
+			}
+
+			public double avoidableEatingTicks()
+			{
+				return raid.getAvoidableEatingTicks();
+			}
+
+			public int damageTakenAvoidable()
+			{
+				return raid.getDamageTakenAvoidable();
 			}
 		};
 	}
@@ -697,6 +735,16 @@ final class LedgerRows
 			{
 				return trip.getTicksLostEating();
 			}
+
+			public double avoidableEatingTicks()
+			{
+				return trip.getAvoidableEatingTicks();
+			}
+
+			public int damageTakenAvoidable()
+			{
+				return trip.getDamageTakenAvoidable();
+			}
 		};
 	}
 
@@ -835,6 +883,15 @@ final class LedgerRows
 		 * for damage you could have.
 		 */
 		final double eatingCost;
+		/**
+		 * T-043: the eating the avoidable hits cost, in seconds, and its share
+		 * kept (1 − avoidable eating ticks ÷ combat ticks); NaN when unknown (a
+		 * running fight, no attack rules, an old kill).
+		 */
+		final double avoidableEatingCost;
+		final double avoidableEatingShare;
+		/** T-038's Execution, without avoidable eating: what the overlay shows while the fight runs. */
+		final double executionLive;
 		final double efficiency;
 		final double execution;
 		/** What the setup (boost, prayer, gear) cost in seconds. */
@@ -884,7 +941,15 @@ final class LedgerRows
 
 			efficiency = s.efficiency();
 			final boolean setupKnown = efficiency >= 0;
-			execution = !setupKnown || Double.isNaN(uptime) ? Double.NaN : uptime * efficiency;
+			executionLive = !setupKnown || Double.isNaN(uptime) ? Double.NaN : uptime * efficiency;
+			// T-043: once the fight has ended at a boss with attack rules, the eating its avoidable hits cost counts against
+			// Execution again, as a fifth part (Eric, 2026-10-27). The scope's figure is -1 until then, and for no rules.
+			final double avoidableTicks = s.avoidableEatingTicks();
+			final int ticks = s.combatTicks();
+			final boolean avoidableKnown = avoidableTicks >= 0 && ticks > 0;
+			avoidableEatingCost = avoidableKnown ? avoidableTicks * SECONDS_PER_TICK : Double.NaN;
+			avoidableEatingShare = avoidableKnown ? Math.max(0, 1 - avoidableTicks / ticks) : Double.NaN;
+			execution = avoidableKnown ? executionLive * avoidableEatingShare : executionLive;
 			// The setup applies to the time you were attacking: neither idle nor eating. The same number as before T-038, when
 			// uptime's seconds held the eating too.
 			setupCost = setupKnown ? Math.max(0, clock - uptimeCost - eatingCost) * Math.max(0, 1 - efficiency)
@@ -1133,14 +1198,35 @@ final class LedgerRows
 		}
 		// The main rows' labels are bold (Eric, 2026-10-26); their sub-rows stay in the detail font.
 		rows.add(main("DPS", Double.isNaN(n.dps) ? UNKNOWN : oneDecimal(n.dps)));
-		rows.add(main("Execution", Double.isNaN(n.execution) ? UNKNOWN : partPercent(n.execution)));
+		// T-043: avoidable eating counts once the fight is over, at a boss with attack rules, and only then: nothing about
+		// the boss's attacks is shown live (Jagex's rule). A room still running may hold an ended fight's figure; it waits.
+		final boolean avoidable = state.ended && !Double.isNaN(n.avoidableEatingCost);
+		final double execution = avoidable ? n.execution : n.executionLive;
+		rows.add(main("Execution", Double.isNaN(execution) ? UNKNOWN : partPercent(execution)));
 		if (settings.parts != ExecutionParts.OFF)
 		{
-			parts(rows, n, settings.parts == ExecutionParts.COSTING);
+			parts(rows, n, settings.parts == ExecutionParts.COSTING, avoidable);
 			// Under Execution too (Eric, 2026-10-26): the damage you took. Your own HP, nothing about the boss.
-			rows.add(detail(" damage taken", number(scope.damageTaken()), Colour.NEUTRAL));
-			eating(rows, n);
+			rows.add(damageTaken(scope, avoidable));
+			eating(rows, n, avoidable);
 		}
+	}
+
+	/**
+	 * {@code  damage taken  263}, and after a ruled fight {@code 263 · 141
+	 * avoidable} (T-043): plain, as it's the boss's mechanics. A panel saved too
+	 * narrow drops the avoidable part.
+	 */
+	private static Row damageTaken(Scope scope, boolean avoidable)
+	{
+		final String taken = number(scope.damageTaken());
+		final int part = scope.damageTakenAvoidable();
+		if (!avoidable || part < 0)
+		{
+			return detail(" damage taken", taken, Colour.NEUTRAL);
+		}
+		return new Row(" damage taken", taken + DOT + number(part) + " avoidable", FontRole.DETAIL, FontRole.DETAIL,
+			Colour.NEUTRAL, Colour.NEUTRAL, null, taken);
 	}
 
 	/**
@@ -1150,20 +1236,27 @@ final class LedgerRows
 	 * it, not one of Execution's parts, and never coloured as a cost: the plugin
 	 * can't tell why you ate.
 	 */
-	private static void eating(List<Row> rows, Numbers n)
+	private static void eating(List<Row> rows, Numbers n, boolean avoidable)
 	{
-		if (roundHalfAway(n.eatingCost) >= 1)
+		// After a ruled fight, the rest of the eating: the avoidable part is Execution's now (T-043).
+		final long seconds = roundHalfAway(avoidable ? Math.max(0, n.eatingCost - n.avoidableEatingCost) : n.eatingCost);
+		if (seconds >= 1)
 		{
-			rows.add(detail(EATING, roundHalfAway(n.eatingCost) + " s", Colour.NEUTRAL));
+			rows.add(detail(EATING, seconds + " s", Colour.NEUTRAL));
 		}
 	}
 
-	private static void parts(List<Row> rows, Numbers n, boolean costingOnly)
+	private static void parts(List<Row> rows, Numbers n, boolean costingOnly, boolean avoidable)
 	{
 		final int before = rows.size();
 		if (!Double.isNaN(n.uptime))
 		{
 			part(rows, " uptime", partPercent(n.uptime), n.uptimeCost, n.clock, costingOnly);
+		}
+		if (avoidable)
+		{
+			// T-043's fifth part, after uptime: the eating the avoidable hits cost, priced like the others.
+			part(rows, AVOIDABLE_EATING, partPercent(n.avoidableEatingShare), n.avoidableEatingCost, n.clock, costingOnly);
 		}
 		// Without the setup figure (no monster data) only uptime can be priced; the canvas shows uptime alone there.
 		if (!Double.isNaN(n.setupCost))
