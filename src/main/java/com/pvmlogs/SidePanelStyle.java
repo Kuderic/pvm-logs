@@ -222,6 +222,12 @@ final class SidePanelStyle
 		private void measure()
 		{
 			final Graphics2D g = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics();
+			if (smooth)
+			{
+				// Fractional advances: a string's width is the same at every scale, as it's drawn (see textHints).
+				g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+				g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+			}
 			try
 			{
 				for (Type t : Type.values())
@@ -238,6 +244,23 @@ final class SidePanelStyle
 		Font font(Type t)
 		{
 			return fonts[t.ordinal()];
+		}
+
+		/** With Smooth font, the measured metrics of one of its own fonts; else null. */
+		FontMetrics smoothMetrics(Font f)
+		{
+			if (!smooth)
+			{
+				return null;
+			}
+			for (Type t : new Type[]{Type.TITLE, Type.BODY, Type.SMALL})
+			{
+				if (fonts[t.ordinal()].equals(f))
+				{
+					return metrics[t.ordinal()];
+				}
+			}
+			return null;
 		}
 
 		int line(Type t)
@@ -332,6 +355,26 @@ final class SidePanelStyle
 		{
 			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		}
+		// Drawn with the fractional advances it was measured with (see metrics).
+		g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+	}
+
+	/**
+	 * The metrics a text is measured by when laid out (T-053). With the RuneScape fonts, the component's own, as before.
+	 * With Smooth font, fractional ones made once: a system font's rounded advances differ from scale to scale, so a width
+	 * measured at 100% could cut the text at 150%; fractional advances are the same at every scale.
+	 */
+	static FontMetrics metrics(java.awt.Component c, Font f)
+	{
+		final FontMetrics m = text.smoothMetrics(f);
+		return m != null ? m : c.getFontMetrics(f);
+	}
+
+	/** The metrics a text is drawn by: the graphics' own with the RuneScape fonts; as laid out with Smooth font. */
+	static FontMetrics metrics(java.awt.Graphics g, Font f)
+	{
+		final FontMetrics m = text.smoothMetrics(f);
+		return m != null ? m : g.getFontMetrics(f);
 	}
 
 	/** At least {@code floor} px, or wider when {@code sample} takes more in the role's font: fixed columns (T-053). */

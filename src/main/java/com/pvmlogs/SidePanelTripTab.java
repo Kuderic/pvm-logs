@@ -274,7 +274,7 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 
 		int clockWidth()
 		{
-			return clock.getFontMetrics(clock.getFont()).stringWidth(clock.getText());
+			return SidePanelStyle.metrics(clock, clock.getFont()).stringWidth(clock.getText());
 		}
 
 		void setColumns(int clockWidth, int chipWidth)

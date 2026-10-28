@@ -226,12 +226,12 @@ final class SidePanelParts
 
 		private int natural()
 		{
-			return text.isEmpty() ? 0 : getFontMetrics(getFont()).stringWidth(text.text) + (fill == null ? 0 : 8);
+			return text.isEmpty() ? 0 : SidePanelStyle.metrics(this, getFont()).stringWidth(text.text) + (fill == null ? 0 : 8);
 		}
 
 		private int moving()
 		{
-			return text.isEmpty() ? 0 : SidePanelText.reservedWidth(getFontMetrics(getFont()), text.text)
+			return text.isEmpty() ? 0 : SidePanelText.reservedWidth(SidePanelStyle.metrics(this, getFont()), text.text)
 				+ (fill == null ? 0 : 8);
 		}
 
@@ -251,7 +251,7 @@ final class SidePanelParts
 				return;
 			}
 			SidePanelStyle.textHints((Graphics2D) g);
-			final FontMetrics fm = g.getFontMetrics(getFont());
+			final FontMetrics fm = SidePanelStyle.metrics(g, getFont());
 			final int w = fm.stringWidth(text.text) + (fill == null ? 0 : 8);
 			final int x = getWidth() - w;
 			if (fill != null)
@@ -340,7 +340,7 @@ final class SidePanelParts
 
 		List<String> lines(int width)
 		{
-			final FontMetrics fm = getFontMetrics(getFont());
+			final FontMetrics fm = SidePanelStyle.metrics(this, getFont());
 			final List<String> lines = new ArrayList<>();
 			StringBuilder line = new StringBuilder();
 			for (String word : text.split(" "))
@@ -375,7 +375,7 @@ final class SidePanelParts
 		protected void paintComponent(Graphics g)
 		{
 			SidePanelStyle.textHints((Graphics2D) g);
-			final FontMetrics fm = g.getFontMetrics(getFont());
+			final FontMetrics fm = SidePanelStyle.metrics(g, getFont());
 			g.setFont(getFont());
 			g.setColor(colour);
 			int y = type.lineHeight() - fm.getDescent();
@@ -715,7 +715,7 @@ final class SidePanelParts
 
 		private int lines(int width)
 		{
-			final FontMetrics fm = getFontMetrics(getFont());
+			final FontMetrics fm = SidePanelStyle.metrics(this, getFont());
 			int lines = 1;
 			int x = 0;
 			for (Item it : items)
@@ -745,7 +745,7 @@ final class SidePanelParts
 			final Graphics2D g2 = (Graphics2D) g;
 			SidePanelStyle.textHints(g2);
 			g2.setFont(getFont());
-			final FontMetrics fm = g2.getFontMetrics();
+			final FontMetrics fm = SidePanelStyle.metrics(g2, getFont());
 			int x = 0;
 			int y = 0;
 			for (Item it : items)

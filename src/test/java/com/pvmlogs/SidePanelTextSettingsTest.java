@@ -148,6 +148,38 @@ public class SidePanelTextSettingsTest
 		assertSame(small, SidePanelStyle.Type.SMALL.font());
 	}
 
+	@Test
+	public void aSmoothTextLaidOutAtOneScaleIsNotCutAtAnother()
+	{
+		// A system font's rounded advances differ from scale to scale: measured at 100% and drawn at 150%, "+11 s" lost its
+		// last characters. Measured and drawn with fractional advances, it fits at every scale.
+		final String[] samples = {"+11 s", "14 s slower", "+1:05", "bottom 20%", "688/778", "Damage taken", "99% (-3 s)",
+			"Vardorvis", "2:16", "100%"};
+		for (boolean larger : new boolean[]{false, true})
+		{
+			SidePanelStyle.setText(new SidePanelStyle.TextStyle(larger, true, new String[0], null));
+			for (SidePanelStyle.Type type : TEXT)
+			{
+				for (String sample : samples)
+				{
+					for (double scale : new double[]{1, 1.25, 1.5, 1.75, 2})
+					{
+						final SidePanelText text = new SidePanelText(new PanelSnapshot.Text(sample, java.awt.Color.WHITE, type),
+							true);
+						text.setSize(text.getPreferredSize());
+						final BufferedImage img = new BufferedImage((int) Math.ceil(text.getWidth() * scale) + 1,
+							(int) Math.ceil(text.getHeight() * scale) + 1, BufferedImage.TYPE_INT_RGB);
+						final Graphics2D g = img.createGraphics();
+						g.scale(scale, scale);
+						text.paint(g);
+						g.dispose();
+						assertNull(type + " \"" + sample + "\" at " + scale + "x", text.getToolTipText());
+					}
+				}
+			}
+		}
+	}
+
 	// ---- smoothing ----
 
 	@Test
@@ -167,6 +199,7 @@ public class SidePanelTextSettingsTest
 		final Graphics2D opaque = new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB).createGraphics();
 		SidePanelStyle.textHints(opaque);
 		assertEquals(RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB, opaque.getRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING));
+		assertEquals(RenderingHints.VALUE_FRACTIONALMETRICS_ON, opaque.getRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS));
 		opaque.dispose();
 		final Graphics2D alpha = new BufferedImage(4, 4, BufferedImage.TYPE_INT_ARGB).createGraphics();
 		SidePanelStyle.textHints(alpha);

@@ -194,7 +194,7 @@ final class SidePanelTimeBudgetBar extends JComponent
 		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
 		SidePanelStyle.textHints(g2);
 		g2.setFont(getFont());
-		final FontMetrics fm = g2.getFontMetrics();
+		final FontMetrics fm = SidePanelStyle.metrics(g2, getFont());
 		final Labels l = labels(budget, width, fm);
 		if (l.clock != null)
 		{
