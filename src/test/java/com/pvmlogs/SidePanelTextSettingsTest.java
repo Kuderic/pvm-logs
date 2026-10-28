@@ -52,6 +52,9 @@ public class SidePanelTextSettingsTest
 		assertEquals(16, t.line(SidePanelStyle.Type.BODY));
 		assertEquals(12, t.line(SidePanelStyle.Type.SMALL));
 		assertNull(t.family);
+		// Today's metrics: the component's and the graphics' own, not fractional ones.
+		assertFalse(t.fractional());
+		assertNull(t.fractionalMetrics(FontManager.getRunescapeFont()));
 	}
 
 	@Test
@@ -149,16 +152,17 @@ public class SidePanelTextSettingsTest
 	}
 
 	@Test
-	public void aSmoothTextLaidOutAtOneScaleIsNotCutAtAnother()
+	public void aTextLaidOutAtOneScaleIsNotCutAtAnother()
 	{
-		// A system font's rounded advances differ from scale to scale: measured at 100% and drawn at 150%, "+11 s" lost its
-		// last characters. Measured and drawn with fractional advances, it fits at every scale.
+		// A font's rounded advances differ from scale to scale: measured at 100% and drawn at 150%, "+11 s" lost its last
+		// characters. Measured and drawn with fractional advances, it fits at every scale.
 		final String[] samples = {"+11 s", "14 s slower", "+1:05", "bottom 20%", "688/778", "Damage taken", "99% (-3 s)",
 			"Vardorvis", "2:16", "100%"};
-		for (boolean larger : new boolean[]{false, true})
+		// Larger text with the RuneScape fonts, Smooth font, both.
+		for (boolean[] mode : new boolean[][]{{true, false}, {false, true}, {true, true}})
 		{
-			SidePanelStyle.setText(new SidePanelStyle.TextStyle(larger, true, new String[0], null));
-			for (SidePanelStyle.Type type : TEXT)
+			SidePanelStyle.setText(new SidePanelStyle.TextStyle(mode[0], mode[1], new String[0], null));
+			for (SidePanelStyle.Type type : SidePanelStyle.Type.values())
 			{
 				for (String sample : samples)
 				{

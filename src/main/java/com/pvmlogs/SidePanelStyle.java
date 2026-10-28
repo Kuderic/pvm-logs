@@ -222,10 +222,13 @@ final class SidePanelStyle
 		private void measure()
 		{
 			final Graphics2D g = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics();
-			if (smooth)
+			if (fractional())
 			{
 				// Fractional advances: a string's width is the same at every scale, as it's drawn (see textHints).
 				g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+			}
+			if (smooth)
+			{
 				g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 			}
 			try
@@ -246,14 +249,25 @@ final class SidePanelStyle
 			return fonts[t.ordinal()];
 		}
 
-		/** With Smooth font, the measured metrics of one of its own fonts; else null. */
-		FontMetrics smoothMetrics(Font f)
+		/**
+		 * Whether text is measured and drawn with fractional advances: with either setting on. A font's advances rounded
+		 * at 125% or 150% don't add up to its widths at 100%, so a value laid out at 100% was cut at 150%. Fractional
+		 * advances are the same at every scale. The RuneScape fonts' advances are whole pixels at 100% and 200%, so there
+		 * they draw as before. Both off keeps today's metrics.
+		 */
+		boolean fractional()
 		{
-			if (!smooth)
+			return smooth || larger;
+		}
+
+		/** With either setting on, the measured metrics of one of the roles' fonts; else null. */
+		FontMetrics fractionalMetrics(Font f)
+		{
+			if (!fractional())
 			{
 				return null;
 			}
-			for (Type t : new Type[]{Type.TITLE, Type.BODY, Type.SMALL})
+			for (Type t : Type.values())
 			{
 				if (fonts[t.ordinal()].equals(f))
 				{
@@ -340,6 +354,11 @@ final class SidePanelStyle
 		final TextStyle t = text;
 		if (!t.smooth)
 		{
+			if (t.larger)
+			{
+				// Drawn with the fractional advances it was measured with (see metrics); no smoothing.
+				g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+			}
 			return;
 		}
 		final boolean opaque = g.getDeviceConfiguration().getColorModel().getTransparency() == Transparency.OPAQUE;
@@ -360,20 +379,19 @@ final class SidePanelStyle
 	}
 
 	/**
-	 * The metrics a text is measured by when laid out (T-053). With the RuneScape fonts, the component's own, as before.
-	 * With Smooth font, fractional ones made once: a system font's rounded advances differ from scale to scale, so a width
-	 * measured at 100% could cut the text at 150%; fractional advances are the same at every scale.
+	 * The metrics a text is measured by when laid out (T-053). Both off: the component's own, as before. With either
+	 * setting on, fractional ones made once per setting (see {@link TextStyle#fractional}).
 	 */
 	static FontMetrics metrics(java.awt.Component c, Font f)
 	{
-		final FontMetrics m = text.smoothMetrics(f);
+		final FontMetrics m = text.fractionalMetrics(f);
 		return m != null ? m : c.getFontMetrics(f);
 	}
 
-	/** The metrics a text is drawn by: the graphics' own with the RuneScape fonts; as laid out with Smooth font. */
+	/** The metrics a text is drawn by: both off, the graphics' own, as before; with either setting on, as laid out. */
 	static FontMetrics metrics(java.awt.Graphics g, Font f)
 	{
-		final FontMetrics m = text.smoothMetrics(f);
+		final FontMetrics m = text.fractionalMetrics(f);
 		return m != null ? m : g.getFontMetrics(f);
 	}
 
