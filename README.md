@@ -1,4 +1,4 @@
-# PvM Performance Tracker
+# Luck vs Skill
 
 A RuneLite plugin for bossing. After every kill it tells you how much of your time was luck and how much was you, for any boss. There's no account to make, and nothing about you leaves your computer.
 
@@ -62,10 +62,10 @@ Nothing about the boss's attacks, and no comparison with your own average while 
 
 All the pictures here are drawn by the plugin's own code (see Developing), over a plain dark backdrop: the overlays are see-through in game.
 
-## About this fork
-This is a maintained fork of [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker) by Arodab, and builds on his combat model. It fixes the build against current RuneLite and counts thrall hits apart from your own ([Arodab's issue #1](https://github.com/Arodab/pvm-performance-tracker/issues/1)).
+## Where it came from
+Luck vs Skill began as a fork of Arodab's [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker), and builds on his combat model. It fixed the build against current RuneLite and counts thrall hits apart from your own ([Arodab's issue #1](https://github.com/Arodab/pvm-performance-tracker/issues/1)).
 
-It keeps the original plugin's name and settings group (`pvmperformance`), so it can be released as an update to the existing Plugin Hub entry without resetting anyone's settings. Fight history, exports and logs live in RuneLite's plugin-data folder, `~/.runelite/plugin-data/pvm-performance-tracker/`, as current Plugin Hub rules require. On first start RuneLite moves the old `~/.runelite/pvm-performance-tracker/` folder there, so nobody's history is lost.
+It is its own plugin, with its own settings and its own folder: nothing it does reads, moves or changes PvM Performance Tracker's settings or fight history, so the two can be installed side by side. Fight history, exports and logs live in `~/.runelite/plugin-data/luck-vs-skill/`.
 
 ## Developing
 These are the steps that work on Windows. Run them in PowerShell, from the repo folder.
@@ -85,7 +85,7 @@ These are the steps that work on Windows. Run them in PowerShell, from the repo 
    ```
 4. **Log in:** in the client's sidebar, open the Jagex account panel → **Add Jagex Account** → sign in → pick your character → **Play Now**. If an old `.runelite\credentials.properties` exists, delete it first.
 5. **Capture a debug log:** after a fight, press **Save debug log** on the side panel's Fight tab (or **Save log** under History → Tools). It writes the last few thousand lines. For a whole session, turn on **Debug logging** in the plugin's settings instead.
-6. **Find the files** in `%USERPROFILE%\.runelite\plugin-data\pvm-performance-tracker\`: `pvm-debug-recent-*.log` (the button), `pvm-debug-*.log` (the setting), `history.json` and CSV exports.
+6. **Find the files** in `%USERPROFILE%\.runelite\plugin-data\luck-vs-skill\`: `pvm-debug-recent-*.log` (the button), `pvm-debug-*.log` (the setting), `history.json` and CSV exports.
 
 **Tests:** `.\gradlew.bat test` on Windows, or `./gradlew test` on Linux and macOS (JDK 11 or newer). CI runs them on every push and pull request.
 
@@ -103,7 +103,7 @@ java "-Djava.awt.headless=true" -cp build\libs\pvm-logs-unspecified-all.jar com.
 `CLAUDE.md` covers how Claude sessions work on this repo. `docs/HANDOFF.md` records what is known about thrall damage and other damage that isn't the player's attack.
 
 ## Credits
-- Arodab, for PvM Performance Tracker, which this is forked from;
+- Arodab, for PvM Performance Tracker, which Luck vs Skill began as a fork of;
 - Special thanks to Kinomoto and zLost for a ton of valuable feedback and ideas for the plugin;
 - Portions of the combat math were ported from the LlemonDuck dps-calculator (BSD-2);
 - Chambers of Xeric scaling math taken from **GearScape**.

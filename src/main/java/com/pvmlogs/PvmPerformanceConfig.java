@@ -20,21 +20,21 @@ import net.runelite.client.config.Range;
 public interface PvmPerformanceConfig extends Config
 {
 	/**
-	 * Settings group. Arodab's original, so users of his Plugin Hub entry keep their settings on update.
+	 * The name a player sees: the plugin list, the side panel's tooltip, dialog titles, chat messages. Luck vs Skill
+	 * since T-060, its own Plugin Hub entry. It began as a fork of Arodab's PvM Performance Tracker.
 	 */
-	String GROUP = "pvmperformance";
+	String DISPLAY_NAME = "Luck vs Skill";
 	/**
-	 * The folder under {@code ~/.runelite/} where Arodab's plugin, and this one until T-009, kept history, CSV
-	 * exports, debug logs and cached data. Hub plugins now get their files through RuneLite's {@code Filepath}, which
-	 * lives in {@code ~/.runelite/plugin-data/<INTERNAL_NAME>/}. The descriptor names this as its legacy folder, so
-	 * RuneLite moves it there the first time the plugin asks for its folder, and nobody's history is lost.
+	 * Settings group (T-060). Not Arodab's {@code pvmperformance}: that would share settings with his plugin for
+	 * anyone who has both. Users' saved settings live under it, so it never changes after release.
 	 */
-	String DATA_DIR = "pvm-performance-tracker";
+	String GROUP = "luckvsskill";
 	/**
-	 * The Plugin Hub entry's internal name: Arodab's, since the plan is to release on his entry. RuneLite names the
-	 * plugin's data folder after it ({@code ~/.runelite/plugin-data/<this>/}).
+	 * The Plugin Hub entry's internal name (T-060). RuneLite names the plugin's data folder after it
+	 * ({@code ~/.runelite/plugin-data/<this>/}), so it never changes after release either. There is no
+	 * {@code legacyDataDirectory}: Arodab's folder stays his plugin's.
 	 */
-	String INTERNAL_NAME = "pvm-performance-tracker";
+	String INTERNAL_NAME = "luck-vs-skill";
 
 	/** How long a finished fight stays on the overlays at most (T-040): 600 s. */
 	int MAX_HOLD_SECONDS = 600;
@@ -90,7 +90,7 @@ public interface PvmPerformanceConfig extends Config
 	}
 
 	// The second job of the old "Fight timeout (ticks)" (T-040). Its first, ending a quiet fight, is the plugin's
-	// FIGHT_TIMEOUT_TICKS now. SettingsMigrations carries a saved timeout over.
+	// FIGHT_TIMEOUT_TICKS now.
 	@Range(min = 0, max = MAX_HOLD_SECONDS)
 	@ConfigItem(
 		keyName = "overlayHoldSeconds",
@@ -113,8 +113,7 @@ public interface PvmPerformanceConfig extends Config
 	)
 	String FIGHT_OVERLAY_SECTION = "fightOverlay";
 
-	// Arodab's "Overlay: whole trip" and "Inside a raid, show" as one choice (T-040); SettingsMigrations carries them
-	// over.
+	// Arodab's "Overlay: whole trip" and "Inside a raid, show" as one choice (T-040).
 	@ConfigItem(
 		keyName = "overlayCovers",
 		name = "Covers",

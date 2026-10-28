@@ -183,7 +183,8 @@ public class SettingsLayoutTest
 	@Test
 	public void theRemovedKeysAreNoLongerRead() throws IOException
 	{
-		// Removed settings: their keys appear only in SettingsMigrations, which reads each once and unsets it.
+		// Removed settings (T-022, T-040): nothing reads their keys. SettingsMigrations moved them until T-060 gave the
+		// plugin its own settings group, where they were never saved.
 		final List<String> removed = Arrays.asList("fightTimeoutTicks", "overlaySessionTotals", "raidScope",
 			"overlayExpectedOnly");
 		for (String key : removed)
