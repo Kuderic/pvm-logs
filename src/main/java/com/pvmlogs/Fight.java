@@ -87,6 +87,10 @@ class Fight
 	private double avoidableEatingTicks;
 	private int eatLineHp;
 	private String eatLineSource;
+	// The target's defence drains over the fight (T-049): its Defence and Magic at the start and the end, its base and
+	// floor, the player's specials thrown and landed per weapon, the party's drains, and each drain. Set as the fight
+	// ends; null on a fight saved before T-049 and where nothing was known of the target's stats.
+	private DrainRecord drainRecord;
 	// One attempt per attack thrown, and a hit for each attack that landed anything. accuracy = hits / attempts.
 	private int attempts;
 	private int hits;
@@ -458,6 +462,72 @@ class Fight
 	String getEatLineSource()
 	{
 		return hasAvoidable() ? eatLineSource : null;
+	}
+
+	/** The target's drains over the fight (T-049), recorded once as it ends. Null records nothing. */
+	void recordDrain(DrainRecord record)
+	{
+		drainRecord = record;
+	}
+
+	/** The fight's drain record (T-049), or null: saved before T-049, or nothing known of the target. */
+	DrainRecord getDrainRecord()
+	{
+		return drainRecord;
+	}
+
+	/** The target's Defence when the fight opened, after any drains before it; -1 unknown (T-049). */
+	int getDefenceStart()
+	{
+		return drainRecord == null ? -1 : drainRecord.defenceStart;
+	}
+
+	/** Its Defence as the fight ended; -1 unknown. */
+	int getDefenceEnd()
+	{
+		return drainRecord == null ? -1 : drainRecord.defenceEnd;
+	}
+
+	/** Its Magic when the fight opened; -1 unknown. */
+	int getMagicStart()
+	{
+		return drainRecord == null ? -1 : drainRecord.magicStart;
+	}
+
+	/** Its Magic as the fight ended; -1 unknown. */
+	int getMagicEnd()
+	{
+		return drainRecord == null ? -1 : drainRecord.magicEnd;
+	}
+
+	/** Its undrained Defence, as the raid scaled it; -1 unknown. */
+	int getDefenceBase()
+	{
+		return drainRecord == null ? -1 : drainRecord.defenceBase;
+	}
+
+	/** The lowest its Defence could be drained to: its base where it is immune; -1 unknown. */
+	int getDefenceFloor()
+	{
+		return drainRecord == null ? -1 : drainRecord.defenceFloor;
+	}
+
+	/** The player's own draining specials thrown at it; -1 unknown. */
+	int getOwnDrainSpecsThrown()
+	{
+		return drainRecord == null ? -1 : drainRecord.ownThrown();
+	}
+
+	/** Of those, the ones that landed; -1 unknown. */
+	int getOwnDrainSpecsLanded()
+	{
+		return drainRecord == null ? -1 : drainRecord.ownLanded();
+	}
+
+	/** Party members' drains on it; -1 unknown. */
+	int getPartyDrains()
+	{
+		return drainRecord == null ? -1 : drainRecord.partyDrains;
 	}
 
 	void end(boolean died, long now)

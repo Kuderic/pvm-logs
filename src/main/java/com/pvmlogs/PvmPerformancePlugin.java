@@ -725,6 +725,9 @@ public class PvmPerformancePlugin extends Plugin
 		if (actor instanceof NPC && hitsplat.isMine() && !EncounterGroup.isIgnored(((NPC) actor).getId()))
 		{
 			final NPC npc = (NPC) actor;
+			// Every splat of mine, before anything judges it (T-049): a special's own is picked from them by its tick and the
+			// order they arrive in, as RuneLite's special attack counter picks it, so a thrall's is never taken.
+			drain.onMyHitsplat(npc, hitsplat.getAmount());
 			// A special's delayed splat before anything else (T-037): the ancient godsword's 25, eight ticks after its hit,
 			// would otherwise open a burst and book an attack, or be weighed as the thrall's.
 			if (onDelayedSpecialSplat(npc, hitsplat.getAmount(), now))
@@ -857,8 +860,6 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				session.recordAttempt(hitsplat.getAmount(), landedAttack, now);
 			}
-			// A special's drain is worked out from the hit it landed, so it can only be applied here.
-			drain.onMyHitsplat(npc, hitsplat.getAmount());
 			// Melee, plus a projectile-less cast the animation route did not recognise; everything else is booked from its
 			// projectile. That route sees misses and this one cannot, so it books first and this is only here so an unknown cast
 			// animation costs the misses rather than everything. Its lag is the hit delay, since it books from the landing and
@@ -2231,6 +2232,8 @@ public class PvmPerformancePlugin extends Plugin
 		hitpointsXp = event.getXp();
 		if (was > 0 && hitpointsXp > was)
 		{
+			// The elder maul's hit or miss (T-049): its splat comes two ticks late, the experience on the tick.
+			drain.onHitpointsXp();
 			debug.log("xp drop HITPOINTS +%d", hitpointsXp - was);
 			xpLedger.add(Skill.HITPOINTS, hitpointsXp - was);
 			noteDamageDealt();
@@ -2940,6 +2943,8 @@ public class PvmPerformancePlugin extends Plugin
 	private void handleNpcChanged(NpcChanged event)
 	{
 		final NPC npc = event.getNpc();
+		// A new form carries its drains over, or restores them where its rules say so (T-049: Muspah's shield).
+		drain.onNpcChanged(npc);
 		if (current == null || current.isEnded())
 		{
 			return;
@@ -2979,11 +2984,8 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void handleSpecialCounterUpdate(SpecialCounterUpdate event)
 	{
-		if (current != null && !current.isEnded()
-			&& current.getTargetIndex() == event.getNpcIndex())
-		{
-			drain.onSpecialCounterUpdate(event, targetNpc);
-		}
+		// On any npc, not only the fight's target (T-049): a teammate's hammer on the boss before the player engages counts.
+		drain.onSpecialCounterUpdate(event);
 	}
 
 	/**
@@ -3159,13 +3161,18 @@ public class PvmPerformancePlugin extends Plugin
 	private void handleNpcDespawned(NpcDespawned event)
 	{
 		final NPC npc = event.getNpc();
+		closeOnDespawn(npc);
+		// The drain dies with the NPC, as its stats do: after the fight on it has been closed, which saves them.
+		drain.forget(npc);
+	}
+
+	private void closeOnDespawn(NPC npc)
+	{
 		if (Thralls.isThrall(npc.getId()))
 		{
 			thralls.onThrallDespawned(npc.getIndex(), client.getTickCount());
 		}
-		// The drain dies with the NPC, as its stats do.
-		drain.forget(npc.getIndex());
-		// So does what it had left - the server can hand its index to the next spawn. The fight's own target is kept until
+		// What it had left goes too - the server can hand its index to the next spawn. The fight's own target is kept until
 		// the fight is closed below, which reconciles against it.
 		if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
 		{
@@ -3649,6 +3656,11 @@ public class PvmPerformancePlugin extends Plugin
 		// Watched here because the energy falling is what says a special went out, and the player's own specials are not
 		// carried by the party message.
 		drain.onEnergyChanged();
+		// A varbit that restores a boss's stats (T-049: Sotetseg's maze).
+		if (event.getVarbitId() >= 0)
+		{
+			drain.onVarbitChanged(event.getVarbitId(), event.getValue());
+		}
 		noteSpecialEnergy();
 	}
 
@@ -3723,6 +3735,8 @@ public class PvmPerformancePlugin extends Plugin
 		readHealthBar();
 		// First: the tick's experience has all arrived by now, and none of the splats it pays for can have.
 		trackThrallAndXp();
+		// The specials due this tick land their drains before anything works out an expectation (T-049).
+		drain.onGameTick();
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
 		// A buff whose fade message never came is let go once its duration is well past (T-026).
 		for (String line : gearBonuses.tickBuffs(client.getTickCount()))
@@ -4195,7 +4209,6 @@ public class PvmPerformancePlugin extends Plugin
 				session.recordExpected(chances, average, variance);
 			}
 		}
-		drain.onMyHitsplat(npc, damage);
 		debug.log("AoE %d on %s (npc %d, index %d) joins the attack on %s: newTarget=%b landed=%b",
 			damage, npc.getName(), npc.getId(), npc.getIndex(), current.getTargetName(), newTarget, landed);
 	}
@@ -4528,6 +4541,8 @@ public class PvmPerformancePlugin extends Plugin
 		closeTargetHealth(died);
 		debug.log("%s", DamageTaken.summary(current));
 		settleAvoidable(current);
+		// The target's drains over the fight (T-049).
+		current.recordDrain(drain.recordFor(targetNpc, current.getTargetIndex(), current.getStartTick()));
 		current.end(died, now);
 		if (!keepCounts)
 		{

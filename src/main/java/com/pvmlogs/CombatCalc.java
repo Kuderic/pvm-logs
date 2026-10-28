@@ -1134,7 +1134,14 @@ class CombatCalc
 	 */
 	private int defenceLevel(MonsterStatsProvider.MonsterStats npc)
 	{
-		// What the target has left, not what it started with: warhammers and godswords take real levels off it.
+		// What the target has left, not what it started with: warhammers and godswords take real levels off it. In the Tombs
+		// the raid level scales the defence roll, so the drain comes off the unscaled level and what is left is scaled
+		// (T-049; DefenceDrain.targetFor tracks the unscaled level there).
+		final int raidLevel = RaidScaling.tombsRaidLevel(client);
+		if (raidLevel > 0)
+		{
+			return RaidScaling.tombs(Math.max(0, npc.getDefenceLevel() - drain.drainedFrom(targetIndex)), raidLevel);
+		}
 		return Math.max(0, raidScaled(npc) - drain.drainedFrom(targetIndex));
 	}
 
@@ -1156,6 +1163,29 @@ class CombatCalc
 	{
 		this.targetNpc = npc;
 		this.targetIndex = npc == null ? -1 : npc.getIndex();
+	}
+
+	/**
+	 * The level the target defends magic with, as drains leave it (T-049): its
+	 * Magic, less what a Seercull, an Accursed sceptre or a godsword's leftover took;
+	 * or, for the few that roll magic defence off Defence (Ice demon, Verzik, by
+	 * boss-rules.json), its drained Defence.
+	 */
+	private int magicDefenceLevel(MonsterStatsProvider.MonsterStats npc)
+	{
+		if (npc.isMagicUsesDefence())
+		{
+			return defenceLevel(npc);
+		}
+		final int magic = RaidScaling.magic(client, npc.getMagicLevel(), npc.getName(), partyHitpoints.highest());
+		return Math.max(0, magic - drain.magicDrainedFrom(targetIndex));
+	}
+
+	/** The target's magic defence bonus, less what an Eye of ayak took (T-049). */
+	private int magicDefenceBonus(MonsterStatsProvider.MonsterStats npc)
+	{
+		final int taken = drain.magicDefenceDrainedFrom(targetIndex);
+		return taken <= 0 ? npc.getDefMagic() : Math.max(0, npc.getDefMagic() - taken);
 	}
 
 	// ToA: 2% per five raid levels, additively. Defence level only - magic does not scale, nor do defence bonuses.
@@ -1191,9 +1221,7 @@ class CombatCalc
 		// effects do.
 		final int attRoll = scaled(attackRoll(effMagic, attackBonus(AttackType.MAGIC),
 			gear * (1.0 + elementalWeakness(npcId) / 100.0)), spec);
-		final int magic = RaidScaling.magic(client, npc.getMagicLevel(), npc.getName(),
-			partyHitpoints.highest());
-		final int defRoll = (magic + 9) * (npc.getDefMagic() + 64);
+		final int defRoll = (magicDefenceLevel(npc) + 9) * (magicDefenceBonus(npc) + 64);
 		if (!hasConflictionGauntlets())
 		{
 			return hitChanceFrom(attRoll, defRoll);

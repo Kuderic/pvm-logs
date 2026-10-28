@@ -4,25 +4,35 @@ import java.util.HashMap;
 import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
+import net.runelite.api.Player;
+import net.runelite.api.coords.WorldArea;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.client.party.PartyMember;
+import net.runelite.client.party.PartyService;
 import net.runelite.client.plugins.specialcounter.SpecialCounterUpdate;
 import net.runelite.client.plugins.specialcounter.SpecialWeapon;
 
-// How much defence has been drained off each NPC being fought.
-@Slf4j
+/**
+ * The client side of the drain tracking (T-049): reads what the game shows and
+ * hands it to {@link DrainTracker}, whose rules are {@link DrainRule}'s and whose
+ * floors, immunities and resets are {@code boss-rules.json}'s ({@link BossRules.DrainRules}).
+ *
+ * <p>Everything here is the player's own and the party's own specials, which is
+ * what RuneLite's special attack counter and Better Party Defence show live too:
+ * nothing about the boss's attacks.
+ */
 @Singleton
 class DefenceDrain
 {
-	// A special lands on the tick it is thrown for melee, a few ticks later for thrown and fired ones. Past this it is
-	// forgotten rather than credited to whatever is hit next.
-	private static final int MEMORY_TICKS = 4;
+	private static final int MAX_SPEC_ENERGY = 1000;
 
 	private static final Map<Integer, SpecialWeapon> BY_ITEM_ID = new HashMap<>();
 
@@ -37,41 +47,37 @@ class DefenceDrain
 		}
 	}
 
-	private static final int MAX_SPEC_ENERGY = 1000;
-	private static final int HIT_WINDOW_TICKS = 5;
-
 	private final Client client;
 	private final MonsterStatsProvider monsters;
 	private final PartyHitpoints partyHitpoints;
-
-	// npc index -> defence levels taken off it.
-	private final Map<Integer, Integer> drained = new HashMap<>();
+	private final PartyService party;
+	private final DrainTracker tracker;
 
 	// Seeded from the live value rather than left unknown, so the first special after a reset is measured against
 	// something: at -1 it was swallowed.
 	private int specEnergy = -1;
-	private SpecialWeapon firedWeapon;
-	private int firedTick = Integer.MIN_VALUE;
+	// A special whose energy fell this tick, aimed once the tick's player update is in (the target is read then).
+	private SpecialWeapon thrownWeapon;
+	private int thrownTick = Integer.MIN_VALUE;
+	private int hitpointsXpTick = Integer.MIN_VALUE;
 
 	@Inject
-	DefenceDrain(Client client, MonsterStatsProvider monsters, PartyHitpoints partyHitpoints)
+	DefenceDrain(Client client, MonsterStatsProvider monsters, PartyHitpoints partyHitpoints, PartyService party,
+		DebugLog debug)
 	{
 		this.client = client;
 		this.monsters = monsters;
 		this.partyHitpoints = partyHitpoints;
-	}
-
-	/** Levels of defence already taken off this NPC. */
-	int drainedFrom(int npcIndex)
-	{
-		final Integer levels = drained.get(npcIndex);
-		return levels == null ? 0 : levels;
+		this.party = party;
+		this.tracker = new DrainTracker(line -> debug.log("%s", line));
 	}
 
 	/**
 	 * Notices the player's own special going out, from the energy falling. The
 	 * party message carries only what other members did, so a solo player's own
-	 * specials have to be seen here or not at all.
+	 * specials have to be seen here or not at all. The weapon is read now; the
+	 * target once the tick's player update has arrived ({@link #onGameTick}), as
+	 * RuneLite's counter defers it.
 	 */
 	void onEnergyChanged()
 	{
@@ -91,109 +97,266 @@ class DefenceDrain
 		{
 			return;
 		}
-		final SpecialWeapon weapon = equippedSpecialWeapon();
+		final SpecialWeapon weapon = BY_ITEM_ID.get(equippedWeaponId());
 		if (weapon != null)
 		{
-			firedWeapon = weapon;
-			firedTick = client.getTickCount();
+			thrownWeapon = weapon;
+			thrownTick = client.getTickCount();
 		}
+	}
+
+	/** Hitpoints experience rose: on the tick of an elder maul special, that is its hit. */
+	void onHitpointsXp()
+	{
+		hitpointsXpTick = client.getTickCount();
+	}
+
+	/** Once a tick: aims a special thrown this tick, and resolves the ones due. O(specials waiting). */
+	void onGameTick()
+	{
+		final int now = client.getTickCount();
+		if (tracker.hasCarried())
+		{
+			adoptReplacements(now);
+		}
+		if (thrownWeapon != null)
+		{
+			aim(thrownWeapon, thrownTick, now);
+			thrownWeapon = null;
+		}
+		tracker.tick(now);
+	}
+
+	// A boss whose actor was just replaced (Kephri's shield, a TFA boss): its stats move to the new actor. Only runs for
+	// the few ticks something is waiting.
+	private void adoptReplacements(int now)
+	{
+		if (client.getTopLevelWorldView() == null)
+		{
+			return;
+		}
+		for (NPC npc : client.getTopLevelWorldView().npcs())
+		{
+			if (npc == null || tracker.tracked(npc.getIndex()) != null)
+			{
+				continue;
+			}
+			final BossRules.Boss boss = bossFor(npc.getId());
+			final String key = carryKey(boss);
+			if (key != null && tracker.isCarried(key))
+			{
+				tracker.adopt(key, npc.getIndex(), npc.getId(), npc.getName(), targetFor(npc), now,
+					boss.defenceDrain.resetsOnNpc(npc.getId()));
+			}
+		}
+	}
+
+	private static String carryKey(BossRules.Boss boss)
+	{
+		return boss == null || boss.defenceDrain == null || !boss.defenceDrain.carryAcrossActors || boss.name == null
+			? null : boss.name;
+	}
+
+	private void aim(SpecialWeapon weapon, int tick, int now)
+	{
+		final Player me = client.getLocalPlayer();
+		final Actor at = me == null ? null : me.getInteracting();
+		if (!(at instanceof NPC))
+		{
+			tracker.ownThrow(tick, weapon, -1, -1, null, tick, null, false);
+			return;
+		}
+		final NPC npc = (NPC) at;
+		final int due = tick + weapon.getHitDelay(distance(me, npc));
+		tracker.ownThrow(tick, weapon, npc.getIndex(), npc.getId(), npc.getName(), due, targetFor(npc),
+			hitpointsXpTick == tick || hitpointsXpTick == now);
+	}
+
+	private static int distance(Player me, NPC npc)
+	{
+		final WorldPoint from = me.getWorldLocation();
+		final WorldArea area = npc.getWorldArea();
+		return from == null || area == null ? 1 : area.distanceTo(from);
+	}
+
+	/** One of the player's own ({@code isMine()}) splats on an npc, before anything has judged it. */
+	void onMyHitsplat(NPC npc, int amount)
+	{
+		tracker.ownSplat(npc.getIndex(), client.getTickCount(), amount);
 	}
 
 	/**
-	 * Applies the special's drain when its hit lands. The hit decides the amount
-	 * for both kinds - a percentage of what remains, or the damage dealt - so
-	 * nothing can be worked out until it arrives.
+	 * A party member's special, from RuneLite's special attack counter. The
+	 * player's own comes back as one of these too, and is dropped: it was counted
+	 * when it landed.
 	 */
-	void onMyHitsplat(NPC npc, int amount)
+	void onSpecialCounterUpdate(SpecialCounterUpdate event)
 	{
-		if (firedWeapon == null || client.getTickCount() - firedTick > HIT_WINDOW_TICKS)
+		final PartyMember me = party == null ? null : party.getLocalMember();
+		final Player self = client.getLocalPlayer();
+		if (isEcho(event, me == null ? Long.MIN_VALUE : me.getMemberId(), self == null ? Integer.MIN_VALUE : self.getId())
+			|| event.getWorld() != client.getWorld())
 		{
-			firedWeapon = null;
 			return;
 		}
-		final SpecialWeapon weapon = firedWeapon;
-		firedWeapon = null;
-		apply(npc, weapon, amount);
+		final NPC npc = client.getTopLevelWorldView() == null ? null
+			: client.getTopLevelWorldView().npcs().byIndex(event.getNpcIndex());
+		if (npc == null)
+		{
+			return;
+		}
+		tracker.partyDrain(client.getTickCount(), event.getWeapon(), event.getHit(), npc.getIndex(), npc.getId(),
+			npc.getName(), targetFor(npc));
 	}
 
-	/** A drain landed by someone else in the party. */
-	void onSpecialCounterUpdate(SpecialCounterUpdate event, NPC npc)
+	/**
+	 * Whether a party message is the player's own special come back: sent by this
+	 * party member, or naming this player. RuneLite's own counter drops the same.
+	 */
+	static boolean isEcho(SpecialCounterUpdate event, long localMemberId, int localPlayerId)
 	{
-		if (npc != null && npc.getIndex() == event.getNpcIndex())
+		return event.getMemberId() == localMemberId || event.getPlayerId() == localPlayerId;
+	}
+
+	/**
+	 * An npc changed form. A boss whose rules restore its stats on entering that
+	 * form starts again from its base; otherwise the drains carry over, against
+	 * the new form's levels.
+	 */
+	void onNpcChanged(NPC npc)
+	{
+		final DrainTracker.Tracked tracked = tracker.tracked(npc.getIndex());
+		if (tracked == null || tracked.npcId == npc.getId())
 		{
-			apply(npc, event.getWeapon(), event.getHit());
+			return;
+		}
+		final BossRules.DrainRules rules = rulesFor(npc.getId());
+		final boolean restores = rules != null && rules.resetsOnNpc(npc.getId()) && !rules.resetsOnNpc(tracked.npcId);
+		tracker.changed(npc.getIndex(), client.getTickCount(), npc.getId(), npc.getName(), targetFor(npc), restores);
+	}
+
+	/** A varbit changed: Sotetseg's maze restores his Defence. */
+	void onVarbitChanged(int varbitId, int value)
+	{
+		final BossRules rules = monsters.rules();
+		if (rules == null || !rules.drainVarbits().contains(varbitId))
+		{
+			return;
+		}
+		for (NPC npc : client.getTopLevelWorldView() == null ? java.util.Collections.<NPC>emptyList()
+			: client.getTopLevelWorldView().npcs())
+		{
+			if (npc == null || tracker.tracked(npc.getIndex()) == null)
+			{
+				continue;
+			}
+			final BossRules.DrainRules r = rulesFor(npc.getId());
+			if (r != null && r.resetsOnVarbit(varbitId, value))
+			{
+				tracker.reset(npc.getIndex(), client.getTickCount(), "varbit " + varbitId + " = " + value);
+			}
 		}
 	}
 
-	// Books a drain against the NPC, stopping at whatever floor it has.
-	private void apply(NPC npc, SpecialWeapon weapon, int hit)
+	private BossRules.DrainRules rulesFor(int npcId)
+	{
+		final BossRules.Boss boss = bossFor(npcId);
+		return boss == null ? null : boss.defenceDrain;
+	}
+
+	private BossRules.Boss bossFor(int npcId)
+	{
+		final BossRules rules = monsters.rules();
+		return rules == null ? null : rules.forNpc(npcId);
+	}
+
+	/**
+	 * What the drain tracking knows of an npc: its levels as the raid leaves them,
+	 * its floors, and whether it is a demon or Tekton. Null without monster stats.
+	 *
+	 * <p>In the Tombs of Amascut the raid level raises the defence ROLL, not the
+	 * Defence level (wiki, Tombs of Amascut), so drains and the floors there work on
+	 * the unscaled level and {@link CombatCalc} scales what is left. In the Chambers
+	 * the levels themselves scale with the party, and drains work on those.
+	 */
+	DrainRule.Target targetFor(NPC npc)
 	{
 		final MonsterStatsProvider.MonsterStats stats = monsters.get(npc.getId());
-		// Vardorvis: the game does not let drains lower his defence (its floor is his current defence), so a warhammer
-		// that landed changed nothing and must not be booked as if it had.
-		if (stats == null || stats.isDrainImmune())
+		if (stats == null)
 		{
-			return;
+			return null;
 		}
-		// The scaled figure, since that is the defence the drain is a share of.
-		final int base = RaidScaling.defence(client, stats.getDefenceLevel(), stats.getName(), partyHitpoints.highest());
-		final int already = drainedFrom(npc.getIndex());
-		final int remaining = base - already;
-		if (remaining <= 0)
-		{
-			return;
-		}
-
-		int taken;
-		if (weapon.isDamage())
-		{
-			taken = weapon.computeHit(hit, npc);
-		}
-		else
-		{
-			final float keep = weapon.computeDrainPercent(hit, npc);
-			if (keep <= 0)
-			{
-				return;
-			}
-			taken = remaining - (int) (remaining * keep);
-		}
-		if (taken <= 0)
-		{
-			return;
-		}
-
-		final int ceiling = DefenceDrainCap.maxDrain(npc.getId(), base);
-		final int total = Math.min(ceiling, Math.min(base, already + taken));
-		if (total != already)
-		{
-			drained.put(npc.getIndex(), total);
-			log.debug("PvM Logs: {} drained to {} of {} defence by {}",
-				npc.getName(), base - total, base, weapon.getName());
-		}
+		final int defence = RaidScaling.tombsRaidLevel(client) > 0 ? stats.getDefenceLevel()
+			: RaidScaling.defence(client, stats.getDefenceLevel(), stats.getName(), partyHitpoints.highest());
+		final int magic = RaidScaling.magic(client, stats.getMagicLevel(), stats.getName(), partyHitpoints.highest());
+		return target(stats, rulesFor(npc.getId()), defence, magic);
 	}
 
-	/** The drain dies with the NPC, as its stats do. */
-	void forget(int npcIndex)
+	/** The target from its stats and rules, at these (raid-scaled) levels. Static for the tests. */
+	static DrainRule.Target target(MonsterStatsProvider.MonsterStats stats, BossRules.DrainRules rules, int defence,
+		int magic)
 	{
-		drained.remove(npcIndex);
+		final boolean immune = stats.isDrainImmune() || rules != null && rules.immune;
+		final int defenceFloor = rules == null ? 0 : rules.defenceFloor(defence);
+		final int magicFloor = rules == null ? 0 : rules.magicFloor(magic);
+		return new DrainRule.Target(defence, magic, stats.getDefMagic(), stats.getAttackLevel(),
+			stats.getStrengthLevel(), stats.getRangedLevel(), defenceFloor, magicFloor, immune,
+			stats.hasAttribute("demon"), rules != null && rules.tekton, rules != null && rules.godswordDoubled,
+			rules == null ? BossRules.DrainRules.DEFAULT_REGEN_TICKS : rules.regenTicks());
+	}
+
+	/** The target's tracked stats for the live readout and the fight's record, or null where nothing is tracked. */
+	DrainTracker.Tracked tracked(int npcIndex)
+	{
+		return tracker.tracked(npcIndex);
+	}
+
+	/** The fight's drain record (see {@link DrainTracker#record}), starting it from its base if nothing was thrown. */
+	DrainRecord recordFor(NPC npc, int npcIndex, int fromTick)
+	{
+		if (npc != null && npc.getIndex() == npcIndex)
+		{
+			tracker.track(npcIndex, npc.getId(), npc.getName(), targetFor(npc));
+		}
+		return tracker.record(npcIndex, fromTick);
+	}
+
+	/** Levels of Defence taken off this npc, 0 where nothing is tracked. */
+	int drainedFrom(int npcIndex)
+	{
+		final DrainTracker.Tracked t = tracker.tracked(npcIndex);
+		return t == null ? 0 : t.target.defence - t.state.defence;
+	}
+
+	/** Levels of Magic taken off it. */
+	int magicDrainedFrom(int npcIndex)
+	{
+		final DrainTracker.Tracked t = tracker.tracked(npcIndex);
+		return t == null ? 0 : t.target.magic - t.state.magic;
+	}
+
+	/** Points of magic defence bonus taken off it (the Eye of ayak). */
+	int magicDefenceDrainedFrom(int npcIndex)
+	{
+		final DrainTracker.Tracked t = tracker.tracked(npcIndex);
+		return t == null ? 0 : t.target.magicDefence - t.state.magicDefence;
+	}
+
+	/**
+	 * The drain dies with the NPC, as its stats do; a boss whose actor the game
+	 * replaces mid-fight keeps them a few ticks for the next one (see
+	 * {@link #onGameTick}).
+	 */
+	void forget(NPC npc)
+	{
+		tracker.forget(npc.getIndex(), carryKey(bossFor(npc.getId())), client.getTickCount());
 	}
 
 	void clear()
 	{
-		drained.clear();
-		firedWeapon = null;
+		tracker.clear();
+		thrownWeapon = null;
 		specEnergy = -1;
-	}
-
-	private SpecialWeapon equippedSpecialWeapon()
-	{
-		final int weaponId = equippedWeaponId();
-		if (weaponId <= 0)
-		{
-			return null;
-		}
-		return BY_ITEM_ID.get(weaponId);
 	}
 
 	private int equippedWeaponId()

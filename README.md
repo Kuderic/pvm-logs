@@ -107,3 +107,4 @@ java "-Djava.awt.headless=true" -cp build\libs\pvm-logs-unspecified-all.jar com.
 - Special thanks to Kinomoto and zLost for a ton of valuable feedback and ideas for the plugin;
 - Portions of the combat math were ported from the LlemonDuck dps-calculator (BSD-2);
 - Chambers of Xeric scaling math taken from **GearScape**.
+- Defence drain tracking follows RuneLite's Special Attack Counter and was checked against Better Party Defence (with OSParty) and Party Defence Tracker, all BSD-2; notices in `THIRD-PARTY.md`.

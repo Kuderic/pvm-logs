@@ -171,7 +171,7 @@ final class RaidScaling
 		tombsLevel = level;
 	}
 
-	private static int tombsRaidLevel(Client client)
+	static int tombsRaidLevel(Client client)
 	{
 		return tombsLevel;
 	}

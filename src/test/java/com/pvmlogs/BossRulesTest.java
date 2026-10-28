@@ -166,14 +166,16 @@ public class BossRulesTest
 		return Filepath.Unchecked.getRooted(file.getParent()).joinSegment(file.getFileName().toString());
 	}
 
-	/** Schemas 2 and 3 only add optional fields, so a hotfix file written for schema 1 still loads. */
+	/** Schemas 2, 3 and 4 only add optional fields, so a hotfix file written for schema 1 still loads. */
 	@Test
 	public void aSchemaOneFileStillLoads()
 	{
 		final BossRules.RulesFile old = BossRules.read(GSON, new StringReader(
 			"{\"schemaVersion\":1,\"bosses\":[{\"name\":\"Vardorvis\",\"npcIds\":[12223]}]}"));
 		assertNotNull(old);
-		assertEquals(3, BossRules.SCHEMA_VERSION);
+		assertEquals(4, BossRules.SCHEMA_VERSION);
+		// With no defenceDrain, a boss drains to 0 and regenerates at the default rate.
+		assertNull(BossRules.merge(old, null).forNpc(12223).defenceDrain);
 	}
 
 	/**

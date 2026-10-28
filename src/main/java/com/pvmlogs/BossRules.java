@@ -10,9 +10,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.util.Filepath;
 
@@ -65,11 +67,20 @@ import net.runelite.client.util.Filepath;
  * {@code attacksOnPlayer}: how to tell the boss's attacks on the player apart from
  * what the client sees, and which of them were avoidable. {@link AttackClassifier}
  * reads it. A schema-2 file has none and reads the same.
+ *
+ * <p>Schema 4 (T-049) adds one optional field to a boss, {@code defenceDrain}
+ * ({@link DrainRules}): how far its Defence and Magic can be drained, whether at
+ * all, how fast drained levels come back and what restores them at once
+ * mid-fight, and the few special cases the drain rules
+ * need (Tekton, the godsword's double drain, magic defence off the Defence level).
+ * It replaces the hard-coded {@code DefenceDrainCap}. A file of an older schema
+ * has none: those bosses drain to 0, the wiki's rule for a monster with no stated
+ * limit.
  */
 @Slf4j
 class BossRules
 {
-	static final int SCHEMA_VERSION = 3;
+	static final int SCHEMA_VERSION = 4;
 
 	static final class Variant
 	{
@@ -184,6 +195,151 @@ class BossRules
 		int countedHpMargin;
 		/** Schema 2: the experience bonus the game pays on every version, where the formula disagrees. 0 means none. */
 		double xpBonus;
+		/** Schema 4: how its stats drain; null for the wiki's default, to 0 with no special cases. */
+		DrainRules defenceDrain;
+	}
+
+	/**
+	 * Schema 4 (T-049): one boss's limits on defence drains, from the OSRS Wiki and
+	 * the DPS calculator's {@code getDefenceFloor} (sources in each entry's
+	 * {@link #source}). Every field is optional. Floors given several ways combine
+	 * to the highest.
+	 */
+	static final class DrainRules
+	{
+		/** A monster restores one drained level every 100 ticks unless it is known to be faster (wiki, Temporary skill drain). */
+		static final int DEFAULT_REGEN_TICKS = 100;
+
+		/** Nothing lowers its Defence or Magic. */
+		boolean immune;
+		/** Versions (as the monster data names them) that nothing drains: the awakened Desert Treasure II bosses. */
+		List<String> immuneVersions;
+		/**
+		 * The game replaces its actor mid-fight (a new npc index) and the drains carry
+		 * to the new one: Kephri's shield, The Fractured Archive's bosses within a phase.
+		 */
+		boolean carryAcrossActors;
+		/** The lowest its Defence can be drained to, in levels. */
+		Integer defenceFloor;
+		/** The share of its (raid-scaled) Defence it always keeps, in percent: The Fractured Archive's 60. */
+		Integer defenceFloorPercent;
+		/** The most levels of Defence that can be drained off it in all. */
+		Integer maxDefenceDrain;
+		/** The lowest its Magic can be drained to, in levels; 0 when left out. */
+		Integer magicFloor;
+		/** It rolls magic defence off its Defence level, not its Magic, so a Defence drain lowers that too. */
+		boolean magicUsesDefence;
+		/** Tekton: a warhammer or maul that misses still takes 5%, a godsword 10 (RuneLite's {@code SpecialWeapon}). */
+		boolean tekton;
+		/** A godsword drains twice its damage off it. */
+		boolean godswordDoubled;
+		/** Changing into any of these npc ids restores its stats to their base. */
+		int[] resetOnNpcIds;
+		/** A varbit taking a value restores them: Sotetseg's maze. */
+		List<VarbitReset> resetOnVarbit;
+		/** Ticks between each drained level it gets back; {@link #DEFAULT_REGEN_TICKS} when left out, 0 for never. */
+		Integer regenTicks;
+		/** Where each fact came from. */
+		String source;
+
+		/** Whether nothing drains it in this version of the monster data. */
+		boolean immuneIn(String version)
+		{
+			if (immune)
+			{
+				return true;
+			}
+			if (immuneVersions == null || version == null)
+			{
+				return false;
+			}
+			for (String v : immuneVersions)
+			{
+				if (v != null && v.equalsIgnoreCase(version))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/** Ticks between each drained level it gets back. */
+		int regenTicks()
+		{
+			return regenTicks == null ? DEFAULT_REGEN_TICKS : Math.max(0, regenTicks);
+		}
+
+		/** The lowest its Defence can go from this (raid-scaled) base. */
+		int defenceFloor(int base)
+		{
+			if (immune)
+			{
+				return base;
+			}
+			int floor = 0;
+			if (defenceFloor != null)
+			{
+				floor = Math.max(floor, defenceFloor);
+			}
+			if (defenceFloorPercent != null)
+			{
+				floor = Math.max(floor, base * defenceFloorPercent / 100);
+			}
+			if (maxDefenceDrain != null)
+			{
+				floor = Math.max(floor, base - maxDefenceDrain);
+			}
+			return Math.max(0, Math.min(base, floor));
+		}
+
+		/** The lowest its Magic can go from this base. */
+		int magicFloor(int base)
+		{
+			if (immune)
+			{
+				return base;
+			}
+			return Math.max(0, Math.min(base, magicFloor == null ? 0 : magicFloor));
+		}
+
+		boolean resetsOnNpc(int npcId)
+		{
+			if (resetOnNpcIds == null)
+			{
+				return false;
+			}
+			for (int id : resetOnNpcIds)
+			{
+				if (id == npcId)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		boolean resetsOnVarbit(int varbit, int value)
+		{
+			if (resetOnVarbit == null)
+			{
+				return false;
+			}
+			for (VarbitReset r : resetOnVarbit)
+			{
+				if (r != null && r.varbit == varbit && r.value == value)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+	}
+
+	/** A varbit and the value that restores a boss's stats. */
+	static final class VarbitReset
+	{
+		int varbit;
+		int value;
 	}
 
 	static final class PortedFrom
@@ -203,11 +359,34 @@ class BossRules
 
 	private final Map<Integer, Boss> byId;
 	private final PortedFrom portedFrom;
+	// Every varbit a drain rule resets on, so a varbit change can be dismissed in O(1).
+	private final Set<Integer> drainVarbits;
 
 	private BossRules(Map<Integer, Boss> byId, PortedFrom portedFrom)
 	{
 		this.byId = byId;
 		this.portedFrom = portedFrom;
+		final Set<Integer> varbits = new HashSet<>();
+		for (Boss b : byId.values())
+		{
+			if (b.defenceDrain != null && b.defenceDrain.resetOnVarbit != null)
+			{
+				for (VarbitReset r : b.defenceDrain.resetOnVarbit)
+				{
+					if (r != null)
+					{
+						varbits.add(r.varbit);
+					}
+				}
+			}
+		}
+		this.drainVarbits = Collections.unmodifiableSet(varbits);
+	}
+
+	/** The varbits any boss's drain rules reset on (T-049). */
+	Set<Integer> drainVarbits()
+	{
+		return drainVarbits;
 	}
 
 	static BossRules empty()
