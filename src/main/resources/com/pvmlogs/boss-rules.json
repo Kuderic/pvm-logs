@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "portedFrom": {
     "repo": "weirdgloop/osrs-dps-calc",
     "paths": ["src/lib/scaling", "src/lib/constants.ts"],
@@ -41,17 +41,25 @@
         },
         { "version": "Awakened", "maxHp": 1400, "scaleWithHp": { "strength": [391, 522], "defence": [268, 181] } }
       ],
-      "notes": "Strength and defence move linearly from full hitpoints to none (DPS calc scaling/Vardorvis.ts). The stats file stores both as 0. Defence cannot be drained (DPS calc DefenceReduction.ts floor = current defence). attacksOnPlayer (T-041): from T-039's 23 kills of Eric's 2026-10-27 logs and the OSRS Wiki's Vardorvis and Vardorvis/Strategies pages (read 2026-10-27); every id in it was seen in those logs. Melee and spikes heal him half the hit, axes and his head's gaze do not; an axe's bleed (splat 67) follows it within 6 ticks; Protect from Melee lets a quarter of his melee through, at most 10. A failed strangle has never been logged, so it is not named: it counts as chip until a log shows it."
+      "notes": "Strength and defence move linearly from full hitpoints to none (DPS calc scaling/Vardorvis.ts). The stats file stores both as 0. Defence cannot be drained (DPS calc DefenceReduction.ts floor = current defence). attacksOnPlayer (T-041): from T-039's 23 kills of Eric's 2026-10-27 logs and the OSRS Wiki's Vardorvis and Vardorvis/Strategies pages (read 2026-10-27); every id in it was seen in those logs. Melee and spikes heal him half the hit, axes and his head's gaze do not; an axe's bleed (splat 67) follows it within 6 ticks; Protect from Melee lets a quarter of his melee through, at most 10. A failed strangle has never been logged, so it is not named: it counts as chip until a log shows it. Defence drains: immune by the DPS calc (DefenceReduction.ts floor = current defence) and the wiki's Vardorvis/Strategies ('defence-draining weapons are useless'); the wiki also quotes Mod Ash saying they do work, though not to zero, so this is unsettled (T-049)."
     },
     {
       "name": "Araxxor",
       "npcIds": [13668],
-      "unmodelled": "Enraged phase adds 35 defence, 28 magic and 31 ranged levels (DPS calc scaling/Phases.ts). The enrage is not tracked, so expected figures after it read high."
+      "unmodelled": "Enraged phase adds 35 defence, 28 magic and 31 ranged levels (DPS calc scaling/Phases.ts). The enrage is not tracked, so expected figures after it read high.",
+      "defenceDrain": {
+        "maxDefenceDrain": 45,
+        "source": "OSRS Wiki, read 2026-10-28: Araxxor/Strategies: 'His Defence level can be only drained by up to 45 levels'; 'drained stats will carry over to enrage' (the enrage is a form change: drains carry). DPS calc floor 90 agrees."
+      }
     },
     {
       "name": "Yama",
       "npcIds": [14176],
-      "unmodelled": "Magic defence bonus is +60 while the tank uses magic and -30 otherwise, outside phase 3 (DPS calc scaling/Phases.ts). The tank's style is not tracked."
+      "unmodelled": "Magic defence bonus is +60 while the tank uses magic and -30 otherwise, outside phase 3 (DPS calc scaling/Phases.ts). The tank's style is not tracked.",
+      "defenceDrain": {
+        "maxDefenceDrain": 80,
+        "source": "OSRS Wiki, read 2026-10-28: Yama/Strategies: 'his stats can be drained a maximum of 80 Defence levels (to 145)'. Contracted fights are immune (Temporary skill drain); a contract is not detected, so not modelled."
+      }
     },
     {
       "name": "Abyssal Sire",
@@ -70,7 +78,347 @@
     {
       "name": "Bork",
       "npcIds": [16640],
-      "unmodelled": "Each phase adds magic resistance and flat armour (DPS calc scaling/Phases.ts). Phases are not tracked."
+      "unmodelled": "Each phase adds magic resistance and flat armour (DPS calc scaling/Phases.ts). Phases are not tracked.",
+      "defenceDrain": {
+        "defenceFloorPercent": 60,
+        "carryAcrossActors": true,
+        "source": "OSRS Wiki, read 2026-10-28: Bork: minimum 180; Jagex, 'The Fractured Archive - Out Today' and the 21 Oct 2026 hotfix: 'a 60% cap on their Defence Reduction ... Archive Guardian, Bork, Ezekiel, Moia, Xarth, Ocellus' (fixed in game 28 Oct 2026, 'Halloween Event 2026, TFA Tweaks & More!'). Carry across actors: Better Party Defence's TFA phase persistence."
+      }
+    },
+    {
+      "name": "Verzik Vitur",
+      "npcIds": [8369, 8370, 8372, 8374, 14795, 14796, 10830, 10831, 10833, 10835, 10847, 10848, 10850, 10852, 14797, 14798],
+      "defenceDrain": {
+        "immune": true,
+        "magicUsesDefence": true,
+        "source": "OSRS Wiki, read 2026-10-28: Verzik Vitur: 'Her defence cannot be lowered.'; Temporary skill drain lists her as immune to stat drains; 'Verzik's magic defence is calculated from her defence level rather than magic' (Mod Ash: 'Defence like the Ice Demon, in all phases'). Ids as the old DefenceDrainCap had them, transitions left out."
+      }
+    },
+    {
+      "name": "Demonic Brutus",
+      "npcIds": [15628, 15629],
+      "defenceDrain": {
+        "immune": true,
+        "source": "OSRS Wiki, read 2026-10-28: Demonic Brutus/Strategies: 'is immune to stat drains and enchanted bolt effects'; Temporary skill drain lists it. Ids matched against the DPS calc's data (COWBOSS_HARDMODE, _GHOST)."
+      }
+    },
+    {
+      "name": "Doom of Mokhaiotl",
+      "npcIds": [14707, 14708, 14709],
+      "defenceDrain": {
+        "maxDefenceDrain": 30,
+        "source": "OSRS Wiki, read 2026-10-28: Doom of Mokhaiotl/Strategies: 'Doom has a defence drain cap of 30, meaning that its Defence can only be lowered to a minimum of 60'; it 'resets defence on each floor' (each delve's Doom is a new npc, whose drains start afresh)."
+      }
+    },
+    {
+      "name": "Sotetseg",
+      "npcIds": [8387, 8388, 10864, 10865, 10867, 10868],
+      "defenceDrain": {
+        "defenceFloor": 100,
+        "resetOnVarbit": [{"varbit": 6447, "value": 2}],
+        "source": "OSRS Wiki, read 2026-10-28: Sotetseg: 'minimum of 100, though any defence drain will be reset each time players are transported to the shadow realm'. The maze is varbit TOB_CLIENT_WAVEPROGRESS_TYPE (6447) = 2, as Better Party Defence reads it. DPS calc floor 100 agrees."
+      }
+    },
+    {
+      "name": "The Nightmare",
+      "npcIds": [9425, 9426, 9427, 9428, 9429, 9430],
+      "defenceDrain": {
+        "defenceFloor": 120,
+        "regenTicks": 5,
+        "source": "OSRS Wiki, read 2026-10-28: The Nightmare: 'her Defence level cannot be reduced below 120, and she will restore her defence stat back at the rate of 20 defence per minute' (one level every 5 ticks). DPS calc floor 120 agrees."
+      }
+    },
+    {
+      "name": "Phosani's Nightmare",
+      "npcIds": [9416, 9417, 9418, 9419, 9420, 9421, 11153, 11154, 11155],
+      "defenceDrain": {
+        "defenceFloor": 120,
+        "regenTicks": 5,
+        "source": "OSRS Wiki, read 2026-10-28: Phosani's Nightmare/Strategies: 'minimum of 120, and she recovers drained levels every 3 seconds (5 ticks)'. DPS calc floor 120 agrees."
+      }
+    },
+    {
+      "name": "Akkha",
+      "npcIds": [11789, 11790, 11791, 11792, 11793, 11794, 11795],
+      "defenceDrain": {
+        "defenceFloor": 70,
+        "regenTicks": 20,
+        "source": "OSRS Wiki, read 2026-10-28: Tombs of Amascut/Strategies: Akkha '-10 (regens quickly)', i.e. no lower than 70 of 80; User:Orion/Regen (measured with Monster Examine): a level every 20 ticks. The raid level scales the defence roll, not the level, so the floor is on the unscaled level. DPS calc floor 70 agrees."
+      }
+    },
+    {
+      "name": "Ba-Ba",
+      "npcIds": [11778],
+      "defenceDrain": {
+        "defenceFloor": 60,
+        "source": "OSRS Wiki, read 2026-10-28: Tombs of Amascut/Strategies: Ba-Ba -20, no lower than 60 of 80. DPS calc agrees."
+      }
+    },
+    {
+      "name": "Kephri",
+      "npcIds": [11719, 11720, 11721],
+      "defenceDrain": {
+        "defenceFloor": 60,
+        "carryAcrossActors": true,
+        "resetOnNpcIds": [11721],
+        "source": "OSRS Wiki, read 2026-10-28: Tombs of Amascut/Strategies: Kephri -20, no lower than 60 of 80; Kephri: 'the defence level is reset for the final phase' (TOA_KEPHRI_BOSS_ENRAGE, 11721). Her actor is replaced through the shield phases and keeps its drains (Better Party Defence's test kephriKeepsDrainAcrossShieldActorsAndResetsOnFinalPhase). DPS calc floor 60 agrees."
+      }
+    },
+    {
+      "name": "Zebak",
+      "npcIds": [11730, 11732],
+      "defenceDrain": {
+        "defenceFloor": 50,
+        "source": "OSRS Wiki, read 2026-10-28: Tombs of Amascut/Strategies: Zebak -20, no lower than 50 of 70. DPS calc agrees."
+      }
+    },
+    {
+      "name": "Obelisk (Tombs of Amascut)",
+      "npcIds": [11750, 11751],
+      "defenceDrain": {
+        "defenceFloor": 60,
+        "source": "OSRS Wiki, read 2026-10-28: Tombs of Amascut/Strategies: Obelisk -40, no lower than 60 of 100. DPS calc agrees."
+      }
+    },
+    {
+      "name": "The Wardens, phase 3",
+      "npcIds": [11759, 11760, 11761, 11762, 11763, 11764],
+      "defenceDrain": {
+        "defenceFloor": 120,
+        "source": "OSRS Wiki, read 2026-10-28: Tumeken's Warden / Elidinis' Warden: phase 3 -30 (no lower than 120 of 150), and after the enrage, which resets the base to 180, -60, no lower than 120 again. The enrage keeps the same npc id, so its reset is not seen. DPS calc floor 120 agrees."
+      }
+    },
+    {
+      "name": "Nex",
+      "npcIds": [11278, 11279, 11280, 11281],
+      "defenceDrain": {
+        "maxDefenceDrain": 10,
+        "regenTicks": 50,
+        "source": "OSRS Wiki, read 2026-10-28: Nex/Strategies: 'Her defence can be reduced a maximum of 10 levels' (to 250); User:Orion/Regen: a level every 50 ticks. DPS calc floor 250 agrees."
+      }
+    },
+    {
+      "name": "The Hueycoatl",
+      "npcIds": [14009, 14011, 14013, 14014, 14015, 14017, 14018],
+      "defenceDrain": {
+        "maxDefenceDrain": 5,
+        "source": "OSRS Wiki, read 2026-10-28: The Hueycoatl/Strategies: 'Defence-draining effects will only drain up to 5 levels' (125 to 120, head, body and tail alike). DPS calc floor 120 agrees."
+      }
+    },
+    {
+      "name": "Tekton",
+      "npcIds": [7540, 7541, 7542, 7543, 7544, 7545],
+      "defenceDrain": {
+        "tekton": true,
+        "regenTicks": 15,
+        "source": "OSRS Wiki, read 2026-10-28: Chambers of Xeric/Strategies: 'missed warhammer/maul specials drain 5% and godsword specials drain 10 Defence levels'; Tekton: 'Tekton no longer resets his Defence when healing at the anvil'; Mod Ash's regen list on the CoX pages: 'Tekton - 15'."
+      }
+    },
+    {
+      "name": "Corporeal Beast",
+      "npcIds": [319],
+      "defenceDrain": {
+        "godswordDoubled": true,
+        "regenTicks": 20,
+        "source": "OSRS Wiki, read 2026-10-28: Corporeal Beast/Strategies: 'The special attack's stat reduction effect is calculated before the Corporeal Beast's 50% damage reduction' (so the drain is twice the splat); 'By default, the Corporeal Beast regenerates each drained stat once every 20 ticks'."
+      }
+    },
+    {
+      "name": "Ice demon",
+      "npcIds": [7584, 7585],
+      "defenceDrain": {
+        "magicUsesDefence": true,
+        "source": "OSRS Wiki, read 2026-10-28: Ice demon: 'magic defence being calculated from its Defence level rather than Magic'. Regeneration the default 100 ticks (User:Orion/Regen)."
+      }
+    },
+    {
+      "name": "Phantom Muspah",
+      "npcIds": [12073, 12074, 12075, 12076, 12077, 12078, 12079, 12080, 12081, 12082],
+      "defenceDrain": {
+        "defenceFloor": 125,
+        "resetOnNpcIds": [12075, 12079],
+        "source": "OSRS Wiki, read 2026-10-28: Phantom Muspah/Strategies: 'Muspah's defence can be reduced down to 125'; drains 'preserve between phases until the shielded phase, where Muspah's defence resets to 200' (MUSPAH_SOULSPLIT, 12079; 12075 in the quest)."
+      }
+    },
+    {
+      "name": "Vanguards",
+      "npcIds": [7525, 7526, 7527, 7528, 7529],
+      "defenceDrain": {
+        "resetOnNpcIds": [7526],
+        "source": "OSRS Wiki, read 2026-10-28: Vanguard: 'they will restore all drained stats upon retreating into their shell'; User:Orion/Regen: 'Vanguards reset their defence upon moving' (RAIDS_VANGUARD_WALKING, 7526)."
+      }
+    },
+    {
+      "name": "Vasa Nistirio",
+      "npcIds": [7565, 7566, 7567, 7568],
+      "defenceDrain": {
+        "regenTicks": 10,
+        "source": "OSRS Wiki, read 2026-10-28: Mod Ash's regen list on the CoX pages: 'Vasa Nistirio - 10'. Not modelled: Vasa restores '(10% + 1) Defence' every 2 ticks while siphoning a crystal (Vasa Nistirio), which is the boss's own behaviour."
+      }
+    },
+    {
+      "name": "Vespula",
+      "npcIds": [7530, 7531, 7532],
+      "defenceDrain": {
+        "regenTicks": 10,
+        "source": "OSRS Wiki, read 2026-10-28: Mod Ash's regen list on the CoX pages: 'Vespula - 10'."
+      }
+    },
+    {
+      "name": "Muttadiles",
+      "npcIds": [7561, 7562, 7563],
+      "defenceDrain": {
+        "regenTicks": 15,
+        "source": "OSRS Wiki, read 2026-10-28: Mod Ash's regen list on the CoX pages: 'Muttadiles - 15'."
+      }
+    },
+    {
+      "name": "Pestilent Bloat",
+      "npcIds": [8359, 10812, 10813],
+      "defenceDrain": {
+        "regenTicks": 5,
+        "source": "OSRS Wiki, read 2026-10-28: User:Orion/Regen: a level every 5 ticks. Not modelled: 'If its Defence has been reduced, it will regenerate to full when it stomps' (Pestilent Bloat), which is the boss's own behaviour."
+      }
+    },
+    {
+      "name": "Zulrah",
+      "npcIds": [2042, 2043, 2044],
+      "defenceDrain": {
+        "regenTicks": 5,
+        "source": "OSRS Wiki, read 2026-10-28: Zulrah/Strategies: 'Drains to Zulrah's defence carry over between phases'; User:Orion/Regen: a level every 5 ticks (paused through phase changes, not modelled)."
+      }
+    },
+    {
+      "name": "Vorkath",
+      "npcIds": [8058, 8059, 8060, 8061],
+      "defenceDrain": {
+        "regenTicks": 5,
+        "source": "OSRS Wiki, read 2026-10-28: User:Orion/Regen: awake, a level every 5 ticks (the first 90-100 ticks of a kill at the sleeping rate, 100, not modelled)."
+      }
+    },
+    {
+      "name": "Cerberus",
+      "npcIds": [5862, 5863, 5866],
+      "defenceDrain": {
+        "regenTicks": 20,
+        "source": "OSRS Wiki, read 2026-10-28: User:Orion/Regen: a level every 20 ticks."
+      }
+    },
+    {
+      "name": "Commander Zilyana",
+      "npcIds": [2205],
+      "defenceDrain": {
+        "regenTicks": 10,
+        "source": "OSRS Wiki, read 2026-10-28: User:Orion/Regen: a level every 10 ticks."
+      }
+    },
+    {
+      "name": "General Graardor",
+      "npcIds": [2215],
+      "defenceDrain": {
+        "regenTicks": 10,
+        "source": "OSRS Wiki, read 2026-10-28: User:Orion/Regen: a level every 10 ticks."
+      }
+    },
+    {
+      "name": "Duke Sucellus",
+      "npcIds": [12166, 12167, 12191, 12192, 12193, 12194, 12195, 12196],
+      "defenceDrain": {
+        "immuneVersions": ["Awakened, Awake"],
+        "source": "OSRS Wiki, read 2026-10-28: Duke Sucellus/Strategies, Awakened: 'The boss is immune to stat drains.' Temporary skill drain: 'the Awakened variants of the Forgotten Four'."
+      }
+    },
+    {
+      "name": "The Leviathan",
+      "npcIds": [12214, 12215],
+      "defenceDrain": {
+        "immuneVersions": ["Awakened"],
+        "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies, Awakened: 'The boss is immune to stat drains.'"
+      }
+    },
+    {
+      "name": "The Whisperer",
+      "npcIds": [12204, 12205, 12206, 12207],
+      "defenceDrain": {
+        "immuneVersions": ["Awakened"],
+        "source": "OSRS Wiki, read 2026-10-28: The Whisperer/Strategies, Awakened: 'The boss is immune to stat drains.' Not modelled: 'this reduction is reset when enrage phase begins' (same npc id)."
+      }
+    },
+    {
+      "name": "Calvar'ion",
+      "npcIds": [11993, 11994],
+      "defenceDrain": {
+        "resetOnNpcIds": [11994],
+        "source": "OSRS Wiki, read 2026-10-28: Calvar'ion: on its enraged form 'any drained Defence levels will be restored' (VETION_2_SINGLE, 11994)."
+      }
+    },
+    {
+      "name": "Vet'ion",
+      "npcIds": [6611, 6612],
+      "defenceDrain": {
+        "resetOnNpcIds": [6612],
+        "source": "OSRS Wiki, read 2026-10-28: Vet'ion: on its enraged form 'any drained Defence levels will be restored' (VETION_2, 6612). A 2017 Mod Ash quote on the Kalphite Queen page says the opposite; it predates the Wilderness rework."
+      }
+    },
+    {
+      "name": "Archive Guardian",
+      "npcIds": [16657, 16659, 16660],
+      "defenceDrain": {
+        "defenceFloorPercent": 60,
+        "carryAcrossActors": true,
+        "source": "OSRS Wiki, read 2026-10-28: Archive Guardian: minimum 156 of 260. Jagex, 'The Fractured Archive - Out Today' and the 21 Oct 2026 hotfix: 'a 60% cap on their Defence Reduction, meaning an NPC with 100 Defence could have it reduced down to 60' for the Archive Guardian, Bork, Ezekiel, Moia, Xarth and Ocellus; in game from 28 Oct 2026 ('Halloween Event 2026, TFA Tweaks & More!': 'Fixed an issue where 60% Defence Reduction caps were not in place'), so logs of 21-27 Oct can show deeper drains. Not modelled: its base is recalculated at each downed phase, keeping a lower drained value. Carry across actors: Better Party Defence's TFA phase persistence."
+      }
+    },
+    {
+      "name": "Ezekiel",
+      "npcIds": [16652],
+      "defenceDrain": {
+        "defenceFloorPercent": 60,
+        "source": "OSRS Wiki, read 2026-10-28: Ezekiel: minimum 78 of 130. Jagex, 'The Fractured Archive - Out Today' and the 21 Oct 2026 hotfix: 'a 60% cap on their Defence Reduction, meaning an NPC with 100 Defence could have it reduced down to 60' for the Archive Guardian, Bork, Ezekiel, Moia, Xarth and Ocellus; in game from 28 Oct 2026 ('Halloween Event 2026, TFA Tweaks & More!': 'Fixed an issue where 60% Defence Reduction caps were not in place'), so logs of 21-27 Oct can show deeper drains."
+      }
+    },
+    {
+      "name": "Moia",
+      "npcIds": [16667],
+      "defenceDrain": {
+        "defenceFloorPercent": 60,
+        "source": "OSRS Wiki, read 2026-10-28: Moia: minimum 117 of 195. Jagex, 'The Fractured Archive - Out Today' and the 21 Oct 2026 hotfix: 'a 60% cap on their Defence Reduction, meaning an NPC with 100 Defence could have it reduced down to 60' for the Archive Guardian, Bork, Ezekiel, Moia, Xarth and Ocellus; in game from 28 Oct 2026 ('Halloween Event 2026, TFA Tweaks & More!': 'Fixed an issue where 60% Defence Reduction caps were not in place'), so logs of 21-27 Oct can show deeper drains."
+      }
+    },
+    {
+      "name": "Xarth",
+      "npcIds": [16684],
+      "defenceDrain": {
+        "defenceFloorPercent": 60,
+        "carryAcrossActors": true,
+        "source": "OSRS Wiki, read 2026-10-28: Xarth: minimum 102 of 170. Jagex, 'The Fractured Archive - Out Today' and the 21 Oct 2026 hotfix: 'a 60% cap on their Defence Reduction, meaning an NPC with 100 Defence could have it reduced down to 60' for the Archive Guardian, Bork, Ezekiel, Moia, Xarth and Ocellus; in game from 28 Oct 2026 ('Halloween Event 2026, TFA Tweaks & More!': 'Fixed an issue where 60% Defence Reduction caps were not in place'), so logs of 21-27 Oct can show deeper drains."
+      }
+    },
+    {
+      "name": "Ocellus, phase 1",
+      "npcIds": [16673, 16674],
+      "defenceDrain": {
+        "defenceFloorPercent": 60,
+        "carryAcrossActors": true,
+        "source": "OSRS Wiki, read 2026-10-28: Ocellus: 'reduced at most to of 129 in phase 1, 0 in phase 2, and 150 in phase 3'; 'During each phase transition, Ocellus' Defence is restored to full' (each phase is its own entry, so the stats never carry between them). Jagex, 'The Fractured Archive - Out Today' and the 21 Oct 2026 hotfix: 'a 60% cap on their Defence Reduction, meaning an NPC with 100 Defence could have it reduced down to 60' for the Archive Guardian, Bork, Ezekiel, Moia, Xarth and Ocellus; in game from 28 Oct 2026 ('Halloween Event 2026, TFA Tweaks & More!': 'Fixed an issue where 60% Defence Reduction caps were not in place'), so logs of 21-27 Oct can show deeper drains."
+      }
+    },
+    {
+      "name": "Ocellus, phase 2 (The Blade)",
+      "npcIds": [16675],
+      "defenceDrain": {
+        "carryAcrossActors": true,
+        "source": "OSRS Wiki, read 2026-10-28: Jagex, 'The Fractured Archive - Out Today': no cap for 'The Blade (Ocellus P2)', which can be drained to 0."
+      }
+    },
+    {
+      "name": "Ocellus, phase 3",
+      "npcIds": [16677],
+      "defenceDrain": {
+        "defenceFloorPercent": 60,
+        "carryAcrossActors": true,
+        "source": "OSRS Wiki, read 2026-10-28: Ocellus: minimum 150 of 250 in phase 3; 'Ocellus will no longer restore his Defence when moving to a new quadrant during P3' (Jagex, 28 Oct 2026). Jagex, 'The Fractured Archive - Out Today' and the 21 Oct 2026 hotfix: 'a 60% cap on their Defence Reduction, meaning an NPC with 100 Defence could have it reduced down to 60' for the Archive Guardian, Bork, Ezekiel, Moia, Xarth and Ocellus; in game from 28 Oct 2026 ('Halloween Event 2026, TFA Tweaks & More!': 'Fixed an issue where 60% Defence Reduction caps were not in place'), so logs of 21-27 Oct can show deeper drains."
+      }
     }
   ]
 }

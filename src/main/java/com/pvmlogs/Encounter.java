@@ -273,6 +273,115 @@ class Encounter
 		return total;
 	}
 
+	/** The first fight's drain record that exists, for the room's starting Defence (T-049), or null. */
+	private DrainRecord firstDrainRecord()
+	{
+		for (Fight fight : fights)
+		{
+			if (fight.getDrainRecord() != null)
+			{
+				return fight.getDrainRecord();
+			}
+		}
+		return null;
+	}
+
+	/** The last fight's drain record that exists, or null. */
+	private DrainRecord lastDrainRecord()
+	{
+		for (int i = fights.size() - 1; i >= 0; i--)
+		{
+			if (fights.get(i).getDrainRecord() != null)
+			{
+				return fights.get(i).getDrainRecord();
+			}
+		}
+		return null;
+	}
+
+	/** The target's Defence when the room's first recorded fight opened (T-049); -1 unknown. */
+	int getDefenceStart()
+	{
+		final DrainRecord r = firstDrainRecord();
+		return r == null ? -1 : r.defenceStart;
+	}
+
+	/** Its Defence as the room's last recorded fight ended; -1 unknown. */
+	int getDefenceEnd()
+	{
+		final DrainRecord r = lastDrainRecord();
+		return r == null ? -1 : r.defenceEnd;
+	}
+
+	/** The target's Magic when the room's first recorded fight opened; -1 unknown. */
+	int getMagicStart()
+	{
+		final DrainRecord r = firstDrainRecord();
+		return r == null ? -1 : r.magicStart;
+	}
+
+	/** Its Magic as the room's last recorded fight ended; -1 unknown. */
+	int getMagicEnd()
+	{
+		final DrainRecord r = lastDrainRecord();
+		return r == null ? -1 : r.magicEnd;
+	}
+
+	/** The player's own draining specials thrown across the room; -1 unknown. */
+	int getOwnDrainSpecsThrown()
+	{
+		return sumDrain(true, false);
+	}
+
+	/** Of those, the ones that landed; -1 unknown. */
+	int getOwnDrainSpecsLanded()
+	{
+		return sumDrain(false, false);
+	}
+
+	/** Party members' drains across the room; -1 unknown. */
+	int getPartyDrains()
+	{
+		return sumDrain(false, true);
+	}
+
+	private int sumDrain(boolean thrown, boolean party)
+	{
+		int total = 0;
+		boolean any = false;
+		for (Fight fight : fights)
+		{
+			final DrainRecord r = fight.getDrainRecord();
+			if (r != null)
+			{
+				any = true;
+				total += party ? r.partyDrains : thrown ? r.ownThrown() : r.ownLanded();
+			}
+		}
+		return any ? total : -1;
+	}
+
+	/** The player's own draining specials per weapon across the room: {thrown, landed} (T-049). */
+	java.util.Map<String, int[]> getOwnDrainSpecs()
+	{
+		final java.util.Map<String, int[]> total = new java.util.LinkedHashMap<>();
+		for (Fight fight : fights)
+		{
+			final DrainRecord r = fight.getDrainRecord();
+			if (r == null)
+			{
+				continue;
+			}
+			for (java.util.Map.Entry<String, int[]> e : r.specs.entrySet())
+			{
+				final int[] sum = total.computeIfAbsent(e.getKey(), w -> new int[2]);
+				sum[0] += e.getValue()[0];
+				sum[1] += e.getValue()[1];
+			}
+		}
+		return total;
+	}
+
 	/**
 	 * The avoidable part of the damage taken (T-041), over the fights that have
 	 * ended at a boss with attack rules, or -1 with none: a fight still running

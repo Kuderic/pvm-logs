@@ -716,8 +716,11 @@ class MonsterStatsProvider
 					: new HashSet<>(Arrays.asList(m.attributes)),
 				xpMultiplier(m, variant, boss),
 				m.version == null ? "" : m.version,
-				boss != null && boss.defenceDrainImmune,
-				warningFor(m, boss, variant));
+				boss != null && (boss.defenceDrainImmune
+					|| boss.defenceDrain != null && boss.defenceDrain.immuneIn(m.version)),
+				warningFor(m, boss, variant))
+				.withDrainFacts(m.skills.attack, m.skills.strength, m.skills.ranged,
+					boss != null && boss.defenceDrain != null && boss.defenceDrain.magicUsesDefence);
 			versions.computeIfAbsent(m.id, k -> new ArrayList<>()).add(stats);
 			names.computeIfAbsent(normalise(stats.getName()), k -> new ArrayList<>()).add(stats);
 		}
@@ -763,6 +766,15 @@ class MonsterStatsProvider
 		/** Whether drains do nothing to this boss's defence (Vardorvis, by the DPS calculator's floor). */
 		private final boolean drainImmune;
 		/**
+		 * The levels a Bandos godsword's leftover damage and an Arclight drain after
+		 * Defence (T-049); 0 where the data gives none.
+		 */
+		private int attackLevel;
+		private int strengthLevel;
+		private int rangedLevel;
+		/** It rolls magic defence off its Defence level, not its Magic (T-049: Ice demon, Verzik; boss-rules.json). */
+		private boolean magicUsesDefence;
+		/**
 		 * Why this target's expected figures should not be trusted, or null: a phase
 		 * a rule names as unmodelled, placeholder stats, versions that cannot be told
 		 * apart. Shown on the overlay and kept on the fight.
@@ -802,6 +814,28 @@ class MonsterStatsProvider
 			this.attributes = attributes;
 		}
 
+		/** This entry with its other combat levels and its magic-defence rule (T-049). */
+		MonsterStats withDrainFacts(int attack, int strength, int ranged, boolean magicUsesDefence)
+		{
+			final MonsterStats copy = new MonsterStats(name, size, hitpoints, defenceLevel, magicLevel, offensiveMagic,
+				defStab, defSlash, defCrush, defMagic, defRanged, weaknessElement, weaknessSeverity, attributes,
+				xpMultiplier, version, drainImmune, warning);
+			copy.attackLevel = attack;
+			copy.strengthLevel = strength;
+			copy.rangedLevel = ranged;
+			copy.magicUsesDefence = magicUsesDefence;
+			return copy;
+		}
+
+		private MonsterStats carry(MonsterStats copy)
+		{
+			copy.attackLevel = attackLevel;
+			copy.strengthLevel = strengthLevel;
+			copy.rangedLevel = rangedLevel;
+			copy.magicUsesDefence = magicUsesDefence;
+			return copy;
+		}
+
 		/**
 		 * The PvM experience bonus this monster pays, 1.0 for none. Used to read
 		 * how much damage an attack dealt from the experience it paid, and checked
@@ -817,18 +851,18 @@ class MonsterStatsProvider
 		/** This entry with its defence where a hitpoints-scaled rule puts it, and the rule's full hitpoints. */
 		MonsterStats scaled(int defence, int hitpoints)
 		{
-			return new MonsterStats(name, size, hitpoints, defence, magicLevel, offensiveMagic, defStab, defSlash,
+			return carry(new MonsterStats(name, size, hitpoints, defence, magicLevel, offensiveMagic, defStab, defSlash,
 				defCrush, defMagic, defRanged, weaknessElement, weaknessSeverity, attributes, xpMultiplier, version,
-				drainImmune, warning);
+				drainImmune, warning));
 		}
 
 		/** This entry carrying a warning, appended to any it already has. */
 		MonsterStats withWarning(String extra)
 		{
 			final String combined = warning == null ? extra : warning + "; " + extra;
-			return new MonsterStats(name, size, hitpoints, defenceLevel, magicLevel, offensiveMagic, defStab, defSlash,
-				defCrush, defMagic, defRanged, weaknessElement, weaknessSeverity, attributes, xpMultiplier, version,
-				drainImmune, combined);
+			return carry(new MonsterStats(name, size, hitpoints, defenceLevel, magicLevel, offensiveMagic, defStab,
+				defSlash, defCrush, defMagic, defRanged, weaknessElement, weaknessSeverity, attributes, xpMultiplier,
+				version, drainImmune, combined));
 		}
 	}
 
@@ -923,6 +957,7 @@ class MonsterStatsProvider
 			int attack;
 			@SerializedName("str")
 			int strength;
+			int ranged;
 		}
 
 		static class Offensive
