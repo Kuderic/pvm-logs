@@ -494,4 +494,23 @@ public class SidePanelModelTest
 		assertFalse(b.rows.stream().anyMatch(r -> r.swatch == PanelSnapshot.Fill.EATING));
 		assertEquals(0, b.segments.get(2).seconds, 0);
 	}
+
+	@Test
+	public void eatingShowsWhenUptimeHasNoRow()
+	{
+		// Orchestrator's review of #39: 0 idle and 7 eating ticks. Uptime's 0 s has no row; eating's 4 s still does.
+		final SidePanelModel.Input in = SidePanelExamples.dead();
+		final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) in.scope;
+		s.ticksLost = 7;
+		s.ticksLostEating = 7;
+		final PanelSnapshot.TimeBudget b = tab(in).budget;
+		assertFalse(b.rows.stream().anyMatch(r -> r.label.text.equals("uptime")));
+		final PanelSnapshot.BudgetRow eating = b.rows.get(1);
+		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
+		assertEquals("eating", eating.label.text);
+		assertEquals("+4 s", eating.value.text);
+		assertEquals(0, b.segments.get(1).seconds, 0);
+		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
+		assertEquals(new LedgerRows.Numbers(s).clock, b.sum(), 1e-9);
+	}
 }

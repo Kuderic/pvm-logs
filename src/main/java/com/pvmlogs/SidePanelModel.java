@@ -811,13 +811,14 @@ final class SidePanelModel
 			Text.small(bestKnown ? SidePanelStyle.roundedDuration(best) : LedgerRows.UNKNOWN, SidePanelStyle.VALUE)));
 		for (int i = 0; i < costs.length; i++)
 		{
-			if (LedgerRows.roundHalfAway(costs[i]) < 1)
+			if (LedgerRows.roundHalfAway(costs[i]) >= 1)
 			{
-				continue;
+				final boolean costing = LedgerRows.isCosting(costs[i], n.clock);
+				rows.add(new BudgetRow(costing ? Fill.COST : Fill.MINOR_COST, Text.small(labels[i], SidePanelStyle.BODY),
+					null, Text.small("+" + SidePanelStyle.seconds(costs[i]), costing ? SidePanelStyle.COST
+						: SidePanelStyle.BODY)));
 			}
-			final boolean costing = LedgerRows.isCosting(costs[i], n.clock);
-			rows.add(new BudgetRow(costing ? Fill.COST : Fill.MINOR_COST, Text.small(labels[i], SidePanelStyle.BODY),
-				null, Text.small("+" + SidePanelStyle.seconds(costs[i]), costing ? SidePanelStyle.COST : SidePanelStyle.BODY)));
+			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
 			if (i == 0 && LedgerRows.roundHalfAway(e) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
