@@ -587,7 +587,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				SidePanelStyle.SECONDARY));
 			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, false, "lost " + t.chart.lost,
 				SidePanelStyle.SECONDARY));
-			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, true, "eating " + t.chart.eating,
+			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.EATING, false, "eating " + t.chart.eating,
 				SidePanelStyle.SECONDARY));
 			legend.set(items);
 			// A new row of ticks every 36 s: the card grows.

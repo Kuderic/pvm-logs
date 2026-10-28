@@ -12,7 +12,8 @@ import javax.swing.JComponent;
  * Every tick of the fight (T-036; spec 3.1): 60 to a row (36 s), each 3 × 9
  * px with half a pixel between, rows 4 px apart. An attack is its style's
  * colour, a special its lighter colour, a cooldown tick Track, a lost tick
- * Cost, an eating tick Cost stripes, an unscored add's tick grey. Ticks the
+ * Cost, an eating tick the time budget's neutral eating grey (T-038: eating
+ * isn't a cost), an unscored add's tick grey. Ticks the
  * fight didn't count (before the first attack, between phases) are left empty.
  */
 final class SidePanelTickStrip extends JComponent
@@ -59,11 +60,6 @@ final class SidePanelTickStrip extends JComponent
 			final double x = (i % PER_ROW) * (TICK + GAP);
 			final double y = (i / PER_ROW) * (TICK_HEIGHT + ROW_GAP);
 			final Rectangle2D.Double r = new Rectangle2D.Double(x, y, TICK, TICK_HEIGHT);
-			if (state == FightTimeline.EATING)
-			{
-				SidePanelParts.stripes(g2, r, SidePanelStyle.COST_STRIPE_GROUND, SidePanelStyle.COST);
-				continue;
-			}
 			g2.setColor(colour(state, data.style(i)));
 			g2.fill(r);
 		}
@@ -82,6 +78,9 @@ final class SidePanelTickStrip extends JComponent
 				return SidePanelModel.styleColour(s, true);
 			case FightTimeline.LOST:
 				return SidePanelStyle.COST;
+			case FightTimeline.EATING:
+				// Neutral since T-038: the plugin can't tell why you ate, so it isn't one of Execution's costs.
+				return SidePanelStyle.EATING;
 			case FightTimeline.UNSCORED:
 				return SidePanelStyle.UNSCORED;
 			default:
