@@ -12,7 +12,10 @@ import java.util.List;
  * started in. That's the only text call RuneLite's {@code TextComponent} makes
  * (1.13.4's bytecode), so a panel of lines recorded once can be drawn again by
  * replaying its text, without its layout, wrapping and colour-tag parsing.
- * Text drawn any other way sets {@link #unrecorded} and isn't kept.
+ * Text drawn any other way sets {@link #unrecorded} and isn't kept. Every other
+ * drawing call (shapes, images, fills) is counted in {@link #drawn}, so a
+ * caller can tell a panel that drew only its background and text from one
+ * that drew something it can't replay (T-043, from #49's review).
  * <p>
  * The overrides below were generated from {@code Graphics2D}'s and
  * {@code Graphics}' abstract methods; all but the text calls and
@@ -43,20 +46,24 @@ final class RecordingGraphics extends Graphics2D
 	private final List<Op> ops;
 	/** Set when text went through a call that isn't recorded; shared with every {@link #create()}d copy. */
 	private final boolean[] unrecorded;
+	/** How many shape, image and fill calls went through, the background's included; shared like {@link #unrecorded}. */
+	private final int[] drawn;
 	private final double originX;
 	private final double originY;
 
-	/** Records into {@code ops}, relative to {@code g}'s translation now. */
-	RecordingGraphics(Graphics2D g, List<Op> ops, boolean[] unrecorded)
+	/** Records into {@code ops}, relative to {@code g}'s translation now, counting other drawing in {@code drawn}. */
+	RecordingGraphics(Graphics2D g, List<Op> ops, boolean[] unrecorded, int[] drawn)
 	{
-		this(g, ops, unrecorded, g.getTransform().getTranslateX(), g.getTransform().getTranslateY());
+		this(g, ops, unrecorded, drawn, g.getTransform().getTranslateX(), g.getTransform().getTranslateY());
 	}
 
-	private RecordingGraphics(Graphics2D g, List<Op> ops, boolean[] unrecorded, double originX, double originY)
+	private RecordingGraphics(Graphics2D g, List<Op> ops, boolean[] unrecorded, int[] drawn, double originX,
+		double originY)
 	{
 		this.g = g;
 		this.ops = ops;
 		this.unrecorded = unrecorded;
+		this.drawn = drawn;
 		this.originX = originX;
 		this.originY = originY;
 	}
@@ -70,6 +77,7 @@ final class RecordingGraphics extends Graphics2D
 	@Override
 	public void clearRect(int a0, int a1, int a2, int a3)
 	{
+		drawn[0]++;
 		g.clearRect(a0, a1, a2, a3);
 	}
 
@@ -88,13 +96,14 @@ final class RecordingGraphics extends Graphics2D
 	@Override
 	public void copyArea(int a0, int a1, int a2, int a3, int a4, int a5)
 	{
+		drawn[0]++;
 		g.copyArea(a0, a1, a2, a3, a4, a5);
 	}
 
 	@Override
 	public java.awt.Graphics create()
 	{
-		return new RecordingGraphics((Graphics2D) g.create(), ops, unrecorded, originX, originY);
+		return new RecordingGraphics((Graphics2D) g.create(), ops, unrecorded, drawn, originX, originY);
 	}
 
 	@Override
@@ -106,6 +115,7 @@ final class RecordingGraphics extends Graphics2D
 	@Override
 	public void drawArc(int a0, int a1, int a2, int a3, int a4, int a5)
 	{
+		drawn[0]++;
 		g.drawArc(a0, a1, a2, a3, a4, a5);
 	}
 
@@ -120,90 +130,105 @@ final class RecordingGraphics extends Graphics2D
 	@Override
 	public boolean drawImage(java.awt.Image a0, java.awt.geom.AffineTransform a1, java.awt.image.ImageObserver a2)
 	{
+		drawn[0]++;
 		return g.drawImage(a0, a1, a2);
 	}
 
 	@Override
 	public boolean drawImage(java.awt.Image a0, int a1, int a2, java.awt.Color a3, java.awt.image.ImageObserver a4)
 	{
+		drawn[0]++;
 		return g.drawImage(a0, a1, a2, a3, a4);
 	}
 
 	@Override
 	public boolean drawImage(java.awt.Image a0, int a1, int a2, int a3, int a4, java.awt.Color a5, java.awt.image.ImageObserver a6)
 	{
+		drawn[0]++;
 		return g.drawImage(a0, a1, a2, a3, a4, a5, a6);
 	}
 
 	@Override
 	public boolean drawImage(java.awt.Image a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, java.awt.Color a9, java.awt.image.ImageObserver a10)
 	{
+		drawn[0]++;
 		return g.drawImage(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
 	}
 
 	@Override
 	public boolean drawImage(java.awt.Image a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, java.awt.image.ImageObserver a9)
 	{
+		drawn[0]++;
 		return g.drawImage(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9);
 	}
 
 	@Override
 	public boolean drawImage(java.awt.Image a0, int a1, int a2, int a3, int a4, java.awt.image.ImageObserver a5)
 	{
+		drawn[0]++;
 		return g.drawImage(a0, a1, a2, a3, a4, a5);
 	}
 
 	@Override
 	public boolean drawImage(java.awt.Image a0, int a1, int a2, java.awt.image.ImageObserver a3)
 	{
+		drawn[0]++;
 		return g.drawImage(a0, a1, a2, a3);
 	}
 
 	@Override
 	public void drawImage(java.awt.image.BufferedImage a0, java.awt.image.BufferedImageOp a1, int a2, int a3)
 	{
+		drawn[0]++;
 		g.drawImage(a0, a1, a2, a3);
 	}
 
 	@Override
 	public void drawLine(int a0, int a1, int a2, int a3)
 	{
+		drawn[0]++;
 		g.drawLine(a0, a1, a2, a3);
 	}
 
 	@Override
 	public void drawOval(int a0, int a1, int a2, int a3)
 	{
+		drawn[0]++;
 		g.drawOval(a0, a1, a2, a3);
 	}
 
 	@Override
 	public void drawPolygon(int[] a0, int[] a1, int a2)
 	{
+		drawn[0]++;
 		g.drawPolygon(a0, a1, a2);
 	}
 
 	@Override
 	public void drawPolyline(int[] a0, int[] a1, int a2)
 	{
+		drawn[0]++;
 		g.drawPolyline(a0, a1, a2);
 	}
 
 	@Override
 	public void drawRenderableImage(java.awt.image.renderable.RenderableImage a0, java.awt.geom.AffineTransform a1)
 	{
+		drawn[0]++;
 		g.drawRenderableImage(a0, a1);
 	}
 
 	@Override
 	public void drawRenderedImage(java.awt.image.RenderedImage a0, java.awt.geom.AffineTransform a1)
 	{
+		drawn[0]++;
 		g.drawRenderedImage(a0, a1);
 	}
 
 	@Override
 	public void drawRoundRect(int a0, int a1, int a2, int a3, int a4, int a5)
 	{
+		drawn[0]++;
 		g.drawRoundRect(a0, a1, a2, a3, a4, a5);
 	}
 
@@ -242,42 +267,49 @@ final class RecordingGraphics extends Graphics2D
 	@Override
 	public void draw(java.awt.Shape a0)
 	{
+		drawn[0]++;
 		g.draw(a0);
 	}
 
 	@Override
 	public void fillArc(int a0, int a1, int a2, int a3, int a4, int a5)
 	{
+		drawn[0]++;
 		g.fillArc(a0, a1, a2, a3, a4, a5);
 	}
 
 	@Override
 	public void fillOval(int a0, int a1, int a2, int a3)
 	{
+		drawn[0]++;
 		g.fillOval(a0, a1, a2, a3);
 	}
 
 	@Override
 	public void fillPolygon(int[] a0, int[] a1, int a2)
 	{
+		drawn[0]++;
 		g.fillPolygon(a0, a1, a2);
 	}
 
 	@Override
 	public void fillRect(int a0, int a1, int a2, int a3)
 	{
+		drawn[0]++;
 		g.fillRect(a0, a1, a2, a3);
 	}
 
 	@Override
 	public void fillRoundRect(int a0, int a1, int a2, int a3, int a4, int a5)
 	{
+		drawn[0]++;
 		g.fillRoundRect(a0, a1, a2, a3, a4, a5);
 	}
 
 	@Override
 	public void fill(java.awt.Shape a0)
 	{
+		drawn[0]++;
 		g.fill(a0);
 	}
 

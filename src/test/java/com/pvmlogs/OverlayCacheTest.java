@@ -1,6 +1,7 @@
 package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -260,6 +261,67 @@ public class OverlayCacheTest
 		assertNull(cache.draw(g, "empty", null, gg -> null));
 		assertNull(cache.draw(g, "empty", null, gg -> null));
 		assertEquals(1, cache.builds());
+	}
+
+	/** A panel with a child that isn't text, for #49's review: rows, then a progress bar and a small image. */
+	private static final class PanelWithShapes extends OverlayPanel
+	{
+		PvmPerformanceOverlay.Lines lines;
+
+		Dimension paint(Graphics2D g)
+		{
+			panelComponent.getChildren().clear();
+			panelComponent.getChildren().addAll(lines.components);
+			final net.runelite.client.ui.overlay.components.ProgressBarComponent bar =
+				new net.runelite.client.ui.overlay.components.ProgressBarComponent();
+			bar.setValue(40);
+			bar.setMaximum(100);
+			panelComponent.getChildren().add(bar);
+			final BufferedImage icon = new BufferedImage(12, 12, BufferedImage.TYPE_INT_ARGB);
+			for (int i = 0; i < 12; i++)
+			{
+				icon.setRGB(i, i, 0xFFFF00FF);
+			}
+			panelComponent.getChildren().add(new net.runelite.client.ui.overlay.components.ImageComponent(icon));
+			panelComponent.setPreferredSize(new Dimension(lines.width, 0));
+			return super.render(g);
+		}
+	}
+
+	@Test
+	public void aRowThatDrawsShapesOrImagesIsDrawnTheOrdinaryWay()
+	{
+		// #49's review: the cache replays only the background and the text, so a bar or an icon would have vanished.
+		final List<LedgerRows.Row> rows = LedgerPictures.states().get("2-mid");
+		for (Color colour : new Color[]{null, new Color(30, 30, 30)})
+		{
+			final BufferedImage expected = scene();
+			final PanelWithShapes old = new PanelWithShapes();
+			old.setPreferredColor(colour);
+			for (int i = 0; i < 3; i++)
+			{
+				final Graphics2D g = overlayGraphics(i < 2 ? scene() : expected, FontManager.getRunescapeFont(), 1);
+				old.lines = PvmPerformanceOverlay.lines(g, rows, null);
+				old.paint(g);
+				g.dispose();
+			}
+			final PanelWithShapes ours = new PanelWithShapes();
+			ours.setPreferredColor(colour);
+			final OverlayCache cache = new OverlayCache();
+			BufferedImage actual = null;
+			for (int i = 0; i < 3; i++)
+			{
+				actual = scene();
+				final Graphics2D g = overlayGraphics(actual, FontManager.getRunescapeFont(), 1);
+				ours.lines = PvmPerformanceOverlay.lines(g, rows, null);
+				final PvmPerformanceOverlay.Lines lines = ours.lines;
+				cache.draw(g, lines.look(null), PvmPerformanceOverlay.background(ours), ours::paint);
+				g.dispose();
+			}
+			assertEquals(1, cache.builds());
+			assertFalse(cache.drawsImage());
+			assertSamePixels("with a bar and an image, " + colour, expected, actual);
+		}
 	}
 
 	@Test
