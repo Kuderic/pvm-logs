@@ -1,7 +1,9 @@
 package com.pvmlogs;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.Getter;
 
 // One boss or room: the fights that belong together, kept as a list rather than as a second set of counters.
@@ -63,6 +65,31 @@ class Encounter
 	boolean closesOnLootFrom(int npcId)
 	{
 		return !isEnded() && EncounterGroup.lootIsTheKill(npcId) && holds(npcId);
+	}
+
+	/** The parts that have gone down, by npc index, for a room that closes on deaths (T-061). */
+	private final Set<Integer> partsDown = new HashSet<>();
+
+	/**
+	 * One of this room's parts went down - despawned dead ({@code fell} false) or
+	 * changed into its beaten form - and whether that closes the room (T-061):
+	 * the room is open, holds the NPC's group, and the group's death rule has now
+	 * seen as many distinct parts go down as it needs. A boss whose room closes
+	 * on loot never closes here.
+	 */
+	boolean closesOnDeathOf(int npcId, int npcIndex, boolean fell)
+	{
+		if (isEnded() || !holds(npcId))
+		{
+			return false;
+		}
+		final EncounterGroup.DeathClose rule = EncounterGroup.deathClose(npcId);
+		if (rule == null || !rule.counts(npcId, fell))
+		{
+			return false;
+		}
+		partsDown.add(npcIndex);
+		return partsDown.size() >= rule.deaths;
 	}
 
 	boolean isEnded()

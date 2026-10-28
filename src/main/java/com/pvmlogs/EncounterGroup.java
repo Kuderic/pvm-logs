@@ -16,6 +16,7 @@ final class EncounterGroup
 	private static final Set<Integer> UNSCORED = buildUnscored();
 	private static final Set<Integer> UNATTACKABLE = buildUnattackable();
 	private static final Set<Integer> ADDS = buildAdds();
+	private static final Map<String, DeathClose> CLOSES_ON_DEATH = buildClosesOnDeath();
 
 	private EncounterGroup()
 	{
@@ -54,6 +55,39 @@ final class EncounterGroup
 	static boolean lootIsTheKill(int npcId)
 	{
 		return !ADDS.contains(npcId);
+	}
+
+	/**
+	 * What closes the room of a boss that drops no loot event (T-061): this
+	 * many of its parts going down, each counted once. A part goes down by
+	 * despawning dead while wearing one of {@link #live}, or by changing into one
+	 * of {@link #fallen}, the form a beaten part lies in.
+	 */
+	static final class DeathClose
+	{
+		final int deaths;
+		final Set<Integer> live;
+		final Set<Integer> fallen;
+
+		DeathClose(int deaths, Set<Integer> live, Set<Integer> fallen)
+		{
+			this.deaths = deaths;
+			this.live = live;
+			this.fallen = fallen;
+		}
+
+		/** Whether this npc going down, by dying ({@code fell} false) or by falling, is one the rule counts. */
+		boolean counts(int npcId, boolean fell)
+		{
+			return fell ? fallen.contains(npcId) : live.contains(npcId);
+		}
+	}
+
+	/** The death rule of this NPC's group, or null if its room closes on loot or not at all. */
+	static DeathClose deathClose(int npcId)
+	{
+		final String group = GROUPS.get(npcId);
+		return group == null ? null : CLOSES_ON_DEATH.get(group);
 	}
 
 	// NPCs that are part of the room but must not be scored: the time spent on them counts, the damage does not.
@@ -226,6 +260,25 @@ final class EncounterGroup
 		put(groups, "Hespori (A Night at the Theatre)",
 			NpcID.TOBQUEST_HESPORI, NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE);
+		// T-061. Named as the hiscores name them. Dawn and Dusk are one kill however many ids they wear on the way: apart, a
+		// kill was a room per form. Kept apart from the Chambers' "Guardians". The pets are not fought and stay out.
+		put(groups, "Grotesque Guardians",
+			NpcID.GARGBOSS_DUSK_SPAWN, NpcID.GARGBOSS_DAWN_SPAWN, NpcID.GARGBOSS_DUSK_PHASE1_DEFENSIVE,
+			NpcID.GARGBOSS_DAWN_PHASE1, NpcID.GARGBOSS_DAWN_PHASE1_TRANSITION, NpcID.GARGBOSS_DUSK_PHASE1_TRANSITION,
+			NpcID.GARGBOSS_DUSK_PHASE1_FLYTRANSITION, NpcID.GARGBOSS_DUSK_PHASE2_ATTACKING,
+			NpcID.GARGBOSS_DUSK_PHASE3_DEFENSIVE, NpcID.GARGBOSS_DAWN_PHASE3, NpcID.GARGBOSS_DAWN_DEATH,
+			NpcID.GARGBOSS_DUSK_PHASE3_TRANSITION, NpcID.GARGBOSS_DUSK_PHASE4_SPAWN, NpcID.GARGBOSS_DUSK_PHASE4,
+			NpcID.GARGBOSS_DUSK_DEATH);
+		// Branda and Eldric, each in its fighting and its beaten form (the wiki's infoboxes: 12596 and 14147 fight, 14148
+		// and 14149 lie defeated to be looted), and the elementals they summon.
+		put(groups, "The Royal Titans",
+			NpcID.RT_FIRE_QUEEN, NpcID.RT_ICE_KING, NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE,
+			NpcID.RT_SUMMON_ELEMENTAL_FIRE, NpcID.RT_SUMMON_ELEMENTAL_ICE);
+		// The boss Kraken, as its whirlpool and surfaced, and its four tentacles, as whirlpools and surfaced. Not the cave
+		// kraken (SLAYER_KRAKEN and _SUB), an ordinary slayer monster.
+		put(groups, "Kraken",
+			NpcID.SLAYER_KRAKEN_BOSS, NpcID.SLAYER_KRAKEN_BOSS_WHIRLPOOL,
+			NpcID.SLAYER_KRAKEN_BOSS_TENTACLE, NpcID.SLAYER_KRAKEN_BOSS_TENTACLE_WHIRLPOOL);
 		put(groups, "The Hueycoatl",
 			NpcID.HUEY_HEAD, NpcID.HUEY_HEAD_INVULNERABLE, NpcID.HUEY_HEAD_DEFEATED,
 			NpcID.HUEY_HEAD_ENRAGED, NpcID.HUEY_TAIL, NpcID.HUEY_TAIL_BROKEN,
@@ -332,6 +385,10 @@ final class EncounterGroup
 			NpcID.ABYSSALSIRE_SCION, NpcID.ABYSSALSIRE_SCION_DYING,
 			// Yama's Judge.
 			NpcID.YAMA_JUDGE_OF_YAMA, NpcID.LEAGUE6_JUDGE_OF_YAMA,
+			// The Kraken's tentacles (T-061): the Kraken's own drop is the kill.
+			NpcID.SLAYER_KRAKEN_BOSS_TENTACLE, NpcID.SLAYER_KRAKEN_BOSS_TENTACLE_WHIRLPOOL,
+			// The Royal Titans' elementals.
+			NpcID.RT_SUMMON_ELEMENTAL_FIRE, NpcID.RT_SUMMON_ELEMENTAL_ICE,
 			// Hespori's flowers.
 			NpcID.HESPORI_HEALER_ACTIVE, NpcID.HESPORI_HEALER_INACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE, NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
@@ -356,6 +413,10 @@ final class EncounterGroup
 			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
 			NpcID.TOA_KEPHRI_SHIELD_SCARAB,
+			// The Royal Titans' elementals (T-061): a +70 magic attack bonus hits them every time, 75 Magic kills one in a cast,
+			// and an opposing wall or Elemental Blast destroys one outright (wiki, Royal Titans/Strategies). Scored, they would
+			// read as luck the way the Sire's respiratory systems did. The time on them counts.
+			NpcID.RT_SUMMON_ELEMENTAL_FIRE, NpcID.RT_SUMMON_ELEMENTAL_ICE,
 			// The Judge is Yama's own add. Grouped so killing it does not reset what is on screen, and unscored so it does not
 			// lend its figures to his. Ignoring it outright would have been worse than either: with nothing tracking the Judge,
 			// the time spent killing its 400 hitpoints would have been booked against Yama as ticks lost.
@@ -402,8 +463,9 @@ final class EncounterGroup
 			|| npcId == NpcID.RAIDS_STONEGUARDIANS_LEFT_DEAD || npcId == NpcID.RAIDS_STONEGUARDIANS_RIGHT_DEAD;
 	}
 
-	private static final Set<Integer> DEFEATED = Collections.unmodifiableSet(
-		new HashSet<>(Collections.singletonList(NpcID.HUEY_HEAD_DEFEATED)));
+	// The Royal Titans' beaten forms (T-061): a titan falls and lies there to be looted rather than despawning (wiki).
+	private static final Set<Integer> DEFEATED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		NpcID.HUEY_HEAD_DEFEATED, NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE)));
 
 	private static Set<Integer> buildUnattackable()
 	{
@@ -442,8 +504,38 @@ final class EncounterGroup
 			NpcID.TOB_MAIDEN_DYING_A_HARD, NpcID.TOB_MAIDEN_DYING_B_HARD,
 			NpcID.XARPUS_DEATH, NpcID.XARPUS_DEATH_STORY, NpcID.XARPUS_DEATH_HARD,
 			NpcID.TOA_WARDEN_P3_DEATH_ELIDINIS, NpcID.TOA_WARDEN_P3_DEATH_TUMEKEN,
+			// A Royal Titan once beaten (T-061).
+			NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE,
 			// The Sire's respiratory systems and minions once they are dying.
 			NpcID.ABYSSALSIRE_LUNG_DYING, NpcID.ABYSSALSIRE_SPAWN_DYING, NpcID.ABYSSALSIRE_SCION_DYING)));
+	}
+
+	/**
+	 * The groups whose room closes on a death rather than on loot (T-061): no
+	 * loot event fires for them (RuneLite's LootManager has no case for either,
+	 * and Eric's Hespori kill in pvm-debug-20261028-130529.log, at [2962], logged its death with no LOOT line).
+	 * Hespori's room closes at its own death - its flowers don't count; the Royal
+	 * Titans' at the second titan's, whichever goes down first. Every other
+	 * group closes on its boss's loot, or not at all.
+	 */
+	private static Map<String, DeathClose> buildClosesOnDeath()
+	{
+		final Map<String, DeathClose> rules = new HashMap<>();
+		rules.put("Hespori", new DeathClose(1, ids(NpcID.HESPORI), ids()));
+		rules.put("Hespori (A Night at the Theatre)", new DeathClose(1, ids(NpcID.TOBQUEST_HESPORI), ids()));
+		rules.put("The Royal Titans", new DeathClose(2, ids(NpcID.RT_FIRE_QUEEN, NpcID.RT_ICE_KING),
+			ids(NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE)));
+		return Collections.unmodifiableMap(rules);
+	}
+
+	private static Set<Integer> ids(int... npcIds)
+	{
+		final Set<Integer> out = new HashSet<>();
+		for (int id : npcIds)
+		{
+			out.add(id);
+		}
+		return Collections.unmodifiableSet(out);
 	}
 
 	private static void put(Map<Integer, String> groups, String name, int... npcIds)

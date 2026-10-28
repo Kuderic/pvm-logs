@@ -125,11 +125,21 @@ public class LootIsTheKillTest
 		assertFalse(PvmPerformancePlugin.lootEndsFight(fight(NpcID.DAGCAVE_RANGED_BOSS, 1),
 			NpcID.DAGCAVE_MELEE_BOSS, 2));
 		assertFalse(room(NpcID.DAGCAVE_RANGED_BOSS).closesOnLootFrom(NpcID.DAGCAVE_MELEE_BOSS));
-		assertFalse(room(NpcID.SLAYER_KRAKEN_BOSS_TENTACLE).closesOnLootFrom(NpcID.SLAYER_KRAKEN_BOSS));
 		assertFalse(PvmPerformancePlugin.lootEndsFight(fight(NpcID.VETION, 1), NpcID.VETION_HELLHOUND_JNR, 2));
 		assertFalse(PvmPerformancePlugin.lootEndsFight(fight(NpcID.SNAKEBOSS_BOSS_MAGIC, 1),
 			NpcID.SNAKEBOSS_MINION_MELEE, 2));
-		assertFalse(PvmPerformancePlugin.lootEndsFight(fight(NpcID.RT_FIRE_QUEEN, 1), NpcID.RT_ICE_KING, 2));
 		assertTrue(room(NpcID.SMOKE_DEVIL_BOSS).closesOnLootFrom(NpcID.SMOKE_DEVIL_BOSS));
+	}
+
+	/**
+	 * T-061 grouped the Kraken and the Royal Titans, which this test had as
+	 * ungrouped: the Kraken's drop now closes a room its tentacles opened, and a
+	 * titan's would end the fight on the other, were there a loot event for them.
+	 */
+	@Test
+	public void theKrakenAndTheTitansAreGroupedNow()
+	{
+		assertTrue(room(NpcID.SLAYER_KRAKEN_BOSS_TENTACLE).closesOnLootFrom(NpcID.SLAYER_KRAKEN_BOSS));
+		assertTrue(PvmPerformancePlugin.lootEndsFight(fight(NpcID.RT_FIRE_QUEEN, 1), NpcID.RT_ICE_KING, 2));
 	}
 }
