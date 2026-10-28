@@ -1,33 +1,273 @@
 package com.pvmlogs;
 
 import com.pvmlogs.PanelSnapshot.Text;
+import com.pvmlogs.PanelSnapshot.TripTab;
+import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.GridLayout;
 import java.awt.Rectangle;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
 
-/** The Trip tab until T-034 (SP-2): what's coming, and the New trip button, which the overlay's trip totals use today. */
+/**
+ * The Trip tab (T-034; spec 3.3, state 9): the trip's clock, tiles and
+ * execution over {@link LedgerRows#of(SessionTotals)}, every room since the
+ * trip started, damage taken, other damage and New trip. Fed by the snapshot
+ * pipeline like the Fight tab: components are built when the snapshot's
+ * structure changes, and only updated otherwise.
+ */
 final class SidePanelTripTab extends JPanel implements Scrollable
 {
-	SidePanelTripTab(SidePanelFightTab.Actions actions)
+	private final SidePanelFightTab.Actions actions;
+	private final SidePanelSection.Folds folds;
+	private final List<Consumer<TripTab>> updaters = new ArrayList<>();
+	private String structure;
+	private int builds;
+
+	SidePanelTripTab(SidePanelFightTab.Actions actions, SidePanelSection.Folds folds)
 	{
 		super(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
+		this.actions = actions;
+		this.folds = folds;
 		setBackground(SidePanelStyle.PANEL);
 		setBorder(new EmptyBorder(SidePanelStyle.BLOCK_GAP, SidePanelStyle.SIDE_BORDER, 10, SidePanelStyle.SIDE_BORDER));
-		final JPanel note = SidePanelParts.card(6);
-		note.add(new SidePanelText(Text.title("Trip", SidePanelStyle.VALUE), false));
-		note.add(new SidePanelParts.Paragraph("Your whole trip's luck, execution and kills come here in the next panel "
-			+ "update. The overlay's \"whole trip\" setting shows its totals now.", SidePanelStyle.SECONDARY,
-			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14));
-		add(note);
+	}
+
+	void apply(TripTab tab)
+	{
+		if (tab == null)
+		{
+			return;
+		}
+		final String s = tab.structure();
+		if (!s.equals(structure))
+		{
+			structure = s;
+			rebuild(tab);
+		}
+		for (Consumer<TripTab> u : updaters)
+		{
+			u.accept(tab);
+		}
+	}
+
+	int builds()
+	{
+		return builds;
+	}
+
+	private void rebuild(TripTab tab)
+	{
+		builds++;
+		removeAll();
+		updaters.clear();
+		header();
+		if (tab.tiles != null)
+		{
+			tiles(tab);
+		}
+		if (tab.execution != null)
+		{
+			execution(tab);
+		}
+		rooms(tab);
+		if (tab.taken != null)
+		{
+			rows("tripTaken", "Damage taken", tab.taken, t -> t.taken);
+		}
+		if (tab.other != null)
+		{
+			rows("tripOther", "Other damage", tab.other, t -> t.other);
+		}
 		final JButton newTrip = SidePanelFightTab.button("New trip", SidePanelStyle.VALUE);
 		newTrip.setToolTipText("Start the trip totals over. Saved fights are untouched");
 		newTrip.addActionListener(e -> actions.newTrip());
 		add(newTrip);
-		add(new SidePanelText(Text.small("Starts the trip's totals over; saved kills stay.", SidePanelStyle.MUTED), false));
+		add(new SidePanelParts.Paragraph("Starts the trip's totals over. Saved kills stay in History.",
+			SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH));
+		revalidate();
+		repaint();
+	}
+
+	private void header()
+	{
+		final JPanel header = new JPanel(new BorderLayout(6, 0));
+		header.setOpaque(false);
+		final JPanel left = SidePanelParts.stack(4);
+		final SidePanelText name = new SidePanelText(Text.title("Trip", SidePanelStyle.VALUE), false);
+		final SidePanelText sub = new SidePanelText(Text.small("", SidePanelStyle.SECONDARY), false);
+		left.add(name);
+		left.add(sub);
+		final SidePanelText clock = new SidePanelText(SidePanelStyle.Type.CLOCK, true);
+		header.add(left, BorderLayout.CENTER);
+		header.add(clock, BorderLayout.EAST);
+		add(header);
+		updaters.add(t ->
+		{
+			name.set(t.header.name);
+			sub.set(t.header.sub);
+			clock.set(t.header.clock);
+		});
+	}
+
+	private void tiles(TripTab tab)
+	{
+		final JPanel grid = new JPanel(new GridLayout(2, 2, SidePanelStyle.TILE_GAP, SidePanelStyle.TILE_GAP));
+		grid.setOpaque(false);
+		final List<SidePanelStatTile> views = new ArrayList<>();
+		for (PanelSnapshot.Tile t : tab.tiles)
+		{
+			final SidePanelStatTile v = new SidePanelStatTile(t);
+			views.add(v);
+			grid.add(v);
+		}
+		add(grid);
+		updaters.add(t ->
+		{
+			for (int i = 0; i < views.size(); i++)
+			{
+				views.get(i).set(t.tiles.get(i));
+			}
+		});
+	}
+
+	private void execution(TripTab tab)
+	{
+		final JPanel card = SidePanelParts.card(7);
+		final List<SidePanelPartBar> bars = new ArrayList<>();
+		for (PanelSnapshot.Part p : tab.execution.parts)
+		{
+			final SidePanelPartBar bar = new SidePanelPartBar(p);
+			bars.add(bar);
+			card.add(bar);
+		}
+		final SidePanelSection section = new SidePanelSection("tripExecution", "Execution", tab.execution.hint, card,
+			folds);
+		add(section);
+		updaters.add(t ->
+		{
+			section.setHint(t.execution.hint);
+			for (int i = 0; i < bars.size(); i++)
+			{
+				bars.get(i).set(t.execution.parts.get(i));
+			}
+		});
+	}
+
+	/** "This trip": a row per room, rebuilt only when their number changes (the structure says so). */
+	private void rooms(TripTab tab)
+	{
+		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
+		final List<RowView> views = new ArrayList<>();
+		if (tab.rooms.isEmpty())
+		{
+			final JPanel card = SidePanelParts.card(0);
+			card.add(new SidePanelText(Text.small(SidePanelModel.NO_TRIP_FIGHTS, SidePanelStyle.SECONDARY), false));
+			list.add(card);
+		}
+		for (int i = 0; i < tab.rooms.size(); i++)
+		{
+			final RowView v = new RowView();
+			views.add(v);
+			list.add(v);
+		}
+		final SidePanelSection section = new SidePanelSection("tripRooms", "This trip", tab.roomsHint, list, folds);
+		add(section);
+		updaters.add(t ->
+		{
+			section.setHint(t.roomsHint);
+			// The clocks' and chips' columns as wide as their widest, so they line up and the names keep the rest.
+			int clockWidth = 0;
+			int chipWidth = 0;
+			for (int i = 0; i < views.size(); i++)
+			{
+				views.get(i).set(t.rooms.get(i));
+				clockWidth = Math.max(clockWidth, views.get(i).clockWidth());
+				chipWidth = Math.max(chipWidth, views.get(i).chipWidth());
+			}
+			for (RowView v : views)
+			{
+				v.setColumns(clockWidth, chipWidth);
+			}
+		});
+	}
+
+	/** A trip row: name (grey with "(ended)" when not a kill), clock, chip. */
+	private static final class RowView extends JPanel
+	{
+		private final SidePanelText name = new SidePanelText(SidePanelStyle.Type.BODY, false);
+		private final SidePanelText clock = new SidePanelText(SidePanelStyle.Type.TITLE, true);
+		private final SidePanelParts.Chip chip = new SidePanelParts.Chip();
+		private final JPanel chipBox = new JPanel(new BorderLayout());
+
+		RowView()
+		{
+			super(new BorderLayout(4, 0));
+			setBackground(SidePanelStyle.CARD);
+			setBorder(new EmptyBorder(5, SidePanelStyle.CARD_PAD_H, 5, 6));
+			add(name, BorderLayout.CENTER);
+			final JPanel right = new JPanel(new BorderLayout(4, 0));
+			right.setOpaque(false);
+			right.add(clock, BorderLayout.CENTER);
+			chipBox.setOpaque(false);
+			chipBox.add(chip, BorderLayout.EAST);
+			right.add(chipBox, BorderLayout.EAST);
+			add(right, BorderLayout.EAST);
+		}
+
+		void set(PanelSnapshot.TripRow r)
+		{
+			final java.awt.Color c = r.ended ? SidePanelStyle.SECONDARY : SidePanelStyle.VALUE;
+			name.set(Text.body(r.name, c), r.ended ? Text.small(" (ended)", SidePanelStyle.SECONDARY) : null);
+			clock.set(Text.title(r.clock, c));
+			chip.set(r.chip, r.chipFill);
+		}
+
+		int chipWidth()
+		{
+			return chip.getPreferredSize().width;
+		}
+
+		int clockWidth()
+		{
+			return clock.getFontMetrics(clock.getFont()).stringWidth(clock.getText());
+		}
+
+		void setColumns(int clockWidth, int chipWidth)
+		{
+			if (chipBox.getPreferredSize().width != chipWidth || clock.getPreferredSize().width != clockWidth)
+			{
+				chipBox.setPreferredSize(new Dimension(chipWidth, 14));
+				clock.setPreferredSize(new Dimension(clockWidth, 16));
+				revalidate();
+			}
+		}
+
+		@Override
+		public Dimension getPreferredSize()
+		{
+			return new Dimension(SidePanelStyle.CONTENT_WIDTH, 26);
+		}
+	}
+
+	private void rows(String id, String title, PanelSnapshot.Rows rows,
+		java.util.function.Function<TripTab, PanelSnapshot.Rows> get)
+	{
+		final SidePanelParts.RowsCard card = new SidePanelParts.RowsCard(rows.rows, 5);
+		final SidePanelSection section = new SidePanelSection(id, title, rows.hint, card, folds);
+		add(section);
+		updaters.add(t ->
+		{
+			final PanelSnapshot.Rows now = get.apply(t);
+			section.setHint(now.hint);
+			card.set(now.rows);
+		});
 	}
 
 	@Override

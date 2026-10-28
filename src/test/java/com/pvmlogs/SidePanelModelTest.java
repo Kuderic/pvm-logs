@@ -232,17 +232,55 @@ public class SidePanelModelTest
 		final PanelSnapshot.TimeBudget dead = tab(SidePanelExamples.dead()).budget;
 		assertEquals(2, dead.average.size());
 		assertEquals("your average 1:54", dead.average.get(0).left.text);
-		// 136.8 s against 114: 23 s slower, above the upper quartile, so Cost.
+		// 136.8 s against 114: 23 s slower. Never coloured (Orchestrator, T-034): the raw clock carries luck.
 		assertEquals("23 s slower", dead.average.get(0).right.text);
-		assertEquals(SidePanelStyle.COST, dead.average.get(0).right.colour);
+		assertEquals(SidePanelStyle.BODY, dead.average.get(0).right.colour);
 		assertEquals("luck removed 2:02", dead.average.get(1).left.text);
+		// 122.5 s against 117, above the upper quartile 120: luck removed is the one that's coloured.
 		assertEquals("5 s slower than 1:57", dead.average.get(1).right.text);
+		assertEquals(SidePanelStyle.COST, dead.average.get(1).right.colour);
 		assertEquals(114, dead.marker, 0);
 
 		final PanelSnapshot.TimeBudget ended = tab(SidePanelExamples.ended()).budget;
 		assertTrue(ended.average.isEmpty());
 		assertEquals(SidePanelModel.NOT_A_KILL, ended.note);
 		assertTrue(Double.isNaN(ended.marker));
+	}
+
+	@Test
+	public void luckInTheBudgetUsesTheTilesWords()
+	{
+		// Orchestrator, T-034: "luck (14 s slower)", "luck average (2 s faster)", so a saving doesn't read like a cost.
+		final PanelSnapshot.TimeBudget dead = tab(SidePanelExamples.dead()).budget;
+		final PanelSnapshot.BudgetRow slower = luckRow(dead);
+		assertEquals("luck", slower.label.text);
+		assertEquals("14 s slower", slower.value.text);
+		assertEquals(SidePanelStyle.COST, slower.value.colour);
+
+		// The raid's luck saved 13 s, in the top 15%.
+		final PanelSnapshot.BudgetRow faster = luckRow(tab(SidePanelExamples.raid()).budget);
+		assertEquals("luck", faster.label.text);
+		assertEquals("13 s faster", faster.value.text);
+		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, faster.swatch);
+
+		// In the middle half: "luck average".
+		final SidePanelModel.Input mid = SidePanelExamples.dead();
+		((LedgerExamples.FakeScope) mid.scope).damage = 770;
+		final PanelSnapshot.BudgetRow average = luckRow(tab(mid).budget);
+		assertEquals("luck average", average.label.text);
+		assertEquals(PanelSnapshot.Fill.LUCK_AVERAGE, average.swatch);
+	}
+
+	private static PanelSnapshot.BudgetRow luckRow(PanelSnapshot.TimeBudget b)
+	{
+		for (PanelSnapshot.BudgetRow r : b.rows)
+		{
+			if (r.label.text.startsWith("luck"))
+			{
+				return r;
+			}
+		}
+		throw new AssertionError("no luck row");
 	}
 
 	// ---- the guardrails (spec section 8) ----
@@ -318,6 +356,7 @@ public class SidePanelModelTest
 		((LedgerExamples.FakeScope) in.scope).damageVariance = -1;
 		final PanelSnapshot.FightTab t = tab(in);
 		assertEquals("14 s slower", tile(t, "Luck").value.text);
+		assertEquals("no percentile", tile(t, "Luck").sub.text);
 		assertNull(t.curve);
 		assertEquals(SidePanelModel.NO_CURVE_TEXT, t.noCurve);
 	}

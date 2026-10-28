@@ -90,11 +90,22 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 
 	SidePanelFightTab(Actions actions, SidePanelSection.Folds folds)
 	{
+		this(actions, folds, false);
+	}
+
+	/**
+	 * {@code nested}: inside another tab (the History tab's saved kill view,
+	 * T-034), which has its own border, so this one has none.
+	 */
+	SidePanelFightTab(Actions actions, SidePanelSection.Folds folds, boolean nested)
+	{
 		super(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
 		this.actions = actions;
 		this.folds = folds;
 		setBackground(SidePanelStyle.PANEL);
-		setBorder(new EmptyBorder(SidePanelStyle.BLOCK_GAP, SidePanelStyle.SIDE_BORDER, 10, SidePanelStyle.SIDE_BORDER));
+		setBorder(nested ? new EmptyBorder(0, 0, 0, 0)
+			: new EmptyBorder(SidePanelStyle.BLOCK_GAP, SidePanelStyle.SIDE_BORDER, 10, SidePanelStyle.SIDE_BORDER));
+		setOpaque(!nested);
 	}
 
 	/** Shows the snapshot: new components only when its structure differs from the last one's. */
@@ -163,6 +174,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				curve(tab);
 				execution(tab);
 				damage(tab);
+				later(tab);
 				rowsSection(tab, "details", "Details", tab.details, t -> t.details);
 				rowsSection(tab, "taken", "Damage taken", tab.taken, t -> t.taken);
 				break;
@@ -431,7 +443,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			final SidePanelParts.Paragraph text = new SidePanelParts.Paragraph(tab.noCurve, SidePanelStyle.MUTED,
 				SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
 			card.add(text);
-			add(new SidePanelSection("curve", "Luck", Text.NONE, card, folds));
+			final SidePanelSection section = new SidePanelSection("curve", "Luck", tab.noCurveHint, card, folds);
+			add(section);
+			updaters.add(t -> section.setHint(t.noCurveHint));
 			return;
 		}
 		if (tab.curve == null)
@@ -494,6 +508,26 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				bars.get(i).set(t.execution.parts.get(i));
 			}
 		});
+	}
+
+	/** A saved kill's dashed card in the damage rows' place (spec 3.2), with the canvas's title. */
+	private void later(FightTab tab)
+	{
+		if (tab.later == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(0);
+		card.setBackground(new Color(0x232323));
+		card.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+			javax.swing.BorderFactory.createDashedBorder(SidePanelStyle.SELECTED, 1f, 3f, 2f, false),
+			new EmptyBorder(SidePanelStyle.CARD_PAD_V - 1, SidePanelStyle.CARD_PAD_H - 1, SidePanelStyle.CARD_PAD_V - 1,
+				SidePanelStyle.CARD_PAD_H - 1)));
+		final SidePanelParts.Paragraph text = new SidePanelParts.Paragraph(tab.later, SidePanelStyle.SECONDARY,
+			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
+		card.add(text);
+		add(new SidePanelSection("later", "Damage, charts, ticks", Text.NONE, card, folds));
+		updaters.add(t -> text.set(t.later, SidePanelStyle.SECONDARY));
 	}
 
 	private void damage(FightTab tab)
@@ -635,7 +669,17 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		private final JButton export;
 		private final JButton clear;
 
+		/** The question Clear… asks before it clears; RuneLite's yes/no dialog in the client. */
+		static final String CLEAR_QUESTION = "Clear all saved kills? This can't be undone.";
+
 		ToolButtons(Actions actions, Component parent)
+		{
+			this(actions, () -> JOptionPane.showConfirmDialog(parent, CLEAR_QUESTION, "PvM Performance Tracker",
+				JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION);
+		}
+
+		/** {@code confirm} asks the question and says whether the answer was yes (spec 3.2: Clear asks first). */
+		ToolButtons(Actions actions, java.util.function.BooleanSupplier confirm)
 		{
 			super(new GridLayout(2, 2, SidePanelStyle.TILE_GAP, SidePanelStyle.TILE_GAP));
 			setOpaque(false);
@@ -653,9 +697,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			clear.setToolTipText("Discard every saved fight");
 			clear.addActionListener(e ->
 			{
-				final int answer = JOptionPane.showConfirmDialog(parent, "Clear all saved kills? This can't be undone.",
-					"PvM Performance Tracker", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-				if (answer == JOptionPane.YES_OPTION)
+				if (confirm.getAsBoolean())
 				{
 					actions.clearHistory();
 				}
@@ -664,6 +706,12 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			add(trip);
 			add(log);
 			add(clear);
+		}
+
+		/** Presses Clear…, as a click would: for tests. */
+		void pressClear()
+		{
+			clear.doClick();
 		}
 
 		/** Export and Clear need something saved (spec 3.2). */

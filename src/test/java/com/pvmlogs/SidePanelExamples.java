@@ -2,7 +2,9 @@ package com.pvmlogs;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -196,6 +198,39 @@ final class SidePanelExamples
 		r.combatTicks = ticks;
 		r.numbers = new LedgerRows.Numbers(s);
 		return r;
+	}
+
+	/** State 9: the overlay spec's trip row (12:40, six kills) with one ended fight among them. */
+	static SidePanelModel.Input trip()
+	{
+		final LedgerExamples.FakeScope s = LedgerExamples.trip();
+		s.damageVariance = 60_000;
+		s.biggestHitTaken = 33;
+		s.damageTakenUnprotected = 64;
+		final SidePanelModel.Input in = base();
+		in.kind = SidePanelModel.Kind.TRIP;
+		in.scope = s;
+		in.tripSince = at(14, 52);
+		in.hitsTaken = 88;
+		in.scoredThrall = in.thrall = 290;
+		in.scoredDot = in.dot = 60;
+		final List<PanelSnapshot.TripRow> rows = new ArrayList<>();
+		rows.add(tripRow("Vardorvis", false, "2:16", "bottom 20%", LedgerRows.Colour.COST));
+		rows.add(tripRow("Vardorvis", false, "1:52", "average", LedgerRows.Colour.NEUTRAL));
+		rows.add(tripRow("Vardorvis", false, "1:44", "top 18%", LedgerRows.Colour.BETTER));
+		rows.add(tripRow("Vardorvis", false, "2:03", "average", LedgerRows.Colour.NEUTRAL));
+		rows.add(tripRow("Vardorvis", true, "0:54", "average", LedgerRows.Colour.NEUTRAL));
+		rows.add(tripRow("Vardorvis", false, "1:41", "top 9%", LedgerRows.Colour.BETTER));
+		rows.add(tripRow("Vardorvis", false, "2:09", "bottom 15%", LedgerRows.Colour.COST));
+		in.tripRows = rows;
+		return in;
+	}
+
+	private static PanelSnapshot.TripRow tripRow(String name, boolean ended, String clock, String chip,
+		LedgerRows.Colour colour)
+	{
+		return new PanelSnapshot.TripRow(name, ended, clock, PanelSnapshot.Text.small(chip, colour == LedgerRows.Colour.NEUTRAL
+			? SidePanelStyle.BODY : SidePanelStyle.of(colour)), SidePanelStyle.chip(colour));
 	}
 
 	/** Every state in the spec's order, keyed by the render's file name. */
