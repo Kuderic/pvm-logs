@@ -187,7 +187,7 @@ public class LedgerRowsTest
 			b("", ""),
 			main("Summary", ""),
 			d(" hits/expected", "26/33.7"),
-			d(" burn/poison dmg", "40"),
+			d(" burn dmg", "40"),
 			d(" boss healed", "71")),
 			build(LedgerExamples.ended(), State.fight("Vardorvis", true, false, false)));
 	}
@@ -213,7 +213,8 @@ public class LedgerRowsTest
 			main("Summary", ""),
 			d(" hits/expected", "161/158.7"),
 			d(" thrall dmg", "290"),
-			d(" burn/poison dmg", "60")),
+			d(" burn dmg", "20"),
+			d(" venom dmg", "40")),
 			build(LedgerExamples.trip(), State.trip(6, false, false)));
 	}
 
@@ -991,11 +992,12 @@ public class LedgerRowsTest
 	{
 		final FakeScope s = LedgerExamples.kill();
 		s.dotTaken = 27;
+		s.dotTakenByKind.put("bleed", 27);
 		s.biggestHitTaken = 41;
 		s.damageTakenUnprotected = 85;
 		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
 		final int healed = rows.indexOf(d(" boss healed", "68"));
-		assertEquals(Arrays.asList(d(" burn/poison taken", "27"), d(" biggest hit taken", "41"),
+		assertEquals(Arrays.asList(d(" bleed taken", "27"), d(" biggest hit taken", "41"),
 			d(" without protection", "85")), rows.subList(healed + 1, rows.size()));
 		// The live total under Execution reads as before: hits only since T-018.
 		assertTrue(rows.contains(d(" damage taken", "248")));
@@ -1008,8 +1010,8 @@ public class LedgerRowsTest
 		s.biggestHitTaken = 10;
 		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
 		assertTrue(rows.contains(d(" biggest hit taken", "10")));
-		assertFalse(rows.stream().anyMatch(row -> row.left.equals(" burn/poison taken")
-			|| row.left.equals(" without protection")));
+		assertFalse(rows.stream().anyMatch(row -> row.left.endsWith(" taken") && !row.left.equals(" damage taken")
+			&& !row.left.equals(" biggest hit taken") || row.left.equals(" without protection")));
 		// Never while the fight runs.
 		s.dotTaken = 27;
 		s.damageTakenUnprotected = 85;

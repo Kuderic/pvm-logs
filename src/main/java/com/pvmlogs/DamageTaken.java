@@ -75,10 +75,10 @@ final class DamageTaken
 				}
 				break;
 			case DAMAGE_OVER_TIME:
-				fight.recordDotTaken(amount, now);
+				fight.recordDotTaken(amount, type, now);
 				if (fight.isScored() && trip != null)
 				{
-					trip.recordDotTaken(amount);
+					trip.recordDotTaken(amount, type);
 				}
 				break;
 			default:

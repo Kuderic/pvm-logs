@@ -32,6 +32,9 @@ class SessionTotals
 	private int damageTakenAvoidable;
 	private double avoidableEatingTicks;
 	private final java.util.Map<String, Integer> damageTakenByAttack = new java.util.LinkedHashMap<>();
+	// T-062: dotDamage and dotTaken by kind, fed with them. See Fight.
+	private final java.util.Map<String, Integer> dotDamageByKind = new java.util.LinkedHashMap<>();
+	private final java.util.Map<String, Integer> dotTakenByKind = new java.util.LinkedHashMap<>();
 	private int attackRulesVersion;
 	private int attempts;
 	private int targets;
@@ -104,6 +107,8 @@ class SessionTotals
 		damageTakenAvoidable = 0;
 		avoidableEatingTicks = 0;
 		damageTakenByAttack.clear();
+		dotDamageByKind.clear();
+		dotTakenByKind.clear();
 		attackRulesVersion = 0;
 		attempts = 0;
 		targets = 0;
@@ -244,6 +249,25 @@ class SessionTotals
 		dotDamage += Math.max(0, damage);
 	}
 
+	/** See {@code Fight.recordDotDamage(int, int)}: by the splat's hitsplat type (T-062). */
+	void recordDotDamage(int damage, int type)
+	{
+		recordDotDamage(damage);
+		DotKinds.add(dotDamageByKind, HitsplatKind.typeName(type), damage);
+	}
+
+	/** dotDamage by kind (T-062). */
+	java.util.Map<String, Integer> getDotDamageByKind()
+	{
+		return java.util.Collections.unmodifiableMap(dotDamageByKind);
+	}
+
+	/** dotTaken by kind (T-062). */
+	java.util.Map<String, Integer> getDotTakenByKind()
+	{
+		return java.util.Collections.unmodifiableMap(dotTakenByKind);
+	}
+
 	/** See {@code Fight.recordHitTaken}. */
 	void recordHitTaken(int damage, boolean unprotected)
 	{
@@ -267,6 +291,13 @@ class SessionTotals
 	void recordDotTaken(int damage)
 	{
 		dotTaken += Math.max(0, damage);
+	}
+
+	/** See {@code Fight.recordDotTaken(int, int, long)}: by the splat's hitsplat type (T-062). */
+	void recordDotTaken(int damage, int type)
+	{
+		recordDotTaken(damage);
+		DotKinds.add(dotTakenByKind, HitsplatKind.typeName(type), damage);
 	}
 
 	/** Takes back a splat recordAttempt counted, judged within its tick to be the thrall's instead. */

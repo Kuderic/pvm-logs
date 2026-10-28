@@ -177,6 +177,31 @@ class Encounter
 		return total;
 	}
 
+	/** {@link #getDotDamage()} by kind (T-062); a kind-less part (old kills) is {@code DotKinds.remainder}. */
+	java.util.Map<String, Integer> getDotDamageByKind()
+	{
+		final java.util.Map<String, Integer> total = new java.util.LinkedHashMap<>();
+		for (Fight fight : fights)
+		{
+			DotKinds.addAll(total, fight.getDotDamageByKind());
+		}
+		return total;
+	}
+
+	/** {@link #getScoredDotDamage()} by kind (T-062). */
+	java.util.Map<String, Integer> getScoredDotDamageByKind()
+	{
+		final java.util.Map<String, Integer> total = new java.util.LinkedHashMap<>();
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				DotKinds.addAll(total, fight.getDotDamageByKind());
+			}
+		}
+		return total;
+	}
+
 	/** Thrall damage on the scored fights only (T-025), for luck's other damage, as damage dealt is scored-only. */
 	int getScoredThrallDamage()
 	{
@@ -273,6 +298,17 @@ class Encounter
 		for (Fight fight : fights)
 		{
 			total += fight.getDotTaken();
+		}
+		return total;
+	}
+
+	/** {@link #getDotTaken()} by kind (T-062). */
+	java.util.Map<String, Integer> getDotTakenByKind()
+	{
+		final java.util.Map<String, Integer> total = new java.util.LinkedHashMap<>();
+		for (Fight fight : fights)
+		{
+			DotKinds.addAll(total, fight.getDotTakenByKind());
 		}
 		return total;
 	}

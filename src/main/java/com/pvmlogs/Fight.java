@@ -51,6 +51,10 @@ class Fight
 	// solo it is the player's and in a group it may be anyone's; either way it is kept out of damage dealt and the hits,
 	// which are the weapon's, and shown on its own.
 	private int dotDamage;
+	// T-062: dotDamage and dotTaken by kind (HitsplatKind.typeName: burn, poison, venom, bleed). Null until there is any,
+	// which is what a fight saved before T-062 reads as: its totals then show as one DoT line (DotKinds).
+	private java.util.Map<String, Integer> dotDamageByKind;
+	private java.util.Map<String, Integer> dotTakenByKind;
 	// What the target healed while it was being fought, from its heal splats.
 	private int healed;
 	// Other players' hits on the target, which take its health down and are nobody's business here beyond that.
@@ -269,10 +273,31 @@ class Fight
 		reflectDamage += Math.max(0, amount);
 	}
 
-	/** A burn, poison, venom or bleed splat on the target. See dotDamage. */
+	/** A burn, poison, venom or bleed splat on the target, its kind unknown. See dotDamage. */
 	void recordDotDamage(int amount)
 	{
 		dotDamage += Math.max(0, amount);
+	}
+
+	/** A burn, poison, venom or bleed splat on the target, by its hitsplat type (T-062). See dotDamage. */
+	void recordDotDamage(int amount, int type)
+	{
+		recordDotDamage(amount);
+		dotDamageByKind = DotKinds.add(dotDamageByKind, HitsplatKind.typeName(type), amount);
+	}
+
+	/** dotDamage by kind (T-062); empty on a fight saved before T-062. */
+	java.util.Map<String, Integer> getDotDamageByKind()
+	{
+		return dotDamageByKind == null ? java.util.Collections.emptyMap()
+			: java.util.Collections.unmodifiableMap(dotDamageByKind);
+	}
+
+	/** dotTaken by kind (T-062); empty on a fight saved before T-062. */
+	java.util.Map<String, Integer> getDotTakenByKind()
+	{
+		return dotTakenByKind == null ? java.util.Collections.emptyMap()
+			: java.util.Collections.unmodifiableMap(dotTakenByKind);
 	}
 
 	/** One of the player's splats that landed on something other than hitpoints. See notHitpoints. */
@@ -385,6 +410,13 @@ class Fight
 	{
 		dotTaken += Math.max(0, amount);
 		touch(now);
+	}
+
+	/** {@link #recordDotTaken(int, long)} by the splat's hitsplat type (T-062). */
+	void recordDotTaken(int amount, int type, long now)
+	{
+		recordDotTaken(amount, now);
+		dotTakenByKind = DotKinds.add(dotTakenByKind, HitsplatKind.typeName(type), amount);
 	}
 
 	private void touch(long now)

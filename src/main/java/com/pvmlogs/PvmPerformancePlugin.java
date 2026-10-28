@@ -1272,10 +1272,10 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			case DAMAGE_OVER_TIME:
 				// Damage over time is the target's health going down with no attack behind it: no activity, no hit, no attempt.
-				current.recordDotDamage(amount);
+				current.recordDotDamage(amount, type);
 				if (current.isScored())
 				{
-					session.recordDotDamage(amount);
+					session.recordDotDamage(amount, type);
 				}
 				break;
 			case HEAL:
@@ -4776,6 +4776,12 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		closeTargetHealth(died);
 		debug.log("%s", DamageTaken.summary(current));
+		// T-062: the damage over time by kind, each way.
+		final String dot = DotKinds.debugLine(current);
+		if (dot != null)
+		{
+			debug.log("%s", dot);
+		}
 		settleAvoidable(current);
 		// The target's drains over the fight (T-049).
 		current.recordDrain(drain.recordFor(targetNpc, current.getTargetIndex(), current.getStartTick()));
