@@ -203,11 +203,28 @@ class PvmPerformancePanel extends PluginPanel
 			@Override
 			public void validate()
 			{
+				final boolean pass = !isValid();
 				final long started = PerfProbe.start(perf);
 				super.validate();
 				if (started != 0L)
 				{
 					perf.stopSwing(PerfProbe.SwingSlot.LAYOUT, started);
+					if (pass)
+					{
+						perf.layoutPassed();
+					}
+				}
+			}
+
+			/** The first invalidation since the last pass reaches here: with the probe on, its stack says what asked. */
+			@Override
+			public void invalidate()
+			{
+				final boolean first = isValid();
+				super.invalidate();
+				if (first && perf != null && perf.isOn())
+				{
+					perf.layoutAsked(new Throwable().getStackTrace());
 				}
 			}
 		};
@@ -322,12 +339,14 @@ class PvmPerformancePanel extends PluginPanel
 			history.size(), head, trip.getStartMillis(), tab);
 		final boolean force = dirty;
 		final boolean fighting = fight != null && !fight.isEnded() && !pre;
-		if (!due(force, fighting, shape.equals(lastShape), config == null || config.panelLive(), ticks - builtAt))
+		final boolean sameShape = shape.equals(lastShape);
+		if (!due(force, fighting, sameShape, config == null || config.panelLive(), ticks - builtAt))
 		{
 			return;
 		}
-		final List<Object> key = key(shape, fight, room, raid, whole, pre);
-		if (!force && key.equals(lastKey))
+		// A running fight's clock changes every tick, so its key always differs: only out of a fight is it worth comparing.
+		final List<Object> key = fighting && sameShape && !force ? null : key(shape, fight, room, raid, whole, pre);
+		if (key != null && !force && key.equals(lastKey))
 		{
 			return;
 		}
@@ -336,6 +355,7 @@ class PvmPerformancePanel extends PluginPanel
 		lastShape = shape;
 		builtAt = ticks;
 
+		final long building = PerfProbe.start(perf);
 		final PanelSnapshot snapshot;
 		if (tab == TRIP_TAB)
 		{
@@ -345,6 +365,7 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			snapshot = new PanelSnapshot(SidePanelModel.fight(read(fight, display, room, raid, whole, pre, history)), null);
 		}
+		PerfProbe.stop(perf, PerfProbe.Slot.PANEL_BUILD, building);
 		SwingUtilities.invokeLater(() -> apply(snapshot));
 	}
 
