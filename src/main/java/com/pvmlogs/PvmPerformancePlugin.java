@@ -2874,6 +2874,16 @@ public class PvmPerformancePlugin extends Plugin
 		return perf;
 	}
 
+	/**
+	 * A target's tracked Defence and Magic (T-049), for the overlay's live
+	 * readout (T-051), or null where nothing is tracked. Read on the client
+	 * thread, where the tracker is written.
+	 */
+	DrainTracker.Tracked getTrackedDrain(int npcIndex)
+	{
+		return drain == null ? null : drain.tracked(npcIndex);
+	}
+
 	// Once a frame, on the client thread: the probe records the interval since the last frame and nothing else (T-045).
 	@Subscribe
 	public void onBeforeRender(BeforeRender event)

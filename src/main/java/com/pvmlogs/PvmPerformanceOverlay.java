@@ -168,22 +168,24 @@ class PvmPerformanceOverlay extends OverlayPanel
 			final OverlayCovers covers = config.overlayCovers();
 			final SessionTotals session = covers == OverlayCovers.TRIP ? plugin.getSession() : null;
 			final Raid raid = covers == OverlayCovers.RAID ? plugin.getCurrentRaid() : null;
+			final LedgerRows.LiveDrain drain = liveDrain(fight);
 			if (session != null)
 			{
 				scope = LedgerRows.of(session);
-				state = LedgerRows.State.trip(session.getKills(), running, warning);
+				state = LedgerRows.State.trip(session.getKills(), running, warning).withDrain(drain);
 			}
 			else if (raid != null)
 			{
 				scope = LedgerRows.of(raid);
-				state = LedgerRows.State.raid(raid.getName(), raid.getEncounters().size(), running, warning);
+				state = LedgerRows.State.raid(raid.getName(), raid.getEncounters().size(), running, warning)
+					.withDrain(drain);
 			}
 			else if (room != null)
 			{
 				scope = LedgerRows.of(room);
 				final boolean killed = fight.isEnded() && room.isKilled();
 				state = LedgerRows.State.fight(room.getName(), fight.isEnded(), room.isKilled(), warning)
-					.withAverage(killed && room.getRaid() == null ? average(room) : null);
+					.withAverage(killed && room.getRaid() == null ? average(room) : null).withDrain(drain);
 			}
 			else
 			{
@@ -265,6 +267,33 @@ class PvmPerformanceOverlay extends OverlayPanel
 		{
 			return builds;
 		}
+	}
+
+	/**
+	 * The running fight's target as T-049 tracks it, for the live Defence row
+	 * (T-051), or null: the fight has ended, nothing is tracked, the target is
+	 * immune, or nothing has been taken off it yet. Read once a tick, when the
+	 * rows are built.
+	 */
+	private LedgerRows.LiveDrain liveDrain(Fight fight)
+	{
+		if (fight == null || fight.isEnded())
+		{
+			return null;
+		}
+		return liveDrain(plugin.getTrackedDrain(fight.getTargetIndex()));
+	}
+
+	/** {@link #liveDrain(Fight)} from the tracker's figures. */
+	static LedgerRows.LiveDrain liveDrain(DrainTracker.Tracked t)
+	{
+		if (t == null || t.target.immune)
+		{
+			return null;
+		}
+		final LedgerRows.LiveDrain live = new LedgerRows.LiveDrain(t.state.defence, t.target.defence,
+			t.target.defenceFloor, t.state.magic, t.target.magic, t.target.magicFloor);
+		return live.drained() ? live : null;
 	}
 
 	/** Your average on this room, from the saved fights; worked out again only when the room or the history changes. */
