@@ -120,17 +120,32 @@ final class FightTimeline
 	private boolean pending;
 	private final Map<Integer, int[]> waiting = new java.util.HashMap<>();
 	private Attack lastCredited;
+	// Times the hooks below while Debug logging is on (T-045); null in tests.
+	private final PerfProbe probe;
 
 	FightTimeline(IntSupplier clock)
 	{
+		this(clock, null);
+	}
+
+	FightTimeline(IntSupplier clock, PerfProbe probe)
+	{
 		this.clock = clock;
 		this.startTick = clock.getAsInt();
+		this.probe = probe;
 	}
 
 	// ---- Fed by Fight, where it counts ----
 
 	/** {@link Fight#recordAttackMade}: an attack booked now. */
 	void attackMade()
+	{
+		final long t0 = PerfProbe.start(probe);
+		attackMadeTimed();
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void attackMadeTimed()
 	{
 		final Attack attack = new Attack(clock.getAsInt());
 		attacks.add(attack);
@@ -139,6 +154,13 @@ final class FightTimeline
 
 	/** {@link Fight#recordExpected}, when it counts: for the attack the plugin named, else the latest. */
 	void expected(double mean, double damageVariance)
+	{
+		final long t0 = PerfProbe.start(probe);
+		expectedTimed(mean, damageVariance);
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void expectedTimed(double mean, double damageVariance)
 	{
 		final Attack attack = expectFor != null ? expectFor : latest();
 		expectFor = null;
@@ -166,6 +188,13 @@ final class FightTimeline
 	 */
 	void damage(int amount, boolean landed)
 	{
+		final long t0 = PerfProbe.start(probe);
+		damageTimed(amount, landed);
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void damageTimed(int amount, boolean landed)
+	{
 		flushPending();
 		pending = true;
 		pendingAmount = amount;
@@ -176,6 +205,13 @@ final class FightTimeline
 
 	/** {@link Fight#revokeDamageDealt}: what was actually taken back, from the attack it was last credited to. */
 	void revoked(int amount, boolean hit)
+	{
+		final long t0 = PerfProbe.start(probe);
+		revokedTimed(amount, hit);
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void revokedTimed(int amount, boolean hit)
 	{
 		flushPending();
 		final Attack attack = lastCredited != null ? lastCredited : latest();
@@ -191,11 +227,25 @@ final class FightTimeline
 	/** {@link Fight#recordTickSpent}, when it counts. */
 	void tickSpent()
 	{
+		final long t0 = PerfProbe.start(probe);
+		tickSpentTimed();
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void tickSpentTimed()
+	{
 		setState(clock.getAsInt(), COOLDOWN);
 	}
 
 	/** {@link Fight#recordTickLost}, when it counts. */
 	void tickLost(boolean eating)
+	{
+		final long t0 = PerfProbe.start(probe);
+		tickLostTimed(eating);
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void tickLostTimed(boolean eating)
 	{
 		setState(clock.getAsInt(), eating ? EATING : LOST);
 		if (eating)
@@ -212,6 +262,13 @@ final class FightTimeline
 
 	/** What the attack just booked was: called right after {@link Fight#recordAttackMade}. */
 	void describeLatest(String key, int itemId, Spell spell, Style style, int thrownTick)
+	{
+		final long t0 = PerfProbe.start(probe);
+		describeLatestTimed(key, itemId, spell, style, thrownTick);
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void describeLatestTimed(String key, int itemId, Spell spell, Style style, int thrownTick)
 	{
 		final Attack attack = latest();
 		if (attack == null)
@@ -234,6 +291,13 @@ final class FightTimeline
 	/** The attack just booked was the special: marks it and its tick. */
 	void markLatestSpecial()
 	{
+		final long t0 = PerfProbe.start(probe);
+		markLatestSpecialTimed();
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void markLatestSpecialTimed()
+	{
 		final Attack attack = latest();
 		if (attack != null)
 		{
@@ -245,6 +309,13 @@ final class FightTimeline
 	/** The next expectation recorded is this attack's: a held sample resolving after other attacks went out. */
 	void expectNextFor(Attack attack)
 	{
+		final long t0 = PerfProbe.start(probe);
+		expectNextForTimed(attack);
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void expectNextForTimed(Attack attack)
+	{
 		expectFor = attack;
 	}
 
@@ -254,6 +325,13 @@ final class FightTimeline
 	 * One not booked yet gets it when it is ({@link #describeLatest}).
 	 */
 	void attributeSplat(int thrownTick)
+	{
+		final long t0 = PerfProbe.start(probe);
+		attributeSplatTimed(thrownTick);
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
+	}
+
+	private void attributeSplatTimed(int thrownTick)
 	{
 		if (!pending)
 		{
@@ -587,10 +665,17 @@ final class FightTimeline
 		private final Deque<Fight> order = new ArrayDeque<>();
 		private IntSupplier clock = () -> 0;
 		private boolean enabled = true;
+		private PerfProbe probe;
 
 		void setClock(IntSupplier clock)
 		{
 			this.clock = clock;
+		}
+
+		/** Times the timelines' hooks (T-045): for those attached from now on. */
+		void setProbe(PerfProbe probe)
+		{
+			this.probe = probe;
 		}
 
 		void setEnabled(boolean enabled)
@@ -615,7 +700,7 @@ final class FightTimeline
 			{
 				return existing;
 			}
-			final FightTimeline line = new FightTimeline(clock);
+			final FightTimeline line = new FightTimeline(clock, probe);
 			byFight.put(fight, line);
 			order.addLast(fight);
 			fight.setTimeline(line);

@@ -44,6 +44,7 @@ import net.runelite.api.Skill;
 import net.runelite.api.Projectile;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.AnimationChanged;
+import net.runelite.api.events.BeforeRender;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
@@ -488,6 +489,8 @@ public class PvmPerformancePlugin extends Plugin
 	// Every fight's attack-by-attack and tick-by-tick record this session, for the side panel's charts (T-035). Fed from
 	// Fight's own counting; the hooks below add what each attack was and whose each splat is.
 	private final FightTimeline.Store timelines = new FightTimeline.Store();
+	// What the plugin costs the client (T-045): on only while Debug logging is on. Read by the overlays and the side panel.
+	private final PerfProbe perf = new PerfProbe();
 	// Specials' splats still to come long after their hit: the ancient godsword's 25 (T-037).
 	private final AttackSplats.Delayed delayedSplats = new AttackSplats.Delayed();
 
@@ -572,6 +575,8 @@ public class PvmPerformancePlugin extends Plugin
 		gearBonuses.resetBuffs("the plugin has just started");
 		timelines.setClock(client::getTickCount);
 		timelines.setEnabled(config.panelCharts());
+		timelines.setProbe(perf);
+		perf.setOn(config.debugLogging());
 		SettingsMigrations.run(SettingsMigrations.Settings.of(configManager));
 		overlayManager.add(overlay);
 		overlayManager.add(loadoutOverlay);
@@ -624,6 +629,7 @@ public class PvmPerformancePlugin extends Plugin
 		navButton = null;
 		// This session's timelines go with it (T-035): they are never saved.
 		timelines.clear();
+		perf.setOn(false);
 		current = null;
 		lastFinished = null;
 		history.clear();
@@ -661,6 +667,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
+		final long t0 = perf.start();
+		handleConfigChanged(event);
+		perf.stop(PerfProbe.Slot.ON_CONFIG_CHANGED, t0);
+	}
+
+	private void handleConfigChanged(ConfigChanged event)
+	{
 		if (!PvmPerformanceConfig.GROUP.equals(event.getGroup()))
 		{
 			return;
@@ -675,6 +688,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
+		perf.setOn(config.debugLogging());
 		if (config.debugLogging())
 		{
 			debug.start();
@@ -687,6 +701,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event)
+	{
+		final long t0 = perf.start();
+		handleHitsplatApplied(event);
+		perf.stop(PerfProbe.Slot.ON_HITSPLAT_APPLIED, t0);
+	}
+
+	private void handleHitsplatApplied(HitsplatApplied event)
 	{
 		final Actor actor = event.getActor();
 		final Hitsplat hitsplat = event.getHitsplat();
@@ -1626,6 +1647,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onCommandExecuted(CommandExecuted event)
 	{
+		final long t0 = perf.start();
+		handleCommandExecuted(event);
+		perf.stop(PerfProbe.Slot.ON_COMMAND_EXECUTED, t0);
+	}
+
+	private void handleCommandExecuted(CommandExecuted event)
+	{
 		if (!"loadout".equalsIgnoreCase(event.getCommand()))
 		{
 			return;
@@ -1664,6 +1692,8 @@ public class PvmPerformancePlugin extends Plugin
 			header.add(String.format("fight timeout %d ticks, file logging %b",
 				FIGHT_TIMEOUT_TICKS, debug.isOn()));
 			header.addAll(combatCalc.describeLoadout(targetId));
+			// The last fight's cost to the client (T-045), when Debug logging was on for it.
+			header.addAll(perf.lastReport());
 			executor.execute(() ->
 			{
 				final Filepath written = debug.saveRecent(header);
@@ -1678,6 +1708,13 @@ public class PvmPerformancePlugin extends Plugin
 	// holding a powered staff would otherwise be reported as the staff's own attack.
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
+	{
+		final long t0 = perf.start();
+		handleMenuOptionClicked(event);
+		perf.stop(PerfProbe.Slot.ON_MENU_OPTION_CLICKED, t0);
+	}
+
+	private void handleMenuOptionClicked(MenuOptionClicked event)
 	{
 		noteConsumed(event);
 		noteDartsLoaded(event);
@@ -1708,6 +1745,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Subscribe
 	public void onProjectileMoved(ProjectileMoved event)
+	{
+		final long t0 = perf.start();
+		handleProjectileMoved(event);
+		perf.stop(PerfProbe.Slot.ON_PROJECTILE_MOVED, t0);
+	}
+
+	private void handleProjectileMoved(ProjectileMoved event)
 	{
 		// Magic and ranged fire a projectile before impact. Recognising mine lets a fight begin on my first cast even if it
 		// splashes.
@@ -1964,6 +2008,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onGameObjectSpawned(GameObjectSpawned event)
 	{
+		final long t0 = perf.start();
+		handleGameObjectSpawned(event);
+		perf.stop(PerfProbe.Slot.ON_GAME_OBJECT_SPAWNED, t0);
+	}
+
+	private void handleGameObjectSpawned(GameObjectSpawned event)
+	{
 		final int id = event.getGameObject().getId();
 		if (OlmPhase.isHeadObject(id))
 		{
@@ -1985,6 +2036,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onFakeXpDrop(FakeXpDrop event)
 	{
+		final long t0 = perf.start();
+		handleFakeXpDrop(event);
+		perf.stop(PerfProbe.Slot.ON_FAKE_XP_DROP, t0);
+	}
+
+	private void handleFakeXpDrop(FakeXpDrop event)
+	{
 		if (XpLedger.indexOf(event.getSkill()) >= 0 && event.getXp() > 0)
 		{
 			// XP TRACE (issue #1): with the hitsplat lines around it, this says whether a thrall's damage pays any
@@ -2000,6 +2058,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Subscribe
 	public void onStatChanged(StatChanged event)
+	{
+		final long t0 = perf.start();
+		handleStatChanged(event);
+		perf.stop(PerfProbe.Slot.ON_STAT_CHANGED, t0);
+	}
+
+	private void handleStatChanged(StatChanged event)
 	{
 		final int skill = XpLedger.indexOf(event.getSkill());
 		if (skill >= 0)
@@ -2047,6 +2112,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Subscribe
 	public void onGraphicChanged(GraphicChanged event)
+	{
+		final long t0 = perf.start();
+		handleGraphicChanged(event);
+		perf.stop(PerfProbe.Slot.ON_GRAPHIC_CHANGED, t0);
+	}
+
+	private void handleGraphicChanged(GraphicChanged event)
 	{
 		// A splash produces no hitsplat, so this is what sees a missed cast - but only the fast route: it needs the spotanim
 		// id to be right and the splash to land on the NPC the fight is open on, neither of which holds for an area spell.
@@ -2147,7 +2219,9 @@ public class PvmPerformancePlugin extends Plugin
 		// carried items change.
 		// The id the shown fight's target wears now, not the one the fight opened on: a boss's phases are different stats.
 		final int shownId = shown == null ? -1 : targetIdOn(shown, client.getTickCount());
+		final long switchStarted = perf.start();
 		switchedByTick.put(client.getTickCount(), combatCalc.switchCheck(shownId));
+		perf.stop(PerfProbe.Slot.SWITCH_CHECK, switchStarted);
 		if (client.getTickCount() % 5 == 0)
 		{
 			switchedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
@@ -2601,6 +2675,19 @@ public class PvmPerformancePlugin extends Plugin
 		return timelines;
 	}
 
+	/** The strain probe (T-045), for the overlays' and the side panel's timing. */
+	PerfProbe getPerf()
+	{
+		return perf;
+	}
+
+	// Once a frame, on the client thread: the probe records the interval since the last frame and nothing else (T-045).
+	@Subscribe
+	public void onBeforeRender(BeforeRender event)
+	{
+		perf.frame();
+	}
+
 	// What the attack just booked into this fight was (T-035): named as the loadout names it, from the weapon held on the
 	// tick it was thrown.
 	private void describeForTimeline(Fight fight, int thrownTick)
@@ -2654,6 +2741,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onNpcSpawned(NpcSpawned event)
 	{
+		final long t0 = perf.start();
+		handleNpcSpawned(event);
+		perf.stop(PerfProbe.Slot.ON_NPC_SPAWNED, t0);
+	}
+
+	private void handleNpcSpawned(NpcSpawned event)
+	{
 		final NPC npc = event.getNpc();
 		if (Thralls.isThrall(npc.getId()))
 		{
@@ -2695,6 +2789,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onNpcChanged(NpcChanged event)
 	{
+		final long t0 = perf.start();
+		handleNpcChanged(event);
+		perf.stop(PerfProbe.Slot.ON_NPC_CHANGED, t0);
+	}
+
+	private void handleNpcChanged(NpcChanged event)
+	{
 		final NPC npc = event.getNpc();
 		if (current == null || current.isEnded())
 		{
@@ -2728,6 +2829,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onSpecialCounterUpdate(SpecialCounterUpdate event)
 	{
+		final long t0 = perf.start();
+		handleSpecialCounterUpdate(event);
+		perf.stop(PerfProbe.Slot.ON_SPECIAL_COUNTER_UPDATE, t0);
+	}
+
+	private void handleSpecialCounterUpdate(SpecialCounterUpdate event)
+	{
 		if (current != null && !current.isEnded()
 			&& current.getTargetIndex() == event.getNpcIndex())
 		{
@@ -2740,6 +2848,13 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	@Subscribe
 	public void onAnimationChanged(AnimationChanged event)
+	{
+		final long t0 = perf.start();
+		handleAnimationChanged(event);
+		perf.stop(PerfProbe.Slot.ON_ANIMATION_CHANGED, t0);
+	}
+
+	private void handleAnimationChanged(AnimationChanged event)
 	{
 		// For the TAKEN line (T-018): what the fight's target started, logged beside the next splats on me.
 		if (event.getActor() instanceof NPC && current != null && !current.isEnded()
@@ -2855,6 +2970,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived event)
 	{
+		final long t0 = perf.start();
+		handleNpcLootReceived(event);
+		perf.stop(PerfProbe.Slot.ON_NPC_LOOT_RECEIVED, t0);
+	}
+
+	private void handleNpcLootReceived(NpcLootReceived event)
+	{
 		final NPC npc = event.getNpc();
 		final long now = System.currentTimeMillis();
 		if (current != null && !current.isEnded()
@@ -2885,6 +3007,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Subscribe
 	public void onNpcDespawned(NpcDespawned event)
+	{
+		final long t0 = perf.start();
+		handleNpcDespawned(event);
+		perf.stop(PerfProbe.Slot.ON_NPC_DESPAWNED, t0);
+	}
+
+	private void handleNpcDespawned(NpcDespawned event)
 	{
 		final NPC npc = event.getNpc();
 		if (Thralls.isThrall(npc.getId()))
@@ -3288,6 +3417,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
+		final long t0 = perf.start();
+		handleItemContainerChanged(event);
+		perf.stop(PerfProbe.Slot.ON_ITEM_CONTAINER_CHANGED, t0);
+	}
+
+	private void handleItemContainerChanged(ItemContainerChanged event)
+	{
 		if (event.getContainerId() == InventoryID.WORN)
 		{
 			combatCalc.invalidateGear();
@@ -3312,6 +3448,13 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
+		final long t0 = perf.start();
+		handleChatMessage(event);
+		perf.stop(PerfProbe.Slot.ON_CHAT_MESSAGE, t0);
+	}
+
+	private void handleChatMessage(ChatMessage event)
+	{
 		if (event.getType() != ChatMessageType.GAMEMESSAGE)
 		{
 			return;
@@ -3328,6 +3471,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
+	{
+		final long t0 = perf.start();
+		handleVarbitChanged(event);
+		perf.stop(PerfProbe.Slot.ON_VARBIT_CHANGED, t0);
+	}
+
+	private void handleVarbitChanged(VarbitChanged event)
 	{
 		if (event.getVarbitId() == VarbitID.ARCEUUS_RESURRECTION_ACTIVE)
 		{
@@ -3354,6 +3504,13 @@ public class PvmPerformancePlugin extends Plugin
 	/** "Taste vengeance!": the player's own words as the rebound goes off, beside the varbit (T-017 Part B). */
 	@Subscribe
 	public void onOverheadTextChanged(OverheadTextChanged event)
+	{
+		final long t0 = perf.start();
+		handleOverheadTextChanged(event);
+		perf.stop(PerfProbe.Slot.ON_OVERHEAD_TEXT_CHANGED, t0);
+	}
+
+	private void handleOverheadTextChanged(OverheadTextChanged event)
 	{
 		if (event.getActor() != null && event.getActor() == client.getLocalPlayer()
 			&& "Taste vengeance!".equals(event.getOverheadText()))
@@ -3391,6 +3548,20 @@ public class PvmPerformancePlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick tick)
 	{
+		// Timed whole and in parts (T-045): refreshExpected, its gear-switch check, the panel's snapshot and the rest.
+		perf.clearNested();
+		final long t0 = perf.start();
+		handleGameTick(tick);
+		final long total = perf.stop(PerfProbe.Slot.ON_GAME_TICK, t0);
+		if (total > 0)
+		{
+			perf.record(PerfProbe.Slot.TICK_REST, total - perf.lastNanos(PerfProbe.Slot.REFRESH_EXPECTED)
+				- perf.lastNanos(PerfProbe.Slot.PANEL_SNAPSHOT));
+		}
+	}
+
+	private void handleGameTick(GameTick tick)
+	{
 		if (!dartLoaded)
 		{
 			dartLoaded = true;
@@ -3425,7 +3596,9 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			combatCalc.noteBoosts();
 		}
+		final long refreshStarted = perf.start();
 		refreshExpected();
+		perf.stop(PerfProbe.Slot.REFRESH_EXPECTED, refreshStarted);
 		// Sampled BEFORE the booking reads it back: a cast booked from its animation has no lag, so it asks for this tick's
 		// answer, and written afterwards there was none. hasOffensivePrayer reads the server's copy.
 		final boolean upThisTick = combatCalc.hasOffensivePrayer();
@@ -3502,7 +3675,13 @@ public class PvmPerformancePlugin extends Plugin
 		// Last, after the tick's bookings (T-033): the side panel builds its snapshot here, only while it's open.
 		if (panel != null)
 		{
+			if (perf.isOn())
+			{
+				perf.notePanelState(panel.perfState());
+			}
+			final long snapshotStarted = perf.start();
 			panel.onTick();
+			perf.stop(PerfProbe.Slot.PANEL_SNAPSHOT, snapshotStarted);
 		}
 	}
 
@@ -3516,6 +3695,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
+	{
+		final long t0 = perf.start();
+		handleGameStateChanged(event);
+		perf.stop(PerfProbe.Slot.ON_GAME_STATE_CHANGED, t0);
+	}
+
+	private void handleGameStateChanged(GameStateChanged event)
 	{
 		final GameState state = event.getGameState();
 		if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING)
@@ -3588,6 +3774,7 @@ public class PvmPerformancePlugin extends Plugin
 			raidType, raidCounter);
 		current.noteStartTick(client.getTickCount());
 		timelines.attach(current);
+		perf.fightStarted();
 		// A boss the monster data cannot describe says so from the first tick, not only once the fight's numbers show it.
 		if (stats != null)
 		{
@@ -4175,6 +4362,11 @@ public class PvmPerformancePlugin extends Plugin
 			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
 			current.getCombatTicks(), current.getSumExpectedAverageHit());
 		debug.log("%s", luckLine(current));
+		// What the fight cost the client (T-045), while Debug logging is on.
+		for (String line : perf.fightEnded(current.getTargetName()))
+		{
+			debug.log("%s", line);
+		}
 		closeTargetHealth(died);
 		debug.log("%s", DamageTaken.summary(current));
 		current.end(died, now);
