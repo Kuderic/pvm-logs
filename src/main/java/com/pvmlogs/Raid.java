@@ -455,6 +455,48 @@ class Raid
 		return total;
 	}
 
+	// T-050: the rooms' drain figures summed; NaN where none knows them.
+	private double drainSum(int which)
+	{
+		double total = 0;
+		boolean any = false;
+		for (Encounter encounter : encounters)
+		{
+			final double room = which == 0 ? encounter.getDrainValueDamage() : which == 1
+				? encounter.getDrainValueExpected() : encounter.getSpecLuckDamage();
+			if (!Double.isNaN(room))
+			{
+				total += room;
+				any = true;
+			}
+		}
+		return any ? total : Double.NaN;
+	}
+
+	/** The drains' worth in damage, realized (T-050); NaN when unknown. */
+	double getDrainValueDamage()
+	{
+		return drainSum(0);
+	}
+
+	/** The same, averaged over the player's own specials' outcomes. */
+	double getDrainValueExpected()
+	{
+		return drainSum(1);
+	}
+
+	/** E(realized) - E(averaged): the specials' share of luck. */
+	double getSpecLuckDamage()
+	{
+		return drainSum(2);
+	}
+
+	/** Damage as seconds over the raid's scored fights, as luck's are (T-050). */
+	double luckSeconds(double damage)
+	{
+		return DrainValue.seconds(damage, getScoredCombatTicks(), sumExpectedAverageHit(), getScoredOtherDamage());
+	}
+
 	/** The ticks of the scored fights only (T-023); see {@link Encounter#getScoredCombatTicks()}. */
 	int getScoredCombatTicks()
 	{

@@ -126,6 +126,12 @@ enum SpecialAttack
 	// burning claws' burn is.
 	URSINE_CHAINMACE(ItemID.WILD_CAVE_URSINE_CHARGED, "Bear Down", 2, 1, 1.0),
 	KERIS_SUN(ItemID.KERIS_PARTISAN_SUN, "Tumeken's Light", 1, 1, 1.0),
+	// Weaken (wiki, Darklight, Arclight and Emberlight, read 2026-10-28; T-050): an ordinary hit, no accuracy or damage
+	// modifier, its accuracy rolled against the target's stab defence whatever the style (see rollsAgainst). The drain on
+	// a landed hit is DrainRule's. Missing from the table, a Weaken was booked with no max beside the ordinary average.
+	DARKLIGHT(ItemID.DARKLIGHT, "Weaken", 1, 1, 1.0),
+	ARCLIGHT(ItemID.ARCLIGHT, "Weaken", 1, 1, 1.0),
+	EMBERLIGHT(ItemID.EMBERLIGHT, "Weaken", 1, 1, 1.0),
 
 	// Ranged
 	TOXIC_BLOWPIPE(new int[]{ItemID.TOXIC_BLOWPIPE,
@@ -385,6 +391,25 @@ enum SpecialAttack
 	boolean sharedAccuracyRoll()
 	{
 		return this == ABYSSAL_DAGGER;
+	}
+
+	/**
+	 * The melee attack type this special rolls its accuracy as, whatever style
+	 * is selected; null for the style's own. Weaken: "The accuracy roll for Weaken
+	 * is made against an opponent's stab defence" (wiki). That it also uses the
+	 * player's stab attack bonus is a reading, not stated.
+	 */
+	AttackType rollsAgainst()
+	{
+		switch (this)
+		{
+			case DARKLIGHT:
+			case ARCLIGHT:
+			case EMBERLIGHT:
+				return AttackType.STAB;
+			default:
+				return null;
+		}
 	}
 
 	/**

@@ -428,6 +428,48 @@ class Encounter
 		return any ? Math.round(total * 10) / 10.0 : -1;
 	}
 
+	// T-050: the drains' worth and the specials' share of luck over the scored fights that know them; NaN with none.
+	private double drainSum(int which)
+	{
+		double total = 0;
+		boolean any = false;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored() && fight.hasDrainValue())
+			{
+				total += which == 0 ? fight.getDrainValueDamage() : which == 1 ? fight.getDrainValueExpected()
+					: fight.getSpecLuckDamage();
+				any = true;
+			}
+		}
+		return any ? total : Double.NaN;
+	}
+
+	/** The drains' worth in damage, realized (T-050): see {@link Fight#getDrainValueDamage()}. NaN when unknown. */
+	double getDrainValueDamage()
+	{
+		return drainSum(0);
+	}
+
+	/** The same, averaged over the player's own specials' outcomes. */
+	double getDrainValueExpected()
+	{
+		return drainSum(1);
+	}
+
+	/** E(realized) - E(averaged): the specials' share of luck. */
+	double getSpecLuckDamage()
+	{
+		return drainSum(2);
+	}
+
+	/** Damage as seconds over this room's scored fights, as luck's are (T-050). */
+	double luckSeconds(double damage)
+	{
+		return DrainValue.seconds(damage, getScoredCombatTicks(), sumExpectedAverageHit(),
+			getScoredThrallDamage() + getScoredDotDamage() + getScoredReflectDamage());
+	}
+
 	/** HP taken by attack (T-041) over the same fights; empty with none. */
 	java.util.Map<String, Integer> getDamageTakenByAttack()
 	{

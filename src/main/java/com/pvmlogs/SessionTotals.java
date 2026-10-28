@@ -69,6 +69,14 @@ class SessionTotals
 	private double sumExpectedDamageVariance;
 	private int expectedSamples;
 	private int expectedVarianceSamples;
+	// T-050: what averaging over the player's own draining specials' outcomes adds to the two sums above, live, and the
+	// ended scored fights' drain worth (realized and averaged) and the specials' share of luck.
+	private double outcomeExpectedShift;
+	private double outcomeVarianceShift;
+	private int drainValueFights;
+	private double drainValueDamage;
+	private double drainValueExpected;
+	private double specLuckDamage;
 
 	SessionTotals(long now)
 	{
@@ -121,6 +129,12 @@ class SessionTotals
 		sumExpectedDamageVariance = 0;
 		expectedSamples = 0;
 		expectedVarianceSamples = 0;
+		outcomeExpectedShift = 0;
+		outcomeVarianceShift = 0;
+		drainValueFights = 0;
+		drainValueDamage = 0;
+		drainValueExpected = 0;
+		specLuckDamage = 0;
 	}
 
 	void recordFightEnded(boolean died, Fight fight, long now)
@@ -132,6 +146,13 @@ class SessionTotals
 		}
 		// The avoidable figures exist only once the fight has ended (T-041); a scored fight's go into the trip, like its
 		// damage taken.
+		if (fight != null && fight.isScored() && fight.hasDrainValue())
+		{
+			drainValueFights++;
+			drainValueDamage += fight.getDrainValueDamage();
+			drainValueExpected += fight.getDrainValueExpected();
+			specLuckDamage += fight.getSpecLuckDamage();
+		}
 		if (fight != null && fight.isScored() && fight.hasAvoidable())
 		{
 			ruledFights++;
@@ -407,7 +428,49 @@ class SessionTotals
 	/** The trip's damage variance (T-028), as {@link Fight#damageVariance()}: -1 when unknown or nothing was scored. */
 	double damageVariance()
 	{
-		return expectedSamples > 0 && expectedVarianceSamples == expectedSamples ? sumExpectedDamageVariance : -1;
+		return expectedSamples > 0 && expectedVarianceSamples == expectedSamples
+			? Math.max(0, sumExpectedDamageVariance + outcomeVarianceShift) : -1;
+	}
+
+	/** The trip's expected damage, averaged over the player's own draining specials' outcomes (T-050). */
+	double getSumExpectedAverageHit()
+	{
+		return sumExpectedAverageHit + outcomeExpectedShift;
+	}
+
+	/**
+	 * A change in a fight's T-050 shifts (see {@link Fight#recordSpecOutcomes}),
+	 * carried into the trip as it happens, so the trip's live luck has them too.
+	 */
+	void recordOutcomeShift(double expectedDelta, double varianceDelta)
+	{
+		outcomeExpectedShift += expectedDelta;
+		outcomeVarianceShift += varianceDelta;
+	}
+
+	/** The drains' worth over the trip's ended scored fights (T-050), realized; NaN with none. */
+	double getDrainValueDamage()
+	{
+		return drainValueFights > 0 ? drainValueDamage : Double.NaN;
+	}
+
+	/** The same, averaged over the player's own specials' outcomes. */
+	double getDrainValueExpected()
+	{
+		return drainValueFights > 0 ? drainValueExpected : Double.NaN;
+	}
+
+	/** E(realized) - E(averaged) over the same fights: the specials' share of luck. */
+	double getSpecLuckDamage()
+	{
+		return drainValueFights > 0 ? specLuckDamage : Double.NaN;
+	}
+
+	/** Damage as seconds over the trip's scored fights, as luck's are (T-050). */
+	double luckSeconds(double damage)
+	{
+		return DrainValue.seconds(damage, scoredCombatTicks, getSumExpectedAverageHit(),
+			Math.max(0, thrallDamage) + Math.max(0, dotDamage) + Math.max(0, reflectDamage));
 	}
 
 	/**

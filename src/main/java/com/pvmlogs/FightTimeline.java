@@ -18,8 +18,10 @@ import java.util.function.IntSupplier;
  *
  * <p>The sums are fed from {@link Fight}'s own methods, at the point each one
  * counts, so they cannot drift from the fight's totals: Σ damage is
- * {@code getDamageDealt()}, Σ expected {@code getSumExpectedAverageHit()}, Σ
- * variance {@code getSumExpectedDamageVariance()}, the lost and eating ticks
+ * {@code getDamageDealt()}, Σ expected {@code getRealizedExpected()} (each
+ * attack as made; since T-050 the fight's own expected is averaged over its
+ * draining specials' outcomes), Σ variance
+ * {@code getSumExpectedDamageVariance()}, the lost and eating ticks
  * {@code getTicksLost()} and {@code getTicksLostEating()}. The plugin adds what
  * Fight doesn't know: what each attack was (its name, weapon, spell, style,
  * whether it was the special), which attack a splat belongs to (its
