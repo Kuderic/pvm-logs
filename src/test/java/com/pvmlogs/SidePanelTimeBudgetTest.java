@@ -111,8 +111,13 @@ public class SidePanelTimeBudgetTest
 				SidePanelStyle.BETTER.getRGB()));
 			final int top = SidePanelTimeBudgetBar.BAR_TOP * scale;
 			final int bottom = (SidePanelTimeBudgetBar.BAR_TOP + SidePanelTimeBudgetBar.BAR_HEIGHT) * scale - 1;
-			// Before the tick, best play at full strength.
+			// Before the tick, best play at full strength, and the losses too (uptime's orange just left of the tick).
 			assertEquals(SidePanelStyle.KEPT.getRGB(), img.getRGB(10 * scale, top + 4 * scale));
+			final double seconds = W / b.total;
+			final int uptime = (int) Math.round((b.segments.get(0).seconds + 0.9) * seconds * scale);
+			final Color uptimeColour = b.segments.get(1).fill == PanelSnapshot.Fill.COST ? SidePanelStyle.COST
+				: SidePanelStyle.MINOR_COST;
+			assertEquals(uptimeColour.getRGB(), img.getRGB(uptime, top + 4 * scale));
 			int dimmed = 0;
 			for (int x = tick + 2 * scale; x < W * scale; x++)
 			{
@@ -129,6 +134,34 @@ public class SidePanelTimeBudgetTest
 			}
 			assertTrue(dimmed > 0);
 		}
+	}
+
+	@Test
+	public void theLossesAreInsideYourTime()
+	{
+		// Eric, after T-042: uptime, eating and the setup happened inside your 1:16, so they're drawn before the tick; only
+		// best play got shorter, and its last L seconds go past the tick.
+		final PanelSnapshot.TimeBudget b = budget(SidePanelExamples.luckSaved(15));
+		final List<PanelSnapshot.Segment> s = b.segments;
+		final PanelSnapshot.Segment saved = s.get(s.size() - 1);
+		assertEquals(PanelSnapshot.Fill.KEPT, saved.fill);
+		assertEquals(b.luckSaved, saved.seconds, 1e-9);
+		double before = 0;
+		for (int i = 0; i < s.size() - 1; i++)
+		{
+			before += s.get(i).seconds;
+		}
+		// (B - L) + Cu + Ce + Cb + Cp + Cg + U = T: every loss ends at or before the tick.
+		assertEquals(b.clock, before, 1e-9);
+		assertEquals(PanelSnapshot.Fill.KEPT, s.get(0).fill);
+		assertEquals(76.2 - 1.8 - 2.4 - 1.0, s.get(0).seconds, 1e-6);
+		// The past-the-tick stretch is best play, as the legend's swatch shows it.
+		assertEquals(b.clock / b.total * W, SidePanelTimeBudgetBar.tickX(b, W), 1e-9);
+
+		// Luck that cost time: the bar as before, nothing past the clock.
+		final PanelSnapshot.TimeBudget slower = budget(SidePanelExamples.luckSaved(-7));
+		assertEquals(PanelSnapshot.Fill.UNSCORED, slower.segments.get(slower.segments.size() - 1).fill);
+		assertEquals(slower.clock, slower.sum(), 1e-9);
 	}
 
 	@Test

@@ -17,8 +17,9 @@ import javax.swing.JComponent;
  * each part's seconds, luck's cost striped and the time on unscored adds grey.
  * A solid white tick marks your real time, labelled with the clock above the
  * bar (T-042). When the rolls saved time the bar runs on to the time at average
- * luck, labelled at its end, and the stretch past the tick is dimmed under
- * light stripes: time you didn't spend. Your average is a dashed grey marker
+ * luck, labelled at its end: the losses stay inside your time, and the best
+ * play luck saved goes past the tick, dimmed under light stripes: time you
+ * didn't spend. Your average is a dashed grey marker
  * hanging below the bar, its clock under it. Shapes only, so it stays sharp at
  * 2× (spec section 1).
  */
