@@ -39,6 +39,8 @@ final class SidePanelModel
 {
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 	private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM HH:mm", java.util.Locale.ENGLISH);
+	static final String NO_CHARTS_TEXT = "No damage chart for this kill: charts were off, or it was more than 50 fights "
+		+ "ago.";
 	static final String LATER_TEXT = "Kept only for fights since RuneLite started. Saving them with every kill is planned "
 		+ "for later.";
 	private static final String DOT = " · ";
@@ -152,6 +154,16 @@ final class SidePanelModel
 		long now = System.currentTimeMillis();
 		/** The "later" card in the damage rows' place (spec 3.2): a saved kill from before this RuneLite session. */
 		String later;
+		/**
+		 * The scope's scored fights from {@link FightTimeline} (T-036), on one tick
+		 * axis; null with no in-memory data (fights from before the panel loaded,
+		 * past the store's cap, or with charts off).
+		 */
+		FightTimeline.View view;
+		/** The chart's series are sent from this index; 0 starts the panel's copy over (spec 5.1). */
+		int chartFrom;
+		/** The "Charts" setting: off, no damage chart or tick strip. */
+		boolean charts = true;
 		/** The trip's start (T-034). */
 		long tripSince;
 		/** The trip's rooms, newest first; the running one first. */
@@ -461,7 +473,11 @@ final class SidePanelModel
 		}
 		else
 		{
-			b.damage = damage(n, in);
+			b.damage = damage(n, in, warning);
+			if (in.charts)
+			{
+				b.chart = chart(in, s, luckColour, warning);
+			}
 		}
 		if (after)
 		{
@@ -958,14 +974,79 @@ final class SidePanelModel
 
 	// ---- damage, details, damage taken ----
 
-	/** The Damage section's Now rows (spec 3.1): thrall, burn/poison, recoil/vengeance. Weapon rows come with T-036. */
+	/** What a weapon row adds up while its attacks are grouped. */
+	static final class WeaponRow
+	{
+		String name;
+		boolean special;
+		int attacks;
+		int damage;
+		double expected;
+		boolean expectedKnown;
+		int itemId = -1;
+		Spell spell;
+		FightTimeline.Style style = FightTimeline.Style.UNKNOWN;
+	}
+
+	/** The Damage section without a stats warning; {@link #damage(LedgerRows.Numbers, Input, boolean)}. */
 	static PanelSnapshot.Sources damage(LedgerRows.Numbers n, Input in)
 	{
-		final int whole = Math.max(0, n.damage) + in.scoredThrall + in.scoredDot + in.scoredReflect;
-		final List<PanelSnapshot.Source> rows = new ArrayList<>(3);
-		source(rows, "Thrall", in.scoredThrall, whole, SidePanelStyle.THRALL);
-		source(rows, "Burn and poison", in.scoredDot, whole, SidePanelStyle.DOT);
-		source(rows, "Recoil and vengeance", in.scoredReflect, whole, SidePanelStyle.REFLECT);
+		return damage(n, in, false);
+	}
+
+	/**
+	 * The Damage section (spec 3.1): a row per attack key from
+	 * {@link FightTimeline}'s attacks (T-036), weapons and spells, specials apart,
+	 * then thrall, burn/poison and recoil/vengeance. Shares are of all of them,
+	 * scored fights only, so they add to 100%. Weapon damage no attack holds (a
+	 * fight from before the panel loaded, or a splat waiting for its attack) gets
+	 * a row of its own, so the rows always add up to the scope's totals.
+	 */
+	static PanelSnapshot.Sources damage(LedgerRows.Numbers n, Input in, boolean warning)
+	{
+		final List<WeaponRow> weapons = weaponRows(in.view);
+		int attributed = 0;
+		for (WeaponRow w : weapons)
+		{
+			attributed += w.damage;
+		}
+		final int weaponDamage = Math.max(0, n.damage);
+		final int whole = weaponDamage + in.scoredThrall + in.scoredDot + in.scoredReflect;
+		final List<PanelSnapshot.Source> rows = new ArrayList<>(weapons.size() + 4);
+		if (!weapons.isEmpty())
+		{
+			weapons.sort((a, b) -> Integer.compare(b.damage, a.damage));
+			for (WeaponRow w : weapons)
+			{
+				final double share = whole <= 0 ? 0 : (double) Math.max(0, w.damage) / whole;
+				final String count = w.attacks + (w.special ? (w.attacks == 1 ? " spec" : " specs")
+					: (w.attacks == 1 ? " attack" : " attacks"));
+				final String sub = warning || !w.expectedKnown ? count
+					: count + DOT + "expected " + LedgerRows.number(Math.round(w.expected));
+				final int sprite = SidePanelIcons.spellSprite(w.spell);
+				rows.add(new PanelSnapshot.Source(w.name, sub, LedgerRows.number(w.damage), Math.round(100 * share) + "%",
+					share, styleColour(w.style, w.special), sprite >= 0 ? -1 : w.itemId, sprite));
+			}
+			// What no attack holds: damage waiting for its attack's booking, or from a fight the timeline didn't record;
+			// expectations that arrived before any attack of their fight was booked (a held sample after a target switch).
+			final int unmatched = weaponDamage - attributed;
+			double heldExpected = 0;
+			for (WeaponRow w : weapons)
+			{
+				heldExpected += w.expected;
+			}
+			final double unmatchedExpected = Math.max(0, n.expected) - heldExpected;
+			if (unmatched != 0 || Math.abs(unmatchedExpected) >= 0.5)
+			{
+				final double share = whole <= 0 ? 0 : (double) Math.max(0, unmatched) / whole;
+				rows.add(new PanelSnapshot.Source("Not matched to an attack", warning ? "weapon damage"
+					: "weapon damage" + DOT + "expected " + LedgerRows.number(Math.round(unmatchedExpected)),
+					LedgerRows.number(unmatched), Math.round(100 * share) + "%", share, SidePanelStyle.UNSCORED));
+			}
+		}
+		source(rows, "Thrall", in.scoredThrall, whole, SidePanelStyle.THRALL, -1, SidePanelIcons.THRALL_SPRITE);
+		source(rows, "Burn and poison", in.scoredDot, whole, SidePanelStyle.DOT, -1, -1);
+		source(rows, "Recoil and vengeance", in.scoredReflect, whole, SidePanelStyle.REFLECT, SidePanelIcons.RECOIL_ITEM, -1);
 		if (rows.isEmpty())
 		{
 			return null;
@@ -974,7 +1055,68 @@ final class SidePanelModel
 		return new PanelSnapshot.Sources(Text.small(LedgerRows.number(whole) + where, SidePanelStyle.SECONDARY), rows);
 	}
 
-	private static void source(List<PanelSnapshot.Source> rows, String name, int damage, int whole, Color colour)
+	/** The view's attacks grouped by {@link FightTimeline.Attack#rowKey()}, in the order first thrown. */
+	static List<WeaponRow> weaponRows(FightTimeline.View view)
+	{
+		final List<WeaponRow> rows = new ArrayList<>();
+		if (view == null)
+		{
+			return rows;
+		}
+		final Map<String, WeaponRow> byKey = new LinkedHashMap<>();
+		for (FightTimeline.Attack a : view.attacks)
+		{
+			final WeaponRow w = byKey.computeIfAbsent(a.rowKey(), k -> new WeaponRow());
+			w.name = LedgerRows.attackLabel(a.key) == null ? a.key : LedgerRows.attackLabel(a.key);
+			w.special = a.special;
+			w.attacks++;
+			w.damage += a.damage;
+			if (a.mean >= 0)
+			{
+				w.expected += a.mean;
+				w.expectedKnown = true;
+			}
+			if (a.itemId >= 0)
+			{
+				w.itemId = a.itemId;
+			}
+			if (a.spell != null)
+			{
+				w.spell = a.spell;
+			}
+			if (a.style != FightTimeline.Style.UNKNOWN)
+			{
+				w.style = a.style;
+			}
+		}
+		rows.addAll(byKey.values());
+		return rows;
+	}
+
+	/** A style's colour (spec section 2); a special's is its style's mixed 70% toward white. */
+	static Color styleColour(FightTimeline.Style style, boolean special)
+	{
+		final Color base;
+		switch (style == null ? FightTimeline.Style.UNKNOWN : style)
+		{
+			case RANGED:
+				base = SidePanelStyle.RANGED;
+				break;
+			case MAGIC:
+				base = SidePanelStyle.MAGIC;
+				break;
+			case MELEE:
+				base = SidePanelStyle.MELEE;
+				break;
+			default:
+				base = SidePanelStyle.SECONDARY;
+				break;
+		}
+		return special ? SidePanelStyle.towardWhite(base, 0.7) : base;
+	}
+
+	private static void source(List<PanelSnapshot.Source> rows, String name, int damage, int whole, Color colour,
+		int itemId, int spriteId)
 	{
 		if (damage <= 0)
 		{
@@ -982,7 +1124,72 @@ final class SidePanelModel
 		}
 		final double share = whole <= 0 ? 0 : (double) damage / whole;
 		rows.add(new PanelSnapshot.Source(name, "no luck either way", LedgerRows.number(damage),
-			Math.round(100 * share) + "%", share, colour));
+			Math.round(100 * share) + "%", share, colour, itemId, spriteId));
+	}
+
+	// ---- the damage chart and tick strip (T-036; spec 3.1) ----
+
+	/**
+	 * The chart's and strip's data for this snapshot: the view's series from
+	 * {@link Input#chartFrom}. Null with no in-memory data. Expected and the
+	 * typical range are left out under the stats warning; the range also when
+	 * the spread isn't known.
+	 */
+	static PanelSnapshot.Chart chart(Input in, LedgerRows.Scope s, LedgerRows.Colour luckColour, boolean warning)
+	{
+		final FightTimeline.View v = in.view;
+		if (v == null || v.states.length == 0)
+		{
+			return null;
+		}
+		final int length = v.states.length;
+		final int from = Math.max(0, Math.min(in.chartFrom, length));
+		final byte[] styles = new byte[length - from];
+		int lost = 0;
+		int eating = 0;
+		final int[] byStyle = new int[FightTimeline.Style.values().length];
+		for (FightTimeline.Attack a : v.attacks)
+		{
+			final int i = a.tick - v.startTick;
+			if (i >= from && i < length)
+			{
+				styles[i - from] = (byte) (a.style.ordinal() + 1);
+			}
+			if (!a.special)
+			{
+				byStyle[a.style.ordinal()]++;
+			}
+		}
+		for (byte state : v.states)
+		{
+			if (state == FightTimeline.LOST)
+			{
+				lost++;
+			}
+			else if (state == FightTimeline.EATING)
+			{
+				eating++;
+			}
+		}
+		int main = FightTimeline.Style.UNKNOWN.ordinal();
+		for (int i = 0; i < byStyle.length; i++)
+		{
+			if (byStyle[i] > byStyle[main])
+			{
+				main = i;
+			}
+		}
+		final float last = v.damage[length - 1];
+		final float lastExpected = v.expected[length - 1];
+		final boolean rangeKnown = s.damageVariance() > 0 && v.variance[length - 1] > 0;
+		final int ticks = s.combatTicks();
+		return new PanelSnapshot.Chart(from, length, Arrays.copyOfRange(v.damage, from, length),
+			Arrays.copyOfRange(v.expected, from, length), Arrays.copyOfRange(v.variance, from, length),
+			Arrays.copyOfRange(v.states, from, length), styles,
+			luckColour == LedgerRows.Colour.NEUTRAL || warning ? SidePanelStyle.VALUE : SidePanelStyle.of(luckColour),
+			!warning, !warning && rangeKnown, LedgerRows.clock(ticks), "you " + LedgerRows.number(Math.round(last)),
+			"expected " + LedgerRows.number(Math.round(lastExpected)), lost, eating,
+			styleColour(FightTimeline.Style.values()[main], false));
 	}
 
 	/** After the fight: the overlay's Summary rows that the tiles and Damage taken don't already show. */

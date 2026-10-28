@@ -81,7 +81,8 @@ public class SidePanelSmokeTest
 		final SidePanelModel.Input next = SidePanelExamples.live();
 		final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) next.scope;
 		s.combatTicks += 2;
-		s.damage += 31;
+		// A thrall hit: the weapon's damage stays the timeline's, so no row is added.
+		next.scoredThrall += 9;
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(next)));
 		assertEquals(before + 1, panel.fightTab().builds());
 		assertEquals(components, all(panel.fightTab()));

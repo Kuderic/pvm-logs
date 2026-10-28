@@ -52,6 +52,8 @@ public final class SidePanelPictures
 			write(out, "9-trip", scale, renderTrip(SidePanelExamples.trip(), scale));
 			write(out, "10-history", scale, renderHistory(false, scale));
 			write(out, "11-saved-kill", scale, renderHistory(true, scale));
+			// T-036: a kill from this session opened from History, with its rows, chart and strip.
+			write(out, "11b-saved-kill-this-session", scale, renderSavedThisSession(scale));
 		}
 	}
 
@@ -127,6 +129,55 @@ public final class SidePanelPictures
 			tab.open(h.get(h.size() - 1));
 		}
 		return draw(panel.tabs(), tab, scale);
+	}
+
+	/** A kill from this session, opened from History: its timeline comes with it (T-036). */
+	static BufferedImage renderSavedThisSession(int scale)
+	{
+		final SidePanelTimelineExamples.Built kill = SidePanelTimelineExamples.kill();
+		kill.fight.end(true, SidePanelExamples.at(15, 31));
+		final java.util.List<Fight> history = java.util.Collections.singletonList(kill.fight);
+		final SidePanelHistoryTab.Source source = new SidePanelHistoryTab.Source()
+		{
+			public java.util.List<Fight> history()
+			{
+				return history;
+			}
+
+			public SidePanelHistory.Versions versions()
+			{
+				return (room, maxHp) -> maxHp == 700 ? "Post-quest" : null;
+			}
+
+			public long sessionStart()
+			{
+				return -1;
+			}
+
+			public long now()
+			{
+				return SidePanelHistoryExamples.NOW;
+			}
+
+			public java.time.ZoneId zone()
+			{
+				return SidePanelExamples.ZONE;
+			}
+
+			public void exportNpc(String name)
+			{
+			}
+
+			@Override
+			public void charts(Encounter room, java.util.function.Consumer<FightTimeline.View> done)
+			{
+				done.accept(FightTimeline.room(room, kill.store));
+			}
+		};
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source);
+		panel.tabs().select(panel.tabs().getTab(1));
+		panel.historyTab().open(kill.fight);
+		return draw(panel.tabs(), panel.historyTab(), scale);
 	}
 
 	/** The panel showing this input's snapshot, drawn at {@code scale}. */

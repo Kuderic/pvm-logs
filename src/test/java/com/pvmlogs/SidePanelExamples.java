@@ -66,6 +66,8 @@ final class SidePanelExamples
 		final SidePanelModel.Input in = room("Vardorvis", midScope());
 		in.scoredThrall = 48;
 		in.hitsTaken = 7;
+		// T-036: the tentacle and one claw spec, as the canvas splits it.
+		in.view = SidePanelTimelineExamples.live().view();
 		return in;
 	}
 
@@ -80,6 +82,7 @@ final class SidePanelExamples
 		in.hitsTaken = 14;
 		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(114, 108, 121), 10);
 		in.luckRemoved = new LedgerHistory.Spread(117, 114, 120);
+		in.view = SidePanelTimelineExamples.kill().view();
 		return in;
 	}
 

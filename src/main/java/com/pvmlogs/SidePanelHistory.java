@@ -565,6 +565,17 @@ final class SidePanelHistory
 	static SidePanelModel.Input savedKill(List<Fight> history, Encounter room, long sessionStart, long now, ZoneId zone,
 		Versions names)
 	{
+		return savedKill(history, room, sessionStart, now, zone, names, null);
+	}
+
+	/**
+	 * {@code view}: the room's timeline from this session (T-036), for its damage
+	 * rows, chart and strip; null while it's being fetched. An empty one (charts
+	 * off, or the fights dropped past the store's cap) gets a card saying so.
+	 */
+	static SidePanelModel.Input savedKill(List<Fight> history, Encounter room, long sessionStart, long now, ZoneId zone,
+		Versions names, FightTimeline.View view)
+	{
 		final SidePanelModel.Input in = new SidePanelModel.Input();
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
@@ -582,16 +593,36 @@ final class SidePanelHistory
 			in.average = LedgerHistory.of(history, room);
 			in.luckRemoved = in.average == null ? null : SidePanelModel.luckRemoved(history, room);
 		}
-		boolean thisSession = !room.getFights().isEmpty();
-		for (Fight f : room.getFights())
-		{
-			thisSession &= f.getStartMillis() >= sessionStart;
-		}
-		if (!thisSession)
+		if (!fromThisSession(room, sessionStart))
 		{
 			in.later = SidePanelModel.LATER_TEXT;
 		}
+		else if (view != null && view.states.length == 0)
+		{
+			in.later = SidePanelModel.NO_CHARTS_TEXT;
+		}
+		else if (view != null)
+		{
+			in.view = view;
+		}
 		return in;
+	}
+
+	/** Every fight of the room started in this RuneLite session, so its timeline may still be held. */
+	static boolean fromThisSession(Encounter room, long sessionStart)
+	{
+		if (room.getFights().isEmpty())
+		{
+			return false;
+		}
+		for (Fight f : room.getFights())
+		{
+			if (f.getStartMillis() < sessionStart)
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 
 	// ---- the trip ----
