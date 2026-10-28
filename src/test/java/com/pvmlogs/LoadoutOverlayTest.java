@@ -2,86 +2,17 @@ package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.junit.Test;
 
-/** T-022: the loadout overlay's settings migration, and the visibility rule it shares with the Ledger. */
+/**
+ * T-022: the visibility rule the loadout overlay shares with the Ledger. Its
+ * settings migration is in {@link SettingsMigrationsTest} since T-040.
+ */
 public class LoadoutOverlayTest
 {
-	/** Settings in a map, as the config would hold them as strings. */
-	private static final class MapSettings implements LoadoutOverlay.Settings
-	{
-		final Map<String, String> values = new HashMap<>();
-
-		public String get(String key)
-		{
-			return values.get(key);
-		}
-
-		public void set(String key, boolean value)
-		{
-			values.put(key, String.valueOf(value));
-		}
-
-		public void unset(String key)
-		{
-			values.remove(key);
-		}
-	}
-
-	@Test
-	public void loadoutOnlyOnBecomesTheLedgerHiddenAndTheLoadoutOverlayShown()
-	{
-		final MapSettings s = new MapSettings();
-		s.values.put("overlayExpectedOnly", "true");
-		s.values.put("showOverlay", "true");
-		s.values.put("overlayShowLoadout", "false");
-		LoadoutOverlay.migrateLoadoutOnly(s);
-		assertEquals("false", s.values.get("showOverlay"));
-		assertEquals("true", s.values.get("overlayShowLoadout"));
-		assertNull(s.values.get("overlayExpectedOnly"));
-	}
-
-	@Test
-	public void loadoutOnlyOffOnlyDropsTheOldKey()
-	{
-		final MapSettings s = new MapSettings();
-		s.values.put("overlayExpectedOnly", "false");
-		s.values.put("overlayShowLoadout", "false");
-		LoadoutOverlay.migrateLoadoutOnly(s);
-		assertEquals("false", s.values.get("overlayShowLoadout"));
-		assertNull(s.values.get("showOverlay"));
-		assertFalse(s.values.containsKey("overlayExpectedOnly"));
-	}
-
-	@Test
-	public void neverSetChangesNothingAndRunningTwiceIsTheSame()
-	{
-		final MapSettings s = new MapSettings();
-		s.values.put("showOverlay", "true");
-		LoadoutOverlay.migrateLoadoutOnly(s);
-		assertEquals(1, s.values.size());
-		s.values.put("overlayExpectedOnly", "true");
-		LoadoutOverlay.migrateLoadoutOnly(s);
-		// The player turns the Ledger back on: a second start must not hide it again.
-		s.values.put("showOverlay", "true");
-		LoadoutOverlay.migrateLoadoutOnly(s);
-		assertEquals("true", s.values.get("showOverlay"));
-	}
-
-	@Test
-	public void theKeysAreTheConfigsOwn()
-	{
-		// The migration writes the same keys the config reads, so a rename there must show up here.
-		assertEquals("showOverlay", LoadoutOverlay.SHOW_OVERLAY_KEY);
-		assertEquals("overlayShowLoadout", LoadoutOverlay.SHOW_LOADOUT_KEY);
-	}
-
-	// ---- shown when the Ledger is: a fight on show, until the timeout, bosses only (T-022) ----
+	// ---- shown when the Ledger is: a fight on show, for "Keep last fight up (s)", bosses only (T-022, T-040) ----
 
 	private static Fight fight()
 	{
@@ -91,24 +22,37 @@ public class LoadoutOverlayTest
 	@Test
 	public void bothOverlaysHideUnderBossesOnlyOffABoss()
 	{
-		assertFalse(PvmPerformanceOverlay.onShow(fight(), 100, true, false, 0L));
-		assertTrue(PvmPerformanceOverlay.onShow(fight(), 100, true, true, 0L));
-		assertTrue(PvmPerformanceOverlay.onShow(fight(), 100, false, false, 0L));
+		assertFalse(PvmPerformanceOverlay.onShow(fight(), 60, true, false, 0L));
+		assertTrue(PvmPerformanceOverlay.onShow(fight(), 60, true, true, 0L));
+		assertTrue(PvmPerformanceOverlay.onShow(fight(), 60, false, false, 0L));
 	}
 
 	@Test
-	public void aFinishedFightStaysUpUntilTheTimeout()
+	public void aFinishedFightStaysUpForTheHoldSeconds()
 	{
 		final Fight f = fight();
 		f.end(true, 10_000L);
-		assertTrue(PvmPerformanceOverlay.onShow(f, 10, false, false, 10_000L + 6_000L));
-		assertFalse(PvmPerformanceOverlay.onShow(f, 10, false, false, 10_000L + 6_001L));
+		assertTrue(PvmPerformanceOverlay.onShow(f, 6, false, false, 10_000L + 6_000L));
+		assertFalse(PvmPerformanceOverlay.onShow(f, 6, false, false, 10_000L + 6_001L));
+		// The default, 60 s: the old 100-tick timeout's minute.
+		assertTrue(PvmPerformanceOverlay.onShow(f, 60, false, false, 10_000L + 60_000L));
+		assertFalse(PvmPerformanceOverlay.onShow(f, 60, false, false, 10_000L + 60_001L));
+	}
+
+	@Test
+	public void holdZeroKeepsTheFightUpUntilTheNextOne()
+	{
+		final Fight f = fight();
+		f.end(true, 10_000L);
+		assertTrue(PvmPerformanceOverlay.onShow(f, 0, false, false, 10_000L + 3_600_000L));
+		// Still under "bosses only".
+		assertFalse(PvmPerformanceOverlay.onShow(f, 0, true, false, 10_000L + 1L));
 	}
 
 	@Test
 	public void nothingToShowWithoutAFight()
 	{
-		assertFalse(PvmPerformanceOverlay.onShow(null, 100, false, false, 0L));
+		assertFalse(PvmPerformanceOverlay.onShow(null, 60, false, false, 0L));
 	}
 
 	// ---- T-027: "bosses only" asks of the room too ----
@@ -122,7 +66,7 @@ public class LoadoutOverlayTest
 		assertEquals("Abyssal Sire", lung.encounterName());
 		assertTrue(PvmPerformanceOverlay.isBossFight(lung));
 		// Both overlays go by onShow, so both stay up under "bosses only".
-		assertTrue(PvmPerformanceOverlay.onShow(lung, 100, true, PvmPerformanceOverlay.isBossFight(lung), 0L));
+		assertTrue(PvmPerformanceOverlay.onShow(lung, 60, true, PvmPerformanceOverlay.isBossFight(lung), 0L));
 		// The spawns and scions too.
 		assertTrue(PvmPerformanceOverlay.isBossFight(new Fight("Spawn", net.runelite.api.gameval.NpcID.ABYSSALSIRE_SPAWN,
 			3, 15, 0L, null, 0)));
@@ -133,7 +77,7 @@ public class LoadoutOverlayTest
 	{
 		final Fight goblin = new Fight("Goblin", NpcIds.GOBLIN, 1, 5, 0L, null, 0);
 		assertFalse(PvmPerformanceOverlay.isBossFight(goblin));
-		assertFalse(PvmPerformanceOverlay.onShow(goblin, 100, true, PvmPerformanceOverlay.isBossFight(goblin), 0L));
+		assertFalse(PvmPerformanceOverlay.onShow(goblin, 60, true, PvmPerformanceOverlay.isBossFight(goblin), 0L));
 		assertFalse(PvmPerformanceOverlay.isBossFight(null));
 	}
 

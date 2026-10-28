@@ -251,7 +251,7 @@ class PvmPerformancePanel extends PluginPanel
 		SwingUtilities.invokeLater(() -> apply(snapshot));
 	}
 
-	/** Whether the switch reads Whole raid: the player's last choice, else the overlay's raid-scope setting. */
+	/** Whether the switch reads Whole raid: the player's last choice, else whether the overlay covers the whole raid. */
 	private boolean wholeRaid()
 	{
 		final Boolean choice = wholeRaid;
@@ -259,7 +259,7 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			return choice;
 		}
-		return config != null && config.raidScope() == RaidScope.RAID;
+		return config != null && config.overlayCovers() == OverlayCovers.RAID;
 	}
 
 	/** The room the Fight tab is about: a room picked from the raid's list while it's still the raid on show, else the display room. */

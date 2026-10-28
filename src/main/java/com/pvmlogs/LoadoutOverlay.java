@@ -7,7 +7,6 @@ import java.util.Arrays;
 import java.util.List;
 import javax.inject.Inject;
 import net.runelite.api.Client;
-import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
 
@@ -27,11 +26,6 @@ import net.runelite.client.ui.overlay.OverlayPosition;
  */
 class LoadoutOverlay extends OverlayPanel
 {
-	/** The key of the removed "Loadout only" setting (Arodab's "Expected figures only"), read once to migrate it. */
-	static final String LOADOUT_ONLY_KEY = "overlayExpectedOnly";
-	static final String SHOW_OVERLAY_KEY = "showOverlay";
-	static final String SHOW_LOADOUT_KEY = "overlayShowLoadout";
-
 	private final PvmPerformancePlugin plugin;
 	private final PvmPerformanceConfig config;
 	private final Client client;
@@ -95,56 +89,5 @@ class LoadoutOverlay extends OverlayPanel
 			l.specExtraKind = "burn";
 		}
 		return l;
-	}
-
-	/** The settings the migration reads and writes, so it can be tested without a {@link ConfigManager}. */
-	interface Settings
-	{
-		String get(String key);
-
-		void set(String key, boolean value);
-
-		void unset(String key);
-
-		static Settings of(ConfigManager configManager)
-		{
-			return new Settings()
-			{
-				public String get(String key)
-				{
-					return configManager.getConfiguration(PvmPerformanceConfig.GROUP, key);
-				}
-
-				public void set(String key, boolean value)
-				{
-					configManager.setConfiguration(PvmPerformanceConfig.GROUP, key, value);
-				}
-
-				public void unset(String key)
-				{
-					configManager.unsetConfiguration(PvmPerformanceConfig.GROUP, key);
-				}
-			};
-		}
-	}
-
-	/**
-	 * Moves the removed "Loadout only" setting, once (T-022): it showed the
-	 * loadout and nothing from the fight, which is now the Ledger hidden and the
-	 * loadout overlay shown. Off, or never set, only the old key goes.
-	 */
-	static void migrateLoadoutOnly(Settings settings)
-	{
-		final String old = settings.get(LOADOUT_ONLY_KEY);
-		if (old == null)
-		{
-			return;
-		}
-		if (Boolean.parseBoolean(old))
-		{
-			settings.set(SHOW_OVERLAY_KEY, false);
-			settings.set(SHOW_LOADOUT_KEY, true);
-		}
-		settings.unset(LOADOUT_ONLY_KEY);
 	}
 }
