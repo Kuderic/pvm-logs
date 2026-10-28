@@ -69,6 +69,16 @@ class PvmPerformanceOverlay extends OverlayPanel
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
+		// Timed while Debug logging is on (T-045).
+		final PerfProbe perf = plugin == null ? null : plugin.getPerf();
+		final long started = PerfProbe.start(perf);
+		final Dimension size = draw(graphics);
+		PerfProbe.stop(perf, PerfProbe.Slot.OVERLAY, started);
+		return size;
+	}
+
+	private Dimension draw(Graphics2D graphics)
+	{
 		if (!config.showOverlay())
 		{
 			return null;

@@ -41,6 +41,10 @@ class PvmPerformancePanel extends PluginPanel
 	private final SidePanelHistoryTab historyTab;
 	private final SidePanelTripTab tripTab;
 	private final MaterialTabGroup tabs;
+	private final MaterialTab fightButton;
+	private final MaterialTab historyButton;
+	/** The strain probe (T-045): times apply and the repaints; null in tests. */
+	private final PerfProbe perf;
 
 	// Swing's thread writes these, the client thread reads them.
 	private volatile boolean active;
@@ -102,6 +106,7 @@ class PvmPerformancePanel extends PluginPanel
 		this.clientThread = clientThread;
 		this.monsterStats = instance(plugin, MonsterStatsProvider.class);
 		this.icons = icons(plugin);
+		this.perf = plugin == null ? null : plugin.getPerf();
 
 		setBackground(SidePanelStyle.PANEL);
 		setLayout(new BorderLayout());
@@ -127,6 +132,8 @@ class PvmPerformancePanel extends PluginPanel
 			historyTab.refresh();
 			return true;
 		});
+		fightButton = fight;
+		historyButton = history;
 		tabs.addTab(fight);
 		tabs.addTab(history);
 		tabs.addTab(trip);
@@ -488,9 +495,42 @@ class PvmPerformancePanel extends PluginPanel
 	/** Shows a snapshot (spec 5.1 step 2). Swing's thread only. */
 	void apply(PanelSnapshot snapshot)
 	{
+		final long started = PerfProbe.start(perf);
 		shown = snapshot;
 		fightTab.apply(snapshot.fight);
 		tripTab.apply(snapshot.trip);
+		if (started != 0L)
+		{
+			perf.stopSwing(PerfProbe.SwingSlot.APPLY, started);
+			// The repaints apply asked for (T-045): Swing paints them in one pass queued during apply, so a marker queued now
+			// runs after it. A repaint from a section paints from that section, never through this panel's paintChildren.
+			// The wait can include other plugins' Swing work queued in between: an upper bound.
+			final long queued = System.nanoTime();
+			SwingUtilities.invokeLater(() -> perf.stopSwing(PerfProbe.SwingSlot.PAINT_AFTER_APPLY, queued));
+		}
+	}
+
+	/** A full paint of the panel (T-045): opening it, resizing, a tab switch. Per-tick repaints are timed in {@link #apply}. */
+	@Override
+	protected void paintChildren(java.awt.Graphics g)
+	{
+		final long started = PerfProbe.start(perf);
+		super.paintChildren(g);
+		if (started != 0L)
+		{
+			perf.stopSwing(PerfProbe.SwingSlot.PAINT_FULL, started);
+		}
+	}
+
+	/**
+	 * The panel's state for the strain probe (T-045), as {@link PerfProbe#panelState}: closed, or open on which tab and with
+	 * which panel settings. Read on the client thread; the tab is Swing's, and a tick's read can be one switch behind.
+	 */
+	int perfState()
+	{
+		final int tab = fightButton.isSelected() ? 0 : historyButton.isSelected() ? 1 : 2;
+		return PerfProbe.panelState(active, tab, config == null || config.panelLive(),
+			config == null || config.panelCharts());
 	}
 
 	PanelSnapshot shown()
