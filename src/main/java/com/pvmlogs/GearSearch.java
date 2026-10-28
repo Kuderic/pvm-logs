@@ -65,9 +65,11 @@ final class GearSearch
 			boolean improved = false;
 			for (Candidate candidate : candidates)
 			{
-				// The weapon is not judged, and a two-hander leaves no shield slot - offering one would be advice the game will not
-				// let the player take.
-				if (candidate.slot == EquipmentInventorySlot.WEAPON
+				// The weapon is not judged, nor its ammo (T-058: "only use armour gear"): the arrows, bolts, darts or blessing in
+				// the ammo slot go with the weapon in hand, the player's choice. Arrows a bow of faerdhinen cannot fire still read
+				// +49 ranged strength over a Rada's blessing. And a two-hander leaves no shield slot - offering one would be advice
+				// the game will not let the player take.
+				if (heldWithTheWeapon(candidate.slot)
 					|| (twoHandedWeapon && candidate.slot == EquipmentInventorySlot.SHIELD))
 				{
 					continue;
@@ -91,6 +93,12 @@ final class GearSearch
 			}
 		}
 		return best;
+	}
+
+	/** The slots the search never swaps: the weapon, and the ammo that goes with it (T-058). */
+	static boolean heldWithTheWeapon(EquipmentInventorySlot slot)
+	{
+		return slot == EquipmentInventorySlot.WEAPON || slot == EquipmentInventorySlot.AMMO;
 	}
 
 	/**

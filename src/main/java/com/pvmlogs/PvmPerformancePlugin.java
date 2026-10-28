@@ -501,6 +501,9 @@ public class PvmPerformancePlugin extends Plugin
 	private final FightTimeline.Store timelines = new FightTimeline.Store();
 	// What the plugin costs the client (T-045): on only while Debug logging is on. Read by the overlays and the side panel.
 	private final PerfProbe perf = new PerfProbe();
+	// The gear ideal last logged (T-058), and for which fight: a line at each fight's start and whenever it changes.
+	private Fight gearIdealFight;
+	private String gearIdealSwaps;
 	// Each fight's expected damage averaged over how the player's own draining specials could have landed (T-050), fed the
 	// bookings below and the drain tracker's events. The lambdas read the injected fields when called.
 	private final DrainLuck drainLuck = new DrainLuck(index -> drain.tracked(index),
@@ -2381,6 +2384,35 @@ public class PvmPerformancePlugin extends Plugin
 	 * overlay, the attack-tick sample, ::loadout - takes this one snapshot, so
 	 * they cannot disagree within a tick.
 	 */
+	/**
+	 * What the gear figure is measured against (T-058): at a fight's start and
+	 * whenever it changes, the slots the best loadout on hand swaps, by item
+	 * name, and its average hit against the worn one's, both at the ideal
+	 * prayer and boost. The weapon and its ammo are never among them.
+	 */
+	private void logGearIdeal(Fight shown, int shownId, CombatCalc.SwitchCheck check)
+	{
+		if (shown == null || shown.isEnded() || shownId < 0)
+		{
+			return;
+		}
+		final String swaps = check.swaps();
+		if (shown == gearIdealFight && java.util.Objects.equals(swaps, gearIdealSwaps))
+		{
+			return;
+		}
+		gearIdealFight = shown;
+		gearIdealSwaps = swaps;
+		final double worn = swaps == null ? combatCalc.idealAverageHit(shownId) : check.wornHit();
+		debug.log("%s", gearIdealLine(swaps, swaps == null ? worn : check.bestHit(), worn));
+	}
+
+	static String gearIdealLine(String swaps, double expected, double worn)
+	{
+		return String.format("GEAR IDEAL %s expected %.2f vs worn %.2f",
+			swaps == null ? "the gear worn (nothing better carried)" : swaps, expected, worn);
+	}
+
 	private void refreshExpected()
 	{
 		final Fight shown = getDisplayFight();
@@ -2392,8 +2424,10 @@ public class PvmPerformancePlugin extends Plugin
 		// The id the shown fight's target wears now, not the one the fight opened on: a boss's phases are different stats.
 		final int shownId = shown == null ? -1 : targetIdOn(shown, client.getTickCount());
 		final long switchStarted = perf.start();
-		switchedByTick.put(client.getTickCount(), combatCalc.switchCheck(shownId));
+		final CombatCalc.SwitchCheck switchCheck = combatCalc.switchCheck(shownId);
+		switchedByTick.put(client.getTickCount(), switchCheck);
 		perf.stop(PerfProbe.Slot.SWITCH_CHECK, switchStarted);
+		logGearIdeal(shown, shownId, switchCheck);
 		if (client.getTickCount() % 5 == 0)
 		{
 			switchedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
