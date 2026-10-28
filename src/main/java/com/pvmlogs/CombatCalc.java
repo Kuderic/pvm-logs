@@ -3593,6 +3593,18 @@ class CombatCalc
 			{
 				return "nothing better on hand";
 			}
+			return String.format("%s; damage per tick %.3f worn, %.3f switched (speed %d / %d), costing %.2f a hit",
+				swaps(), GearSearch.perTick(wornHit, wornSpeed), GearSearch.perTick(bestHit, bestSpeed), wornSpeed, bestSpeed,
+				cost());
+		}
+
+		/** The slots the best loadout swaps, by item name ("BODY Crystal body -> Masori body"); null when none. */
+		String swaps()
+		{
+			if (!isMissed())
+			{
+				return null;
+			}
 			final StringBuilder swaps = new StringBuilder();
 			for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
 			{
@@ -3603,9 +3615,18 @@ class CombatCalc
 						.append(best.id(slot) < 0 ? "empty" : best.name(slot));
 				}
 			}
-			return String.format("%s; damage per tick %.3f worn, %.3f switched (speed %d / %d), costing %.2f a hit",
-				swaps, GearSearch.perTick(wornHit, wornSpeed), GearSearch.perTick(bestHit, bestSpeed), wornSpeed, bestSpeed,
-				cost());
+			return swaps.toString();
+		}
+
+		/** The best loadout's average hit and the worn one's, at the ideal prayer and boost; 0 when nothing better. */
+		double bestHit()
+		{
+			return bestHit;
+		}
+
+		double wornHit()
+		{
+			return wornHit;
 		}
 	}
 
