@@ -1,0 +1,45 @@
+# T-055 fixture, copied with Eric's OK (2026-10-28): the fight START/END, AoE and LOOT lines of two Abyssal Sire kills, nothing else.
+# Kill 1: pvm-debug-20261028-130529.log, from line 6883 (the Sire).
+[8196] fight START Abyssal Sire (npc 5886, index 24479, maxHp 425) group=Abyssal Sire room=Abyssal Sire raid=null
+[8225] fight END Abyssal Sire (npc 5886) a different target in the room was attacked: attempts=5 made=5 damage=21 thrallDamage=0 hits=3 ticksLost=4 combatTicks=27 expDamage=30.2
+[8225] fight START Respiratory system (npc 5914, index 33159, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[8228] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=0 combatTicks=2 expDamage=0.0
+[8228] fight START Respiratory system (npc 5914, index 33161, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[8235] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=2 combatTicks=6 expDamage=0.0
+[8235] fight START Respiratory system (npc 5914, index 33158, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[8240] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=2 combatTicks=4 expDamage=0.0
+[8240] fight START Respiratory system (npc 5914, index 33160, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[8247] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=2 combatTicks=6 expDamage=0.0
+[8257] fight START Scion (npc 5918, index 58326, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[8272] fight END Scion (npc 5918) target died: attempts=4 made=4 damage=48 thrallDamage=2 hits=4 ticksLost=1 combatTicks=14 expDamage=0.0
+[8272] LOOT from Scion (npc 5918, index 58326): room 'Abyssal Sire' closed with 6 fights
+[8272] fight START Abyssal Sire (npc 5890, index 24479, maxHp 425) group=Abyssal Sire room=Abyssal Sire raid=null
+[8373] fight END Abyssal Sire (npc 5890) target died: attempts=22 made=22 damage=426 thrallDamage=0 hits=16 ticksLost=12 combatTicks=97 expDamage=485.3
+[8373] LOOT from Abyssal Sire (npc 5908, index 24479): room 'Abyssal Sire' closed with 1 fights
+# Kill 2: pvm-debug-20261028-143400.log, the whole log.
+[186] fight START Abyssal Sire (npc 5886, index 24479, maxHp 425) group=Abyssal Sire room=Abyssal Sire raid=null
+[203] fight END Abyssal Sire (npc 5886) a different target in the room was attacked: attempts=2 made=2 damage=0 thrallDamage=0 hits=0 ticksLost=7 combatTicks=15 expDamage=15.1
+[203] fight START Respiratory system (npc 5914, index 54179, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[206] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=0 combatTicks=2 expDamage=0.0
+[206] fight START Respiratory system (npc 5914, index 54181, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[211] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=0 combatTicks=4 expDamage=0.0
+[211] fight START Respiratory system (npc 5914, index 54180, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[221] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=6 combatTicks=9 expDamage=0.0
+[221] fight START Respiratory system (npc 5914, index 54178, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[226] fight END Respiratory system (npc 5914) target died: attempts=1 made=1 damage=50 thrallDamage=0 hits=1 ticksLost=1 combatTicks=4 expDamage=0.0
+[242] fight START Abyssal Sire (npc 5889, index 24479, maxHp 425) group=Abyssal Sire room=Abyssal Sire raid=null
+[274] AoE 13 on Scion (npc 5918, index 34631) joins the attack on Abyssal Sire: newTarget=true landed=true
+[278] fight END Abyssal Sire (npc 5889) a different target in the room was attacked: attempts=6 made=6 damage=100 thrallDamage=0 hits=4 ticksLost=12 combatTicks=36 expDamage=110.9
+[278] fight START Scion (npc 5918, index 34631, maxHp 50) group=Abyssal Sire room=Abyssal Sire raid=null
+[292] fight END Scion (npc 5918) target died: attempts=4 made=4 damage=37 thrallDamage=0 hits=4 ticksLost=0 combatTicks=13 expDamage=0.0
+[292] LOOT from Scion (npc 5918, index 34631): room 'Abyssal Sire' closed with 7 fights
+[293] fight START Abyssal Sire (npc 5890, index 24479, maxHp 425) group=Abyssal Sire room=Abyssal Sire raid=null
+[351] AoE 15 on Spawn (npc 5916, index 36146) joins the attack on Abyssal Sire: newTarget=true landed=true
+[353] fight END Abyssal Sire (npc 5890) loot received: attempts=14 made=14 damage=182 thrallDamage=0 hits=11 ticksLost=3 combatTicks=59 expDamage=232.0
+[353] LOOT from Spawn (npc 5916, index 36146): room 'Abyssal Sire' closed with 1 fights
+[353] fight START Spawn (npc 5916, index 36147, maxHp 15) group=Abyssal Sire room=Abyssal Sire raid=null
+[361] fight END Spawn (npc 5916) target died: attempts=2 made=2 damage=15 thrallDamage=0 hits=2 ticksLost=0 combatTicks=5 expDamage=0.0
+[361] LOOT from Spawn (npc 5916, index 36147): room 'Abyssal Sire' closed with 1 fights
+[362] fight START Abyssal Sire (npc 5891, index 24479, maxHp 425) group=Abyssal Sire room=Abyssal Sire raid=null
+[399] fight END Abyssal Sire (npc 5891) target died: attempts=8 made=8 damage=178 thrallDamage=0 hits=7 ticksLost=5 combatTicks=34 expDamage=151.8
+[399] LOOT from Abyssal Sire (npc 5908, index 24479): room 'Abyssal Sire' closed with 1 fights

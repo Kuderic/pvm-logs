@@ -55,6 +55,16 @@ class Encounter
 		return false;
 	}
 
+	/**
+	 * Whether loot from this NPC closes the room (T-055): the room is open, holds
+	 * a fight on it or its group, and the NPC is not one of the boss's adds, whose
+	 * drops never mean the kill.
+	 */
+	boolean closesOnLootFrom(int npcId)
+	{
+		return !isEnded() && EncounterGroup.lootIsTheKill(npcId) && holds(npcId);
+	}
+
 	boolean isEnded()
 	{
 		return endMillis > 0;
