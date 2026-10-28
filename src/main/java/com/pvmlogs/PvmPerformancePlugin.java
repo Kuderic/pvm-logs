@@ -3836,6 +3836,9 @@ public class PvmPerformancePlugin extends Plugin
 			panel.onTick();
 			perf.stop(PerfProbe.Slot.PANEL_SNAPSHOT, snapshotStarted);
 		}
+		// The input-delay probe (T-045 item 4), after the panel has queued its update: it waits behind that update and its
+		// repaint, as a click made just after the tick does.
+		perf.postInputProbe();
 	}
 
 	/** Whether the player is still interacting with this NPC. */

@@ -3,6 +3,8 @@ package com.pvmlogs;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import javax.swing.SwingUtilities;
 
 /**
  * What the plugin costs the client during fights (T-045): frame intervals, the
@@ -168,6 +170,22 @@ final class PerfProbe
 
 	private List<String> lastReport = new ArrayList<>();
 
+	// Input delay (T-045 item 4): how long a task posted to Swing's queue waits to run, which is how long a click waits.
+	// One probe a tick, reused: none is posted while the last is still waiting, so a wait past a tick is still recorded
+	// whole, once, when it runs.
+	static final long INPUT_SLOW_NANOS = 16_000_000L;
+	static final long INPUT_STUCK_NANOS = 50_000_000L;
+	private Timer inputDelay;
+	private int inputSlow;
+	private int inputStuck;
+	private final AtomicBoolean inputPending = new AtomicBoolean();
+	private volatile long inputPosted;
+	private final Runnable inputProbe = () ->
+	{
+		recordInputDelay(System.nanoTime() - inputPosted);
+		inputPending.set(false);
+	};
+
 	void setOn(boolean on)
 	{
 		if (on && timers == null)
@@ -184,6 +202,7 @@ final class PerfProbe
 				{
 					swingTimers[i] = new Timer(TIMER_SAMPLES);
 				}
+				inputDelay = new Timer(TIMER_SAMPLES);
 			}
 			frames = new int[FRAME_SAMPLES];
 			windowEnds = new long[BASELINE_FRAMES];
@@ -276,6 +295,35 @@ final class PerfProbe
 			{
 				swingTimers[slot.ordinal()].add(nanos);
 			}
+		}
+	}
+
+	/**
+	 * Once a tick, on the client thread: posts the input-delay probe to Swing's
+	 * queue, stamped now, unless the last one is still waiting there.
+	 */
+	void postInputProbe()
+	{
+		if (!on || !inputPending.compareAndSet(false, true))
+		{
+			return;
+		}
+		inputPosted = System.nanoTime();
+		SwingUtilities.invokeLater(inputProbe);
+	}
+
+	/** How long one probe waited on Swing's queue. Swing's thread, or a test. */
+	void recordInputDelay(long nanos)
+	{
+		synchronized (swingLock)
+		{
+			if (inputDelay == null)
+			{
+				return;
+			}
+			inputDelay.add(nanos);
+			inputSlow += nanos > INPUT_SLOW_NANOS ? 1 : 0;
+			inputStuck += nanos > INPUT_STUCK_NANOS ? 1 : 0;
 		}
 	}
 
@@ -373,6 +421,9 @@ final class PerfProbe
 			{
 				t.reset();
 			}
+			inputDelay.reset();
+			inputSlow = 0;
+			inputStuck = 0;
 		}
 		Arrays.fill(panelTicks, 0);
 		panelSeen = 0;
@@ -456,6 +507,11 @@ final class PerfProbe
 			}
 		}
 		lines.add(swing.toString());
+		synchronized (swingLock)
+		{
+			lines.add("PERF input delay (Swing's queue, a probe a tick): " + timerSummary("waited", inputDelay)
+				+ String.format("; over 16 ms %d, over 50 ms %d", inputSlow, inputStuck));
+		}
 		lines.add("PERF budgets: " + budgets());
 		lastReport = new ArrayList<>(lines);
 		return lines;
@@ -565,6 +621,9 @@ final class PerfProbe
 			final long paint = swingTimers[SwingSlot.PAINT_AFTER_APPLY.ordinal()].quantile(0.99);
 			out.add(String.format("panel apply + repaint p99 %.3f ms %s 2", (apply + paint) / 1e6,
 				apply + paint < 2_000_000 ? "<" : ">="));
+			final long input = inputDelay.quantile(0.99);
+			out.add(String.format("input delay p99 %.3f ms %s 16, over 50 ms %d %s 0", input / 1e6,
+				input < INPUT_SLOW_NANOS ? "<" : ">=", inputStuck, inputStuck == 0 ? "=" : ">"));
 		}
 		return String.join("; ", out);
 	}
