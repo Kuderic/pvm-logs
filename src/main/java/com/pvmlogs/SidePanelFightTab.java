@@ -989,7 +989,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 
 		ToolButtons(Actions actions, Component parent)
 		{
-			this(actions, () -> JOptionPane.showConfirmDialog(parent, CLEAR_QUESTION, "PvM Performance Tracker",
+			this(actions, () -> JOptionPane.showConfirmDialog(parent, CLEAR_QUESTION, PvmPerformanceConfig.DISPLAY_NAME,
 				JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION);
 		}
 

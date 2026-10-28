@@ -1,6 +1,6 @@
 # Third-party notices
 
-PvM Performance Tracker is BSD-2 (see `LICENSE`). Parts of it follow, or carry data checked against, the projects below. No code from them is copied verbatim; where a rule or a figure was taken from one, the class that uses it says so. Their notices are reproduced as their licences ask.
+Luck vs Skill is BSD-2 (see `LICENSE`). Parts of it follow, or carry data checked against, the projects below. No code from them is copied verbatim; where a rule or a figure was taken from one, the class that uses it says so. Their notices are reproduced as their licences ask.
 
 ## Defence drains (T-049)
 

@@ -90,11 +90,10 @@ import net.runelite.client.util.Text;
 
 @Slf4j
 @PluginDescriptor(
-	name = "PvM Performance Tracker",
-	description = "Tracks your real vs expected combat performance against any NPC",
-	tags = {"pvm", "dps", "combat", "performance", "damage", "accuracy", "boss", "luck"},
-	internalName = PvmPerformanceConfig.INTERNAL_NAME,
-	legacyDataDirectory = PvmPerformanceConfig.DATA_DIR
+	name = PvmPerformanceConfig.DISPLAY_NAME,
+	description = "How much of each boss kill was luck and how much was you",
+	tags = {"luck", "skill", "pvm", "boss", "dps", "damage", "accuracy", "uptime", "combat", "performance"},
+	internalName = PvmPerformanceConfig.INTERNAL_NAME
 )
 public class PvmPerformancePlugin extends Plugin
 {
@@ -608,7 +607,7 @@ public class PvmPerformancePlugin extends Plugin
 		panel = new PvmPerformancePanel(this);
 		final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/com/pvmlogs/panel_icon.png");
 		navButton = NavigationButton.builder()
-			.tooltip("PvM Performance Tracker")
+			.tooltip(PvmPerformanceConfig.DISPLAY_NAME)
 			.icon(icon)
 			.priority(7)
 			.panel(panel)
@@ -626,9 +625,8 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/**
-	 * The plugin's data folder, {@code ~/.runelite/plugin-data/<INTERNAL_NAME>/}. The first call moves the old
-	 * {@code ~/.runelite/<DATA_DIR>/} there (the descriptor's {@code legacyDataDirectory}), history and all. Null if
-	 * RuneLite can't give one: the plugin still runs, without history, exports, debug files or the monster cache.
+	 * The plugin's data folder, {@code ~/.runelite/plugin-data/<INTERNAL_NAME>/}. Null if RuneLite can't give one: the
+	 * plugin still runs, without history, exports, debug files or the monster cache.
 	 */
 	private Filepath openDataDirectory()
 	{
@@ -1835,7 +1833,7 @@ public class PvmPerformancePlugin extends Plugin
 		for (String line : combatCalc.describeLoadout(targetId))
 		{
 			log.debug("::loadout {}", line);
-			client.addChatMessage(ChatMessageType.CONSOLE, "PvM Performance", line, null);
+			client.addChatMessage(ChatMessageType.CONSOLE, PvmPerformanceConfig.DISPLAY_NAME, line, null);
 		}
 	}
 
@@ -1865,8 +1863,8 @@ public class PvmPerformancePlugin extends Plugin
 			executor.execute(() ->
 			{
 				final Filepath written = debug.saveRecent(header);
-				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.CONSOLE, "PvM Performance",
-					written == null ? "Nothing to save yet - fight something first."
+				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.CONSOLE,
+					PvmPerformanceConfig.DISPLAY_NAME, written == null ? "Nothing to save yet - fight something first."
 						: "Saved the recent debug log to " + written.getFileName(), null));
 			});
 		});
@@ -3508,10 +3506,8 @@ public class PvmPerformancePlugin extends Plugin
 			attackDueTick, lag, counts ? "" : ", NOT COUNTED - no attack made in this fight yet");
 	}
 
-	// The hidden per-account key holding the blowpipe dart last seen (T-015), and the setting it replaced, read once as the
-	// starting guess so a player who had set it keeps their dart until the game shows another.
+	// The hidden per-account key holding the blowpipe dart last seen (T-015).
 	private static final String DART_SEEN_KEY = "blowpipeDartSeen";
-	private static final String LEGACY_DART_KEY = "blowpipeDart";
 	// Whether this login's remembered dart has been read. Read on the first tick logged in, when the account's profile is
 	// known, and again after every logout or hop.
 	private boolean dartLoaded;
@@ -3554,12 +3550,10 @@ public class PvmPerformancePlugin extends Plugin
 		debug.log("BLOWPIPE dart %s (%s)", dart, how);
 	}
 
-	// The dart remembered for this account, else the old setting's value, else nothing (the calc then assumes dragon).
+	// The dart remembered for this account, else nothing (the calc then assumes dragon).
 	private void loadRememberedDart()
 	{
-		final String seen = configManager.getRSProfileConfiguration(PvmPerformanceConfig.GROUP, DART_SEEN_KEY);
-		final String legacy = configManager.getConfiguration(PvmPerformanceConfig.GROUP, LEGACY_DART_KEY);
-		final String name = seen != null ? seen : legacy;
+		final String name = configManager.getRSProfileConfiguration(PvmPerformanceConfig.GROUP, DART_SEEN_KEY);
 		if (name == null)
 		{
 			// Another account may have been logged in before: its dart is not this one's.
@@ -3568,8 +3562,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		try
 		{
-			combatCalc.setBlowpipeDart(BlowpipeDart.valueOf(name),
-				seen != null ? "remembered for this account" : "from the old Blowpipe dart setting, not seen yet");
+			combatCalc.setBlowpipeDart(BlowpipeDart.valueOf(name), "remembered for this account");
 		}
 		catch (IllegalArgumentException e)
 		{
@@ -5082,7 +5075,7 @@ public class PvmPerformancePlugin extends Plugin
 				final String path = out.toString();
 				setStatus("Exported " + fights.size() + " fights → " + path);
 				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "",
-					"PvM Performance: exported " + fights.size() + " fights to " + path, null));
+					PvmPerformanceConfig.DISPLAY_NAME + ": exported " + fights.size() + " fights to " + path, null));
 			}
 			catch (IOException | RuntimeException e)
 			{
