@@ -144,10 +144,7 @@ class CombatCalc
 	// told from one that has.
 	private int headingWeapon = Integer.MIN_VALUE;
 	private String headingText;
-	private Spell manualCastSpell;
-	private int manualCastTick = Integer.MIN_VALUE;
-	// Clicks made but not yet seen leaving as a cast.
-	private int manualCastsPending;
+	private final ManualCast manualCast = new ManualCast();
 	// Whether the attack currently being described was proven by a hitsplat.
 	private boolean meleeProvenAttack;
 	// Which setup the level and prayer reads answer for, as two switches that work apart: the prayer read is the one up or
@@ -1644,37 +1641,35 @@ class CombatCalc
 	 */
 	void recordManualCast(Spell spell)
 	{
-		// A click arriving after the previous one has lapsed starts the count over rather than adding to a cast that never
-		// happened.
-		if (activeManualCast() == null)
-		{
-			manualCastsPending = 0;
-		}
-		manualCastSpell = spell;
-		manualCastTick = client.getTickCount();
-		// Capped: spamming the spell icon queues clicks the game will never turn into casts, and each would have to be spent
-		// before the weapon is read.
-		manualCastsPending = Math.min(MAX_PENDING_CASTS, manualCastsPending + 1);
+		manualCast.record(spell, client.getTickCount());
 	}
 
-	/**
-	 * The manually cast spell, if cast recently enough to still be what the
-	 * player is doing. Casting takes 5 ticks, so the window is slightly wider
-	 * and lapses back to the weapon once they stop clicking.
-	 */
 	/** The spell a manual cast named in the last few ticks, or null (T-057: the shadow spell that stuns). */
 	Spell recentManualCast()
 	{
 		return activeManualCast();
 	}
 
+	/** The tick the manual cast in hand was clicked, for its trace line (T-066); meaningless while there is none. */
+	int recentManualCastTick()
+	{
+		return manualCast.tick;
+	}
+
+	/**
+	 * Forgets the manual cast in hand (T-066): a projectile the weapon fired is
+	 * never a spell that has none, so whatever clicks are still counted were
+	 * superseded by the weapon's attack.
+	 */
+	void dropManualCast()
+	{
+		manualCast.drop();
+		memoStyle = null;
+	}
+
 	private Spell activeManualCast()
 	{
-		if (manualCastSpell == null || client.getTickCount() - manualCastTick > MANUAL_CAST_TICKS)
-		{
-			return null;
-		}
-		return manualCastSpell;
+		return manualCast.active(client.getTickCount());
 	}
 
 	// How the attack about to be described was proven. A hitsplat can only be a melee blow, and a melee blow is never a
@@ -1693,16 +1688,71 @@ class CombatCalc
 	// to-cast delay, and a window that wide goes on claiming the weapon's own attacks afterwards.
 	void noteAttackThrown()
 	{
-		if (meleeProvenAttack || activeManualCast() == null)
+		if (manualCast.attackThrown(meleeProvenAttack, client.getTickCount()))
 		{
-			manualCastsPending = 0;
-			return;
+			memoStyle = null;
 		}
-		// One cast leaves per click and the two are several ticks apart, so more than one click can be outstanding at once.
-		if (--manualCastsPending <= 0)
+	}
+
+	/**
+	 * The spell clicked onto an NPC and the clicks not yet seen leaving as casts,
+	 * apart from the client so the order of clicks, casts and the weapon's next
+	 * attack can be tested (T-066).
+	 */
+	static final class ManualCast
+	{
+		private Spell spell;
+		private int tick = Integer.MIN_VALUE;
+		// Clicks made but not yet seen leaving as a cast.
+		private int pending;
+
+		void record(Spell clicked, int now)
 		{
-			manualCastsPending = 0;
-			manualCastSpell = null;
+			// A click arriving after the previous one has lapsed starts the count over rather than adding to a cast that never
+			// happened.
+			if (active(now) == null)
+			{
+				pending = 0;
+			}
+			spell = clicked;
+			tick = now;
+			// Capped: spamming the spell icon queues clicks the game will never turn into casts, and each would have to be
+			// spent before the weapon is read.
+			pending = Math.min(MAX_PENDING_CASTS, pending + 1);
+		}
+
+		/**
+		 * The manually cast spell, if cast recently enough to still be what the
+		 * player is doing. Casting takes 5 ticks, so the window is slightly wider
+		 * and lapses back to the weapon once they stop clicking.
+		 */
+		Spell active(int now)
+		{
+			return spell == null || now - tick > MANUAL_CAST_TICKS ? null : spell;
+		}
+
+		/** @return whether the cast in hand was spent */
+		boolean attackThrown(boolean meleeProven, int now)
+		{
+			if (meleeProven || active(now) == null)
+			{
+				pending = 0;
+				return false;
+			}
+			// One cast leaves per click and the two are several ticks apart, so more than one click can be outstanding at once.
+			if (--pending <= 0)
+			{
+				pending = 0;
+				spell = null;
+				return true;
+			}
+			return false;
+		}
+
+		void drop()
+		{
+			spell = null;
+			pending = 0;
 		}
 	}
 

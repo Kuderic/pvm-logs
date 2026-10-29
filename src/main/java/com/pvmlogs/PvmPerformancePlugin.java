@@ -150,6 +150,14 @@ public class PvmPerformancePlugin extends Plugin
 	// "cast UNKNOWN ANIM" trace.
 	private static final Set<Integer> CAST_ANIMATIONS =
 		Collections.unmodifiableSet(new HashSet<>(Collections.singletonList(10092)));
+	// The ancient spellbook's cast animations, for a spell clicked onto an NPC (T-066). 10092 (the "walkmerge" vertical cast)
+	// is the one measured, for the barrages above; T-057 listed only 1978 and 1979, so no stun ever opened. 10091 (the
+	// walkmerge single-target cast) is its pair for the rushes and blitzes by RuneLite's name, not yet seen in a log.
+	static final Set<Integer> ANCIENT_CAST_ANIMATIONS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		AnimationID.ZAROS_CASTING, AnimationID.ZAROS_VERTICAL_CASTING, AnimationID.ZAROS_CASTING_WALKMERGE,
+		AnimationID.ZAROS_VERTICAL_CASTING_WALKMERGE)));
+	// The click the MANUAL CAST trace last described, so one click is traced once however many animations follow it.
+	private int manualCastTraced = Integer.MIN_VALUE;
 	// Casts with no projectile, waiting to be told whether they landed. Usually none or one; two only while a long-range
 	// cast is still in the air as the next goes out. A single slot let the new cast overwrite the old one's verdict, and
 	// at range the two coincide exactly.
@@ -353,6 +361,10 @@ public class PvmPerformancePlugin extends Plugin
 	private int attackThrownTick = -1;
 	private int attackSwitchTick = Integer.MIN_VALUE;
 	private int attackFiguresTick = Integer.MIN_VALUE;
+	// T-066: the attack being observed was proven by its cast animation (a cast, never a melee blow); and it is a boss
+	// mechanic cast that deals nothing (the Leviathan's stun), scored at nothing expected.
+	private boolean attackObservedFromCast;
+	private boolean attackIsMechanic;
 	// The figures as they stood when the attack was seen, or on the tick before a switch since it was thrown (T-065). The
 	// per-tick snapshot is written at GameTick, after any switch made during it, and a projectile surfaces two ticks after
 	// its throw, by when the weapon that threw it may be gone.
@@ -2007,6 +2019,15 @@ public class PvmPerformancePlugin extends Plugin
 			.add(attackThrownOn(startTick(projectile), lands, npc.getId(), projectileBookedTick(client.getTickCount())));
 		debug.log("projectile %d taken as mine, aimed at npc %d (index %d), lands tick %d",
 			projectile.getId(), npc.getId(), npc.getIndex(), lands);
+		// A projectile is never a spell that has none (T-066): a shadow spell clicked at a boss it stuns and still in hand
+		// is not what this is, whatever the cast animation did. The bow's next shot was scored as the Shadow Rush before it.
+		final Spell manual = combatCalc.recentManualCast();
+		if (manual != null && stunsWith(npc, manual))
+		{
+			debug.log("MANUAL CAST %s dropped: projectile %d is the weapon's, the spell has none", manual.getDisplayName(),
+				projectile.getId());
+			combatCalc.dropManualCast();
+		}
 		recordAttackObserved(true, npc);
 		// Not always the tick the event surfaces on: the start cycle says when the projectile was fired, which for a slow one
 		// can be a tick earlier.
@@ -2654,6 +2675,19 @@ public class PvmPerformancePlugin extends Plugin
 		// (T-065); otherwise the tick the attack left on, as before.
 		final boolean beforeSwitch = attackFiguresTick != Integer.MIN_VALUE;
 		final int figuresTick = beforeSwitch ? attackFiguresTick : attackOriginTick;
+		if (attackIsMechanic)
+		{
+			// A boss mechanic cast deals nothing (T-066: the Leviathan's stun), so nothing is expected of it and nothing waits
+			// for it to land. It still went out: the attempt and its cooldown are counted, which is what uptime reads.
+			debug.log("  scored as a stun: nothing expected, it deals no damage");
+			fight.recordExpected(0, 0, 0, 0);
+			session.recordExpected(0, 0, 0);
+			attackObservedNpcId = -1;
+			attackObservedAccuracy = -1;
+			attackObservedAverageHit = -1;
+			attackObservedVariance = -1;
+			return;
+		}
 		int maxHit = expectedMaxHit;
 		double accuracy = expectedAccuracy;
 		double averageHit = expectedAverageHit;
@@ -3206,16 +3240,11 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
-		// A shadow spell cast at a boss it stuns (T-057: the Leviathan), from the ancient cast animation and the manual
-		// cast the menu named; the stun starts when the spell lands.
-		if (me.getAnimation() == AnimationID.ZAROS_CASTING || me.getAnimation() == AnimationID.ZAROS_VERTICAL_CASTING)
+		// A spell clicked onto an NPC going out (T-066), from the ancient cast animation and the manual cast the menu named.
+		// A shadow spell at a boss it stuns (T-057: the Leviathan) starts the stun when it lands.
+		if (onManualCast(me.getAnimation()))
 		{
-			final NPC castAt = castTarget();
-			final Spell cast = combatCalc.recentManualCast();
-			if (castAt != null && cast != null && damageModifiers.hasModifiers(castAt))
-			{
-				damageModifiers.onPlayerCast(castAt, cast, client.getTickCount() + magicHitDelay(castDistance(castAt)));
-			}
+			return;
 		}
 		if (!combatCalc.castLandsWithoutProjectile()
 			|| client.getTickCount() < lastAttackSeenTick + combatCalc.attackSpeedTicks())
@@ -3236,12 +3265,119 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
+		bookCast(target, false);
+	}
+
+	/**
+	 * A spell clicked onto an NPC, going out as its cast animation plays (T-066).
+	 * Traced once a click whatever the animation, so a log says which of the
+	 * animation, the target and the boss is missing when nothing happens. A cast
+	 * with no projectile is booked here, since nothing else will book it: the
+	 * ancient area spells, and a shadow spell at a boss it stuns, which deals
+	 * nothing. The stun opens from the same cast, timed from its landing.
+	 *
+	 * @return whether the cast was booked, so nothing else books it again
+	 */
+	private boolean onManualCast(int animation)
+	{
+		final Spell manual = combatCalc.recentManualCast();
+		if (manual == null)
+		{
+			return false;
+		}
+		final boolean castAnimation = isAncientCast(animation, manual);
+		final NPC castAt = castTarget();
+		final boolean stuns = stunsWith(castAt, manual);
+		if (castAnimation || manualCastTraced != combatCalc.recentManualCastTick())
+		{
+			manualCastTraced = combatCalc.recentManualCastTick();
+			debug.log("MANUAL CAST %s clicked on %d: anim %d (%s), at %s%s", manual.getDisplayName(),
+				combatCalc.recentManualCastTick(), animation, castAnimation ? "its cast" : "not an ancient cast",
+				castAt == null ? "nothing" : String.format("%s (npc %d, index %d)", castAt.getName(), castAt.getId(),
+					castAt.getIndex()),
+				stuns ? ", which it stuns" : damageModifiers.hasModifiers(castAt) ? ", a boss with modifiers it doesn't stun" : "");
+		}
+		if (!castAnimation || castAt == null)
+		{
+			return false;
+		}
+		if (damageModifiers.hasModifiers(castAt))
+		{
+			damageModifiers.onPlayerCast(castAt, manual, client.getTickCount() + magicHitDelay(castDistance(castAt)));
+		}
+		if (!booksFromAnimation(manual, stuns) || lastCastBookedTick == client.getTickCount())
+		{
+			// One with a projectile is booked from it, which spends the click.
+			return false;
+		}
+		return bookCast(castAt, isMechanicCast(manual, stuns));
+	}
+
+	/** Whether this animation is a manual cast of {@code manual} going out (T-066): an ancient spell's cast animation. */
+	static boolean isAncientCast(int animation, Spell manual)
+	{
+		return manual != null && manual.getSpellbook() == Spellbook.ANCIENT && ANCIENT_CAST_ANIMATIONS.contains(animation);
+	}
+
+	/**
+	 * Whether a manual cast is booked from its animation (T-066): one with no
+	 * projectile to book it from. The ancient area spells, as the autocast route
+	 * books them, and a shadow spell at a boss it stuns.
+	 */
+	static boolean booksFromAnimation(Spell manual, boolean stuns)
+	{
+		return manual != null && (manual.landsWithoutProjectile() || stuns);
+	}
+
+	/**
+	 * Whether a manual cast is a boss mechanic that deals nothing (T-066): a
+	 * shadow rush or blitz at a boss it stuns. Eric's Leviathan logs of
+	 * 2026-10-28: nine Shadow Rush casts, each paying its 31 Magic and no damage,
+	 * with no splat and no projectile. The blitz is taken to be the same (a
+	 * guess); the burst and barrage are booked as the area spells they are.
+	 */
+	static boolean isMechanicCast(Spell spell, boolean stuns)
+	{
+		return stuns && spell != null && !spell.landsWithoutProjectile();
+	}
+
+	/** Whether this spell starts one of this npc's damage-modifier states (T-057's stun). */
+	private boolean stunsWith(NPC npc, Spell spell)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		return npc != null && rules != null && startsAState(rules.forNpc(npc.getId()), spell);
+	}
+
+	static boolean startsAState(BossRules.Boss boss, Spell spell)
+	{
+		if (boss == null || spell == null || boss.damageModifiers == null || boss.damageModifiers.states == null)
+		{
+			return false;
+		}
+		for (BossRules.StateRule state : boss.damageModifiers.states)
+		{
+			if (state.startOnPlayerSpell != null && state.startOnPlayerSpell.contains(spell.name()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Books a cast seen from its animation. A mechanic cast deals nothing, so
+	 * nothing waits for it to land.
+	 *
+	 * @return whether it was booked: not where the target cannot be fought
+	 */
+	private boolean bookCast(NPC target, boolean mechanic)
+	{
 		final long now = System.currentTimeMillis();
 		if (current == null || current.isEnded() || current.getTargetIndex() != target.getIndex())
 		{
 			if (!isFightable(target))
 			{
-				return;
+				return false;
 			}
 			startFight(target, now);
 		}
@@ -3250,8 +3386,14 @@ public class PvmPerformancePlugin extends Plugin
 		// every cast read as a splash - the gauntlets armed on hits and expected damage counted at the cast.
 		final int distance = castDistance(target);
 		final int due = client.getTickCount() + magicHitDelay(distance);
-		castsAwaiting.add(new PendingCast(target.getIndex(), due));
+		if (!mechanic)
+		{
+			castsAwaiting.add(new PendingCast(target.getIndex(), due));
+		}
 		recordAttackObserved(false, target, CAST_BOOKING_LAG);
+		attackObservedFromCast = true;
+		attackIsMechanic = mechanic;
+		return true;
 	}
 
 	/**
@@ -3470,7 +3612,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// Before anything reads the style: which event proved this attack decides whether a queued cast can be what went
 			// out.
-			combatCalc.noteAttackKind(attackObservedFromProjectile);
+			combatCalc.noteAttackKind(attackObservedFromProjectile || attackObservedFromCast);
 			// The tick the attack went out on, which is the lag of whatever proved it and not a fixed offset. The prayer is read
 			// back from there, never live: read live it counts one switched on after the swing. The potion is taken as it stood
 			// when the attack went out, since drinking after it cannot have boosted it.
@@ -3493,10 +3635,13 @@ public class PvmPerformancePlugin extends Plugin
 			// Read on the attack tick: this is when the prayers and boosts are the ones the attack actually rolled with. And
 			// the target's id then, which is the phase the attack was rolled against (T-020).
 			final int targetId = targetIdOn(attacker, attackTick);
-			final boolean prayed = Boolean.TRUE.equals(prayerUpByTick.get(attackTick));
-			final boolean potted = attackObservedPotted;
-			final double boostShare = attackObservedBoostShare;
-			final boolean drained = attackObservedDrained;
+			// A boss mechanic cast (T-066: the Leviathan's stun) deals nothing, so no prayer, potion or drain could have made it
+			// better: it reads as set up right, and its setup pair below is left out.
+			final boolean mechanic = attackIsMechanic;
+			final boolean prayed = mechanic || Boolean.TRUE.equals(prayerUpByTick.get(attackTick));
+			final boolean potted = mechanic || attackObservedPotted;
+			final double boostShare = mechanic ? 1 : attackObservedBoostShare;
+			final boolean drained = !mechanic && attackObservedDrained;
 			// Worked out both ways while the loadout and boost are the ones that threw the attack. Which applies is decided by
 			// the prayer, and for a projectile that is not known until it lands.
 			final double ifPrayed = combatCalc.actualAverageHit(targetId, true);
@@ -3505,8 +3650,8 @@ public class PvmPerformancePlugin extends Plugin
 			// search is wrong and the worn one is the best known. Without this the ratio can exceed 100%, which is not a
 			// thing efficiency can be: it read 107% on an ice barrage where the ideal came back at 7.31 against an actual
 			// of 7.81. Clamped rather than left to show, and logged, because a clamp that keeps firing is a bug report.
-			final double bestSetup = combatCalc.idealAverageHit(targetId);
-			final double actualSetup = prayed ? ifPrayed : ifNot;
+			final double bestSetup = mechanic ? -1 : combatCalc.idealAverageHit(targetId);
+			final double actualSetup = mechanic ? 0 : prayed ? ifPrayed : ifNot;
 			final double idealSetup = Math.max(bestSetup, actualSetup);
 			if (bestSetup >= 0 && actualSetup > bestSetup)
 			{
@@ -3515,15 +3660,15 @@ public class PvmPerformancePlugin extends Plugin
 					targetId, bestSetup, actualSetup);
 			}
 			// What the missing boost cost this attack: the same attack at full boost, prayer and gear as they were (T-010).
-			final double boosted = combatCalc.boostedAverageHit(targetId, prayed);
+			final double boosted = mechanic ? -1 : combatCalc.boostedAverageHit(targetId, prayed);
 			final double boostCost = actualSetup >= 0 && boosted >= 0 ? Math.max(0, boosted - actualSetup) : 0;
 			// Read from the tick the attack went out on, never live: by now the gear may be someone else's. Absent means never
 			// sampled, which is not evidence of a missed switch, so it reads as clean.
 			// The tick before a switch since the throw, if there was one (T-065): the attack's own tick already shows a swap
 			// made on it, which it was not thrown with.
 			final CombatCalc.SwitchCheck switchCheck = switchedByTick.get(heldTick(attackSwitchTick, attackTick));
-			final boolean switched = switchCheck == null || !switchCheck.isMissed();
-			final double switchCost = switchCheck == null ? 0 : switchCheck.cost();
+			final boolean switched = mechanic || switchCheck == null || !switchCheck.isMissed();
+			final double switchCost = mechanic || switchCheck == null ? 0 : switchCheck.cost();
 			if (!switched && attacker.isScored())
 			{
 				debug.log("SWITCH MISSED on attack thrown tick %d: %s", attackTick, switchCheck.describe());
@@ -3577,10 +3722,11 @@ public class PvmPerformancePlugin extends Plugin
 				attacker.isScored(), actualSetup, idealSetup, combatCalc.describeBossModifiers(targetLiveId >= 0
 					? targetLiveId : targetId));
 			lastAttackFromProjectile = attackObservedFromProjectile;
-			if (attackObservedFromProjectile)
+			if (attackObservedFromProjectile || attackObservedFromCast)
 			{
 				// Only a cast can spend a cast. A melee blow landing on the tick the spell was clicked would otherwise consume it,
-				// and the cast a tick later then read as the weapon.
+				// and the cast a tick later then read as the weapon. A cast seen from its animation spends it too (T-066): it was
+				// left in hand, and the bow's next shot was taken as the spell.
 				combatCalc.noteAttackThrown();
 			}
 			// Last: back to describing the loadout rather than one past attack, so the overlay goes on showing a queued cast
@@ -3769,6 +3915,8 @@ public class PvmPerformancePlugin extends Plugin
 		lastAttackSeenTick = client.getTickCount();
 		attackObservedTick = client.getTickCount();
 		attackObservedFromProjectile = fromProjectile;
+		attackObservedFromCast = false;
+		attackIsMechanic = false;
 		attackOriginTick = client.getTickCount();
 		attackObservedNpcId = npcId;
 		attackObservedMaxHit = combatCalc.maxHit(npcId);

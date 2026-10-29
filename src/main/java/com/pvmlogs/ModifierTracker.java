@@ -28,6 +28,8 @@ final class ModifierTracker
 		final int start;
 		/** The first tick it is no longer open; Integer.MAX_VALUE while nothing has closed it. */
 		int end;
+		/** Closed by an event, whose line was logged then: running out on the same tick is not logged again (T-066). */
+		boolean closed;
 
 		Window(String state, int start, int end)
 		{
@@ -112,6 +114,7 @@ final class ModifierTracker
 			return;
 		}
 		w.end = tick;
+		w.closed = true;
 		log.accept(String.format("MOD %s: %s off at tick %d (%s, after %d ticks)", b.name, s.name, tick, signal,
 			tick - w.start));
 	}
@@ -207,7 +210,7 @@ final class ModifierTracker
 				final Window w = it.next();
 				if (w.end != Integer.MAX_VALUE && now >= w.end)
 				{
-					if (w.end == now)
+					if (w.end == now && !w.closed)
 					{
 						log.accept(String.format("MOD %s: %s off at tick %d (ran out after %d ticks)", b.name, w.state,
 							now, now - w.start));
