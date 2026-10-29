@@ -13,8 +13,8 @@ import java.util.List;
 import org.junit.Test;
 
 /**
- * Eric's tweaks of 2026-10-29: History's boss list says {@code 13 kills · 1:58}, the kill rows' times are on the
- * right under the header's {@code time}, in one column, and a damage source's icon has no box behind it, so its share bar shows through.
+ * Eric's tweaks of 2026-10-29: History's boss list says {@code 13 kills · 1:58}, the kill rows' dates are
+ * right-aligned against the luck chip, and a damage source's icon has no box behind it, so its share bar shows through.
  */
 public class SidePanelHistoryTweaksTest
 {
@@ -61,31 +61,15 @@ public class SidePanelHistoryTweaksTest
 		return javax.swing.SwingUtilities.convertPoint(t.getParent(), t.getLocation(), root).x;
 	}
 
-	@Test
-	public void killTimesAreOnTheRightInOneColumn()
+	/** Where {@code t}'s drawn pixels start and end, in its own coordinates. */
+	private static int[] drawn(SidePanelText t)
 	{
-		final SidePanelKillRow wide = row("2:16", "bottom 14%", "84%");
-		final SidePanelKillRow narrow = row("1:57", "average", "100%");
-		final List<SidePanelText> w = texts(wide);
-		final List<SidePanelText> n = texts(narrow);
-		// The date on the left, then under "time · luck · execution": the time, the chip, the execution.
-		assertEquals("12:40 pm", w.get(0).getText());
-		assertEquals("2:16", w.get(1).getText());
-		assertEquals("84%", w.get(2).getText());
-		assertEquals(x(w.get(0), wide), x(n.get(0), narrow));
-		assertTrue(x(w.get(1), wide) > x(w.get(0), wide) + w.get(0).getWidth());
-		// Each in its column whatever its width, so the rows line up: the times end in line, as do the executions.
-		assertEquals(x(w.get(1), wide) + w.get(1).getWidth(), x(n.get(1), narrow) + n.get(1).getWidth());
-		assertEquals(x(w.get(2), wide) + w.get(2).getWidth(), x(n.get(2), narrow) + n.get(2).getWidth());
-		assertEquals(x(w.get(1), wide), x(n.get(1), narrow));
-		// And a time is drawn against its column's right edge.
-		final SidePanelText narrowClock = n.get(1);
-		final BufferedImage img = new BufferedImage(narrowClock.getWidth(), narrowClock.getHeight(), BufferedImage.TYPE_INT_ARGB);
+		final BufferedImage img = new BufferedImage(t.getWidth(), t.getHeight(), BufferedImage.TYPE_INT_ARGB);
 		final Graphics2D g = img.createGraphics();
-		narrowClock.paint(g);
+		t.paint(g);
 		g.dispose();
-		int last = -1;
 		int first = -1;
+		int last = -1;
 		for (int px = 0; px < img.getWidth(); px++)
 		{
 			for (int py = 0; py < img.getHeight(); py++)
@@ -97,7 +81,29 @@ public class SidePanelHistoryTweaksTest
 				}
 			}
 		}
-		assertTrue("drawn at " + first + ".." + last + " of " + img.getWidth(), last >= img.getWidth() - 3 && first > 0);
+		return new int[]{first, last};
+	}
+
+	@Test
+	public void theKillTimeOnTheLeftAndTheDateAgainstTheLuckChip()
+	{
+		final SidePanelKillRow wide = row("2:16", "bottom 14%", "84%");
+		final SidePanelKillRow narrow = row("1:57", "average", "100%");
+		final List<SidePanelText> w = texts(wide);
+		final List<SidePanelText> n = texts(narrow);
+		// The time in bold on the left, then the date, the chip and the execution.
+		assertEquals("2:16", w.get(0).getText());
+		assertEquals("12:40 pm", w.get(1).getText());
+		assertEquals("84%", w.get(2).getText());
+		assertEquals(x(w.get(0), wide), x(n.get(0), narrow));
+		assertTrue(drawn(w.get(0))[0] <= 3);
+		// The date right-aligned and ending in line on every row, whatever the chip's or the execution's width.
+		assertEquals(x(w.get(1), wide) + w.get(1).getWidth(), x(n.get(1), narrow) + n.get(1).getWidth());
+		assertEquals(x(w.get(2), wide) + w.get(2).getWidth(), x(n.get(2), narrow) + n.get(2).getWidth());
+		final int[] d = drawn(n.get(1));
+		assertTrue("drawn at " + d[0] + ".." + d[1] + " of " + n.get(1).getWidth(), d[1] >= n.get(1).getWidth() - 3
+			&& d[0] > 0);
+		assertTrue(x(n.get(1), narrow) + d[0] > SidePanelStyle.CONTENT_WIDTH / 4);
 	}
 
 	@Test
@@ -108,11 +114,8 @@ public class SidePanelHistoryTweaksTest
 		final SidePanelKillRow r = SidePanelKillRow.history(k, null);
 		r.setSize(SidePanelStyle.CONTENT_WIDTH, SidePanelKillRow.rowHeight());
 		SidePanelPictures.layout(r);
-		final SidePanelText date = texts(r).get(0);
-		final BufferedImage img = new BufferedImage(date.getWidth(), date.getHeight(), BufferedImage.TYPE_INT_ARGB);
-		final Graphics2D g = img.createGraphics();
-		date.paint(g);
-		g.dispose();
+		final SidePanelText date = texts(r).get(1);
+		drawn(date);
 		assertTrue(date.lastShown(), date.lastShown().equals("26 Oct 9:40 pm") || date.lastShown().equals("26 Oct"));
 	}
 
@@ -127,7 +130,7 @@ public class SidePanelHistoryTweaksTest
 	@Test
 	public void theColumnsFollowTheTextSettings()
 	{
-		// Built with the RuneScape fonts, then Smooth: the columns are measured again, so the rows still line up.
+		// Built with the RuneScape fonts, then Smooth: the columns are measured again, so the dates still end in line.
 		final SidePanelKillRow wide = row("2:16", "bottom 14%", "84%");
 		final SidePanelKillRow narrow = row("1:57", "average", "93%");
 		SidePanelStyle.setText(false, true);
@@ -143,7 +146,6 @@ public class SidePanelHistoryTweaksTest
 			}
 			final List<SidePanelText> w = texts(wide);
 			final List<SidePanelText> n = texts(narrow);
-			assertEquals(x(w.get(1), wide), x(n.get(1), narrow));
 			assertEquals(x(w.get(1), wide) + w.get(1).getWidth(), x(n.get(1), narrow) + n.get(1).getWidth());
 		}
 		finally

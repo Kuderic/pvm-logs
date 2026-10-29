@@ -12,7 +12,7 @@ import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 
 /**
- * A kill in a list (spec 3.2): the date on the left; the clock in bold, the
+ * A kill in a list (spec 3.2): the clock in bold on the left; the date, the
  * luck chip and execution on the right. Selectable: hover and selected are {@code #3C3C3C},
  * and the selected row has a 2 px Accent edge on its left.
  */
@@ -24,24 +24,17 @@ final class SidePanelKillRow extends JPanel
 	private boolean hover;
 
 	/**
-	 * A History row: the date on the left; the kill's time, the luck chip and the execution on the right, under the
-	 * header's {@code time · luck · execution} (Eric, 2026-10-29). Each of the three is right-aligned in a column of
-	 * its own, so the rows line up. {@code onClick} null for none.
+	 * A History row: the kill's time in bold on the left; the date right-aligned against the luck chip, then the chip
+	 * and the execution, each in a fixed column so the rows line up (Eric, 2026-10-29). {@code onClick} null for none.
 	 */
 	static SidePanelKillRow history(SidePanelHistory.KillRow row, Runnable onClick)
 	{
 		final SidePanelKillRow r = new SidePanelKillRow(onClick);
-		final SidePanelText date = new SidePanelText(Text.small(row.date, SidePanelStyle.SECONDARY), false);
+		r.add(new SidePanelText(Text.title(row.clock, SidePanelStyle.VALUE), false), BorderLayout.WEST);
+		final SidePanelText date = new SidePanelText(Text.small(row.date, SidePanelStyle.SECONDARY), true);
 		date.setShort(dateShort(row.date));
 		r.add(date, BorderLayout.CENTER);
-		final JPanel right = new JPanel(new BorderLayout(6, 0));
-		right.setOpaque(false);
-		final SidePanelText clock = new SidePanelText(Text.title(row.clock, SidePanelStyle.VALUE), true);
-		// Measured as its shape with every digit a 0, so 2:16 and 1:57 take exactly the width 0:00 takes.
-		right.add(new Column(clock, () -> SidePanelText.reservedWidth(SidePanelStyle.metrics(clock, clock.getFont()),
-			longer("0:00", row.clock.replaceAll("[0-9]", "0")))), BorderLayout.WEST);
-		right.add(chipAndExecution(row), BorderLayout.CENTER);
-		r.add(right, BorderLayout.EAST);
+		r.add(chipAndExecution(row), BorderLayout.EAST);
 		return r;
 	}
 
@@ -62,11 +55,6 @@ final class SidePanelKillRow extends JPanel
 			return words[0];
 		}
 		return null;
-	}
-
-	private static String longer(String a, String b)
-	{
-		return b.length() > a.length() ? b : a;
 	}
 
 	/** The widest chip a column keeps room for: a quartile, or seconds for a kill with no percentile. */
