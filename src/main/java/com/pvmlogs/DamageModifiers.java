@@ -1,7 +1,10 @@
 package com.pvmlogs;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
@@ -27,13 +30,15 @@ class DamageModifiers
 	private final Client client;
 	private final MonsterStatsProvider monsters;
 	private final ModifierTracker tracker;
+	private final Consumer<String> log;
 
 	@Inject
 	DamageModifiers(Client client, MonsterStatsProvider monsters, DebugLog debug)
 	{
 		this.client = client;
 		this.monsters = monsters;
-		this.tracker = new ModifierTracker(line -> debug.log("%s", line));
+		this.log = line -> debug.log("%s", line);
+		this.tracker = new ModifierTracker(log);
 		this.tracker.setPresence(this::present);
 	}
 
@@ -151,6 +156,7 @@ class DamageModifiers
 	void clear()
 	{
 		tracker.clear();
+		insideSeen.clear();
 	}
 
 	/**
@@ -206,14 +212,68 @@ class DamageModifiers
 		return fx * (px - cx) + fy * (py - cy) < 0;
 	}
 
-	// Whether the player stands within range of an npc of this id: its footprint widened by the range, in tiles.
+	/**
+	 * Whether the player is inside the range of an npc of this id for an attack
+	 * going out now: inside on this tick and the tick before (T-079). Judged on one
+	 * tick, 9 of the 52 enrages in Eric's logs of 2026-10-28/29 had a first
+	 * "pathfinder" shot that missed or hit under its 20% minimum: the player
+	 * stepping in, or the pathfinder just spawned, on the tick the shot went out.
+	 * The extra tick is a guess from that, which the MOD lines' tiles will settle.
+	 */
 	private boolean inside(int npcId, int range)
+	{
+		final int now = client.getTickCount();
+		final long key = ((long) npcId << 8) | (range & 0xFF);
+		final int[] seen = insideSeen.computeIfAbsent(key, k -> new int[]{NOT_INSIDE, Integer.MIN_VALUE});
+		if (seen[1] != now)
+		{
+			final String where = insideNow(npcId, range);
+			final boolean in = where != null;
+			final boolean was = seen[0] != NOT_INSIDE;
+			seen[0] = since(seen[0], seen[1], in, now);
+			if (in != was)
+			{
+				log.accept(String.format("MOD %s npc %d (range %d) at tick %d: %s", in ? "inside" : "outside", npcId, range,
+					now, in ? where : describeOutside(npcId)));
+			}
+			seen[1] = now;
+		}
+		return dwelt(seen[0], now);
+	}
+
+	/**
+	 * The tick the player has been inside since, after asking on {@code now}:
+	 * {@link #NOT_INSIDE} when outside, kept when inside and last asked on the tick
+	 * before, else {@code now}. A tick not asked about is not known to have been
+	 * inside (it is asked on every tick a fight is shown).
+	 */
+	static int since(int since, int lastAsked, boolean in, int now)
+	{
+		if (!in)
+		{
+			return NOT_INSIDE;
+		}
+		return since != NOT_INSIDE && lastAsked == now - 1 ? since : now;
+	}
+
+	/** Whether the player, inside since {@code since} ({@link #NOT_INSIDE} for not), counts as inside on {@code now}. */
+	static boolean dwelt(int since, int now)
+	{
+		return since != NOT_INSIDE && since <= now - 1;
+	}
+
+	static final int NOT_INSIDE = Integer.MIN_VALUE;
+	/** Per npc id and range: the tick the player has been inside since (or NOT_INSIDE), and the tick last asked. */
+	private final Map<Long, int[]> insideSeen = new HashMap<>();
+
+	// Where the player stands against the npc's footprint if within range of one of this id, for the MOD line; null if not.
+	private String insideNow(int npcId, int range)
 	{
 		final Player me = client.getLocalPlayer();
 		final WorldPoint at = me == null ? null : me.getWorldLocation();
 		if (at == null || client.getTopLevelWorldView() == null)
 		{
-			return false;
+			return null;
 		}
 		for (NPC npc : client.getTopLevelWorldView().npcs())
 		{
@@ -225,10 +285,35 @@ class DamageModifiers
 			if (area != null && withinRange(area.getX(), area.getY(), area.getWidth(), area.getHeight(), area.getPlane(),
 				at.getX(), at.getY(), at.getPlane(), range))
 			{
-				return true;
+				return tiles(at, area);
 			}
 		}
-		return false;
+		return null;
+	}
+
+	// The player's tile and the npc's footprint, for the MOD line when the player has stepped out.
+	private String describeOutside(int npcId)
+	{
+		final Player me = client.getLocalPlayer();
+		final WorldPoint at = me == null ? null : me.getWorldLocation();
+		if (at == null || client.getTopLevelWorldView() == null)
+		{
+			return "you not placed";
+		}
+		for (NPC npc : client.getTopLevelWorldView().npcs())
+		{
+			if (npc != null && npc.getId() == npcId && npc.getWorldArea() != null)
+			{
+				return tiles(at, npc.getWorldArea());
+			}
+		}
+		return String.format("you at %d,%d, none in the scene", at.getX(), at.getY());
+	}
+
+	private static String tiles(WorldPoint at, WorldArea area)
+	{
+		return String.format("you at %d,%d, it at %d,%d size %dx%d", at.getX(), at.getY(), area.getX(), area.getY(),
+			area.getWidth(), area.getHeight());
 	}
 
 	/** Whether a tile is within {@code range} tiles (Chebyshev) of an area on the same plane. */

@@ -442,14 +442,43 @@ final class ModifierTracker
 		return damage(mods, max, max, true);
 	}
 
+	/** How many damage rolls the attack takes the best of (T-079): the most any modifier asks, one by default. */
+	static int rolls(List<BossRules.ModifierRule> mods)
+	{
+		int n = 1;
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.rolls != null && m.rolls > n)
+			{
+				n = m.rolls;
+			}
+		}
+		return n;
+	}
+
+	/**
+	 * The chance the best of {@code rolls} rolls, each uniform from 0 to {@code max},
+	 * comes to {@code r}: {@code ((r+1)^n - r^n) / (max+1)^n}; {@code 1/(max+1)} for one.
+	 */
+	static double rollChance(int r, int max, int rolls)
+	{
+		if (rolls <= 1)
+		{
+			return 1.0 / (max + 1);
+		}
+		return (Math.pow(r + 1, rolls) - Math.pow(r, rolls)) / Math.pow(max + 1, rolls);
+	}
+
 	/**
 	 * One attack's damage as moments after the modifiers: each hitsplat a roll
-	 * from 0 to its max at this accuracy, rolled independently, walked value by
-	 * value so the rounding is the game's (floor of each hit, not a scaled mean).
-	 * The accuracy is the modified one ({@link #accuracy}).
+	 * from 0 to its max at this accuracy (the best of {@link #rolls} where a
+	 * modifier says so), rolled independently, walked value by value so the
+	 * rounding is the game's (floor of each hit, not a scaled mean). The accuracy
+	 * is the modified one ({@link #accuracy}).
 	 */
 	static DamageMoments moments(List<BossRules.ModifierRule> mods, int[] maxima, double accuracy, int cap)
 	{
+		final int rolls = rolls(mods);
 		double mean = 0;
 		double variance = 0;
 		for (int max : maxima)
@@ -458,12 +487,12 @@ final class ModifierTracker
 			{
 				continue;
 			}
-			final double each = accuracy / (max + 1);
 			final double missValue = Math.min(cap, damage(mods, 0, max, false));
 			double m = (1 - accuracy) * missValue;
 			double second = (1 - accuracy) * missValue * missValue;
 			for (int r = 0; r <= max; r++)
 			{
+				final double each = accuracy * rollChance(r, max, rolls);
 				final double v = Math.min(cap, damage(mods, r, max, true));
 				m += each * v;
 				second += each * v * v;
