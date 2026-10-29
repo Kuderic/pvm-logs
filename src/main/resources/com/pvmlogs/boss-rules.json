@@ -291,7 +291,15 @@
       "defenceDrain": {
         "regenTicks": 5,
         "source": "OSRS Wiki, read 2026-10-28: Zulrah/Strategies: 'Drains to Zulrah's defence carry over between phases'; User:Orion/Regen: a level every 5 ticks (paused through phase changes, not modelled)."
-      }
+      },
+      "damageModifiers": {
+        "states": [
+          {"name": "diving", "startOnBossAnim": [5072], "endOnBossAnim": [5073], "maxTicks": 10, "source": "T-084: Zulrah sinking (SNAKEBOSS_SINKFAST, 5072) to its emerging (SNAKEBOSS_EMERGEFAST, 5073), when it can't be attacked. Eric's log of 2026-10-29 06:12: 5072 then 5073 three ticks later at each of 7 dives where both show, the form changing on the emerge's tick. No damage modifier rides on it: it is the window for its uptime allowance."}
+        ]
+      },
+      "uptimeAllowances": [
+        {"state": "diving", "from": "open", "maxTicks": 8, "afterTicks": 6, "source": "T-084, PROPOSED, for Eric to approve. Zulrah's dives between forms, and getting into position and switching gear for the next form after it emerges. Measured over the same log's 26 counted dives in 5 Zulrah fights (each placed at its emerge: the form change, or 5073 where the form stays; the dive 3 ticks before), idle ticks from the dive to 6 after the emerge: median 6.5, 75th percentile 8, 90th 8.5, most 10. The cap is the 75th percentile."}
+      ]
     },
     {
       "name": "Vorkath",

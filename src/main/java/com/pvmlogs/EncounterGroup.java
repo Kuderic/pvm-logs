@@ -18,6 +18,11 @@ final class EncounterGroup
 	private static final Set<Integer> ADDS = buildAdds();
 	private static final Map<String, DeathClose> CLOSES_ON_DEATH = buildClosesOnDeath();
 	private static final Map<String, Falls> FALLS = buildFalls();
+	// Groups whose adds are swatted in passing while the boss fight goes on (T-084): a hit on one, or its death, never ends
+	// the boss's fight. Not the Sire's, Kraken's or Hespori's, whose adds are the phase the boss waits through and get their
+	// own fights in the room.
+	private static final Set<String> ADDS_KEEP_BOSS_FIGHT = Collections.unmodifiableSet(new HashSet<>(
+		Collections.singletonList("Zulrah")));
 
 	private EncounterGroup()
 	{
@@ -137,6 +142,19 @@ final class EncounterGroup
 		final Falls rule = falls(fallenId);
 		return rule != null && rule.kind == FallKind.ONE_BOSS && rule.boss.contains(fallenId)
 			&& !UNSCORED.contains(fallenId);
+	}
+
+	/**
+	 * Whether an attack on, or a splat on, {@code addId} leaves the fight open on
+	 * {@code bossId} as it is (T-084): an unscored add of a group whose adds are
+	 * swatted in passing, Zulrah's snakelings. Before, hitting one ended Zulrah's
+	 * fight, and each Zulrah fight after began at full hitpoints.
+	 */
+	static boolean addKeepsBossFight(int addId, int bossId)
+	{
+		final String group = GROUPS.get(addId);
+		return group != null && ADDS_KEEP_BOSS_FIGHT.contains(group) && group.equals(GROUPS.get(bossId))
+			&& UNSCORED.contains(addId) && !UNSCORED.contains(bossId);
 	}
 
 	/** Every group's name, for the audit test. */
@@ -347,6 +365,10 @@ final class EncounterGroup
 		put(groups, "Kraken",
 			NpcID.SLAYER_KRAKEN_BOSS, NpcID.SLAYER_KRAKEN_BOSS_WHIRLPOOL,
 			NpcID.SLAYER_KRAKEN_BOSS_TENTACLE, NpcID.SLAYER_KRAKEN_BOSS_TENTACLE_WHIRLPOOL);
+		// Zulrah in its three forms (T-084), and its snakelings, alive and dying.
+		put(groups, "Zulrah",
+			NpcID.SNAKEBOSS_BOSS_RANGED, NpcID.SNAKEBOSS_BOSS_MELEE, NpcID.SNAKEBOSS_BOSS_MAGIC,
+			NpcID.SNAKEBOSS_MINION_MELEE, NpcID.SNAKEBOSS_MINION_MAGIC, NpcID.SNAKEBOSS_MINION_DYING);
 		put(groups, "The Hueycoatl",
 			NpcID.HUEY_HEAD, NpcID.HUEY_HEAD_INVULNERABLE, NpcID.HUEY_HEAD_DEFEATED,
 			NpcID.HUEY_HEAD_ENRAGED, NpcID.HUEY_TAIL, NpcID.HUEY_TAIL_BROKEN,
@@ -457,6 +479,8 @@ final class EncounterGroup
 			NpcID.SLAYER_KRAKEN_BOSS_TENTACLE, NpcID.SLAYER_KRAKEN_BOSS_TENTACLE_WHIRLPOOL,
 			// The Royal Titans' elementals.
 			NpcID.RT_SUMMON_ELEMENTAL_FIRE, NpcID.RT_SUMMON_ELEMENTAL_ICE,
+			// Zulrah's snakelings (T-084).
+			NpcID.SNAKEBOSS_MINION_MELEE, NpcID.SNAKEBOSS_MINION_MAGIC, NpcID.SNAKEBOSS_MINION_DYING,
 			// Hespori's flowers.
 			NpcID.HESPORI_HEALER_ACTIVE, NpcID.HESPORI_HEALER_INACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE, NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
@@ -485,6 +509,9 @@ final class EncounterGroup
 			// and an opposing wall or Elemental Blast destroys one outright (wiki, Royal Titans/Strategies). Scored, they would
 			// read as luck the way the Sire's respiratory systems did. The time on them counts.
 			NpcID.RT_SUMMON_ELEMENTAL_FIRE, NpcID.RT_SUMMON_ELEMENTAL_ICE,
+			// Zulrah's snakelings (T-084): one hitpoint each, so any hit kills one and its "luck" would be noise; the time on
+			// them is Zulrah's.
+			NpcID.SNAKEBOSS_MINION_MELEE, NpcID.SNAKEBOSS_MINION_MAGIC, NpcID.SNAKEBOSS_MINION_DYING,
 			// The Judge is Yama's own add. Grouped so killing it does not reset what is on screen, and unscored so it does not
 			// lend its figures to his. Ignoring it outright would have been worse than either: with nothing tracking the Judge,
 			// the time spent killing its 400 hitpoints would have been booked against Yama as ticks lost.
@@ -663,6 +690,8 @@ final class EncounterGroup
 		separate(rules, "Grotesque Guardians");
 		separate(rules, "The Royal Titans");
 		oneBoss(rules, "Kraken", NpcID.SLAYER_KRAKEN_BOSS, NpcID.SLAYER_KRAKEN_BOSS_WHIRLPOOL);
+		// Zulrah's forms are one boss; a snakeling's death ends nothing but a fight on itself (T-084).
+		oneBoss(rules, "Zulrah", NpcID.SNAKEBOSS_BOSS_RANGED, NpcID.SNAKEBOSS_BOSS_MELEE, NpcID.SNAKEBOSS_BOSS_MAGIC);
 		// One snake: the head, the tail and the body segments are all it.
 		oneBossAll(rules, "The Hueycoatl");
 		oneBoss(rules, "Abyssal Sire", NpcID.ABYSSALSIRE_SIRE_STASIS_SLEEPING, NpcID.ABYSSALSIRE_SIRE_STASIS_AWAKE,
