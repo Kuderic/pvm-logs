@@ -354,10 +354,12 @@ class PvmPerformancePanel extends PluginPanel
 		final Fight head = newest.hasNext() ? newest.next() : null;
 
 		final SessionTotals trip = plugin.getSession();
-		final List<Object> shape = Arrays.asList(fight, fight != null && fight.isEnded(), pre, room, raid, whole,
+		// T-068 part 2 (T-070): over by the overlay's rule, the room's, so an add's or one titan's death isn't the end.
+		final boolean over = PvmPerformanceOverlay.isOver(fight, display);
+		final List<Object> shape = Arrays.asList(fight, over, pre, room, raid, whole,
 			history.size(), head, trip.getStartMillis(), tab);
 		final boolean force = dirty;
-		final boolean fighting = fight != null && !fight.isEnded() && !pre;
+		final boolean fighting = fight != null && !over && !pre;
 		final boolean sameShape = shape.equals(lastShape);
 		if (!due(force, fighting, sameShape, config == null || config.panelLive(), ticks - builtAt))
 		{
@@ -492,7 +494,8 @@ class PvmPerformancePanel extends PluginPanel
 			in.kind = SidePanelModel.Kind.RAID;
 			SidePanelModel.fillRaid(in, raid);
 			charts(in, raid, FightTimeline.raid(raid, plugin.getTimelines()));
-			in.ended = fight.isEnded();
+			// As the overlay's raid view: over when the fight on show and its room are (T-070).
+			in.ended = PvmPerformanceOverlay.isOver(fight, display);
 			in.warning = plugin.getStatsWarning(fight);
 			// T-044: only an ended scope shows them, so they're looked up once it has.
 			if (in.ended)
@@ -511,7 +514,7 @@ class PvmPerformancePanel extends PluginPanel
 		in.version = version(room.getFights(), in.maxHp);
 		charts(in, room, FightTimeline.room(room, plugin.getTimelines()));
 		final boolean current = contains(room, fight);
-		in.ended = !current || fight.isEnded();
+		in.ended = roomEnded(room, fight);
 		in.killed = in.ended && room.isKilled();
 		if (!in.ended)
 		{
@@ -674,6 +677,17 @@ class PvmPerformancePanel extends PluginPanel
 			average = LedgerHistory.of(copy, room);
 			luckRemoved = average == null ? null : SidePanelModel.luckRemoved(copy, room);
 		}
+	}
+
+	/**
+	 * T-068 part 2 (T-067's finding D-3): whether the Fight tab shows the room after its fight. A room other than the
+	 * running fight's (one picked from the raid's list) is; the running fight's room is over only by T-070's rule, as
+	 * the overlay has it. A dead respiratory system or one titan down ends that fight, not the room: the panel stays
+	 * live, and the after-fight cards, "your average" and "luck removed" wait for the boss.
+	 */
+	static boolean roomEnded(Encounter room, Fight fight)
+	{
+		return !contains(room, fight) || PvmPerformanceOverlay.isOver(fight, room);
 	}
 
 	private static boolean contains(Encounter room, Fight fight)

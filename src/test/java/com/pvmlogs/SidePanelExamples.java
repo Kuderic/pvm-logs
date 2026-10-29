@@ -478,6 +478,58 @@ final class SidePanelExamples
 		return in;
 	}
 
+	/**
+	 * T-068 part 2: a Sire room with a respiratory system dead, read as the panel reads it: running, by T-070's rule.
+	 * {@code killed}: the Sire's death too.
+	 */
+	static SidePanelModel.Input sireRoom(boolean killed)
+	{
+		final Encounter room = new Encounter("Abyssal Sire", null, at(15, 0));
+		final Fight sire = sireFight(net.runelite.api.gameval.NpcID.ABYSSALSIRE_SIRE_STASIS_AWAKE, 1, 40);
+		sire.end(false, at(15, 1));
+		final Fight lung = sireFight(net.runelite.api.gameval.NpcID.ABYSSALSIRE_LUNG, 2, 12);
+		lung.end(true, at(15, 2));
+		room.add(sire);
+		room.add(lung);
+		Fight onShow = lung;
+		if (killed)
+		{
+			final Fight puppet = sireFight(net.runelite.api.gameval.NpcID.ABYSSALSIRE_SIRE_PUPPET, 1, 60);
+			room.add(puppet);
+			puppet.end(true, at(15, 4));
+			onShow = puppet;
+		}
+		final SidePanelModel.Input in = base();
+		in.kind = SidePanelModel.Kind.ROOM;
+		SidePanelModel.fillRoom(in, room);
+		in.ended = PvmPerformancePanel.roomEnded(room, onShow);
+		in.killed = in.ended && room.isKilled();
+		in.endMillis = in.ended ? at(15, 4) : 0;
+		return in;
+	}
+
+	private static Fight sireFight(int npcId, int index, int attacks)
+	{
+		final Fight f = new Fight(npcId == net.runelite.api.gameval.NpcID.ABYSSALSIRE_LUNG ? "Respiratory system"
+			: "Abyssal Sire", npcId, index, 400, at(15, 0), null, 0);
+		for (int i = 0; i < attacks; i++)
+		{
+			f.recordAttackMade(true, 1.0);
+			f.recordAttackResolved(true, true, 10, 10);
+			f.recordDamageDealt(9 + i % 7, at(15, 0), true);
+			f.recordExpected(30, 0.8, 11, 100);
+			f.recordTickSpent(true);
+			f.recordTickSpent(true);
+			f.recordTickSpent(true);
+			f.recordTickSpent(true);
+			if (i % 5 == 0)
+			{
+				f.recordHitTaken(8 + i % 9, false, at(15, 0));
+			}
+		}
+		return f;
+	}
+
 	// ---- T-063: damage over time by kind ----
 
 	/** A kill with this damage over time dealt and taken, by kind; the remainder is what has no kind. */
