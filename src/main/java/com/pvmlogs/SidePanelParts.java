@@ -412,6 +412,10 @@ final class SidePanelParts
 				g.setColor(SidePanelStyle.EATING);
 				g.fill(area);
 				break;
+			case MECHANICS:
+				g.setColor(SidePanelStyle.MECHANICS);
+				g.fill(area);
+				break;
 			case LUCK_SLOWER:
 				stripes(g, area, SidePanelStyle.COST_STRIPE_GROUND, SidePanelStyle.COST);
 				break;
@@ -686,6 +690,12 @@ final class SidePanelParts
 			setFont(SidePanelStyle.Type.SMALL.font());
 			revalidate();
 			repaint();
+		}
+
+		/** What it shows; for tests. */
+		java.util.List<Item> items()
+		{
+			return items;
 		}
 
 		void set(java.util.List<Item> newItems)

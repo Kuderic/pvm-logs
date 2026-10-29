@@ -108,6 +108,11 @@ public final class SidePanelPictures
 			write(out, "18a-sire-emberlight", scale, render(SidePanelExamples.sireEmberlight(), scale));
 			write(out, "18b-floor-not-reached", scale, render(SidePanelExamples.floorNotReached(), scale));
 			write(out, "18c-short-average", scale, render(SidePanelExamples.sireShortAverage(), scale));
+			// T-081: forced downtime at the Leviathan (details, the time budget, the tick strip); a boss without
+			// allowances and an old kill show nothing new.
+			write(out, "19a-leviathan-mechanics", scale, render(SidePanelExamples.leviathanKill(), scale));
+			write(out, "19b-no-allowances", scale, render(SidePanelExamples.dead(), scale));
+			write(out, "19c-old-kill", scale, renderHistory(true, scale));
 			write(out, "18d-at-its-floor-card", scale, card(SidePanelExamples.atItsFloor(), scale, "defence"));
 		}
 	}

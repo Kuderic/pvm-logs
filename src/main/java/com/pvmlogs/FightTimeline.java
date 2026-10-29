@@ -47,6 +47,8 @@ final class FightTimeline
 	static final byte EATING = 5;
 	/** A tick on an unscored fight, in a room's view. */
 	static final byte UNSCORED = 6;
+	/** An idle tick a boss's mechanic excused (T-074), drawn in its own neutral colour by the side panel (T-081). */
+	static final byte MECHANIC = 7;
 
 	enum Style
 	{
@@ -241,13 +243,13 @@ final class FightTimeline
 	}
 
 	/**
-	 * {@link Fight#recordTickMechanic}, when it counts (T-074): drawn as a
-	 * cooldown tick, neutral, until the side panel gives it a colour of its own.
+	 * {@link Fight#recordTickMechanic}, when it counts (T-074): a {@link #MECHANIC}
+	 * tick, which the side panel's strip draws in a neutral colour of its own (T-081).
 	 */
 	void tickMechanic()
 	{
 		final long t0 = PerfProbe.start(probe);
-		setState(clock.getAsInt(), COOLDOWN);
+		setState(clock.getAsInt(), MECHANIC);
 		mechanicTicks++;
 		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
 	}
