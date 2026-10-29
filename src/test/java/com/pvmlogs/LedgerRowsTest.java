@@ -537,9 +537,9 @@ public class LedgerRowsTest
 	public void theExpectedDpsSitsBesideTheAttackWithTheSpecsExpectedDamageUnder()
 	{
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
-		l.attack = "Purging staff (Fire Surge)";
+		l.attack = "Fire Surge";
 		l.dps = 6.1;
-		assertEquals(Arrays.asList(attack("Purging staff (Fire Surge)", "6.1 DPS", "Fire Surge")),
+		assertEquals(Arrays.asList(attack("Fire Surge", "6.1 DPS", "Fire Surge")),
 			LedgerRows.loadout(l, false));
 		final LedgerRows.Loadout claws = new LedgerRows.Loadout();
 		claws.attack = "Burning claws";
@@ -932,9 +932,9 @@ public class LedgerRowsTest
 		assertEquals("Bow of faerdhinen", LedgerRows.attackLabel("Bow of faerdhinen (c)"));
 		assertEquals("Dragon dagger", LedgerRows.attackLabel("Dragon dagger (p++)"));
 		assertEquals("Trident of the swamp", LedgerRows.attackLabel("Trident of the swamp (e)"));
-		// A spell is capitalised, so it stays; a variant tag before it still goes.
-		assertEquals("Purging staff (Fire Surge)", LedgerRows.attackLabel("Purging staff (Fire Surge)"));
-		assertEquals("Kodai wand (Ice Barrage)", LedgerRows.attackLabel("Kodai wand (or) (Ice Barrage)"));
+		// T-071: a kill saved as weapon (Spell) shows the spell, variant tag and all.
+		assertEquals("Fire Surge", LedgerRows.attackLabel("Purging staff (Fire Surge)"));
+		assertEquals("Ice Barrage", LedgerRows.attackLabel("Kodai wand (or) (Ice Barrage)"));
 		assertEquals("Twisted bow", LedgerRows.attackLabel("Twisted bow"));
 		assertNull(LedgerRows.attackLabel(null));
 		assertNull(LedgerRows.attackLabel(" (or)"));
@@ -950,10 +950,13 @@ public class LedgerRowsTest
 	}
 
 	@Test
-	public void theShortFormOfAStaffAndSpellIsTheSpell()
+	public void theAttacksNameHasNoShorterFormThanItself()
 	{
-		assertEquals("Fire Surge", LedgerRows.spellOr("Harmonised nightmare staff (Fire Surge)"));
-		assertEquals("Sanguine scythe of vitur", LedgerRows.spellOr("Sanguine scythe of vitur"));
+		// T-071: the spell alone was the short form of staff (Spell); now it is the name, and a name is cut as it is.
+		final LedgerRows.Loadout scythe = new LedgerRows.Loadout();
+		scythe.attack = "Sanguine scythe of vitur";
+		scythe.dps = 9.0;
+		assertEquals("Sanguine scythe of vitur", LedgerRows.loadout(scythe, false).get(0).shortLeft);
 	}
 
 	@Test

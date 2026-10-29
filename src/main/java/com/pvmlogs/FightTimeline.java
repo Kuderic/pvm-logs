@@ -63,7 +63,7 @@ final class FightTimeline
 		final int tick;
 		/** The tick it was thrown on, or {@code tick} when not told. */
 		int thrownTick;
-		/** As the loadout names it: the weapon, with the spell in brackets when one is cast. */
+		/** As the loadout names it: the spell when one is cast (T-071), the weapon otherwise; weapon (Spell) before T-071. */
 		String key = "Unknown";
 		/** The weapon (or the special's weapon), or -1. */
 		int itemId = -1;

@@ -66,8 +66,12 @@ final class LedgerRows
 	static final String CUT = "…";
 	/** An item's variant tag: a space and a bracketed word in lower case, like " (or)" or " (uncharged)". */
 	private static final Pattern VARIANT_TAG = Pattern.compile("\\s*\\([a-z][^()]*\\)");
-	/** {@code weapon (Spell)}, from {@link CombatCalc#attackName(String, String)}; group 1 is the spell. */
-	private static final Pattern SPELL = Pattern.compile(".+ \\(([A-Z][^()]*)\\)");
+	/**
+	 * A name ending in a bracketed word, as kills saved before T-071 named a cast
+	 * ({@code weapon (Spell)}); group 1 is the bracket's text, a spell only if
+	 * {@link Spell} knows it.
+	 */
+	private static final Pattern SPELL = Pattern.compile(".+ \\(([^()]+)\\)");
 	/** Luck, or this kill against your average, that rounds to no seconds either way. */
 	static final String EVEN = "even";
 	/** The stat boost row's figure when more than half the attacks were below base (T-016). */
@@ -1288,7 +1292,7 @@ final class LedgerRows
 			final String dps = l.dps >= 0 ? oneDecimal(l.dps) + " DPS" : "";
 			rows.add(0, name == null
 				? main("Loadout", dps)
-				: new Row(name, dps, FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL, spellOr(name)));
+				: new Row(name, dps, FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL, name));
 		}
 		return rows;
 	}
@@ -1307,13 +1311,14 @@ final class LedgerRows
 	}
 
 	/**
-	 * The attack's name as the loadout row shows it: the plugin's
-	 * {@code weapon (Spell)} without the item's variant tags, the bracketed
-	 * lower-case words like {@code (or)}, {@code (i)}, {@code (e)} or
-	 * {@code (uncharged)} that ornament kits and charges add. They don't change
-	 * the attack and widened the panel until the row wrapped (Eric, 2026-10-26:
-	 * "Abyssal tentacle (or)"). A spell's name is capitalised, so it stays. Null
-	 * when there's no name yet.
+	 * The attack's name as the loadout row and the Damage card show it, without
+	 * the item's variant tags: the bracketed lower-case words like {@code (or)},
+	 * {@code (i)}, {@code (e)} or {@code (uncharged)} that ornament kits and
+	 * charges add. They don't change the attack and widened the panel until the
+	 * row wrapped (Eric, 2026-10-26: "Abyssal tentacle (or)"). A cast is named by
+	 * its spell alone (T-071), so a kill saved as {@code weapon (Spell)} shows the
+	 * spell: only a bracket {@link Spell} knows by name is a spell, so
+	 * {@code Bow of faerdhinen (c)} stays a bow. Null when there's no name yet.
 	 */
 	static String attackLabel(String attack)
 	{
@@ -1322,18 +1327,16 @@ final class LedgerRows
 			return null;
 		}
 		final String label = VARIANT_TAG.matcher(attack).replaceAll("").trim();
-		return label.isEmpty() ? null : label;
-	}
-
-	/**
-	 * The shortest form of the attack's name worth showing before it's cut: the
-	 * spell alone for {@code staff (Spell)}, as the spell is the attack;
-	 * otherwise the name itself.
-	 */
-	static String spellOr(String label)
-	{
 		final Matcher m = SPELL.matcher(label);
-		return m.matches() ? m.group(1) : label;
+		if (m.matches())
+		{
+			final Spell spell = Spell.forDisplayName(m.group(1));
+			if (spell != null)
+			{
+				return spell.getDisplayName();
+			}
+		}
+		return label.isEmpty() ? null : label;
 	}
 
 	/**
