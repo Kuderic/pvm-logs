@@ -832,45 +832,100 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	 * T-052: the Defence card after a fight with tracked drains: its rows (the path, the floor, the specials thrown and
 	 * landed, the party's drains), then what the drains added and the specials' share of luck in words.
 	 */
+	/** T-076: the Defence card's three candidate layouts, for Eric to pick from; the others go once he has. */
+	enum DefenceLayout
+	{
+		/** Labelled rows only: the facts, then {@code Damage added} and {@code Specials' luck}. */
+		ROWS,
+		/** {@code Drained 76 (30%)} over a bar with the floor ticked, as Execution's parts, then the rows. */
+		BAR,
+		/** The facts as rows, then the two figures as a pair of tiles, seconds first. */
+		TILES
+	}
+
+	static DefenceLayout defenceLayout = DefenceLayout.ROWS;
+
 	private void defence(FightTab tab)
 	{
 		if (tab.defence == null)
 		{
 			return;
 		}
+		final DefenceLayout layout = defenceLayout;
 		final JPanel card = SidePanelParts.card(6);
-		final SidePanelParts.RowsCard rows = flat(tab.defence.rows);
-		card.add(rows);
-		final SidePanelParts.Paragraph worth = tab.defence.worth == null ? null : paragraph(tab.defence.worth);
-		final SidePanelParts.Paragraph luck = tab.defence.specLuck == null ? null : paragraph(tab.defence.specLuck);
-		if (worth != null)
+		final SidePanelDrainBar bar = layout == DefenceLayout.BAR && tab.defence.drop != null
+			? new SidePanelDrainBar(tab.defence.drop) : null;
+		if (bar != null)
 		{
-			card.add(worth);
+			card.add(bar);
 		}
-		if (luck != null)
+		final boolean tiles = layout == DefenceLayout.TILES;
+		final SidePanelParts.RowsCard rows = flat(defenceRows(tab.defence, !tiles));
+		card.add(rows);
+		final List<SidePanelStatTile> pair = new ArrayList<>(2);
+		if (tiles && (tab.defence.worth != null || tab.defence.specLuck != null))
 		{
-			card.add(luck);
+			final JPanel grid = new JPanel(new GridLayout(1, 2, SidePanelStyle.TILE_GAP, SidePanelStyle.TILE_GAP));
+			grid.setOpaque(false);
+			for (PanelSnapshot.Tile t : defenceTiles(tab.defence))
+			{
+				final SidePanelStatTile v = new SidePanelStatTile(t);
+				pair.add(v);
+				grid.add(v);
+			}
+			card.add(grid);
 		}
 		final SidePanelSection section = new SidePanelSection("defence", "Defence", tab.defence.hint, card, folds);
 		add(section);
 		updaters.add(t ->
 		{
 			section.setHint(t.defence.hint);
-			rows.set(t.defence.rows);
-			if (worth != null)
+			if (bar != null)
 			{
-				worth.set(t.defence.worth.text, t.defence.worth.colour);
+				bar.set(t.defence.drop);
 			}
-			if (luck != null)
+			rows.set(defenceRows(t.defence, !tiles));
+			final List<PanelSnapshot.Tile> now = defenceTiles(t.defence);
+			for (int i = 0; i < pair.size() && i < now.size(); i++)
 			{
-				luck.set(t.defence.specLuck.text, t.defence.specLuck.colour);
+				pair.get(i).set(now.get(i));
 			}
 		});
 	}
 
-	private static SidePanelParts.Paragraph paragraph(PanelSnapshot.Text t)
+	/** The card's rows: the facts, and with {@code figures} its two figures as rows too. */
+	static List<PanelSnapshot.Row> defenceRows(PanelSnapshot.Defence d, boolean figures)
 	{
-		return new SidePanelParts.Paragraph(t.text, t.colour, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
+		final List<PanelSnapshot.Row> rows = new ArrayList<>(d.rows);
+		if (figures && d.worth != null)
+		{
+			rows.add(d.worth.row());
+		}
+		if (figures && d.specLuck != null)
+		{
+			rows.add(d.specLuck.row());
+		}
+		return rows;
+	}
+
+	/** {@link DefenceLayout#TILES}: a tile a figure, its seconds the value and its damage under it. */
+	static List<PanelSnapshot.Tile> defenceTiles(PanelSnapshot.Defence d)
+	{
+		final List<PanelSnapshot.Tile> tiles = new ArrayList<>(2);
+		for (PanelSnapshot.Figure f : new PanelSnapshot.Figure[]{d.worth, d.specLuck})
+		{
+			if (f == null)
+			{
+				continue;
+			}
+			final boolean secs = !f.seconds.isEmpty();
+			final boolean coloured = !f.colour.equals(SidePanelStyle.VALUE) && !f.colour.equals(SidePanelStyle.BODY);
+			tiles.add(new PanelSnapshot.Tile(Text.small(f.label, SidePanelStyle.SECONDARY),
+				Text.title(secs ? f.seconds : f.damage, coloured ? f.colour : SidePanelStyle.VALUE),
+				Text.small(secs ? f.damage + " dmg" : "expected dmg", SidePanelStyle.SECONDARY),
+				coloured ? f.colour : SidePanelStyle.TRACK));
+		}
+		return tiles;
 	}
 
 	private void rowsSection(FightTab tab, String id, String title, PanelSnapshot.Rows rows,

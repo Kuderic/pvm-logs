@@ -39,9 +39,10 @@ public class SidePanelDefenceDrainTest
 		final PanelSnapshot.Defence d = tab.defence;
 		assertNotNull(d);
 		assertEquals("250 → 175", d.hint.text);
-		assertEquals(Arrays.asList("defence | 250 → 175", "floor | none", "Dragon warhammer | 1 of 2 landed"), rows(d));
-		assertEquals("Your drains added 182 expected damage: about 14 s faster.", d.worth.text);
-		assertEquals("Your specials landed worse than average: 3 s slower. That's part of Luck.", d.specLuck.text);
+		// T-076: no row repeats the header's drop, and no floor where the boss has none.
+		assertEquals(Arrays.asList("Dragon warhammer | 1 of 2 landed"), rows(d));
+		assertEquals("Damage added | +182 · 14 s faster", d.worth.toString());
+		assertEquals("Specials' luck | -41 · 3 s slower", d.specLuck.toString());
 		assertEquals(SidePanelStyle.COST, d.specLuck.colour);
 		// Luck's card says the specials' share is in it.
 		assertTrue(tab.curve.caption, tab.curve.caption.endsWith(". Your specials' share: 3 s slower"));
@@ -51,11 +52,9 @@ public class SidePanelDefenceDrainTest
 	public void aBandosGodsword()
 	{
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.bandosGodsword());
-		assertEquals(Arrays.asList("defence | 310 → 232", "floor | none", "Bandos godsword | 1 of 1 landed"),
-			rows(tab.defence));
-		assertEquals("Your drains added 96 expected damage: about 8 s faster.", tab.defence.worth.text);
-		assertEquals("Your specials landed better than average: 4 s faster. That's part of Luck.",
-			tab.defence.specLuck.text);
+		assertEquals(Arrays.asList("Bandos godsword | 1 of 1 landed"), rows(tab.defence));
+		assertEquals("Damage added | +96 · 8 s faster", tab.defence.worth.toString());
+		assertEquals("Specials' luck | +52 · 4 s faster", tab.defence.specLuck.toString());
 		assertEquals(SidePanelStyle.BETTER, tab.defence.specLuck.colour);
 	}
 
@@ -63,11 +62,16 @@ public class SidePanelDefenceDrainTest
 	public void aBossAtItsFloor()
 	{
 		final PanelSnapshot.Defence d = SidePanelModel.fight(SidePanelExamples.atItsFloor()).defence;
-		assertEquals(Arrays.asList("defence [at its floor] | 170 → 102", "floor | 102", "Dragon warhammer | 2 of 2 landed",
-			"party drains | 1"), rows(d));
+		assertEquals(Arrays.asList("Floor [reached] | 102", "Dragon warhammer | 2 of 2 landed", "Party drains | 1"), rows(d));
 		// A party member's drain is in the worth too.
-		assertEquals("The drains added 60 expected damage: about 5 s faster.", d.worth.text);
-		assertEquals("Your specials landed about as well as average. That's part of Luck.", d.specLuck.text);
+		assertEquals("Damage added | +60 · 5 s faster", d.worth.toString());
+		assertEquals("Specials' luck | +2 · about even", d.specLuck.toString());
+		assertEquals(SidePanelStyle.BODY, d.specLuck.colour);
+		// The bar: base to now, the floor ticked.
+		assertEquals(170, d.drop.base);
+		assertEquals(102, d.drop.end);
+		assertEquals(102, d.drop.floor);
+		assertEquals("68 (40%)", d.drop.value.text);
 	}
 
 	@Test
@@ -102,7 +106,7 @@ public class SidePanelDefenceDrainTest
 		final SidePanelModel.Drain d = SidePanelExamples.drain(250, 225, 250, 0, 1, Double.NaN, Double.NaN, Double.NaN,
 			Double.NaN);
 		final PanelSnapshot.Defence card = SidePanelModel.defence(d);
-		assertEquals(Arrays.asList("defence | 250 → 225", "floor | none", "party drains | 1"), rows(card));
+		assertEquals(Arrays.asList("Party drains | 1"), rows(card));
 		assertNull(card.worth);
 		assertNull(card.specLuck);
 		assertNull(SidePanelModel.specsShareOfLuck(d));
@@ -115,8 +119,7 @@ public class SidePanelDefenceDrainTest
 		d.specs.put("EYE_OF_AYAK", new int[]{1, 1});
 		d.magicStart = 150;
 		d.magicEnd = 120;
-		assertEquals(Arrays.asList("defence | 200 → 140", "floor | none", "magic | 150 → 120", "Eye of ayak | 1 of 1 landed"),
-			rows(SidePanelModel.defence(d)));
+		assertEquals(Arrays.asList("Magic | 150 → 120", "Eye of ayak | 1 of 1 landed"), rows(SidePanelModel.defence(d)));
 	}
 
 	@Test

@@ -621,6 +621,7 @@ class PvmPerformancePanel extends PluginPanel
 		in.scope = LedgerRows.of(trip);
 		in.tripSince = trip.getStartMillis();
 		in.hitsTaken = trip.getHitsTaken();
+		in.missedHitsTaken = trip.getMissedHitsTaken();
 		// The trip records thrall, DoT and reflect on scored fights only (T-025), so its other damage is the scored kind too.
 		in.scoredThrall = in.thrall = Math.max(0, trip.getThrallDamage());
 		in.scoredDot = in.dot = Math.max(0, trip.getDotDamage());

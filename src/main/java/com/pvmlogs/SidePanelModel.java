@@ -188,6 +188,8 @@ final class SidePanelModel
 		/** The fights the scored figures are about: the room's name. */
 		String scoredName;
 		int hitsTaken;
+		/** T-076: the part of {@link #hitsTaken} that were 0s; 0 for kills from before T-076, whose count stays one number. */
+		int missedHitsTaken;
 		/** Thrall, DoT and reflected damage on the scored fights only, each apart, for the Damage rows. */
 		int scoredThrall;
 		int scoredDot;
@@ -262,6 +264,7 @@ final class SidePanelModel
 		in.startMillis = room.getStartMillis();
 		in.unscored = anyUnscored(fights);
 		in.hitsTaken = room.getHitsTaken();
+		in.missedHitsTaken = room.getMissedHitsTaken();
 		in.inRaid = room.getRaid() != null;
 		in.raidType = room.getRaid();
 		in.takenByAttack = room.getDamageTakenByAttack();
@@ -334,6 +337,7 @@ final class SidePanelModel
 		in.roomCount = raid.getEncounters().size();
 		in.inRaid = true;
 		in.hitsTaken = raid.getHitsTaken();
+		in.missedHitsTaken = raid.getMissedHitsTaken();
 		in.takenByAttack = raid.getDamageTakenByAttack();
 		final List<Fight> fights = new ArrayList<>();
 		final List<Room> rooms = new ArrayList<>();
@@ -1221,18 +1225,24 @@ final class SidePanelModel
 
 	// ---- the Defence card (T-052) ----
 
-	/** The Defence card after a room with tracked drains. */
+	/**
+	 * The Defence card after a room with tracked drains (T-052), in short labelled rows since T-076: Eric found T-052's
+	 * lowercase rows and two sentences hard to read. The header's hint is the drop ({@code 250 → 174}); no row repeats
+	 * it, and the floor is a row only where the boss has one.
+	 */
 	static PanelSnapshot.Defence defence(Drain d)
 	{
 		final List<Row> rows = new ArrayList<>();
-		final boolean atFloor = d.defenceEnd >= 0 && d.defenceEnd <= d.defenceFloor && d.defenceFloor < d.defenceBase;
-		rows.add(new Row(Text.small("defence", SidePanelStyle.BODY),
-			atFloor ? Text.small(" at its floor", SidePanelStyle.SECONDARY) : Text.NONE,
-			Text.small(path(d.defenceStart, d.defenceEnd), SidePanelStyle.VALUE)));
-		rows.add(row("floor", d.defenceFloor <= 0 ? "none" : String.valueOf(d.defenceFloor)));
+		if (hasFloor(d))
+		{
+			final boolean atFloor = d.defenceEnd >= 0 && d.defenceEnd <= d.defenceFloor;
+			rows.add(new Row(Text.small("Floor", SidePanelStyle.BODY),
+				atFloor ? Text.small(" reached", SidePanelStyle.SECONDARY) : Text.NONE,
+				Text.small(String.valueOf(d.defenceFloor), SidePanelStyle.VALUE)));
+		}
 		if (d.magicStart >= 0 && d.magicEnd >= 0 && d.magicEnd != d.magicStart)
 		{
-			rows.add(row("magic", path(d.magicStart, d.magicEnd)));
+			rows.add(row("Magic", path(d.magicStart, d.magicEnd)));
 		}
 		for (Map.Entry<String, int[]> e : d.specs.entrySet())
 		{
@@ -1240,10 +1250,34 @@ final class SidePanelModel
 		}
 		if (d.partyDrains > 0)
 		{
-			rows.add(row("party drains", String.valueOf(d.partyDrains)));
+			rows.add(row("Party drains", String.valueOf(d.partyDrains)));
 		}
 		return new PanelSnapshot.Defence(Text.small(path(d.defenceStart, d.defenceEnd), SidePanelStyle.SECONDARY), rows,
-			drainWorth(d), specLuck(d));
+			drainWorth(d), specLuck(d), drop(d));
+	}
+
+	/** Whether the boss has a Defence floor above 0 and below its base (T-049's rules). */
+	private static boolean hasFloor(Drain d)
+	{
+		return d.defenceFloor > 0 && (d.defenceBase < 0 || d.defenceFloor < d.defenceBase);
+	}
+
+	/** T-076: the bar's drop, {@code Drained 76 (30%)}; null when a level isn't known. */
+	static PanelSnapshot.Drop drop(Drain d)
+	{
+		if (d.defenceStart < 0 || d.defenceEnd < 0)
+		{
+			return null;
+		}
+		final int base = Math.max(d.defenceBase, d.defenceStart);
+		if (base <= 0)
+		{
+			return null;
+		}
+		final int drained = Math.max(0, d.defenceStart - d.defenceEnd);
+		final String share = d.defenceStart <= 0 ? "" : " (" + Math.round(100.0 * drained / d.defenceStart) + "%)";
+		return new PanelSnapshot.Drop(d.defenceStart, d.defenceEnd, base, hasFloor(d) ? d.defenceFloor : 0,
+			Text.small("Drained", SidePanelStyle.BODY), Text.small(drained + share, SidePanelStyle.VALUE));
 	}
 
 	private static String path(int start, int end)
@@ -1267,38 +1301,43 @@ final class SidePanelModel
 		return lower.isEmpty() ? lower : Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
 	}
 
-	/** {@code The drains added 182 expected damage: about 14 s faster.} Null when T-050's figure is unknown. */
-	static Text drainWorth(Drain d)
+	/** T-050's drain value: {@code Damage added  +182 · 14 s faster}. Null when unknown. */
+	static PanelSnapshot.Figure drainWorth(Drain d)
 	{
 		if (Double.isNaN(d.valueDamage))
 		{
 			return null;
 		}
 		final long dmg = LedgerRows.roundHalfAway(d.valueDamage);
-		final String who = d.ownThrown() > 0 && d.partyDrains <= 0 ? "Your drains" : "The drains";
-		final StringBuilder s = new StringBuilder(who);
-		s.append(dmg >= 0 ? " added " : " took away ").append(LedgerRows.number(Math.abs(dmg))).append(" expected damage");
-		if (!Double.isNaN(d.valueSeconds) && LedgerRows.roundHalfAway(d.valueSeconds) != 0)
-		{
-			s.append(": about ").append(LedgerRows.fasterOrSlower(d.valueSeconds));
-		}
-		return Text.small(s.append('.').toString(), SidePanelStyle.BODY);
+		final String secs = Double.isNaN(d.valueSeconds) || LedgerRows.roundHalfAway(d.valueSeconds) == 0 ? ""
+			: LedgerRows.fasterOrSlower(d.valueSeconds);
+		return new PanelSnapshot.Figure(WORTH, signed(dmg), secs, SidePanelStyle.VALUE);
+	}
+
+	static final String WORTH = "Damage added";
+	static final String SPEC_LUCK = "Specials' luck";
+
+	private static String signed(long n)
+	{
+		return (n > 0 ? "+" : n < 0 ? "-" : "") + LedgerRows.number(Math.abs(n));
 	}
 
 	/**
-	 * T-050's spec luck in words: {@code Your specials landed better than average: 5 s faster. That's part of Luck.}
-	 * Null without own draining specials, or when unknown.
+	 * T-050's spec luck: {@code Specials' luck  +12 · 1 s faster}, in Better or Cost. It is the difference between the
+	 * chart's expected line as thrown and the tile's averaged figure (T-076). Null without own draining specials, or
+	 * when unknown.
 	 */
-	static Text specLuck(Drain d)
+	static PanelSnapshot.Figure specLuck(Drain d)
 	{
-		final String phrase = specLuckPhrase(d);
-		if (phrase == null)
+		if (d == null || d.ownThrown() <= 0 || Double.isNaN(d.specLuckSeconds))
 		{
 			return null;
 		}
 		final long r = LedgerRows.roundHalfAway(d.specLuckSeconds);
 		final Color c = r > 0 ? SidePanelStyle.BETTER : r < 0 ? SidePanelStyle.COST : SidePanelStyle.BODY;
-		return Text.small("Your specials " + phrase + ". That's part of Luck.", c);
+		final long dmg = Double.isNaN(d.specLuckDamage) ? 0 : LedgerRows.roundHalfAway(d.specLuckDamage);
+		return new PanelSnapshot.Figure(SPEC_LUCK, signed(dmg), r == 0 ? "about even" : LedgerRows.fasterOrSlower(
+			d.specLuckSeconds), c);
 	}
 
 	private static String specLuckPhrase(Drain d)
@@ -1519,7 +1558,10 @@ final class SidePanelModel
 			{
 				heldExpected += w.expected;
 			}
-			final double unmatchedExpected = Math.max(0, n.expected) - heldExpected;
+			// T-076: the rows hold each attack's expectation as thrown, so what they don't hold is measured against the
+			// scope's as thrown, not T-050's averaged figure (the tile's). Their difference is the specials' luck, not an
+			// unmatched attack: Eric's Sire recording showed a "0 · 0%" row for it. With nothing in it, no row.
+			final double unmatchedExpected = Math.max(0, n.expected + asThrownShift(in.scope)) - heldExpected;
 			if (unmatched != 0 || Math.abs(unmatchedExpected) >= 0.5)
 			{
 				final double share = whole <= 0 ? 0 : (double) Math.max(0, unmatched) / whole;
@@ -1541,6 +1583,16 @@ final class SidePanelModel
 		}
 		final String where = in.unscored && in.kind == Kind.ROOM ? " on the " + in.scoredName : " yours";
 		return new PanelSnapshot.Sources(Text.small(LedgerRows.number(whole) + where, SidePanelStyle.SECONDARY), rows);
+	}
+
+	/**
+	 * T-076: T-050's spec luck in damage, E(as thrown) - E(averaged): what the attacks as thrown (the chart, the Damage
+	 * rows) expected beyond the tile's averaged figure. 0 when unknown.
+	 */
+	static double asThrownShift(LedgerRows.Scope s)
+	{
+		final double d = s == null ? Double.NaN : s.specLuckDamage();
+		return Double.isNaN(d) ? 0 : d;
 	}
 
 	/** The view's attacks grouped by the name shown and whether it was the special, in the order first thrown. */
@@ -1655,9 +1707,22 @@ final class SidePanelModel
 			Arrays.copyOfRange(v.states, from, length), styles,
 			luckColour == LedgerRows.Colour.NEUTRAL || warning ? SidePanelStyle.VALUE : SidePanelStyle.of(luckColour),
 			!warning, !warning && rangeKnown, LedgerRows.clock(ticks), "you " + LedgerRows.number(Math.round(last)),
-			"expected " + LedgerRows.number(Math.round(lastExpected)), lost, eating,
+			expectedLegend(lastExpected, s), lost, eating,
 			styleColour(FightTimeline.Style.values()[main], false));
 	}
+
+	/**
+	 * T-076: the chart's expected line is each attack as thrown, the only expectation a single attack has; the tile's is
+	 * T-050's, averaged over how the draining specials could have landed. Where they differ by a point or more the
+	 * legend says which it is, and the Defence card's specials row is the difference.
+	 */
+	static String expectedLegend(double lastExpected, LedgerRows.Scope s)
+	{
+		final String figure = "expected " + LedgerRows.number(Math.round(lastExpected));
+		return Math.abs(asThrownShift(s)) >= 0.5 ? figure + AS_THROWN : figure;
+	}
+
+	static final String AS_THROWN = " as thrown";
 
 	/** After the fight: the overlay's Summary rows that the tiles and Damage taken don't already show. */
 	static PanelSnapshot.Rows details(LedgerRows.Scope s)
@@ -1719,7 +1784,10 @@ final class SidePanelModel
 		{
 			return null;
 		}
-		final int hitsTaken = in.hitsTaken;
+		// T-076: the hits that did damage; the 0s (a miss, or a hit the prayer blocked) apart. A kill from before T-076 didn't
+		// count its 0s apart, so its hits stay its one number.
+		final int missed = Math.max(0, Math.min(in.hitsTaken, in.missedHitsTaken));
+		final int hitsTaken = in.hitsTaken - missed;
 		final List<Row> rows = new ArrayList<>(12);
 		final int part = s.damageTakenAvoidable();
 		if (avoidable && part >= 0)
@@ -1752,6 +1820,10 @@ final class SidePanelModel
 		{
 			rows.add(row("hits", LedgerRows.number(hitsTaken)));
 		}
+		if (missed > 0)
+		{
+			rows.add(row(MISSED, LedgerRows.number(missed)));
+		}
 		if (s.biggestHitTaken() > 0)
 		{
 			rows.add(row("biggest hit", LedgerRows.number(s.biggestHitTaken())));
@@ -1768,6 +1840,8 @@ final class SidePanelModel
 	}
 
 	static final String AVOIDABLE = "avoidable";
+	/** T-076: the Damage taken card's 0s. */
+	static final String MISSED = "missed or blocked";
 	/** T-068: the Damage taken card's line while the fight runs. */
 	static final String AFTER_THE_FIGHT = "hits and biggest hit after the fight";
 

@@ -723,23 +723,81 @@ final class PanelSnapshot
 	{
 		/** The section's value: Defence start → end. */
 		final Text hint;
+		/** T-076: the facts, short labels and figures: each special's landings, the floor where there is one, Magic, party drains. */
 		final List<Row> rows;
-		/** "The drains added 182 expected damage: about 14 s faster." Null when T-050's figure is unknown. */
-		final Text worth;
-		/** "Your specials landed better than average: 5 s faster. That's part of Luck." Null without own specials. */
-		final Text specLuck;
+		/** T-050's drain value: {@code Damage added +42 · 5 s faster}. Null when unknown. */
+		final Figure worth;
+		/** T-050's spec luck: {@code Specials' luck +12 · 1 s faster}, in Better or Cost. Null without own specials. */
+		final Figure specLuck;
+		/** T-076: the drop for a bar, base to now with the floor; null when the levels aren't known. */
+		final Drop drop;
 
-		Defence(Text hint, List<Row> rows, Text worth, Text specLuck)
+		Defence(Text hint, List<Row> rows, Figure worth, Figure specLuck, Drop drop)
 		{
 			this.hint = hint == null ? Text.NONE : hint;
 			this.rows = list(rows);
 			this.worth = worth;
 			this.specLuck = specLuck;
+			this.drop = drop;
 		}
 
 		String structure()
 		{
-			return rows.size() + (worth == null ? "" : "w") + (specLuck == null ? "" : "s");
+			return rows.size() + (worth == null ? "" : "w") + (specLuck == null ? "" : "s") + (drop == null ? "" : "b");
+		}
+	}
+
+	/** T-076: one of the Defence card's figures, in damage and in seconds, for a row or a tile. */
+	static final class Figure
+	{
+		final String label;
+		/** {@code +42}. */
+		final String damage;
+		/** {@code 5 s faster}, {@code about even}; empty where it rounds to nothing. */
+		final String seconds;
+		final Color colour;
+
+		Figure(String label, String damage, String seconds, Color colour)
+		{
+			this.label = label;
+			this.damage = damage;
+			this.seconds = seconds == null ? "" : seconds;
+			this.colour = colour;
+		}
+
+		/** As a row: {@code Damage added    +42 · 5 s faster}. */
+		Row row()
+		{
+			return new Row(Text.small(label, SidePanelStyle.BODY),
+				Text.small(seconds.isEmpty() ? damage : damage + " · " + seconds, colour));
+		}
+
+		@Override
+		public String toString()
+		{
+			return row().toString();
+		}
+	}
+
+	/** T-076: a Defence drop for the bar: levels, with -1 where unknown, and the bar's line. */
+	static final class Drop
+	{
+		final int start;
+		final int end;
+		final int base;
+		/** 0 for none. */
+		final int floor;
+		final Text label;
+		final Text value;
+
+		Drop(int start, int end, int base, int floor, Text label, Text value)
+		{
+			this.start = start;
+			this.end = end;
+			this.base = base;
+			this.floor = floor;
+			this.label = label;
+			this.value = value;
 		}
 	}
 
