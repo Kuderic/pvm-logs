@@ -9,6 +9,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -102,7 +104,10 @@ public class NamesTest
 			offenders.isEmpty());
 	}
 
-	/** What a player reads says Luck vs Skill: no text left over from the old name. */
+	/**
+	 * What a player reads says Luck vs Skill: no text left over from the old name, nor from the working name "PvM Logs"
+	 * that client.log lines and saved debug logs carried until T-067.
+	 */
 	@Test
 	public void noTextShowsTheOldName() throws IOException
 	{
@@ -112,13 +117,78 @@ public class NamesTest
 			final List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
 			for (int i = 0; i < lines.size(); i++)
 			{
-				if (lines.get(i).matches(".*\"[^\"]*PvM Performance[^\"]*\".*"))
+				if (lines.get(i).matches(".*\"[^\"]*(PvM Performance|PvM Logs)[^\"]*\".*"))
 				{
 					offenders.add(file + ":" + (i + 1) + ": " + lines.get(i).trim());
 				}
 			}
 		}
 		assertTrue("Use PvmPerformanceConfig.DISPLAY_NAME:\n" + String.join("\n", offenders), offenders.isEmpty());
+	}
+
+	/** client.log lines start with the display name, so a player searching their log finds them under it. */
+	@Test
+	public void clientLogLinesStartWithTheName() throws IOException
+	{
+		final Pattern logCall = Pattern.compile("\\blog\\.(?:warn|info|debug|error)\\(\"([^\"]*)\"");
+		final List<String> offenders = new ArrayList<>();
+		int named = 0;
+		for (Path file : mainSources())
+		{
+			final List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+			for (int i = 0; i < lines.size(); i++)
+			{
+				final Matcher m = logCall.matcher(lines.get(i));
+				if (m.find() && m.group(1).startsWith("PvM"))
+				{
+					offenders.add(file + ":" + (i + 1) + ": " + lines.get(i).trim());
+				}
+				else if (m.find(0) && m.group(1).startsWith(DISPLAY_NAME + ": "))
+				{
+					named++;
+				}
+			}
+		}
+		assertTrue(String.join("\n", offenders), offenders.isEmpty());
+		assertTrue("expected the client.log lines to carry the name", named > 10);
+	}
+
+	/**
+	 * A saved debug log opens with the name. Logs saved before T-067 open with "=== PvM Logs, the last" instead, the
+	 * replay fixtures among them; the replay readers take only {@code [tick]} lines, so both headers are skipped alike.
+	 */
+	@Test
+	public void savedDebugLogHeader() throws IOException
+	{
+		assertEquals("=== Luck vs Skill, the last ", DebugLog.headerStart());
+
+		final Pattern replayLine = Pattern.compile("^\\[(\\d+)\\] (.*)$");
+		final String oldHeader = "=== PvM Logs, the last 120 lines before this was saved. Plugin dev ===";
+		final String newHeader = DebugLog.headerStart() + "120 lines before this was saved. Plugin dev ===";
+		assertTrue(!replayLine.matcher(oldHeader).matches() && !replayLine.matcher(newHeader).matches());
+
+		int fixtures = 0;
+		try (Stream<Path> files = Files.walk(Paths.get("src/test/resources/com/pvmlogs/replay")))
+		{
+			for (Path file : (Iterable<Path>) files.filter(p -> p.toString().endsWith(".log"))::iterator)
+			{
+				final String first = Files.readAllLines(file, StandardCharsets.UTF_8).get(0);
+				if (first.startsWith("=== "))
+				{
+					fixtures++;
+					assertTrue(file + ": " + first, first.startsWith("=== PvM Logs, the last ")
+						|| first.startsWith(DebugLog.headerStart()));
+				}
+			}
+		}
+		assertTrue("expected saved-log fixtures with a header", fixtures > 0);
+	}
+
+	/** The monster-data request names the plugin, and nothing about the player. */
+	@Test
+	public void userAgentNamesThePlugin()
+	{
+		assertEquals("RuneLite plugin " + INTERNAL_NAME, MonsterStatsProvider.USER_AGENT);
 	}
 
 	private static PluginDescriptor descriptor()
