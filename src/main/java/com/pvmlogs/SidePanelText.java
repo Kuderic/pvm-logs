@@ -186,6 +186,125 @@ final class SidePanelText extends JComponent
 		}
 	}
 
+	/**
+	 * T-085: texts drawn in the same form, the longest that fits them all: a card's weapon rows, so one row doesn't
+	 * read {@code 30 attacks · 8.6 DPS (expected 7.6)} over another's {@code 5.4 DPS (exp 5.6)}. Each member's forms
+	 * are its text then its short forms, in the same order of length. Swing's thread only.
+	 */
+	static final class FormGroup
+	{
+		private final java.util.List<SidePanelText> members = new java.util.ArrayList<>();
+
+		void join(SidePanelText t)
+		{
+			if (t.group != this)
+			{
+				if (t.group != null)
+				{
+					t.group.leave(t);
+				}
+				t.group = this;
+				members.add(t);
+				repaintAll();
+			}
+		}
+
+		void leave(SidePanelText t)
+		{
+			if (t.group == this)
+			{
+				members.remove(t);
+				t.group = null;
+				t.drawnForm = -1;
+				repaintAll();
+			}
+		}
+
+		/** The form the members draw: the longest every one of them fits, by what each measured when it last painted. */
+		int form(SidePanelText painting, int own)
+		{
+			int form = own;
+			for (SidePanelText m : members)
+			{
+				if (m != painting)
+				{
+					form = Math.max(form, m.fitForm >= 0 ? m.fitForm
+						: m.fit(SidePanelStyle.metrics(m, m.getFont()), m.room(SidePanelStyle.metrics(m, m.suffixFont()))));
+				}
+			}
+			return form;
+		}
+
+		/** After a member drew {@code form}: the others that drew another form draw again. */
+		void drawn(SidePanelText painting, int form)
+		{
+			for (SidePanelText m : members)
+			{
+				if (m != painting && m.drawnForm >= 0 && m.drawnForm != form)
+				{
+					m.repaint();
+				}
+			}
+		}
+
+		private void repaintAll()
+		{
+			for (SidePanelText m : members)
+			{
+				m.repaint();
+			}
+		}
+
+		int size()
+		{
+			return members.size();
+		}
+	}
+
+	private FormGroup group;
+	/** T-085: the form this text fit when it last painted, and the form it drew; -1 before its first paint. */
+	private int fitForm = -1;
+	private int drawnForm = -1;
+
+	/** T-085: draws in {@code g}'s form, or on its own with null. */
+	void setGroup(FormGroup g)
+	{
+		if (g == null)
+		{
+			if (group != null)
+			{
+				group.leave(this);
+			}
+		}
+		else
+		{
+			g.join(this);
+		}
+	}
+
+	/** The first of the forms (the text, then the short forms) that fits {@code room}; the last when none does. */
+	private int fit(FontMetrics fm, int room)
+	{
+		if (fm.stringWidth(text) <= room)
+		{
+			return 0;
+		}
+		for (int i = 0; i < shortTexts.size(); i++)
+		{
+			if (fm.stringWidth(shortTexts.get(i)) <= room)
+			{
+				return i + 1;
+			}
+		}
+		return shortTexts.size();
+	}
+
+	/** The width the first run has: all of it less the second run's. */
+	private int room(FontMetrics suffixMetrics)
+	{
+		return Math.max(0, getWidth() - suffixMetrics.stringWidth(suffix));
+	}
+
 	/** The second run is cut before the first: for hints, which matter less than what they follow. */
 	SidePanelText cutSuffixFirst()
 	{
@@ -239,7 +358,16 @@ final class SidePanelText extends JComponent
 		final int room = Math.max(0, getWidth() - suffixWidth);
 		// The short form where the text would be cut (T-063), cut itself only if even it doesn't fit.
 		String full = text;
-		if (!shortTexts.isEmpty() && fm.stringWidth(text) > room)
+		if (group != null && !shortTexts.isEmpty())
+		{
+			// T-085: the group's form, the longest every member fits.
+			fitForm = fit(fm, room);
+			final int form = Math.min(shortTexts.size(), group.form(this, fitForm));
+			full = form == 0 ? text : shortTexts.get(form - 1);
+			drawnForm = form;
+			group.drawn(this, form);
+		}
+		else if (!shortTexts.isEmpty() && fm.stringWidth(text) > room)
 		{
 			// The first short form that fits; the shortest, to be cut, when none does.
 			full = shortTexts.get(shortTexts.size() - 1);

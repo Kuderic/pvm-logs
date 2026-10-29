@@ -49,7 +49,7 @@ public final class SidePanelPictures
 		}
 		if (args.length > 1 && "dps".equals(args[1]))
 		{
-			dpsLayouts(out);
+			dpsCards(out);
 			return;
 		}
 		if (args.length > 2 && "icons".equals(args[1]))
@@ -478,28 +478,27 @@ public final class SidePanelPictures
 	}
 
 	/**
-	 * T-085: the Damage card's DPS layouts, for Eric to pick: the Sire and Leviathan kills in each, with T-053's settings
-	 * off and Smooth, at 1× and 2×, the card alone.
+	 * T-085: the Damage card with each weapon's DPS (Eric's layout A), and a row's tooltip: the Sire and Leviathan kills
+	 * with T-053's settings off, Smooth, and Smooth + Larger, at 1× and 2×, the card alone.
 	 */
-	private static void dpsLayouts(Path out) throws IOException
+	private static void dpsCards(Path out) throws IOException
 	{
-		for (SidePanelModel.DpsLayout layout : SidePanelModel.DpsLayout.values())
+		final String[] modes = {"normal", "smooth", "smooth-larger"};
+		for (int m = 0; m < modes.length; m++)
 		{
-			SidePanelModel.dpsLayout = layout;
-			for (int m = 0; m < 2; m++)
+			smooth = m >= 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
 			{
-				smooth = m == 1;
-				final Path dir = out.resolve(layout.name().toLowerCase(java.util.Locale.ENGLISH) + (smooth ? "-smooth" : ""));
-				Files.createDirectories(dir);
-				for (double scale : new double[]{1, 2})
-				{
-					write(dir, "a-sire", scale, card(SidePanelExamples.sireWeapons(), scale, "damage"));
-					write(dir, "b-leviathan", scale, card(SidePanelExamples.leviathanWeapons(), scale, "damage"));
-				}
+				write(dir, "a-sire", scale, card(SidePanelExamples.sireWeapons(), scale, "damage"));
+				write(dir, "b-leviathan", scale, card(SidePanelExamples.leviathanWeapons(), scale, "damage"));
+				write(dir, "c-tooltip", scale, tooltip(SidePanelExamples.sireWeapons(), 0, scale));
 			}
 		}
-		SidePanelModel.dpsLayout = SidePanelModel.DpsLayout.SUB_LINE;
 		smooth = false;
+		larger = false;
 		SidePanelStyle.setText(false, false);
 	}
 

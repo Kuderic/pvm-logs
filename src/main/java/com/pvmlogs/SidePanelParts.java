@@ -536,8 +536,8 @@ final class SidePanelParts
 		private final SidePanelIcons icons;
 		private final Line top;
 		private final Line bottom;
-		/** T-085: the third line, in the layout that has one; built for the rows that have it (a structure change). */
-		private final SidePanelText third;
+		/** T-085: the card's weapon rows draw their sub-lines in one form; null for a row on its own. */
+		private final SidePanelText.FormGroup forms;
 		private final Icon icon = new Icon();
 		/** T-085: hovered, as the panel's other rows: the Selected fill under the share. */
 		private boolean hover;
@@ -553,7 +553,14 @@ final class SidePanelParts
 
 		SourceRowView(PanelSnapshot.Source s, SidePanelIcons icons)
 		{
+			this(s, icons, null);
+		}
+
+		/** T-085: with the card's {@code forms}, which its weapon rows' sub-lines join. */
+		SourceRowView(PanelSnapshot.Source s, SidePanelIcons icons, SidePanelText.FormGroup forms)
+		{
 			super(new BorderLayout(6, 0));
+			this.forms = forms;
 			this.icons = icons == null ? SidePanelIcons.NONE : icons;
 			setOpaque(false);
 			setBorder(new EmptyBorder(2, 2, 2, 6));
@@ -562,15 +569,9 @@ final class SidePanelParts
 			top = new Line(PanelSnapshot.Text.body(s.name, SidePanelStyle.VALUE),
 				PanelSnapshot.Text.title(s.damage, SidePanelStyle.VALUE));
 			bottom = new Line(PanelSnapshot.Text.small(s.sub, SidePanelStyle.SECONDARY),
-				PanelSnapshot.Text.small(s.right, SidePanelStyle.SECONDARY));
+				PanelSnapshot.Text.small(s.share, SidePanelStyle.SECONDARY));
 			text.add(top);
 			text.add(bottom);
-			third = s.third == null ? null : new SidePanelText(PanelSnapshot.Text.small(s.third, SidePanelStyle.SECONDARY),
-				false);
-			if (third != null)
-			{
-				text.add(third);
-			}
 			add(icon, BorderLayout.WEST);
 			add(text, BorderLayout.CENTER);
 			addMouseListener(new java.awt.event.MouseAdapter()
@@ -602,12 +603,12 @@ final class SidePanelParts
 			top.set(new PanelSnapshot.Row(PanelSnapshot.Text.body(s.name, SidePanelStyle.VALUE),
 				PanelSnapshot.Text.title(s.damage, SidePanelStyle.VALUE)));
 			bottom.set(new PanelSnapshot.Row(PanelSnapshot.Text.small(s.sub, SidePanelStyle.SECONDARY),
-				PanelSnapshot.Text.small(s.right, SidePanelStyle.SECONDARY)));
-			// T-085: the sub-line's shorter forms where it doesn't fit, the third line, and the details on hover.
+				PanelSnapshot.Text.small(s.share, SidePanelStyle.SECONDARY)));
+			// T-085: the sub-line's shorter forms, in the card's one form for a weapon row; the details on hover.
 			bottom.left.setShort(s.subShort);
-			if (third != null && s.third != null)
+			if (forms != null)
 			{
-				third.set(PanelSnapshot.Text.small(s.third, SidePanelStyle.SECONDARY));
+				bottom.left.setGroup(s.dps != null && !s.subShort.isEmpty() ? forms : null);
 			}
 			if (!java.util.Objects.equals(s.tooltip, getToolTipText()))
 			{

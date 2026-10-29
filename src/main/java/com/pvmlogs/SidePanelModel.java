@@ -1623,19 +1623,6 @@ final class SidePanelModel
 
 	// ---- T-085: each weapon's DPS, and its details on hover ----
 
-	/** T-085: where a weapon row shows its DPS; Eric picks one, and the others go. */
-	enum DpsLayout
-	{
-		/** On the sub-line: {@code 32 attacks · 6.1 DPS (exp 7.1)}. */
-		SUB_LINE,
-		/** Under the damage on the right, {@code 6.1 DPS}, with the expected on the sub-line; the share in the tooltip. */
-		RIGHT,
-		/** A third line: {@code 6.1 DPS · expected 7.1}, under the sub-line as it was. */
-		THIRD_LINE
-	}
-
-	static DpsLayout dpsLayout = DpsLayout.SUB_LINE;
-
 	/**
 	 * T-085: a weapon or spell row with its DPS, its damage over the time spent attacking with it
 	 * ({@link SidePanelWeaponRows#ticks}: its attacks and the cooldown after each, up to the next attack), beside its
@@ -1656,31 +1643,18 @@ final class SidePanelModel
 		final String damage = LedgerRows.number(w.damage);
 		if (dps == null)
 		{
-			return new PanelSnapshot.Source(w.name, sub, null, damage, shareText, null, null, share, colour, item, sprite,
-				tooltip, null, null);
+			return new PanelSnapshot.Source(w.name, sub, null, damage, shareText, share, colour, item, sprite, tooltip, null,
+				null);
 		}
+		// T-085, Eric's pick (layout A): the DPS on the sub-line. Where the longest doesn't fit, the shorter forms in turn;
+		// the card draws every weapon row in the same one (SidePanelText.FormGroup), so the rows don't go ragged.
 		final String rate = dps + " DPS";
-		switch (dpsLayout)
-		{
-			case RIGHT:
-				return new PanelSnapshot.Source(w.name, exp == null ? count : count + DOT + "exp " + exp + " DPS",
-					Collections.singletonList(exp == null ? count : "exp " + exp + " DPS"), damage, shareText, rate, null,
-					share, colour, item, sprite, tooltip, dps, exp);
-			case THIRD_LINE:
-				return new PanelSnapshot.Source(w.name, sub, Collections.singletonList(count), damage, shareText, null,
-					exp == null ? rate : rate + DOT + "expected " + exp, share, colour, item, sprite, tooltip, dps, exp);
-			case SUB_LINE:
-			default:
-				// Where it doesn't fit, the attacks go first, then the expected: the DPS is the last to go.
-				final List<String> shorts = new ArrayList<>(2);
-				if (exp != null)
-				{
-					shorts.add(rate + " (exp " + exp + ")");
-				}
-				shorts.add(rate);
-				return new PanelSnapshot.Source(w.name, count + DOT + rate + (exp == null ? "" : " (exp " + exp + ")"),
-					shorts, damage, shareText, null, null, share, colour, item, sprite, tooltip, dps, exp);
-		}
+		final List<String> forms = exp == null
+			? Arrays.asList(count + DOT + rate, rate, rate, rate)
+			: Arrays.asList(count + DOT + rate + " (expected " + exp + ")", rate + " (expected " + exp + ")",
+				rate + " (exp " + exp + ")", rate);
+		return new PanelSnapshot.Source(w.name, forms.get(0), forms.subList(1, forms.size()), damage, shareText, share,
+			colour, item, sprite, tooltip, dps, exp);
 	}
 
 	/**
@@ -1719,7 +1693,7 @@ final class SidePanelModel
 		{
 			s.append(", expected ").append(LedgerRows.number(Math.round(w.expected)));
 		}
-		s.append(" (").append(share).append(" of the card)");
+		s.append(" (").append(share).append(" of your damage)");
 		if (dps != null)
 		{
 			s.append("<br>").append(dps).append(" DPS");

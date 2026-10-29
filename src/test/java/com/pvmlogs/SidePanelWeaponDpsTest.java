@@ -10,7 +10,6 @@ import java.awt.Container;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import org.junit.After;
 import org.junit.Test;
 
 /**
@@ -20,12 +19,6 @@ import org.junit.Test;
  */
 public class SidePanelWeaponDpsTest
 {
-	@After
-	public void layoutBack()
-	{
-		SidePanelModel.dpsLayout = SidePanelModel.DpsLayout.SUB_LINE;
-	}
-
 	private static PanelSnapshot.Source row(PanelSnapshot.FightTab tab, String name, boolean special)
 	{
 		for (PanelSnapshot.Source s : tab.damage.rows)
@@ -123,9 +116,10 @@ public class SidePanelWeaponDpsTest
 		// 620 over 120 ticks (72 s): 8.6; expected 546 over the same: 7.6.
 		assertEquals("8.6", ember.dps);
 		assertEquals("7.6", ember.expectedDps);
-		assertEquals("30 attacks · 8.6 DPS (exp 7.6)", ember.sub);
-		assertEquals(Arrays.asList("8.6 DPS (exp 7.6)", "8.6 DPS"), ember.subShort);
-		assertEquals("75%", ember.right);
+		// Eric's forms, longest first: "expected" spelt out wherever it fits, as the spec row's "expected 44" is.
+		assertEquals("30 attacks · 8.6 DPS (expected 7.6)", ember.sub);
+		assertEquals(Arrays.asList("8.6 DPS (expected 7.6)", "8.6 DPS (exp 7.6)", "8.6 DPS"), ember.subShort);
+		assertEquals("75%", ember.share);
 		final PanelSnapshot.Source bow = row(tab, "Scorching bow", false);
 		assertEquals("5.4", bow.dps);
 		assertEquals("5.6", bow.expectedDps);
@@ -150,21 +144,6 @@ public class SidePanelWeaponDpsTest
 	}
 
 	@Test
-	public void theOtherLayouts()
-	{
-		SidePanelModel.dpsLayout = SidePanelModel.DpsLayout.RIGHT;
-		PanelSnapshot.Source ember = row(SidePanelModel.fight(SidePanelExamples.sireWeapons()), "Emberlight", false);
-		assertEquals("30 attacks · exp 7.6 DPS", ember.sub);
-		assertEquals("8.6 DPS", ember.right);
-		assertTrue(ember.tooltip.contains("(75% of the card)"));
-		SidePanelModel.dpsLayout = SidePanelModel.DpsLayout.THIRD_LINE;
-		ember = row(SidePanelModel.fight(SidePanelExamples.sireWeapons()), "Emberlight", false);
-		assertEquals("30 attacks · expected 546", ember.sub);
-		assertEquals("8.6 DPS · expected 7.6", ember.third);
-		assertEquals("75%", ember.right);
-	}
-
-	@Test
 	public void underTheStatsWarningNoExpected()
 	{
 		final SidePanelModel.Input in = SidePanelExamples.sireWeapons();
@@ -173,6 +152,7 @@ public class SidePanelWeaponDpsTest
 		assertEquals("8.6", ember.dps);
 		assertNull(ember.expectedDps);
 		assertEquals("30 attacks · 8.6 DPS", ember.sub);
+		assertEquals(Arrays.asList("8.6 DPS", "8.6 DPS", "8.6 DPS"), ember.subShort);
 		assertFalse(ember.tooltip, ember.tooltip.contains("expected"));
 	}
 
@@ -218,7 +198,7 @@ public class SidePanelWeaponDpsTest
 		assertTrue(tip, tip.contains("30 attacks, 25 landed (83%, expected "));
 		assertTrue(tip, tip.contains("average hit 24.8"));
 		assertTrue(tip, tip.contains("biggest hit 40 of max 46"));
-		assertTrue(tip, tip.contains("damage 620, expected 546 (75% of the card)"));
+		assertTrue(tip, tip.contains("damage 620, expected 546 (75% of your damage)"));
 		assertTrue(tip, tip.contains("8.6 DPS (expected 7.6) over 1:12 attacking, 120 ticks"));
 	}
 
@@ -249,34 +229,79 @@ public class SidePanelWeaponDpsTest
 
 	// ---- fit, and no lag ----
 
-	@Test
-	public void everyLayoutFitsAt1xAnd2xInBothFonts()
+	/** The card's weapon rows' sub-lines as drawn, after a render at {@code scale} with Smooth on or off. */
+	private static List<String> drawn(SidePanelModel.Input in, boolean smooth, double scale, boolean larger)
 	{
-		for (SidePanelModel.DpsLayout layout : SidePanelModel.DpsLayout.values())
+		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
+		p.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		p.setText(larger, smooth);
+		try
 		{
-			SidePanelModel.dpsLayout = layout;
-			for (boolean smooth : new boolean[]{false, true})
+			SidePanelPictures.draw(p.tabs(), p.fightTab(), scale);
+			// Twice: a row that found a shorter form than the others asked them to draw again.
+			SidePanelPictures.draw(p.tabs(), p.fightTab(), scale);
+			final List<String> out = new ArrayList<>();
+			for (SidePanelParts.SourceRowView row : all(p.fightTab(), SidePanelParts.SourceRowView.class))
 			{
-				for (double scale : new double[]{1, 2})
+				for (SidePanelText t : all(row, SidePanelText.class))
+				{
+					assertFalse(smooth + " " + scale + ": " + t.getText() + " => " + t.lastShown(),
+						t.lastShown() != null && t.lastShown().contains(LedgerRows.CUT));
+				}
+				out.add(all(row, SidePanelText.class).get(2).lastShown());
+			}
+			return out;
+		}
+		finally
+		{
+			SidePanelStyle.setText(false, false);
+		}
+	}
+
+	@Test
+	public void everyRowFitsAt1xAnd2xInBothFonts()
+	{
+		for (boolean smooth : new boolean[]{false, true})
+		{
+			for (double scale : new double[]{1, 2})
+			{
+				drawn(SidePanelExamples.sireWeapons(), smooth, scale, false);
+				drawn(SidePanelExamples.leviathanWeapons(), smooth, scale, false);
+			}
+		}
+	}
+
+	@Test
+	public void theCardsWeaponRowsShareOneForm()
+	{
+		// Each card's weapon rows are drawn in one form, the longest that fits them all: "30 attacks · 8.6 DPS
+		// (expected 7.6)" fits the Emberlight row but not the Scorching bow's, so neither has the attacks.
+		for (boolean smooth : new boolean[]{false, true})
+		{
+			for (double scale : new double[]{1, 2})
+			{
+				for (boolean larger : new boolean[]{false, true})
 				{
 					for (SidePanelModel.Input in : Arrays.asList(SidePanelExamples.sireWeapons(),
 						SidePanelExamples.leviathanWeapons()))
 					{
-						final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
-						p.apply(new PanelSnapshot(SidePanelModel.fight(in)));
-						p.setText(false, smooth);
-						try
+						final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
+						final List<String> shown = drawn(in, smooth, scale, larger);
+						int form = -1;
+						for (int i = 0; i < tab.damage.rows.size(); i++)
 						{
-							SidePanelPictures.draw(p.tabs(), p.fightTab(), scale);
-							for (SidePanelText t : all(SidePanelPictures.sectionOf(p.fightTab(), "damage"), SidePanelText.class))
+							final PanelSnapshot.Source s = tab.damage.rows.get(i);
+							if (s.dps == null)
 							{
-								assertFalse(layout + " " + smooth + " " + scale + ": " + t.getText() + " => " + t.lastShown(),
-									t.lastShown() != null && t.lastShown().contains(LedgerRows.CUT));
+								continue;
 							}
-						}
-						finally
-						{
-							SidePanelStyle.setText(false, false);
+							final List<String> forms = new ArrayList<>();
+							forms.add(s.sub);
+							forms.addAll(s.subShort);
+							final int f = forms.indexOf(shown.get(i));
+							assertTrue(shown.get(i), f >= 0);
+							assertTrue(smooth + " " + scale + " " + larger + ": " + shown, form < 0 || form == f);
+							form = f;
 						}
 					}
 				}
@@ -285,24 +310,20 @@ public class SidePanelWeaponDpsTest
 	}
 
 	@Test
-	public void builtOnceAndUpdatedInPlaceInEveryLayout()
+	public void builtOnceAndUpdatedInPlace()
 	{
-		for (SidePanelModel.DpsLayout layout : SidePanelModel.DpsLayout.values())
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.sireWeapons())));
+		final SidePanelFightTab tab = panel.fightTab();
+		SidePanelPictures.draw(panel.tabs(), tab, 1);
+		final int builds = tab.builds();
+		final int layouts = SidePanelParts.relayouts;
+		for (int i = 0; i < 10; i++)
 		{
-			SidePanelModel.dpsLayout = layout;
-			final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 			panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.sireWeapons())));
-			final SidePanelFightTab tab = panel.fightTab();
-			SidePanelPictures.draw(panel.tabs(), tab, 1);
-			final int builds = tab.builds();
-			final int layouts = SidePanelParts.relayouts;
-			for (int i = 0; i < 10; i++)
-			{
-				panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.sireWeapons())));
-			}
-			assertEquals(layout.toString(), builds, tab.builds());
-			assertEquals(layout.toString(), layouts, SidePanelParts.relayouts);
 		}
+		assertEquals(builds, tab.builds());
+		assertEquals(layouts, SidePanelParts.relayouts);
 	}
 
 	private static <T> List<T> all(Container c, Class<T> type)
