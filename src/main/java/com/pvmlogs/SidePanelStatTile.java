@@ -49,6 +49,7 @@ final class SidePanelStatTile extends JPanel
 		label.set(t.label);
 		value.set(t.value);
 		sub.set(t.sub);
+		sub.setShort(t.subShort);
 		if (wrapped != null)
 		{
 			wrapped.set(t.sub.text, t.sub.colour);
@@ -65,6 +66,12 @@ final class SidePanelStatTile extends JPanel
 	{
 		fill = f;
 		repaint();
+	}
+
+	/** The sub-line's text, for tests. */
+	SidePanelText subText()
+	{
+		return sub;
 	}
 
 	String valueText()

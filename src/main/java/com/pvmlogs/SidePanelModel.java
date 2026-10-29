@@ -187,6 +187,8 @@ final class SidePanelModel
 		/** Thrall, DoT and reflected damage on the scored fights only, each apart, for the Damage rows. */
 		int scoredThrall;
 		int scoredDot;
+		/** T-063: {@link #scoredDot} by kind (T-062); the part with no kind is the remainder, an old kill's. */
+		Map<String, Integer> scoredDotByKind = Collections.emptyMap();
 		int scoredReflect;
 		List<Target> targets = Collections.emptyList();
 		List<Room> rooms = Collections.emptyList();
@@ -230,6 +232,8 @@ final class SidePanelModel
 		/** The trip's whole other damage, for its "Other damage" rows. */
 		int thrall;
 		int dot;
+		/** T-063: {@link #dot} by kind. */
+		Map<String, Integer> dotByKind = Collections.emptyMap();
 		int reflect;
 		/**
 		 * T-044: HP taken by attack ({@code melee}, {@code melee off prayer}, {@code axe}, ...) over the scope's ended
@@ -383,17 +387,20 @@ final class SidePanelModel
 		int thrall = 0;
 		int dot = 0;
 		int reflect = 0;
+		final Map<String, Integer> dotByKind = new LinkedHashMap<>();
 		for (Fight f : fights)
 		{
 			if (f.isScored())
 			{
 				thrall += Math.max(0, f.getThrallDamage());
 				dot += Math.max(0, f.getDotDamage());
+				DotKinds.addAll(dotByKind, f.getDotDamageByKind());
 				reflect += Math.max(0, f.getReflectDamage());
 			}
 		}
 		in.scoredThrall = thrall;
 		in.scoredDot = dot;
+		in.scoredDotByKind = dotByKind;
 		in.scoredReflect = reflect;
 	}
 
@@ -760,10 +767,8 @@ final class SidePanelModel
 		{
 			other.add(row("thrall dmg", LedgerRows.number(in.thrall)));
 		}
-		if (in.dot > 0)
-		{
-			other.add(row("burn/poison dmg", LedgerRows.number(in.dot)));
-		}
+		// T-063: a line a kind, then "DoT dmg" for what has no kind (fights from before T-062).
+		dotRows(other, in.dotByKind, in.dot, " dmg");
 		if (in.reflect > 0)
 		{
 			other.add(row("recoil/veng dmg", LedgerRows.number(in.reflect)));
@@ -820,8 +825,10 @@ final class SidePanelModel
 		}
 		else
 		{
-			tiles.add(tile("Damage/expected", Text.title(LedgerRows.number(n.damage) + "/"
-				+ LedgerRows.number(Math.round(n.expected)), luck), Text.small(other, SidePanelStyle.SECONDARY), edge));
+			final String shortOther = otherDamageShort(in);
+			tiles.add(new Tile(Text.small("Damage/expected", SidePanelStyle.SECONDARY), Text.title(LedgerRows.number(n.damage)
+				+ "/" + LedgerRows.number(Math.round(n.expected)), luck), Text.small(other, SidePanelStyle.SECONDARY),
+				shortOther.equals(other) ? null : shortOther, edge));
 		}
 
 		tiles.add(tile("DPS", Text.title(Double.isNaN(n.dps) ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps),
@@ -845,6 +852,54 @@ final class SidePanelModel
 		return new Tile(Text.small(label, SidePanelStyle.SECONDARY), value, sub, edge);
 	}
 
+	/**
+	 * T-063: the tile's damage over time, by the kind it was: {@code 30 venom}, {@code 8 burn}; {@code 40 DoT} for an
+	 * old kill's, with no kind, or where there were several kinds (their split is on the Damage card).
+	 */
+	static String dotTile(Map<String, Integer> byKind, int total)
+	{
+		final Map<String, Integer> lines = DotKinds.split(byKind, total, DotKinds.REMAINDER);
+		if (lines.size() == 1)
+		{
+			final Map.Entry<String, Integer> only = lines.entrySet().iterator().next();
+			return LedgerRows.number(only.getValue()) + " " + only.getKey();
+		}
+		return LedgerRows.number(total) + " " + DotKinds.REMAINDER;
+	}
+
+	/** T-063: a row a kind with damage, in T-062's order, then the remainder as {@code DoT}: {@code venom dmg}. */
+	static void dotRows(List<Row> rows, Map<String, Integer> byKind, int total, String suffix)
+	{
+		for (Map.Entry<String, Integer> e : DotKinds.split(byKind, total, DotKinds.REMAINDER).entrySet())
+		{
+			rows.add(row(e.getKey() + suffix, LedgerRows.number(e.getValue())));
+		}
+	}
+
+	/** T-063: a kind's Damage row: {@code Burn}, {@code Venom}; the part with no kind is {@code Damage over time}. */
+	static String dotSourceName(String kind)
+	{
+		if (DotKinds.REMAINDER.equals(kind))
+		{
+			return "Damage over time";
+		}
+		return kind.isEmpty() ? kind : Character.toUpperCase(kind.charAt(0)) + kind.substring(1);
+	}
+
+	/**
+	 * T-063: {@link #otherDamage} with its damage over time as {@code N DoT}, for a tile too narrow for the kind's
+	 * name ({@code +80 thrall, 30 venom} doesn't fit at 1× in the RuneScape font).
+	 */
+	static String otherDamageShort(Input in)
+	{
+		final Input shorter = new Input();
+		shorter.scoredThrall = in.scoredThrall;
+		shorter.scoredReflect = in.scoredReflect;
+		shorter.scoredDot = in.scoredDot;
+		// No kinds: the whole as the remainder, DoT.
+		return otherDamage(shorter);
+	}
+
 	/** {@code +80 thrall}, {@code +80 thrall, 8 burn}: the player's other damage on the scored fights, kind by kind. */
 	static String otherDamage(Input in)
 	{
@@ -855,7 +910,7 @@ final class SidePanelModel
 		}
 		if (in.scoredDot > 0)
 		{
-			parts.add(LedgerRows.number(in.scoredDot) + " burn");
+			parts.add(dotTile(in.scoredDotByKind, in.scoredDot));
 		}
 		if (in.scoredReflect > 0)
 		{
@@ -1408,10 +1463,11 @@ final class SidePanelModel
 	/**
 	 * The Damage section (spec 3.1): a row per attack key from
 	 * {@link FightTimeline}'s attacks (T-036), weapons and spells, specials apart,
-	 * then thrall, burn/poison and recoil/vengeance. Shares are of all of them,
-	 * scored fights only, so they add to 100%. Weapon damage no attack holds (a
-	 * fight from before the panel loaded, or a splat waiting for its attack) gets
-	 * a row of its own, so the rows always add up to the scope's totals.
+	 * then thrall, each kind of damage over time (T-063) and recoil/vengeance.
+	 * Shares are of all of them, scored fights only, so they add to 100%. Weapon
+	 * damage no attack holds (a fight from before the panel loaded, or a splat
+	 * waiting for its attack) gets a row of its own, so the rows always add up to
+	 * the scope's totals.
 	 */
 	static PanelSnapshot.Sources damage(LedgerRows.Numbers n, Input in, boolean warning)
 	{
@@ -1457,7 +1513,11 @@ final class SidePanelModel
 			}
 		}
 		source(rows, "Thrall", in.scoredThrall, whole, SidePanelStyle.THRALL, -1, SidePanelIcons.THRALL_SPRITE);
-		source(rows, "Burn and poison", in.scoredDot, whole, SidePanelStyle.DOT, -1, -1);
+		// T-063: a row a kind of damage over time, each with its share of the whole card.
+		for (Map.Entry<String, Integer> e : DotKinds.split(in.scoredDotByKind, in.scoredDot, DotKinds.REMAINDER).entrySet())
+		{
+			source(rows, dotSourceName(e.getKey()), e.getValue(), whole, SidePanelStyle.DOT, -1, -1);
+		}
 		source(rows, "Recoil and vengeance", in.scoredReflect, whole, SidePanelStyle.REFLECT, SidePanelIcons.RECOIL_ITEM, -1);
 		if (rows.isEmpty())
 		{
@@ -1605,10 +1665,8 @@ final class SidePanelModel
 		{
 			rows.add(row("recoil/veng dmg", LedgerRows.number(s.reflectDamage())));
 		}
-		if (s.dotDamage() > 0)
-		{
-			rows.add(row("burn/poison dmg", LedgerRows.number(s.dotDamage())));
-		}
+		// T-063: a line a kind, then "DoT dmg" for what has no kind, as the overlay has them (T-062).
+		dotRows(rows, s.dotDamageByKind(), s.dotDamage(), " dmg");
 		// The boss's doing rather than the player's, so after the fight only (own-output guardrail).
 		if (s.healed() > 0)
 		{
@@ -1638,7 +1696,10 @@ final class SidePanelModel
 	 */
 	static PanelSnapshot.Rows taken(LedgerRows.Scope s, Input in, boolean avoidable)
 	{
-		if (s.damageTaken() <= 0 && s.dotTaken() <= 0)
+		// T-063: what the boss's damage over time was (venom, poison, ...) is its doing, so after the fight only, as the
+		// overlay has it (T-062). Before T-063 the panel showed burn/poison taken while the fight ran.
+		final boolean dotShown = in.ended && s.dotTaken() > 0;
+		if (s.damageTaken() <= 0 && !dotShown)
 		{
 			return null;
 		}
@@ -1674,10 +1735,10 @@ final class SidePanelModel
 		rows.add(new Row(Text.small("without protection", SidePanelStyle.BODY),
 			Text.small(LedgerRows.number(s.damageTakenUnprotected()), s.damageTakenUnprotected() > 0
 				? SidePanelStyle.COST : SidePanelStyle.BODY)));
-		if (s.dotTaken() > 0)
+		// By kind, as the overlay has them (T-062, T-063): poison taken, venom taken, ..., then DoT taken.
+		if (dotShown)
 		{
-			// Named as the overlay names it (Eric, 2026-10-27): burn and bleed count too.
-			rows.add(row("burn/poison taken", LedgerRows.number(s.dotTaken())));
+			dotRows(rows, s.dotTakenByKind(), s.dotTaken(), " taken");
 		}
 		return new PanelSnapshot.Rows(Text.title(LedgerRows.number(s.damageTaken()), SidePanelStyle.VALUE), rows);
 	}

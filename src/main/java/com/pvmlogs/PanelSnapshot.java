@@ -277,14 +277,22 @@ final class PanelSnapshot
 		final Text label;
 		final Text value;
 		final Text sub;
+		/** T-063: the sub-line shown instead when {@link #sub} doesn't fit the tile ({@code 38 DoT}); null for none. */
+		final String subShort;
 		/** The 2 px top edge: Track, or the value's colour when it's coloured. */
 		final Color edge;
 
 		Tile(Text label, Text value, Text sub, Color edge)
 		{
+			this(label, value, sub, null, edge);
+		}
+
+		Tile(Text label, Text value, Text sub, String subShort, Color edge)
+		{
 			this.label = label;
 			this.value = value;
 			this.sub = sub;
+			this.subShort = subShort;
 			this.edge = edge;
 		}
 	}
