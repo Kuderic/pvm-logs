@@ -353,7 +353,11 @@
           {"name": "pathfinder", "insideNpc": {"npcIds": [12220], "range": 1}, "styles": ["RANGED"], "accuracy": 1.0, "minHitShare": 0.2, "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: the abyssal pathfinder 'has a 5x5 Area-of-Effect'; inside, the player is 'granted perfect accuracy and an increased minimum hit', Mod Ash: 'it's ensuring you hit for at least 20% of your max'. The npc is LEVIATHAN_BUFF_NPC (12220); the range is the wiki's radius marker, 'a Ranged attack range of 1 for normal Leviathan, or ... 2 for Awakened' (the awakened 7x7 is not modelled). Judged where the player stands when the attack goes out (Eric, 2026-10-28). Outside it 'the player's attacks will deal less damage': by how much is not stated, so not modelled. Eric's kill: 7 of 7 enrage shots landed."},
           {"name": "pathfinder", "insideNpc": {"npcIds": [12220], "range": 1}, "styles": ["MAGIC"], "multiply": [2, 1], "source": "OSRS Wiki, read 2026-10-28: The Leviathan/Strategies: 'Attacking with magic instead of ranged while within the pathfinder's AoE will grant doubled damage instead of perfect accuracy.'"}
         ]
-      }
+      },
+      "uptimeAllowances": [
+        {"state": "stunned", "from": "cast", "maxTicks": 7, "afterTicks": 0, "source": "T-074, PROPOSED, for Eric to approve. Running behind the stunned Leviathan to shoot its wound is the mechanic (Eric, 2026-10-28 23:36). Measured over his 13 Leviathan logs of 2026-10-28/29 (87 stuns), idle ticks from the cast to the stun's end (the wound shot, or 15 ticks from the landing), with the cast and free shot counted as T-078 counts them: median 6, 75th percentile 7, 90th 9, most 15. The cap is the 75th percentile."},
+        {"state": "special", "from": "open", "maxTicks": 4, "afterTicks": 6, "source": "T-074, PROPOSED, for Eric to approve. Dodging the Leviathan's lightning barrage and smoke blast, and getting back into position after. Over the same logs (61 specials), idle ticks inside the window and the 6 ticks after it: median 0, 75th percentile 4, 90th 7, most 17 (the smoke blasts alone: 75th 3; the barrages: 75th 4). The cap is the 75th percentile."}
+      ]
     },
     {
       "name": "The Whisperer",

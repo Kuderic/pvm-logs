@@ -279,6 +279,17 @@ final class ModifierTracker
 		}
 	}
 
+	/**
+	 * The window of {@code state} open on {@code tick}, or set to open after it
+	 * (a stun cast still in the air), as {start, end}; null for none (T-074).
+	 */
+	int[] window(int npcIndex, String state, int tick)
+	{
+		final Boss b = bosses.get(npcIndex);
+		final Window w = b == null ? null : b.windows.get(state);
+		return w == null || w.end <= tick ? null : new int[]{w.start, w.end};
+	}
+
 	/** Whether a state is open at this (landing) tick. */
 	boolean isOpen(int npcIndex, String state, int tick)
 	{

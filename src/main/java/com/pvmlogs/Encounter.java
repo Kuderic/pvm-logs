@@ -929,6 +929,17 @@ class Encounter
 		return ideal <= 0 ? -1 : cost / ideal;
 	}
 
+	/** Idle ticks its bosses' mechanics excused (T-074). */
+	int getTicksMechanics()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getTicksMechanics();
+		}
+		return total;
+	}
+
 	int getTicksLostEating()
 	{
 		int total = 0;

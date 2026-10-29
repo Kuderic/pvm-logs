@@ -374,6 +374,8 @@ public class PvmPerformancePlugin extends Plugin
 	// The boss modifiers each tick's figures were worked out with (T-078), for the ATTACK line: read at the booking they
 	// were the ones left after the attack's own splat had closed its window.
 	private final Map<Integer, String> modifiersByTick = new HashMap<>();
+	// Downtime the boss's mechanics force, excused from uptime up to each allowance's cap (T-074).
+	private final MechanicAllowances mechanics = new MechanicAllowances(line -> debug.log("%s", line));
 	// The figures as they stood when the attack was seen, or on the tick before a switch since it was thrown (T-065). The
 	// per-tick snapshot is written at GameTick, after any switch made during it, and a projectile surfaces two ticks after
 	// its throw, by when the weapon that threw it may be gone.
@@ -3320,6 +3322,11 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			damageModifiers.onPlayerCast(castAt, manual, client.getTickCount() + magicHitDelay(castDistance(castAt)));
 		}
+		if (stuns)
+		{
+			// An allowance counted from the cast starts here, not at the landing (T-074).
+			mechanics.noteCast(client.getTickCount());
+		}
 		if (!booksFromAnimation(manual, stuns) || lastCastBookedTick == client.getTickCount())
 		{
 			// One with a projectile is booked from it, which spends the click.
@@ -3868,6 +3875,18 @@ public class PvmPerformancePlugin extends Plugin
 		// added, idle after it.
 		final int added = foodDelay.added(attackDueTick);
 		final boolean eating = FoodDelay.isEatingTick(client.getTickCount(), attackDueTick, lag, added);
+		// Downtime a boss's mechanic forced, inside its allowance (T-074): neutral, not lost. Judged on the tick the idle
+		// attack would have gone out, a booking lag before this one, as the windows are.
+		final MechanicAllowances.Run excused = eating || !counts ? null
+			: mechanics.excuse(client.getTickCount() - lag);
+		if (excused != null)
+		{
+			current.recordTickMechanic(roomEngaged);
+			session.recordTickMechanic(current.isScored());
+			debug.log("tick MECHANIC: overdue since %d + lag %d, excused by %s (%d of %d)", attackDueTick, lag,
+				excused.allowance.state, excused.excused, excused.allowance.maxTicks);
+			return;
+		}
 		current.recordTickLost(eating, roomEngaged);
 		if (counts)
 		{
@@ -3879,6 +3898,21 @@ public class PvmPerformancePlugin extends Plugin
 			eating ? String.format(" (eating %d/%d)",
 				FoodDelay.eatingTickNumber(client.getTickCount(), attackDueTick, lag), added) : "",
 			attackDueTick, lag, counts ? "" : ", NOT COUNTED - no attack made in this fight yet");
+	}
+
+	/** Shows the uptime allowances the fight's target has the windows they ride on this tick (T-074). */
+	private void observeMechanics()
+	{
+		if (current == null || current.isEnded() || targetNpc == null)
+		{
+			return;
+		}
+		final List<BossRules.UptimeAllowance> allowances = damageModifiers.uptimeAllowances(targetNpc);
+		if (!allowances.isEmpty())
+		{
+			final NPC boss = targetNpc;
+			mechanics.observe(client.getTickCount(), allowances, state -> damageModifiers.window(boss, state));
+		}
 	}
 
 	// The hidden per-account key holding the blowpipe dart last seen (T-015).
@@ -4316,6 +4350,8 @@ public class PvmPerformancePlugin extends Plugin
 		drain.onGameTick();
 		// Damage-modifier windows that ran out (T-057).
 		damageModifiers.onGameTick();
+		// And the windows the boss's uptime allowances ride on, as they stand now (T-074).
+		observeMechanics();
 		// The tick's splats against the max each attack was expected to have (T-056).
 		maxHits.endTick(client.getTickCount());
 		// What they and the party's did to the fights' outcome distributions (T-050).
@@ -4528,6 +4564,7 @@ public class PvmPerformancePlugin extends Plugin
 		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount());
 		// Tags stripped: some names carry colour markup and it was reaching the CSV verbatim, "<col=00ffff>Rubble</col>" and
 		// all.
+		mechanics.reset();
 		current = new Fight(Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(),
 			maxHp, now,
 			raidType, raidCounter);
@@ -5131,6 +5168,7 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void finalizeFight(boolean died, long now, String reason, boolean keepCounts)
 	{
+		mechanics.finish();
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
 				+ "combatTicks=%d expDamage=%.1f",
 			current.getTargetName(), current.getTargetId(), reason, current.getAttempts(), current.getAttacksMade(),

@@ -121,6 +121,20 @@ class DamageModifiers
 		tracker.onModifiersLanded(npc.getIndex(), boss.name, boss.damageModifiers, names, now);
 	}
 
+	/** The window of the boss's state open or set to open now, as {start, end}; null for none (T-074). */
+	int[] window(NPC npc, String state)
+	{
+		return npc == null ? null : tracker.window(npc.getIndex(), state, client.getTickCount());
+	}
+
+	/** The boss's uptime allowances (T-074); empty for one with none. */
+	List<BossRules.UptimeAllowance> uptimeAllowances(NPC npc)
+	{
+		final BossRules rules = npc == null ? null : monsters.rules();
+		final BossRules.Boss boss = rules == null ? null : rules.forNpc(npc.getId());
+		return boss == null || boss.uptimeAllowances == null ? Collections.emptyList() : boss.uptimeAllowances;
+	}
+
 	void onGameTick()
 	{
 		tracker.tick(client.getTickCount());

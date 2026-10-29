@@ -113,6 +113,7 @@ final class FightTimeline
 	private double totalVariance;
 	private int lostTicks;
 	private int eatingTicks;
+	private int mechanicTicks;
 	// The expectation the plugin said the next one is for; spent by it.
 	private Attack expectFor;
 	// The splat Fight just counted, until the plugin says whose it is (attributeSplat); handed to the latest attack if the
@@ -237,6 +238,18 @@ final class FightTimeline
 	private void tickSpentTimed()
 	{
 		setState(clock.getAsInt(), COOLDOWN);
+	}
+
+	/**
+	 * {@link Fight#recordTickMechanic}, when it counts (T-074): drawn as a
+	 * cooldown tick, neutral, until the side panel gives it a colour of its own.
+	 */
+	void tickMechanic()
+	{
+		final long t0 = PerfProbe.start(probe);
+		setState(clock.getAsInt(), COOLDOWN);
+		mechanicTicks++;
+		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
 	}
 
 	/** {@link Fight#recordTickLost}, when it counts. */
@@ -597,6 +610,12 @@ final class FightTimeline
 	int lostTicks()
 	{
 		return lostTicks + eatingTicks;
+	}
+
+	/** The idle ticks a boss's mechanic excused (T-074), as {@link Fight#getTicksMechanics()}. */
+	int mechanicTicks()
+	{
+		return mechanicTicks;
 	}
 
 	int eatingTicks()
