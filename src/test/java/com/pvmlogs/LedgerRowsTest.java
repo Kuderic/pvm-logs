@@ -151,8 +151,8 @@ public class LedgerRowsTest
 		// and eating has its own line, neutral.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
+			emph("Luck", "8 s slower", COST),
 			main("Execution", "92%"),
 			d(" uptime", "93% (-5 s)", COST),
 			d(" prayer", "100%"),
@@ -169,8 +169,8 @@ public class LedgerRowsTest
 		// Eric's kill. 688 + thrall 80 - healed 68 = 700, the boss's HP.
 		assertRows(Arrays.asList(
 			title("Vardorvis (dead)", "2:16"),
-			emph("Luck", "14 s slower", COST),
 			damage("688/778", COST),
+			emph("Luck", "14 s slower", COST),
 			main("Execution", "87%"),
 			d(" uptime", "89% (-15 s)", COST),
 			d(" prayer", "100%"),
@@ -191,8 +191,8 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis (ended)", "2:20"),
-			emph("Luck", "15 s slower", COST),
 			damage("721/812", COST),
+			emph("Luck", "15 s slower", COST),
 			main("Execution", "93%"),
 			d(" uptime", "94% (-8 s)", COST),
 			d(" prayer", "100%"),
@@ -214,8 +214,8 @@ public class LedgerRowsTest
 		// The trip keeps no heal (only thrall and DoT were added for it), so there's no "boss healed" row.
 		assertRows(Arrays.asList(
 			title("Trip · 6 kills", "12:40"),
-			emph("Luck", "14 s slower", NEUTRAL),
 			damage("4,120/4,201", NEUTRAL),
+			emph("Luck", "14 s slower", NEUTRAL),
 			main("Execution", "93%"),
 			d(" uptime", "96% (-31 s)", COST),
 			d(" prayer", "99% (-3 s)"),
@@ -245,8 +245,8 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("ToA · 3 rooms", "9:12"),
-			emph("Luck", "13 s faster", BETTER),
 			damage("8,410/8,200", BETTER),
+			emph("Luck", "13 s faster", BETTER),
 			main("Execution", "86%"),
 			d(" uptime", "90% (-55 s)", COST),
 			d(" prayer", "98% (-12 s)", COST),
@@ -277,9 +277,9 @@ public class LedgerRowsTest
 		// The warning takes Luck's place, and damage shows without an expected figure.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
+			emph("Damage", "370", NEUTRAL),
 			r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL),
 			d(" luck hidden until it's fixed", ""),
-			emph("Damage", "370", NEUTRAL),
 			main("Execution", "92%"),
 			d(" uptime", "93% (-5 s)", COST),
 			d(" prayer", "100%"),
@@ -499,9 +499,9 @@ public class LedgerRowsTest
 		// Nothing to expect from: Luck and Execution read a dash, uptime still counts.
 		assertRows(Arrays.asList(
 			title("New boss", "0:48"),
-			emph("Luck", "—", NEUTRAL),
 			emph("Damage", "212", NEUTRAL),
 			d(" no monster data yet", ""),
+			emph("Luck", "—", NEUTRAL),
 			main("Execution", "—"),
 			d(" uptime", "95% (-2 s)", COST),
 			d(" damage taken", "36")),
@@ -513,8 +513,8 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
+			emph("Luck", "8 s slower", COST),
 			main("Execution", "92%"),
 			d(" uptime", "93% (-5 s)", COST),
 			d(" setup", "98% (-1 s)"),
@@ -531,8 +531,8 @@ public class LedgerRowsTest
 		// T-022: no loadout under the fight's rows; it has an overlay of its own.
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
-			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
+			emph("Luck", "8 s slower", COST),
 			main("Execution", "92%"),
 			d(" uptime", "93% (-5 s)", COST),
 			d(" prayer", "100%"),
@@ -547,7 +547,7 @@ public class LedgerRowsTest
 	public void theLedgerKeepsItsOwnWarning()
 	{
 		final List<Row> rows = build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, true));
-		assertEquals(r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL), rows.get(1));
+		assertEquals(r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL), rows.get(2));
 		assertEquals(d(" damage taken", "112"), rows.get(rows.size() - 2));
 		assertEquals(d(" eating", "1 s"), rows.get(rows.size() - 1));
 	}
@@ -1135,7 +1135,7 @@ public class LedgerRowsTest
 		final List<Row> rows = build(sire, State.fight("Abyssal Sire", true, true, false));
 		assertEquals(title("Abyssal Sire", "1:51").left + " (dead)", rows.get(0).left);
 		assertEquals("1:51", rows.get(0).right);
-		assertEquals("20 s slower", rows.get(1).right);
+		assertEquals("20 s slower", rows.get(2).right);
 		// T-073: no DPS row on the overlay; the side panel's tile reads Numbers.dps.
 		assertFalse(rows.stream().anyMatch(row -> row.left.equals("DPS")));
 	}
@@ -1324,17 +1324,18 @@ public class LedgerRowsTest
 		final FakeScope kill = LedgerExamples.kill();
 		kill.damageVariance = 11436;
 		final List<Row> rows = build(kill, State.fight("Vardorvis", true, true, false));
-		assertEquals("bottom 20% (14 s slower)", rows.get(1).right);
-		assertEquals(COST, rows.get(1).rightColour);
-		// Damage/expected takes the same colour.
+		// Luck sits under Damage/expected (Eric, 2026-10-28).
+		assertEquals("bottom 20% (14 s slower)", rows.get(2).right);
 		assertEquals(COST, rows.get(2).rightColour);
+		// Damage/expected takes the same colour.
+		assertEquals(COST, rows.get(1).rightColour);
 		// The short form for a narrow panel is the band alone.
-		assertEquals("bottom 20%", rows.get(1).shortRight);
+		assertEquals("bottom 20%", rows.get(2).shortRight);
 		// A middling fight: "average", neutral, even though its seconds would have coloured it.
 		kill.damageVariance = 200_000;
 		final List<Row> middling = build(kill, State.fight("Vardorvis", true, true, false));
-		assertEquals("average (14 s slower)", middling.get(1).right);
-		assertEquals(NEUTRAL, middling.get(1).rightColour);
+		assertEquals("average (14 s slower)", middling.get(2).right);
+		assertEquals(NEUTRAL, middling.get(2).rightColour);
 	}
 
 	@Test
@@ -1343,7 +1344,7 @@ public class LedgerRowsTest
 		final FakeScope close = LedgerExamples.midFight();
 		close.damage = 417;
 		close.damageVariance = 4000;
-		assertEquals("average", build(close, State.fight("Vardorvis", false, false, false)).get(1).right);
+		assertEquals("average", build(close, State.fight("Vardorvis", false, false, false)).get(2).right);
 	}
 
 	@Test
@@ -1352,7 +1353,7 @@ public class LedgerRowsTest
 		final FakeScope kill = LedgerExamples.kill();
 		kill.damageVariance = -1;
 		final List<Row> rows = build(kill, State.fight("Vardorvis", true, true, false));
-		assertEquals(emph("Luck", "14 s slower", COST), rows.get(1));
+		assertEquals(emph("Luck", "14 s slower", COST), rows.get(2));
 		assertNull(rows.get(1).shortRight);
 	}
 
@@ -1369,7 +1370,7 @@ public class LedgerRowsTest
 		sire.thrallDamage = 0;
 		sire.dotDamage = 8;
 		sire.damageVariance = 11_200;
-		assertEquals("bottom 6% (20 s slower)", build(sire, State.fight("Abyssal Sire", true, true, false)).get(1).right);
+		assertEquals("bottom 6% (20 s slower)", build(sire, State.fight("Abyssal Sire", true, true, false)).get(2).right);
 	}
 
 	@Test
@@ -1715,7 +1716,9 @@ public class LedgerRowsTest
 	public void liveTrackedOverBaseUnderDamageExpected()
 	{
 		final List<Row> rows = running(LedgerExamples.midFight(), live(145, 0, 150));
-		assertEquals(Arrays.asList(d(" defence", "145 / 215"), main("Execution", "92%")), afterDamage(rows, 2));
+		// The defence row stays under Damage/expected; Luck follows it (Eric, 2026-10-28).
+		assertEquals(d(" defence", "145 / 215"), afterDamage(rows, 1).get(0));
+		assertEquals("Luck", afterDamage(rows, 2).get(1).left);
 	}
 
 	@Test

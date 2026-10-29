@@ -1491,19 +1491,6 @@ final class LedgerRows
 		// By the percentile when it's known (T-029), else by the seconds as before.
 		final Colour luckColour = Double.isNaN(n.percentile) ? luckColour(n.luck, n.clock) : percentileBand(n.percentile);
 		final boolean noData = n.expected <= 0;
-		if (settings.luck && !state.warning)
-		{
-			// A short form for a panel saved too narrow: the band without its seconds (T-029).
-			final String band = Double.isNaN(n.luck) || Double.isNaN(n.percentile) ? null : band(n.percentile);
-			rows.add(new Row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, luckColour, null,
-				band));
-			specs(rows, n, scope, state);
-		}
-		if (state.warning)
-		{
-			rows.add(row(WARNING_TEXT, "", FontRole.BODY, FontRole.BODY, Colour.WARNING, Colour.NEUTRAL));
-			rows.add(detail(" luck hidden until it's fixed", "", Colour.NEUTRAL));
-		}
 		if (!state.warning && !noData)
 		{
 			// No spaces round the slashes (Eric, 2026-10-26): they only widened the panel. Without them the label is one word,
@@ -1523,6 +1510,20 @@ final class LedgerRows
 		if (!state.warning)
 		{
 			drain(rows, n, scope, state);
+		}
+		// Luck under Damage/expected and its defence rows (Eric, 2026-10-28), where the warning stands in for it.
+		if (settings.luck && !state.warning)
+		{
+			// A short form for a panel saved too narrow: the band without its seconds (T-029).
+			final String band = Double.isNaN(n.luck) || Double.isNaN(n.percentile) ? null : band(n.percentile);
+			rows.add(new Row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, luckColour, null,
+				band));
+			specs(rows, n, scope, state);
+		}
+		if (state.warning)
+		{
+			rows.add(row(WARNING_TEXT, "", FontRole.BODY, FontRole.BODY, Colour.WARNING, Colour.NEUTRAL));
+			rows.add(detail(" luck hidden until it's fixed", "", Colour.NEUTRAL));
 		}
 		// No DPS row (T-073, Eric 2026-10-28: "remove DPS"): the side panel has its tile, the DPS overlay the expected DPS.
 		// T-043: avoidable eating counts once the fight is over, at a boss with attack rules, and only then: nothing about
