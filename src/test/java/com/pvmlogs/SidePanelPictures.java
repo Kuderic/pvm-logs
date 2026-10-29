@@ -91,6 +91,9 @@ public final class SidePanelPictures
 			write(out, "16a-taken-mid-fight", scale, render(SidePanelExamples.takenMidFight(), scale));
 			write(out, "16b-taken-after", scale, render(SidePanelExamples.ruledKill(true), scale));
 			write(out, "16c-trip-while-fighting", scale, renderTrip(SidePanelExamples.tripWhileFighting(), scale));
+			// T-068 part 2: a Sire room with a respiratory system dead runs on; the Sire's death ends it.
+			write(out, "16d-sire-lung-dead-running", scale, render(SidePanelExamples.sireRoom(false), scale));
+			write(out, "16e-sire-dead", scale, render(SidePanelExamples.sireRoom(true), scale));
 		}
 	}
 
