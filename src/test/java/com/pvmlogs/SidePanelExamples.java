@@ -580,6 +580,26 @@ final class SidePanelExamples
 		return drainKill("Xarth", d);
 	}
 
+	// ---- T-081: forced downtime (T-074's mechanics ticks) in the side panel ----
+
+	/**
+	 * A Leviathan kill (illustrative): three stuns (7 ticks each, T-074's cap) and two specials (4 each) forced 29 idle
+	 * ticks, 17 s; besides 10 lost ticks and 4 of eating.
+	 */
+	static SidePanelModel.Input leviathanKill()
+	{
+		final SidePanelTimelineExamples.Built b = SidePanelTimelineExamples.fight("The Leviathan", "Zaryte crossbow",
+			net.runelite.api.gameval.ItemID.ZARYTE_XBOW, 260, new int[]{6, 30}, new int[]{150, 10}, new int[]{200, 4},
+			new int[]{40, 7, 95, 4, 120, 7, 175, 4, 225, 7}, 520, 560, 80, 74, 210);
+		b.fight.end(true, at(14, 12));
+		final SidePanelModel.Input in = SidePanelTimelineExamples.input(b, true);
+		in.zone = ZONE;
+		in.endMillis = at(14, 12);
+		in.solo = true;
+		in.maxHp = 900;
+		return in;
+	}
+
 	// ---- T-072: times of day with am and pm ----
 
 	/** The kill, ended at this time of day: the header's {@code 12:00 am}, {@code 12:00 pm}, {@code 12:05 am}. */

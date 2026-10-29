@@ -53,6 +53,11 @@ final class SidePanelStyle
 	/** The time budget's eating stretch (T-038): a light, neutral grey, apart from the unscored grey and luck's stripes. */
 	static final Color EATING = new Color(0xA8A8A8);
 	/**
+	 * T-081: time a boss's mechanic forced on you (T-074): neutral like eating, in a lighter grey so the two read apart on
+	 * the bar and the strip.
+	 */
+	static final Color MECHANICS = new Color(0xDADADA);
+	/**
 	 * T-042: laid over the time budget's segments past your clock, where luck
 	 * saved the time: the card's colour at 60%, so they show at about 40%.
 	 */

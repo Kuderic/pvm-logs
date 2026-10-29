@@ -334,6 +334,8 @@ final class PanelSnapshot
 		UNSCORED,
 		/** Time spent eating (T-038): neutral, neither kept nor a cost. */
 		EATING,
+		/** T-081: time a boss's mechanic forced (T-074): neutral, neither kept nor a cost, apart from eating. */
+		MECHANICS,
 		/**
 		 * Only as a row's swatch (T-042): the time luck saved, drawn on the bar as
 		 * the stretch past your clock, dimmed under light stripes.
@@ -501,12 +503,22 @@ final class PanelSnapshot
 		/** The strip's legend counts. */
 		final int lost;
 		final int eating;
+		/** T-081: the ticks a boss's mechanic forced (T-074); 0 for a boss without allowances, or an old kill. */
+		final int mechanics;
 		/** The colour most attacks were in, for the legend's "attack" swatch. */
 		final Color attackColour;
 
 		Chart(int from, int length, float[] damage, float[] expected, float[] variance, byte[] states, byte[] styles,
 			Color actual, boolean expectedShown, boolean rangeShown, String end, String youLegend, String expectedLegend,
 			int lost, int eating, Color attackColour)
+		{
+			this(from, length, damage, expected, variance, states, styles, actual, expectedShown, rangeShown, end, youLegend,
+				expectedLegend, lost, eating, 0, attackColour);
+		}
+
+		Chart(int from, int length, float[] damage, float[] expected, float[] variance, byte[] states, byte[] styles,
+			Color actual, boolean expectedShown, boolean rangeShown, String end, String youLegend, String expectedLegend,
+			int lost, int eating, int mechanics, Color attackColour)
 		{
 			this.from = from;
 			this.length = length;
@@ -523,6 +535,7 @@ final class PanelSnapshot
 			this.expectedLegend = expectedLegend;
 			this.lost = lost;
 			this.eating = eating;
+			this.mechanics = mechanics;
 			this.attackColour = attackColour;
 		}
 	}

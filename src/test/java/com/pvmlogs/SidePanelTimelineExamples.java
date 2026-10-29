@@ -54,6 +54,15 @@ final class SidePanelTimelineExamples
 	static Built fight(String boss, String specName, int specItem, int ticks, int[] specials, int[] lost, int[] eating,
 		int tentacleDamage, double tentacleExpected, int specDamage, double specExpected, double variancePerAttack)
 	{
+		return fight(boss, specName, specItem, ticks, specials, lost, eating, new int[0], tentacleDamage, tentacleExpected,
+			specDamage, specExpected, variancePerAttack);
+	}
+
+	/** As above, with idle ticks a boss's mechanic forced in {@code mechanics} spans (T-074; T-081's Leviathan). */
+	static Built fight(String boss, String specName, int specItem, int ticks, int[] specials, int[] lost, int[] eating,
+		int[] mechanics, int tentacleDamage, double tentacleExpected, int specDamage, double specExpected,
+		double variancePerAttack)
+	{
 		final int[] clock = {0};
 		final FightTimeline.Store store = new FightTimeline.Store();
 		store.setClock(() -> clock[0]);
@@ -66,7 +75,7 @@ final class SidePanelTimelineExamples
 		int cooldown = 0;
 		for (int t = 0; t < ticks; t++)
 		{
-			if (!in(t, lost) && !in(t, eating) && cooldown == 0)
+			if (!in(t, lost) && !in(t, eating) && !in(t, mechanics) && cooldown == 0)
 			{
 				attacks++;
 				cooldown = 4;
@@ -84,6 +93,12 @@ final class SidePanelTimelineExamples
 		for (int t = 0; t < ticks; t++)
 		{
 			clock[0] = t;
+			if (in(t, mechanics))
+			{
+				f.recordTickMechanic(true);
+				cooldown = 0;
+				continue;
+			}
 			if (in(t, lost) || in(t, eating))
 			{
 				f.recordTickLost(in(t, eating));

@@ -1085,9 +1085,13 @@ final class SidePanelModel
 		// the plugin can't tell why you ate. After a ruled fight (T-044) its avoidable part Ca is a cost of its own and
 		// the rest stays neutral; best play is the same: B = T - U + L - (Cu + Ca + (Ce - Ca) + Cb + Cp + Cg).
 		final double e = Double.isNaN(n.eatingCost) ? 0 : n.eatingCost;
+		// T-081: the time a boss's mechanic forced (T-074) is a stretch of its own after eating, in a lighter neutral
+		// grey: not a cost, and not best play either, which is the time spent attacking with no losses at average luck.
+		// B = T - U + L - (Cu + Ce + M + Cb + Cp + Cg). Before T-081 it sat inside best play's stretch.
+		final double m = Double.isNaN(n.mechanicsCost) ? 0 : n.mechanicsCost;
 		final double ca = avoidableShown(n, in) ? avoidableEating(n) : 0;
 		final boolean caCosting = LedgerRows.isCosting(ca, n.clock);
-		double costSum = e;
+		double costSum = e + m;
 		for (double c : costs)
 		{
 			costSum += c;
@@ -1113,6 +1117,11 @@ final class SidePanelModel
 					segments.add(new Segment(ca, caCosting ? Fill.COST : Fill.MINOR_COST));
 				}
 				segments.add(new Segment(e - ca, Fill.EATING));
+				if (m > 0)
+				{
+					// Only where a boss's mechanic forced some: the bar of every other fight is as it was.
+					segments.add(new Segment(m, Fill.MECHANICS));
+				}
 			}
 		}
 		segments.add(new Segment(Math.max(0, -l), averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER));
@@ -1153,6 +1162,11 @@ final class SidePanelModel
 			{
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
 					Text.small("+" + SidePanelStyle.seconds(e - ca), SidePanelStyle.BODY)));
+			}
+			if (i == 0 && LedgerRows.roundHalfAway(m) >= 1)
+			{
+				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(MECHANICS, SidePanelStyle.BODY), null,
+					Text.small("+" + SidePanelStyle.seconds(m), SidePanelStyle.BODY)));
 			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
@@ -1203,6 +1217,9 @@ final class SidePanelModel
 			averageBand ? SidePanelStyle.AVERAGE_STRIPE : SidePanelStyle.BETTER, clockLabel, endLabel, marker, rows, average,
 			note);
 	}
+
+	/** T-081: the time budget's and the strip's word for the ticks a boss's mechanic forced (T-074). */
+	static final String MECHANICS = "mechanics";
 
 	/** {@code 23 s slower}, {@code 5 s faster}, {@code even}: this kill's time against a usual one. */
 	static String against(double seconds, double usual)
@@ -1666,6 +1683,7 @@ final class SidePanelModel
 		final byte[] styles = new byte[length - from];
 		int lost = 0;
 		int eating = 0;
+		int mechanics = 0;
 		final int[] byStyle = new int[FightTimeline.Style.values().length];
 		for (FightTimeline.Attack a : v.attacks)
 		{
@@ -1689,6 +1707,10 @@ final class SidePanelModel
 			{
 				eating++;
 			}
+			else if (state == FightTimeline.MECHANIC)
+			{
+				mechanics++;
+			}
 		}
 		int main = FightTimeline.Style.UNKNOWN.ordinal();
 		for (int i = 0; i < byStyle.length; i++)
@@ -1707,7 +1729,7 @@ final class SidePanelModel
 			Arrays.copyOfRange(v.states, from, length), styles,
 			luckColour == LedgerRows.Colour.NEUTRAL || warning ? SidePanelStyle.VALUE : SidePanelStyle.of(luckColour),
 			!warning, !warning && rangeKnown, LedgerRows.clock(ticks), "you " + LedgerRows.number(Math.round(last)),
-			expectedLegend(lastExpected, s), lost, eating,
+			expectedLegend(lastExpected, s), lost, eating, mechanics,
 			styleColour(FightTimeline.Style.values()[main], false));
 	}
 
@@ -1758,6 +1780,13 @@ final class SidePanelModel
 		if (s.ticksLostEating() > 0 && LedgerRows.roundHalfAway(eating) >= 1)
 		{
 			rows.add(row("eating", LedgerRows.roundHalfAway(eating) + " s"));
+		}
+		// T-081: the idle time a boss's mechanic forced (T-074), beside eating and neutral like it, as the overlay's
+		// T-080 line. Nothing for a boss with no allowances, or an old kill.
+		final long mechanics = LedgerRows.roundHalfAway(Math.max(0, s.ticksMechanics()) * LedgerRows.SECONDS_PER_TICK);
+		if (mechanics >= 1)
+		{
+			rows.add(row("mechanics", mechanics + " s"));
 		}
 		return rows.isEmpty() ? null : new PanelSnapshot.Rows(null, rows);
 	}

@@ -237,6 +237,9 @@ final class SidePanelTickStrip extends JComponent
 				return SidePanelStyle.EATING;
 			case FightTimeline.UNSCORED:
 				return SidePanelStyle.UNSCORED;
+			case FightTimeline.MECHANIC:
+				// T-081: neutral, apart from lost and eating: a boss's mechanic forced it.
+				return SidePanelStyle.MECHANICS;
 			default:
 				return SidePanelStyle.TRACK;
 		}
