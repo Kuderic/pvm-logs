@@ -365,6 +365,15 @@ public class PvmPerformancePlugin extends Plugin
 	// mechanic cast that deals nothing (the Leviathan's stun), scored at nothing expected.
 	private boolean attackObservedFromCast;
 	private boolean attackIsMechanic;
+	// T-078: the attack being observed is a cast that resets the attack delay (the Leviathan's stun), and the tick it was
+	// observed on, which lets the weapon's next shot go out the tick after; and the attack is a projectile that dropped a
+	// spell click that never cast, so it went out at the weapon's speed, not the spell's.
+	private boolean attackResetsDelay;
+	private int delayResetTick = Integer.MIN_VALUE;
+	private boolean attackDroppedCast;
+	// The boss modifiers each tick's figures were worked out with (T-078), for the ATTACK line: read at the booking they
+	// were the ones left after the attack's own splat had closed its window.
+	private final Map<Integer, String> modifiersByTick = new HashMap<>();
 	// The figures as they stood when the attack was seen, or on the tick before a switch since it was thrown (T-065). The
 	// per-tick snapshot is written at GameTick, after any switch made during it, and a projectile surfaces two ticks after
 	// its throw, by when the weapon that threw it may be gone.
@@ -707,6 +716,7 @@ public class PvmPerformancePlugin extends Plugin
 		ringByTick.clear();
 		setupByTick.clear();
 		gearChangeTicks.clear();
+		modifiersByTick.clear();
 		reflect.clear();
 		vengeanceUp = false;
 		lastHitsplatTick.clear();
@@ -2022,13 +2032,15 @@ public class PvmPerformancePlugin extends Plugin
 		// A projectile is never a spell that has none (T-066): a shadow spell clicked at a boss it stuns and still in hand
 		// is not what this is, whatever the cast animation did. The bow's next shot was scored as the Shadow Rush before it.
 		final Spell manual = combatCalc.recentManualCast();
-		if (manual != null && stunsWith(npc, manual))
+		final boolean dropped = manual != null && stunsWith(npc, manual);
+		if (dropped)
 		{
 			debug.log("MANUAL CAST %s dropped: projectile %d is the weapon's, the spell has none", manual.getDisplayName(),
 				projectile.getId());
 			combatCalc.dropManualCast();
 		}
 		recordAttackObserved(true, npc);
+		attackDroppedCast = dropped;
 		// Not always the tick the event surfaces on: the start cycle says when the projectile was fired, which for a slow one
 		// can be a tick earlier.
 		attackOriginTick = startTick(projectile);
@@ -2139,7 +2151,8 @@ public class PvmPerformancePlugin extends Plugin
 		// Judged on the tick the projectile SET OFF, and against the fastest speed seen lately rather than the live one - see
 		// fastestSpeedSeen for why the live reading is unusable here.
 		final int firedTick = startTick(projectile);
-		if (tooSoonToBeMine(firedTick, lastAttackSeenTick, fastestSpeedSeen()))
+		if (tooSoonToBeMine(firedTick, lastAttackSeenTick,
+			speedSinceLastAttack(delayResetTick, lastAttackSeenTick, fastestSpeedSeen())))
 		{
 			debug.log("projectile %d at npc %d NOT taken as mine: from my tile, but set off on %d with my last attack seen on %d",
 				projectile.getId(), ((NPC) target).getId(), firedTick, lastAttackSeenTick);
@@ -2524,12 +2537,14 @@ public class PvmPerformancePlugin extends Plugin
 			row[EXP_VARIANCE] = expectedVariance;
 			row[EXP_SPEC_VARIANCE] = expectedSpecVariance;
 			expectedByTick.put(client.getTickCount(), row);
+			modifiersByTick.put(client.getTickCount(), combatCalc.describeBossModifiers(shownId));
 			// The same figures at each state the open fight's outcome distribution holds (T-050), for the attacks made now.
 			if (current != null && !current.isEnded())
 			{
 				drainLuck.snapshot(current, targetIdOn(current, client.getTickCount()), client.getTickCount());
 			}
 			expectedByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
+			modifiersByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
 			// Once per target, and again whenever the version in use changes or the defence has moved (Vardorvis's follows his
 			// hitpoints), so a log shows the figures the attacks were judged by as they changed. Not gated on the debug
 			// setting: the panel's saved window keeps every line whether or not the file is being written.
@@ -2674,7 +2689,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Where the worn items changed since the throw, the figures from before the switch, which recordAttackObserved found
 		// (T-065); otherwise the tick the attack left on, as before.
 		final boolean beforeSwitch = attackFiguresTick != Integer.MIN_VALUE;
-		final int figuresTick = beforeSwitch ? attackFiguresTick : attackOriginTick;
+		final int figuresTick = scoringTick();
 		if (attackIsMechanic)
 		{
 			// A boss mechanic cast deals nothing (T-066: the Leviathan's stun), so nothing is expected of it and nothing waits
@@ -3265,7 +3280,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
-		bookCast(target, false);
+		bookCast(target, false, false);
 	}
 
 	/**
@@ -3310,7 +3325,7 @@ public class PvmPerformancePlugin extends Plugin
 			// One with a projectile is booked from it, which spends the click.
 			return false;
 		}
-		return bookCast(castAt, isMechanicCast(manual, stuns));
+		return bookCast(castAt, isMechanicCast(manual, stuns), stuns && resetsDelayWith(castAt, manual));
 	}
 
 	/** Whether this animation is a manual cast of {@code manual} going out (T-066): an ancient spell's cast animation. */
@@ -3339,6 +3354,81 @@ public class PvmPerformancePlugin extends Plugin
 	static boolean isMechanicCast(Spell spell, boolean stuns)
 	{
 		return stuns && spell != null && !spell.landsWithoutProjectile();
+	}
+
+	/** Whether this spell's state on this npc resets the player's attack delay (T-078: the Leviathan's stun). */
+	private boolean resetsDelayWith(NPC npc, Spell spell)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		return npc != null && rules != null && resetsAttackDelay(rules.forNpc(npc.getId()), spell);
+	}
+
+	static boolean resetsAttackDelay(BossRules.Boss boss, Spell spell)
+	{
+		if (boss == null || spell == null || boss.damageModifiers == null || boss.damageModifiers.states == null)
+		{
+			return false;
+		}
+		for (BossRules.StateRule state : boss.damageModifiers.states)
+		{
+			if (state.resetsAttackDelay && state.startOnPlayerSpell != null && state.startOnPlayerSpell.contains(spell.name()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The speed an attack is booked at (T-078): one tick after a cast that
+	 * resets the attack delay; the weapon's own for a projectile that dropped a
+	 * spell click that never cast (the tick's recorded speed was the spell's);
+	 * otherwise the speed recorded on the tick it was held, else the live one.
+	 */
+	static int bookedSpeed(boolean resetsDelay, boolean droppedCastNoSwitch, Integer heldSpeed, int liveSpeed)
+	{
+		if (resetsDelay)
+		{
+			return 1;
+		}
+		if (droppedCastNoSwitch || heldSpeed == null)
+		{
+			return liveSpeed;
+		}
+		return heldSpeed;
+	}
+
+	/**
+	 * The fastest the weapon could have fired again, for judging whether a
+	 * projectile could be mine (T-078): a tick, after a cast that reset the
+	 * attack delay - the Leviathan's free shot - else the fastest speed seen.
+	 */
+	static int speedSinceLastAttack(int delayResetTick, int lastAttackTick, int fastestSpeed)
+	{
+		return delayResetTick != Integer.MIN_VALUE && delayResetTick == lastAttackTick ? 1 : fastestSpeed;
+	}
+
+	/**
+	 * The tick whose figures an attack is scored with (T-065, T-078): before a
+	 * switch since its throw, that switch's; a projectile's own throw where that
+	 * tick has figures - the window it was thrown into, and where the player
+	 * stood, which its own splat may since have closed (the shot into the
+	 * Leviathan's wound); otherwise the tick it left on, as before.
+	 */
+	static int scoringTick(int beforeSwitchTick, boolean fromProjectile, boolean thrownHasFigures, int thrownTick,
+		int originTick)
+	{
+		if (beforeSwitchTick != Integer.MIN_VALUE)
+		{
+			return beforeSwitchTick;
+		}
+		return fromProjectile && thrownHasFigures ? thrownTick : originTick;
+	}
+
+	private int scoringTick()
+	{
+		return scoringTick(attackFiguresTick, attackObservedFromProjectile, expectedByTick.containsKey(attackThrownTick),
+			attackThrownTick, attackOriginTick);
 	}
 
 	/** Whether this spell starts one of this npc's damage-modifier states (T-057's stun). */
@@ -3370,7 +3460,7 @@ public class PvmPerformancePlugin extends Plugin
 	 *
 	 * @return whether it was booked: not where the target cannot be fought
 	 */
-	private boolean bookCast(NPC target, boolean mechanic)
+	private boolean bookCast(NPC target, boolean mechanic, boolean resetsDelay)
 	{
 		final long now = System.currentTimeMillis();
 		if (current == null || current.isEnded() || current.getTargetIndex() != target.getIndex())
@@ -3393,6 +3483,8 @@ public class PvmPerformancePlugin extends Plugin
 		recordAttackObserved(false, target, CAST_BOOKING_LAG);
 		attackObservedFromCast = true;
 		attackIsMechanic = mechanic;
+		attackResetsDelay = resetsDelay;
+		delayResetTick = resetsDelay ? client.getTickCount() : Integer.MIN_VALUE;
 		return true;
 	}
 
@@ -3710,8 +3802,13 @@ public class PvmPerformancePlugin extends Plugin
 			// the attack went out on and with the speed in force then - this is the booking tick, which trails the attack, so
 			// reading the speed here reads it off whatever is held now.
 			final Integer threwAt = speedByTick.get(heldTick(attackSwitchTick, attackTick));
-			final int speed = threwAt != null ? threwAt : combatCalc.attackSpeedTicks();
+			final int speed = bookedSpeed(attackResetsDelay, attackDroppedCast && attackSwitchTick == Integer.MIN_VALUE,
+				threwAt, combatCalc.attackSpeedTicks());
 			attackDueTick = attackTick + speed;
+			if (attackResetsDelay)
+			{
+				debug.log("  the stun resets the attack delay: the weapon's next attack is due on %d", attackDueTick);
+			}
 			// Every figure here was already worked out above, so the line costs nothing beyond formatting it. An expected
 			// average of -1 is the tell that the target has no stats and that this attack was scored against nothing.
 			debug.log("ATTACK on %s (npc %d) thrown tick %d, booked +%d, speed %d, next due %d, "
@@ -3719,8 +3816,8 @@ public class PvmPerformancePlugin extends Plugin
 					+ "expected avg %.2f, ideal %.2f, boss modifiers %s",
 				attacker.getTargetName(), targetId, attackTick, attackObservedLag, speed, attackDueTick,
 				prayed, potted, boostShare, boostCost, switched, switchCost, attackObservedFromProjectile,
-				attacker.isScored(), actualSetup, idealSetup, combatCalc.describeBossModifiers(targetLiveId >= 0
-					? targetLiveId : targetId));
+				attacker.isScored(), actualSetup, idealSetup, modifiersByTick.getOrDefault(scoringTick(),
+					combatCalc.describeBossModifiers(targetLiveId >= 0 ? targetLiveId : targetId)));
 			lastAttackFromProjectile = attackObservedFromProjectile;
 			if (attackObservedFromProjectile || attackObservedFromCast)
 			{
@@ -3917,6 +4014,9 @@ public class PvmPerformancePlugin extends Plugin
 		attackObservedFromProjectile = fromProjectile;
 		attackObservedFromCast = false;
 		attackIsMechanic = false;
+		attackResetsDelay = false;
+		delayResetTick = Integer.MIN_VALUE;
+		attackDroppedCast = false;
 		attackOriginTick = client.getTickCount();
 		attackObservedNpcId = npcId;
 		attackObservedMaxHit = combatCalc.maxHit(npcId);
@@ -4385,6 +4485,7 @@ public class PvmPerformancePlugin extends Plugin
 			ringByTick.clear();
 		setupByTick.clear();
 		gearChangeTicks.clear();
+		modifiersByTick.clear();
 			vengeanceUp = false;
 			pendingMineHits.clear();
 			damageByIndex.clear();

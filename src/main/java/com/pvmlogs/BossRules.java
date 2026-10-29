@@ -239,6 +239,14 @@ class BossRules
 		String endOnModifierLanded;
 		/** The longest it can last, when nothing else closed it; 0 for no limit. */
 		int maxTicks;
+		/**
+		 * The player's spell that starts it resets their attack delay (T-078): the weapon's next attack can go out the
+		 * next tick, and one thrown before the state starts lands free of it - the Leviathan's "free ranged shot every
+		 * stun before Levi's damage reduction kicks in".
+		 */
+		boolean resetsAttackDelay;
+		/** Not open while an npc of one of these ids is present: it is not opened, and one open is closed (T-078). */
+		int[] endWhileNpc;
 		String source;
 	}
 
