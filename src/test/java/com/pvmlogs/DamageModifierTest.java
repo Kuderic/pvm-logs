@@ -270,15 +270,23 @@ public class DamageModifierTest
 		{
 			double m = 0;
 			double sq = 0;
-			// Every outcome with its probability: a miss, or each roll 0..max.
+			// Every outcome with its probability: a miss, or each roll lo..max - or, where a modifier takes the better of two
+			// (T-079, T-083), each pair of them.
 			final double miss = ModifierTracker.damage(mods, 0, max, false);
 			m += (1 - a) * miss;
 			sq += (1 - a) * miss * miss;
-			for (int r = 0; r <= max; r++)
+			final int lo = ModifierTracker.rollFloor(mods, max);
+			final int k = max - lo + 1;
+			final boolean two = ModifierTracker.rolls(mods) == 2;
+			for (int r = lo; r <= max; r++)
 			{
-				final double v = ModifierTracker.damage(mods, r, max, true);
-				m += a / (max + 1) * v;
-				sq += a / (max + 1) * v * v;
+				for (int s = lo; s <= (two ? max : lo); s++)
+				{
+					final double p = two ? a / ((double) k * k) : a / k;
+					final double v = ModifierTracker.damage(mods, Math.max(r, s), max, true);
+					m += p * v;
+					sq += p * v * v;
+				}
 			}
 			mean += m;
 			variance += sq - m * m;

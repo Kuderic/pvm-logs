@@ -470,11 +470,30 @@ final class ModifierTracker
 	}
 
 	/**
+	 * Where a landed roll starts (T-083): the minimum, ⌊share × max⌋, when a
+	 * modifier draws the roll from its minimum up rather than raising it to the
+	 * minimum ({@code rollsFromMin}); 0 otherwise.
+	 */
+	static int rollFloor(List<BossRules.ModifierRule> mods, int max)
+	{
+		int lo = 0;
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (Boolean.TRUE.equals(m.rollsFromMin) && m.minHitShare != null)
+			{
+				lo = Math.max(lo, (int) Math.floor(m.minHitShare * max));
+			}
+		}
+		return Math.min(lo, max);
+	}
+
+	/**
 	 * One attack's damage as moments after the modifiers: each hitsplat a roll
 	 * from 0 to its max at this accuracy (the best of {@link #rolls} where a
-	 * modifier says so), rolled independently, walked value by value so the
-	 * rounding is the game's (floor of each hit, not a scaled mean). The accuracy
-	 * is the modified one ({@link #accuracy}).
+	 * modifier says so, from {@link #rollFloor} up where one says that), rolled
+	 * independently, walked value by value so the rounding is the game's (floor
+	 * of each hit, not a scaled mean). The accuracy is the modified one
+	 * ({@link #accuracy}).
 	 */
 	static DamageMoments moments(List<BossRules.ModifierRule> mods, int[] maxima, double accuracy, int cap)
 	{
@@ -490,9 +509,10 @@ final class ModifierTracker
 			final double missValue = Math.min(cap, damage(mods, 0, max, false));
 			double m = (1 - accuracy) * missValue;
 			double second = (1 - accuracy) * missValue * missValue;
-			for (int r = 0; r <= max; r++)
+			final int lo = rollFloor(mods, max);
+			for (int r = lo; r <= max; r++)
 			{
-				final double each = accuracy * rollChance(r, max, rolls);
+				final double each = accuracy * rollChance(r - lo, max - lo, rolls);
 				final double v = Math.min(cap, damage(mods, r, max, true));
 				m += each * v;
 				second += each * v * v;
