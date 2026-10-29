@@ -24,8 +24,24 @@ final class EncounterGroup
 	private static final Set<String> ADDS_KEEP_BOSS_FIGHT = Collections.unmodifiableSet(new HashSet<>(
 		Arrays.asList("Zulrah", "Maggot King")));
 
+	// Bosses the hiscores' list names otherwise or not at all (T-089), so each kill stays a fight of its own rather than
+	// joining a run of monsters: the Barrows brothers (the list has only "Barrows Chests"), the Gauntlet's Hunllefs (listed
+	// as "The Gauntlet") and the Mimic (listed as "Mimic"; the npc is "The Mimic"). Lower case, as the names are compared.
+	private static final Set<String> ALSO_BOSSES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		"ahrim the blighted", "dharok the wretched", "guthan the infested", "karil the tainted", "torag the corrupted",
+		"verac the defiled", "crystalline hunllef", "corrupted hunllef", "the mimic")));
+
 	private EncounterGroup()
 	{
+	}
+
+	/**
+	 * Whether this name is a boss the hiscores' list misses (T-089): see
+	 * {@link #ALSO_BOSSES}. Case and apostrophes aside, as the list is compared.
+	 */
+	static boolean isBossByName(String name)
+	{
+		return name != null && ALSO_BOSSES.contains(name.toLowerCase().replace("'", "").replace("’", "").trim());
 	}
 
 	/** The group this NPC also belongs to, or null if it stands on its own. */
