@@ -31,6 +31,8 @@ final class LedgerRows
 	static final String DEFENCE = " defence";
 	static final String MAGIC = " magic";
 	static final String DEFENCE_DRAINS = " defence drains";
+	/** T-075: under a kill's Defence and Magic rows, what the drains were worth: {@code  drains  5 s faster}. */
+	static final String DRAINS = " drains";
 	static final String SPECS = " specs";
 	private static final String ARROW = " \u2192 ";
 	/** Execution's fifth part after a ruled fight (T-043). */
@@ -1563,17 +1565,20 @@ final class LedgerRows
 		{
 			return;
 		}
-		rows.add(detail(SPECS, signedSeconds(seconds), luckColour(seconds, n.clock)));
+		// In words, as Luck is (T-075, Eric 2026-10-29: "+1 s" read as time added to the kill).
+		rows.add(detail(SPECS, fasterOrSlower(seconds), luckColour(seconds, n.clock)));
 	}
 
 	/**
 	 * T-051: the target's Defence under Damage/expected, as the drains are what
 	 * moves the expected. Live, once a drain has been tracked on it: {@code
 	 * defence  145 / 215}, or {@code 145 (floor)}, and Magic the same way when it
-	 * was drained. After the fight: {@code defence  215 → 145 · +14 s}, with what
-	 * the drains were worth (T-050); a raid or a trip, which has many targets,
-	 * shows the worth alone. Nothing for an immune or untracked target, or a kill
-	 * saved before T-049.
+	 * was drained. After the fight: {@code defence  215 → 145}, then what the
+	 * drains were worth (T-050) in words, as Luck is (T-075): {@code drains  14 s
+	 * faster}, a row of its own so the panel keeps its width. A raid or a trip,
+	 * which has many targets, shows the worth alone: {@code defence drains  40 s
+	 * faster}. Nothing for an immune or untracked target, or a kill saved before
+	 * T-049.
 	 */
 	private static void drain(List<Row> rows, Numbers n, Scope scope, State state)
 	{
@@ -1591,7 +1596,7 @@ final class LedgerRows
 			return;
 		}
 		final double seconds = scope.luckSeconds(scope.drainValueDamage());
-		final String worth = Double.isNaN(seconds) || roundHalfAway(seconds) == 0 ? "" : signedSeconds(seconds);
+		final String worth = Double.isNaN(seconds) || roundHalfAway(seconds) == 0 ? "" : fasterOrSlower(seconds);
 		final int start = scope.defenceStart();
 		final int end = scope.defenceEnd();
 		final boolean defenceMoved = start >= 0 && end >= 0 && start != end;
@@ -1608,12 +1613,16 @@ final class LedgerRows
 		}
 		if (defenceMoved || !worth.isEmpty() && !magicMoved)
 		{
-			rows.add(detail(DEFENCE, start + ARROW + end + (worth.isEmpty() ? "" : DOT + worth), Colour.NEUTRAL));
+			rows.add(detail(DEFENCE, start + ARROW + end, Colour.NEUTRAL));
 		}
 		if (magicMoved)
 		{
-			rows.add(detail(MAGIC, scope.magicStart() + ARROW + scope.magicEnd()
-				+ (defenceMoved || worth.isEmpty() ? "" : DOT + worth), Colour.NEUTRAL));
+			rows.add(detail(MAGIC, scope.magicStart() + ARROW + scope.magicEnd(), Colour.NEUTRAL));
+		}
+		// On a row of its own (T-075): "215 → 145 · 14 s faster" would widen the box in the Small font.
+		if (!worth.isEmpty())
+		{
+			rows.add(detail(DRAINS, worth, Colour.NEUTRAL));
 		}
 	}
 
@@ -1621,13 +1630,6 @@ final class LedgerRows
 	static String level(int now, int base, int floor)
 	{
 		return now <= floor ? now + " (floor)" : now + " / " + base;
-	}
-
-	/** {@code +14 s} or {@code -5 s}: positive is time saved. */
-	static String signedSeconds(double seconds)
-	{
-		final long s = roundHalfAway(seconds);
-		return (s > 0 ? "+" : "-") + Math.abs(s) + " s";
 	}
 
 	/**

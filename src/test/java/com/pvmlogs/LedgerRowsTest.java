@@ -1756,10 +1756,11 @@ public class LedgerRowsTest
 	public void afterTheKillThePathTheWorthAndTheSpecs()
 	{
 		final List<Row> rows = build(drained(), State.fight("Vardorvis", true, true, false));
-		assertEquals(d(" defence", "215 \u2192 145 \u00b7 +14 s"), afterDamage(rows, 1).get(0));
+		// T-075: in words, as Luck is, the worth on a row of its own under the path.
+		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145"), d(" drains", "14 s faster")), afterDamage(rows, 2));
 		// Under Luck: 5 s is over a second and 2% of the 136.8 s clock, so Better.
 		final int luck = rows.indexOf(rows.stream().filter(r -> r.left.equals("Luck")).findFirst().get());
-		assertEquals(d(" specs", "+5 s", BETTER), rows.get(luck + 1));
+		assertEquals(d(" specs", "5 s faster", BETTER), rows.get(luck + 1));
 	}
 
 	@Test
@@ -1767,7 +1768,7 @@ public class LedgerRowsTest
 	{
 		final FakeScope s = drained();
 		s.specLuckDamage = -65;
-		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" specs", "-5 s", COST)));
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" specs", "5 s slower", COST)));
 	}
 
 	@Test
@@ -1778,7 +1779,7 @@ public class LedgerRowsTest
 		s.specLuckDamage = 0;
 		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
 		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
-		assertTrue(rows.contains(d(" defence", "215 \u2192 145 \u00b7 +14 s")));
+		assertTrue(rows.contains(d(" drains", "14 s faster")));
 		// Under half a second: hidden too.
 		s.specLuckDamage = 6;
 		assertFalse(build(s, State.fight("Vardorvis", true, true, false)).stream()
@@ -1790,12 +1791,12 @@ public class LedgerRowsTest
 	{
 		final FakeScope s = drained();
 		s.magicEnd = 120;
-		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145 \u00b7 +14 s"), d(" magic", "150 \u2192 120")),
-			afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 2));
-		// Magic alone drained: the worth goes on its row.
+		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145"), d(" magic", "150 \u2192 120"),
+			d(" drains", "14 s faster")), afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 3));
+		// Magic alone drained: its path, then the worth.
 		s.defenceEnd = 215;
-		assertEquals(d(" magic", "150 \u2192 120 \u00b7 +14 s"),
-			afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 1).get(0));
+		assertEquals(Arrays.asList(d(" magic", "150 \u2192 120"), d(" drains", "14 s faster")),
+			afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 2));
 	}
 
 	@Test
@@ -1849,8 +1850,39 @@ public class LedgerRowsTest
 		noLuck.luck = false;
 		final List<Row> rows = LedgerRows.build(drained(), State.fight("Vardorvis", true, true, false), noLuck);
 		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
-		// The Defence row isn't luck: it stays.
-		assertTrue(rows.contains(d(" defence", "215 \u2192 145 \u00b7 +14 s")));
+		// The Defence rows aren't luck: they stay.
+		assertTrue(rows.contains(d(" defence", "215 \u2192 145")));
+		assertTrue(rows.contains(d(" drains", "14 s faster")));
+	}
+
+	@Test
+	public void theDrainsInWordsDontWidenTheBoxInAnyFont()
+	{
+		// T-075: "215 → 145 · 14 s faster" on one row would have widened the box in the Small font; on two rows the box is
+		// as wide as the same kill without drains, and a narrow saved width leaves their figures whole.
+		final FakeScope plain = drained();
+		plain.defenceStart = -1;
+		plain.defenceEnd = -1;
+		plain.magicStart = -1;
+		plain.magicEnd = -1;
+		plain.drainValueDamage = Double.NaN;
+		plain.specLuckDamage = Double.NaN;
+		final java.awt.Graphics2D g = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+			.createGraphics();
+		for (java.awt.Font font : Arrays.asList(net.runelite.client.ui.FontManager.getRunescapeFont(),
+			net.runelite.client.ui.FontManager.getRunescapeBoldFont(), net.runelite.client.ui.FontManager.getRunescapeSmallFont()))
+		{
+			g.setFont(font);
+			final int with = PvmPerformanceOverlay.lines(g, build(drained(), State.fight("Vardorvis", true, true, false)),
+				null).width;
+			final int without = PvmPerformanceOverlay.lines(g, build(plain, State.fight("Vardorvis", true, true, false)),
+				null).width;
+			assertEquals(font.getName(), without, with);
+			final List<Row> narrow = PvmPerformanceOverlay.lines(g, build(drained(), State.fight("Vardorvis", true, true,
+				false)), new java.awt.Dimension(140, 0)).rows;
+			assertTrue(narrow.contains(d(" drains", "14 s faster")));
+			assertTrue(narrow.contains(d(" defence", "215 \u2192 145")));
+		}
 	}
 
 	@Test
@@ -1865,8 +1897,8 @@ public class LedgerRowsTest
 		for (State state : Arrays.asList(State.trip(3, false, false), State.raid("Tombs of Amascut", 3, false, false)))
 		{
 			final List<Row> rows = build(s, state);
-			assertTrue(rows.toString(), rows.contains(d(" defence drains", "+40 s")));
-			assertTrue(rows.contains(d(" specs", "+5 s", BETTER)));
+			assertTrue(rows.toString(), rows.contains(d(" defence drains", "40 s faster")));
+			assertTrue(rows.contains(d(" specs", "5 s faster", BETTER)));
 		}
 		// While a fight runs: only the live row, if any.
 		assertFalse(build(s, State.trip(3, true, false)).stream().anyMatch(r -> r.left.equals(LedgerRows.DEFENCE_DRAINS)));
