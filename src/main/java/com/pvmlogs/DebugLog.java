@@ -119,7 +119,7 @@ class DebugLog
 		final Filepath dir = directory;
 		if (dir == null)
 		{
-			log.warn("PvM Logs: no data folder, so debug logging to a file stays off");
+			log.warn("Luck vs Skill: no data folder, so debug logging to a file stays off");
 			return;
 		}
 		file = dir.joinSegment("pvm-debug-" + LocalDateTime.now().format(STAMP) + ".log");
@@ -228,7 +228,7 @@ class DebugLog
 		}
 		final Filepath target = dir.joinSegment("pvm-debug-recent-" + LocalDateTime.now().format(STAMP) + ".log");
 		final StringBuilder buffer = new StringBuilder();
-		buffer.append("=== PvM Logs, the last ").append(lines.size())
+		buffer.append(headerStart()).append(lines.size())
 			.append(" lines before this was saved. ").append(BuildInfo.describe()).append(" ===")
 			.append(System.lineSeparator());
 		if (header != null)
@@ -252,9 +252,19 @@ class DebugLog
 		}
 		catch (IOException | RuntimeException e)
 		{
-			log.warn("PvM Logs: could not write the recent debug log", e);
+			log.warn("Luck vs Skill: could not write the recent debug log", e);
 			return null;
 		}
+	}
+
+	/**
+	 * How a saved debug log's first line starts: {@code === Luck vs Skill, the last }. Logs saved before T-067 start
+	 * {@code === PvM Logs, the last } instead. Nothing parses that line (the replay tests read only the {@code [tick]}
+	 * lines after {@code === log ===}), so both read the same.
+	 */
+	static String headerStart()
+	{
+		return "=== " + PvmPerformanceConfig.DISPLAY_NAME + ", the last ";
 	}
 
 	private int tick()
@@ -299,7 +309,7 @@ class DebugLog
 			// warning says where to look. Anything unchecked is caught for the same reason and one more - a scheduled task
 			// that throws is cancelled silently, so letting one escape would stop the writing without stopping the queueing.
 			on = false;
-			log.warn("PvM Logs: debug log could not be written, logging off", e);
+			log.warn("Luck vs Skill: debug log could not be written, logging off", e);
 		}
 	}
 }

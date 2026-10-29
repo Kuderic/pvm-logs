@@ -6,7 +6,6 @@ import java.awt.Font;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.Point;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -45,7 +44,7 @@ import net.runelite.client.ui.overlay.components.PanelComponent;
  * background, over a neutral dark scene (the overlays are see-through).</li>
  * <li>The side panel's three tabs, from {@link SidePanelPictures}.</li>
  * <li>A GIF of the Fight tab through a simulated kill, redrawn every {@link PvmPerformancePanel#UPDATE_TICKS} ticks as
- * the panel updates, then the full view after the kill.</li>
+ * the panel updates, then the view after the kill, all cut to {@link #MAX_GIF_HEIGHT}.</li>
  * </ul>
  */
 public final class ReadmePictures
@@ -59,6 +58,11 @@ public final class ReadmePictures
 	/** The GIF: game seconds per GIF second, and how long the last frame is held. */
 	static final double SPEED = 7.5;
 	private static final int HOLD_LAST_MS = 3000;
+	/**
+	 * The GIF's frames are cut to this height (T-067: T-048's was 1,312 px, too tall to watch on a README). The live
+	 * frames fit; the after-kill frame keeps its top: where the time went, Luck and Execution.
+	 */
+	static final int MAX_GIF_HEIGHT = 980;
 
 	private ReadmePictures()
 	{
@@ -71,12 +75,12 @@ public final class ReadmePictures
 		RuneLiteLAF.setup();
 
 		final java.util.Map<String, List<LedgerRows.Row>> states = LedgerPictures.states();
-		png(out, "overlay-mid-fight", overlays(states.get("2-mid"), states.get("2-mid.L")));
-		png(out, "overlay-after-kill", overlays(states.get("3-dead")));
+		png(out, "overlay-mid-fight", overlays(graardor(false), states.get("2-mid.L")));
+		png(out, "overlay-after-kill", overlays(graardor(true)));
 		png(out, "overlay-ruled-kill", overlays(states.get("14-ruled")));
 		png(out, "overlay-loadout", overlays(states.get("2-mid.L")));
 
-		png(out, "panel-fight", SidePanelPictures.render(SidePanelExamples.ruledKill(true), 1));
+		png(out, "panel-fight", SidePanelPictures.render(SidePanelExamples.twoHammersOneLanded(), 1));
 		png(out, "panel-history", SidePanelPictures.renderHistory(false, 1));
 		png(out, "panel-trip", SidePanelPictures.renderTrip(SidePanelExamples.trip(), 1));
 
@@ -84,6 +88,37 @@ public final class ReadmePictures
 	}
 
 	// ---- Overlays ----
+
+	/**
+	 * The fight overlay at General Graardor, with the Defence the player's own hammer took (T-051): mid-fight, then
+	 * after the kill. Graardor, not Vardorvis, because Vardorvis's Defence can't be drained. The figures are
+	 * {@link LedgerExamples}' illustrative ones, less what Graardor doesn't do (heal, bleed).
+	 */
+	static List<LedgerRows.Row> graardor(boolean dead)
+	{
+		final LedgerRows.Settings all = new LedgerRows.Settings();
+		if (!dead)
+		{
+			final LedgerExamples.FakeScope mid = LedgerExamples.midFight();
+			mid.damageVariance = 6000;
+			return LedgerRows.build(mid, LedgerRows.State.fight("General Graardor", false, false, false)
+				.withDrain(new LedgerRows.LiveDrain(175, 250, 0, 80, 80, 0)), all);
+		}
+		final LedgerExamples.FakeScope kill = LedgerExamples.kill();
+		kill.healed = 0;
+		kill.damageVariance = 11436;
+		kill.biggestHitTaken = 41;
+		kill.damageTakenUnprotected = 85;
+		kill.defenceStart = 250;
+		kill.defenceEnd = 175;
+		kill.magicStart = 80;
+		kill.magicEnd = 80;
+		kill.secondsPerDamage = 14.0 / 182;
+		kill.drainValueDamage = 182;
+		kill.specLuckDamage = -41;
+		return LedgerRows.build(kill, LedgerRows.State.fight("General Graardor", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all);
+	}
 
 	/** One or more overlay boxes stacked top-left over the scene, as RuneLite stacks them. */
 	static BufferedImage overlays(List<?>... boxes)
@@ -191,11 +226,11 @@ public final class ReadmePictures
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(dead), null));
 		images.add(SidePanelPictures.draw(panel.tabs(), panel.fightTab(), 1));
 
-		// One size for every frame: the tallest, the rest padded with the panel's own background.
+		// One size for every frame: the tallest, cut to MAX_GIF_HEIGHT, the rest padded with the panel's own background.
 		int height = 0;
 		for (BufferedImage i : images)
 		{
-			height = Math.max(height, i.getHeight());
+			height = Math.max(height, Math.min(i.getHeight(), MAX_GIF_HEIGHT));
 		}
 		final int frameMillis = (int) Math.round(PvmPerformancePanel.UPDATE_TICKS * 600 / SPEED);
 		final List<Frame> frames = new ArrayList<>();
@@ -429,51 +464,60 @@ public final class ReadmePictures
 	/** The image in at most 256 colours: exact when it has that few, as the panel's flat colours do. */
 	static BufferedImage indexed(BufferedImage src)
 	{
-		final java.util.LinkedHashMap<Integer, Integer> palette = new java.util.LinkedHashMap<>();
 		final int w = src.getWidth();
 		final int h = src.getHeight();
 		final int[] rgb = src.getRGB(0, 0, w, h, null, 0, w);
+		final java.util.Map<Integer, Integer> counts = new java.util.HashMap<>();
 		for (int p : rgb)
 		{
-			palette.putIfAbsent(p & 0xFFFFFF, palette.size());
-			if (palette.size() > 256)
-			{
-				// More colours than a GIF holds: let the writer's own palette builder choose.
-				final BufferedImage copy = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-				copy.setRGB(0, 0, w, h, rgb, 0, w);
-				return toIndexed(copy);
-			}
+			counts.merge(p & 0xFFFFFF, 1, Integer::sum);
 		}
-		final int n = Math.max(2, palette.size());
+		// Up to 256 colours: each its own entry. More (the luck curve's shading after a kill): the 256 most used, and
+		// every other colour drawn as its nearest. The writer's own palette (T-048) turned the panel's greys teal.
+		final List<Integer> colours = new ArrayList<>(counts.keySet());
+		colours.sort((a, b) -> counts.get(b) - counts.get(a) != 0 ? counts.get(b) - counts.get(a) : a - b);
+		final int n = Math.max(2, Math.min(256, colours.size()));
 		final byte[] r = new byte[n];
 		final byte[] g = new byte[n];
 		final byte[] b = new byte[n];
-		for (java.util.Map.Entry<Integer, Integer> e : palette.entrySet())
+		final java.util.Map<Integer, Integer> index = new java.util.HashMap<>();
+		for (int i = 0; i < Math.min(n, colours.size()); i++)
 		{
-			final int c = e.getKey();
-			r[e.getValue()] = (byte) (c >> 16);
-			g[e.getValue()] = (byte) (c >> 8);
-			b[e.getValue()] = (byte) c;
+			final int c = colours.get(i);
+			r[i] = (byte) (c >> 16);
+			g[i] = (byte) (c >> 8);
+			b[i] = (byte) c;
+			index.put(c, i);
 		}
 		final java.awt.image.IndexColorModel cm = new java.awt.image.IndexColorModel(8, n, r, g, b);
 		final BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_INDEXED, cm);
 		final java.awt.image.WritableRaster raster = out.getRaster();
 		for (int i = 0; i < rgb.length; i++)
 		{
-			raster.setSample(i % w, i / w, 0, palette.get(rgb[i] & 0xFFFFFF));
+			final int c = rgb[i] & 0xFFFFFF;
+			raster.setSample(i % w, i / w, 0, index.computeIfAbsent(c, k -> nearest(k, r, g, b)));
 		}
 		return out;
 	}
 
-	/** Fallback for a frame with more than 256 colours: AWT's own conversion to an indexed image. */
-	private static BufferedImage toIndexed(BufferedImage src)
+	/** The palette entry closest to a colour, by squared distance in RGB. */
+	private static int nearest(int c, byte[] r, byte[] g, byte[] b)
 	{
-		final BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_BYTE_INDEXED);
-		final Graphics2D g = out.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_DITHERING, RenderingHints.VALUE_DITHER_DISABLE);
-		g.drawImage(src, 0, 0, null);
-		g.dispose();
-		return out;
+		int best = 0;
+		int bestDistance = Integer.MAX_VALUE;
+		for (int i = 0; i < r.length; i++)
+		{
+			final int dr = ((c >> 16) & 0xFF) - (r[i] & 0xFF);
+			final int dg = ((c >> 8) & 0xFF) - (g[i] & 0xFF);
+			final int db = (c & 0xFF) - (b[i] & 0xFF);
+			final int d = dr * dr + dg * dg + db * db;
+			if (d < bestDistance)
+			{
+				bestDistance = d;
+				best = i;
+			}
+		}
+		return best;
 	}
 
 	/**

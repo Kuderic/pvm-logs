@@ -784,7 +784,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		catch (IOException | RuntimeException e)
 		{
-			log.warn("PvM Logs: no data folder, so history, exports and debug files are off", e);
+			log.warn("Luck vs Skill: no data folder, so history, exports and debug files are off", e);
 			return null;
 		}
 	}
@@ -6705,7 +6705,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 		}
 		currentEncounter.add(fight);
-		log.debug("PvM Logs: fight on {} (npc {}) -> room '{}' group={} fights={}",
+		log.debug("Luck vs Skill: fight on {} (npc {}) -> room '{}' group={} fights={}",
 			fight.getTargetName(), fight.getTargetId(), currentEncounter.getName(),
 			fight.getGroupName(), currentEncounter.getFights().size());
 	}
@@ -7227,7 +7227,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		catch (Exception e)
 		{
-			log.warn("PvM Logs: could not load history", e);
+			log.warn("Luck vs Skill: could not load history", e);
 		}
 		if (panel != null)
 		{
@@ -7253,7 +7253,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			catch (IOException | RuntimeException e)
 			{
-				log.warn("PvM Logs: could not save history", e);
+				log.warn("Luck vs Skill: could not save history", e);
 			}
 		});
 	}
@@ -7573,7 +7573,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			catch (IOException | RuntimeException e)
 			{
-				log.warn("PvM Logs export failed", e);
+				log.warn("Luck vs Skill: export failed", e);
 				setStatus("Export failed: " + e.getMessage());
 			}
 		});
