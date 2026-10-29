@@ -39,10 +39,11 @@ import net.runelite.client.ui.overlay.components.PanelComponent;
  * The out dir defaults to {@code docs/images}. It reads the render harnesses ({@link LedgerPictures},
  * {@link SidePanelPictures} and their examples) without changing them.
  * <ul>
- * <li>The overlays: the rows {@link LedgerPictures#states()} draws, turned into line components by
- * {@link PvmPerformanceOverlay#lines} as the overlay does, in RuneLite's own {@link PanelComponent} with its standard
- * background, over a neutral dark scene (the overlays are see-through).</li>
- * <li>The side panel's three tabs, from {@link SidePanelPictures}.</li>
+ * <li>The overlays: rows turned into line components by {@link PvmPerformanceOverlay#lines} as the overlay does, in
+ * RuneLite's own {@link PanelComponent} with its standard background, over a neutral dark scene (the overlays are
+ * see-through). The fight overlay, its loadout and the Fight tab all come from one simulated kill, {@link Graardor};
+ * the ruled kill is {@link LedgerPictures#states()}' Vardorvis.</li>
+ * <li>The side panel's History and Trip tabs, from {@link SidePanelPictures}.</li>
  * <li>A GIF of the Fight tab through a simulated kill, redrawn every {@link PvmPerformancePanel#UPDATE_TICKS} ticks as
  * the panel updates, then the view after the kill, all cut to {@link #MAX_GIF_HEIGHT}.</li>
  * </ul>
@@ -75,12 +76,13 @@ public final class ReadmePictures
 		RuneLiteLAF.setup();
 
 		final java.util.Map<String, List<LedgerRows.Row>> states = LedgerPictures.states();
-		png(out, "overlay-mid-fight", overlays(graardor(false), states.get("2-mid.L")));
-		png(out, "overlay-after-kill", overlays(graardor(true)));
+		final Graardor g = new Graardor();
+		png(out, "overlay-mid-fight", overlays(g.mid, LedgerRows.loadout(tentacle(), false)));
+		png(out, "overlay-after-kill", overlays(g.dead));
 		png(out, "overlay-ruled-kill", overlays(states.get("14-ruled")));
-		png(out, "overlay-loadout", overlays(states.get("2-mid.L")));
+		png(out, "overlay-loadout", overlays(LedgerRows.loadout(hammer(), false)));
 
-		png(out, "panel-fight", SidePanelPictures.render(SidePanelExamples.twoHammersOneLanded(), 1));
+		png(out, "panel-fight", SidePanelPictures.render(g.panel, 1));
 		png(out, "panel-history", SidePanelPictures.renderHistory(false, 1));
 		png(out, "panel-trip", SidePanelPictures.renderTrip(SidePanelExamples.trip(), 1));
 
@@ -90,34 +92,77 @@ public final class ReadmePictures
 	// ---- Overlays ----
 
 	/**
-	 * The fight overlay at General Graardor, with the Defence the player's own hammer took (T-051): mid-fight, then
-	 * after the kill. Graardor, not Vardorvis, because Vardorvis's Defence can't be drained. The figures are
-	 * {@link LedgerExamples}' illustrative ones, less what Graardor doesn't do (heal, bleed).
+	 * One simulated kill at General Graardor for the README's overlays and Fight tab, so every picture tells the same
+	 * story (Eric, 2026-10-28: the Defence card's hammer and the Damage card's specs must agree). An Abyssal tentacle,
+	 * two Dragon warhammer specs to open, the first missed and the second landed (Defence 250 → 175), a thrall, no
+	 * healing. Graardor, not Vardorvis, because Vardorvis's Defence can't be drained.
 	 */
-	static List<LedgerRows.Row> graardor(boolean dead)
+	static final class Graardor
 	{
-		final LedgerRows.Settings all = new LedgerRows.Settings();
-		if (!dead)
+		/** Graardor's levels, from the wiki: 255 hitpoints, 250 Defence, 80 Magic; a hammer takes 30% of Defence. */
+		static final int HP = 255;
+		static final int DEFENCE = 250;
+		static final int MAGIC = 80;
+		final List<LedgerRows.Row> mid;
+		final List<LedgerRows.Row> dead;
+		final SidePanelModel.Input panel;
+
+		Graardor()
 		{
-			final LedgerExamples.FakeScope mid = LedgerExamples.midFight();
-			mid.damageVariance = 6000;
-			return LedgerRows.build(mid, LedgerRows.State.fight("General Graardor", false, false, false)
-				.withDrain(new LedgerRows.LiveDrain(175, 250, 0, 80, 80, 0)), all);
+			final LedgerRows.Settings all = new LedgerRows.Settings();
+			final Kill kill = Kill.graardor();
+			// Mid-fight: about half its hitpoints gone.
+			while (!kill.over() && kill.hp > HP / 2)
+			{
+				kill.run(1);
+			}
+			final int drained = kill.defenceNow();
+			mid = LedgerRows.build(LedgerRows.of(kill.room), LedgerRows.State.fight(kill.boss, false, false, false)
+				.withDrain(new LedgerRows.LiveDrain(drained, DEFENCE, 0, MAGIC, MAGIC, 0)), all);
+			while (!kill.over())
+			{
+				kill.run(1);
+			}
+			kill.end();
+			// Your usual here, a few seconds slower than this kill.
+			final int seconds = (int) Math.round(kill.tick * 0.6);
+			final LedgerHistory.Average usual = new LedgerHistory.Average(
+				new LedgerHistory.Spread(seconds + 6, seconds + 1, seconds + 12), 10);
+			dead = LedgerRows.build(LedgerRows.of(kill.room), LedgerRows.State.fight(kill.boss, true, true, false)
+				.withAverage(usual), all);
+			panel = kill.input(new SidePanelWeaponRows());
+			panel.ended = true;
+			panel.killed = true;
+			panel.endMillis = kill.now();
+			panel.average = usual;
 		}
-		final LedgerExamples.FakeScope kill = LedgerExamples.kill();
-		kill.healed = 0;
-		kill.damageVariance = 11436;
-		kill.biggestHitTaken = 41;
-		kill.damageTakenUnprotected = 85;
-		kill.defenceStart = 250;
-		kill.defenceEnd = 175;
-		kill.magicStart = 80;
-		kill.magicEnd = 80;
-		kill.secondsPerDamage = 14.0 / 182;
-		kill.drainValueDamage = 182;
-		kill.specLuckDamage = -41;
-		return LedgerRows.build(kill, LedgerRows.State.fight("General Graardor", true, true, false)
-			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all);
+	}
+
+	/** The tentacle mid-fight at Graardor, its Defence drained to 175: no special of its own, so no spec rows. */
+	static LedgerRows.Loadout tentacle()
+	{
+		final LedgerRows.Loadout l = new LedgerRows.Loadout();
+		l.attack = "Abyssal tentacle";
+		l.maxHit = Kill.TENTACLE_MAX;
+		l.accuracy = Kill.TENTACLE_DRAINED;
+		// 49 max, 66%: about 16.2 a swing every 2.4 s.
+		l.dps = 6.7;
+		return l;
+	}
+
+	/** The Dragon warhammer, for the loadout picture: its own figures and its special's (×1.5 max hit). */
+	static LedgerRows.Loadout hammer()
+	{
+		final LedgerRows.Loadout l = new LedgerRows.Loadout();
+		l.attack = "Dragon warhammer";
+		l.maxHit = 44;
+		l.accuracy = 0.49;
+		// 44 max, 49%: about 10.8 a swing every 3.6 s.
+		l.dps = 3.0;
+		l.specMaxHit = Kill.HAMMER_MAX;
+		l.specAccuracy = Kill.HAMMER_ACCURACY;
+		l.specAverage = Kill.HAMMER_ACCURACY * Kill.HAMMER_MAX / 2.0;
+		return l;
 	}
 
 	/** One or more overlay boxes stacked top-left over the scene, as RuneLite stacks them. */
@@ -248,42 +293,94 @@ public final class ReadmePictures
 		return frames;
 	}
 
-	/** The simulated kill: 700 HP, ticks counted from 0. Seeded, so the GIF comes out the same every time. */
+	/**
+	 * A simulated kill, ticks counted from 0, seeded so the pictures come out the same every time. The GIF's is
+	 * Vardorvis (700 HP, a claws special every 15th attack); {@link #graardor()} is the README's drain example.
+	 */
 	static final class Kill
 	{
-		static final int MAX_HP = 700;
 		/** When the kill starts: an afternoon, as the panel examples use. */
 		static final long START = SidePanelExamples.at(16, 3);
-		final int[] clock = {0};
-		final FightTimeline.Store store = new FightTimeline.Store();
-		final Fight fight = new Fight("Vardorvis", NpcIds.GOBLIN, 1, MAX_HP, START, null, 0);
-		final Encounter room = new Encounter("Vardorvis", null, START);
-		final FightTimeline line;
 		/** Picked for an ordinary kill: about two minutes, luck in the middle. */
 		static final long SEED = 255;
+		static final int TENTACLE_MAX = 49;
+		/** The tentacle's accuracy at Graardor's full Defence, and at 175 once a hammer lands (illustrative). */
+		static final double TENTACLE_FULL = 0.54;
+		static final double TENTACLE_DRAINED = 0.66;
+		static final int HAMMER_MAX = 66;
+		static final double HAMMER_ACCURACY = 0.60;
+
+		final String boss;
+		final int maxHp;
+		final int[] clock = {0};
+		final FightTimeline.Store store = new FightTimeline.Store();
+		final Fight fight;
+		final Encounter room;
+		final FightTimeline line;
 		final Random rng;
 		int tick;
-		int hp = MAX_HP;
+		int hp;
 		private int cooldown;
 		private int attacks;
+		/** Graardor only: the hammer specs to open with, and whether each lands; null for Vardorvis's claws. */
+		private final boolean[] hammers;
+		private int specsLanded;
+		private double accuracy = TENTACLE_FULL;
+		private double drainValue;
 
 		Kill()
 		{
-			this(SEED);
+			this("Vardorvis", 700, SEED, null);
 		}
 
 		Kill(long seed)
 		{
+			this("Vardorvis", 700, seed, null);
+		}
+
+		private Kill(String boss, int maxHp, long seed, boolean[] hammers)
+		{
+			this.boss = boss;
+			this.maxHp = maxHp;
+			this.hp = maxHp;
+			this.hammers = hammers;
 			rng = new Random(seed);
+			fight = new Fight(boss, NpcIds.GOBLIN, 1, maxHp, START, null, 0);
+			room = new Encounter(boss, null, START);
 			store.setClock(() -> clock[0]);
 			store.attach(fight);
 			line = store.of(fight);
 			room.add(fight);
 		}
 
+		/** Picked for an ordinary Graardor kill: 0:34, damage on expected (luck 50%). */
+		static final long GRAARDOR_SEED = 42;
+
+		/** General Graardor: two hammer specs to open, the first missed, the second landed. */
+		static Kill graardor()
+		{
+			return graardor(GRAARDOR_SEED);
+		}
+
+		static Kill graardor(long seed)
+		{
+			return new Kill("General Graardor", Graardor.HP, seed, new boolean[]{false, true});
+		}
+
 		boolean over()
 		{
 			return hp <= 0;
+		}
+
+		/** Graardor's Defence now: 30% off for each hammer that landed. */
+		int defenceNow()
+		{
+			int d = Graardor.DEFENCE;
+			for (int i = 0; i < specsLanded; i++)
+			{
+				d -= (int) (d * 0.3);
+			}
+			return d;
 		}
 
 		void run(int ticks)
@@ -316,7 +413,13 @@ public final class ReadmePictures
 					continue;
 				}
 				attacks++;
-				final boolean special = attacks % 15 == 0;
+				if (hammers != null && attacks <= hammers.length)
+				{
+					hammer(hammers[attacks - 1], now);
+					cooldown = 5;
+					continue;
+				}
+				final boolean special = hammers == null && attacks % 15 == 0;
 				fight.recordAttackMade(false, 1.0, false);
 				line.describeLatest(special ? "Burning claws" : "Abyssal tentacle", special ? ItemID.BONE_CLAWS
 					: ItemID.ABYSSAL_TENTACLE, null, FightTimeline.Style.MELEE, tick);
@@ -325,11 +428,16 @@ public final class ReadmePictures
 					line.markLatestSpecial();
 				}
 				// Vardorvis at full HP blocks about half of a tentacle's swings (08-boss-stats.md: 54% at full HP).
-				final int maxHit = special ? 48 : 49;
-				final double accuracy = special ? 0.85 : 0.54;
-				fight.recordExpected(maxHit, accuracy, accuracy * maxHit / 2.0, maxHit * maxHit / 12.0);
+				final int maxHit = special ? 48 : TENTACLE_MAX;
+				final double chance = special ? 0.85 : accuracy;
+				fight.recordExpected(maxHit, chance, chance * maxHit / 2.0, maxHit * maxHit / 12.0);
 				fight.recordAttackResolved(true, true, 0.98, 1.0, 0.012, 0);
-				if (rng.nextDouble() < accuracy)
+				if (!special && accuracy > TENTACLE_FULL)
+				{
+					// What the drain added to this swing's expectation.
+					drainValue += (accuracy - TENTACLE_FULL) * maxHit / 2.0;
+				}
+				if (rng.nextDouble() < chance)
 				{
 					final int hit = rng.nextInt(maxHit + 1);
 					fight.recordDamageDealt(Math.min(hit, hp), now, true);
@@ -337,6 +445,26 @@ public final class ReadmePictures
 					hp -= Math.min(hit, hp);
 				}
 				cooldown = 3;
+			}
+		}
+
+		/** A Dragon warhammer special: it lands as the plan says, and a landed one takes 30% of Defence. */
+		private void hammer(boolean lands, long now)
+		{
+			fight.recordAttackMade(false, 1.0, false);
+			line.describeLatest("Dragon warhammer", ItemID.DRAGON_WARHAMMER, null, FightTimeline.Style.MELEE, tick);
+			line.markLatestSpecial();
+			fight.recordExpected(HAMMER_MAX, HAMMER_ACCURACY, HAMMER_ACCURACY * HAMMER_MAX / 2.0,
+				HAMMER_MAX * HAMMER_MAX / 12.0);
+			fight.recordAttackResolved(true, true, 0.98, 1.0, 0.012, 0);
+			if (lands)
+			{
+				final int hit = 18 + rng.nextInt(HAMMER_MAX - 17);
+				fight.recordDamageDealt(Math.min(hit, hp), now, true);
+				line.attributeSplat(Integer.MIN_VALUE);
+				hp -= Math.min(hit, hp);
+				specsLanded++;
+				accuracy = TENTACLE_DRAINED;
 			}
 		}
 
@@ -357,6 +485,24 @@ public final class ReadmePictures
 
 		void end()
 		{
+			if (hammers != null)
+			{
+				final DrainRecord r = new DrainRecord();
+				r.defenceBase = Graardor.DEFENCE;
+				r.defenceStart = Graardor.DEFENCE;
+				r.defenceEnd = defenceNow();
+				r.magicBase = Graardor.MAGIC;
+				r.magicStart = Graardor.MAGIC;
+				r.magicEnd = Graardor.MAGIC;
+				r.magicDefenceBase = -1;
+				r.magicDefenceStart = -1;
+				r.magicDefenceEnd = -1;
+				r.specs.put("DRAGON_WARHAMMER", new int[]{hammers.length, specsLanded});
+				fight.recordDrain(r);
+				// The drain's worth as realized. The specs' own share of Luck is left at 0: on master a non-zero share
+				// shows as an empty "Not matched to an attack" row on the Damage card (reported in T-067's status).
+				fight.recordSpecOutcomes(0, 0, drainValue, drainValue);
+			}
 			fight.end(true, now());
 			room.end(now());
 		}

@@ -33,7 +33,7 @@ After a kill at a boss with attack rules, Execution gains an **avoidable eating*
 ### The loadout overlay
 Your current weapon's max hit, accuracy and DPS against the target, and its special attack's.
 
-<img src="docs/images/overlay-loadout.png" alt="The loadout overlay for an Abyssal tentacle">
+<img src="docs/images/overlay-loadout.png" alt="The loadout overlay for a Dragon warhammer, with its special attack">
 
 ### The side panel
 - **Fight:** where the time went, Luck, the Defence your specials took, Execution, damage by weapon and source, damage over time, a tick strip, and damage taken.
