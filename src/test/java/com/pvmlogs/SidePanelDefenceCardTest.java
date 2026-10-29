@@ -10,22 +10,15 @@ import java.awt.Container;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import org.junit.After;
 import org.junit.Test;
 
 /**
- * T-076, from Eric's recorded Sire kill: the Defence card in short labelled rows (three layouts for him to pick from),
- * no zero "Not matched to an attack" row, one expectation on the panel (or the chart saying which it is), and
- * {@code hits} counting the hits that did damage.
+ * T-076, from Eric's recorded Sire kill: the Defence card in short labelled rows under a drained bar (his pick of
+ * three layouts), no zero "Not matched to an attack" row, one expectation on the panel (or the chart saying which it
+ * is), and {@code hits} counting the hits that did damage.
  */
 public class SidePanelDefenceCardTest
 {
-	@After
-	public void layoutBack()
-	{
-		SidePanelFightTab.defenceLayout = SidePanelFightTab.DefenceLayout.ROWS;
-	}
-
 	private static List<String> rows(List<PanelSnapshot.Row> rows)
 	{
 		final List<String> out = new ArrayList<>();
@@ -45,9 +38,9 @@ public class SidePanelDefenceCardTest
 		assertEquals("250 → 174", d.hint.text);
 		// No row repeats the drop, no floor where the boss has none, no sentences.
 		assertEquals(Arrays.asList("Emberlight | 2 of 2 landed", "Damage added | +42 · 5 s faster",
-			"Specials' luck | +12 · 2 s faster"), rows(SidePanelFightTab.defenceRows(d, true)));
+			"Specials' luck | +12 · 2 s faster"), rows(SidePanelFightTab.defenceRows(d)));
 		assertEquals(SidePanelStyle.BETTER, d.specLuck.colour);
-		for (String r : rows(SidePanelFightTab.defenceRows(d, true)))
+		for (String r : rows(SidePanelFightTab.defenceRows(d)))
 		{
 			assertFalse(r, r.startsWith("defence") || r.startsWith("floor") || r.endsWith("none") || r.endsWith("."));
 			assertTrue(r, Character.isUpperCase(r.charAt(0)));
@@ -68,50 +61,42 @@ public class SidePanelDefenceCardTest
 	}
 
 	@Test
-	public void eachLayoutShowsTheSameFigures()
+	public void theDrainedBarThenTheRows()
 	{
-		for (SidePanelFightTab.DefenceLayout layout : SidePanelFightTab.DefenceLayout.values())
-		{
-			SidePanelFightTab.defenceLayout = layout;
-			final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
-			panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.sireEmberlight())));
-			final List<String> texts = texts(panel.fightTab());
-			assertTrue(layout + " " + texts, texts.contains("Emberlight"));
-			assertTrue(layout + " " + texts, texts.contains("Damage added"));
-			assertTrue(layout + " " + texts, texts.contains("Specials' luck"));
-			assertEquals(layout == SidePanelFightTab.DefenceLayout.BAR, count(panel.fightTab(), SidePanelDrainBar.class) == 1);
-			if (layout == SidePanelFightTab.DefenceLayout.TILES)
-			{
-				assertTrue(texts.toString(), texts.contains("5 s faster"));
-				assertTrue(texts.toString(), texts.contains("+12 dmg"));
-			}
-			else
-			{
-				assertTrue(texts.toString(), texts.contains("+42 · 5 s faster"));
-			}
-			assertFalse(texts.toString(), texts.contains("floor"));
-		}
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.sireEmberlight())));
+		final List<String> texts = texts(panel.fightTab());
+		assertEquals(1, count(panel.fightTab(), SidePanelDrainBar.class));
+		final int drained = texts.indexOf("Drained");
+		assertTrue(texts.toString(), drained >= 0);
+		assertEquals("76 (30%)", texts.get(drained + 1));
+		assertEquals(Arrays.asList("Emberlight", "2 of 2 landed", "Damage added", "+42 · 5 s faster", "Specials' luck",
+			"+12 · 2 s faster"), texts.subList(drained + 2, drained + 8));
+		assertFalse(texts.toString(), texts.contains("floor"));
+		// Levels unknown: the rows alone.
+		final SidePanelModel.Input unknown = SidePanelExamples.sireEmberlight();
+		unknown.drain.defenceStart = -1;
+		final PvmPerformancePanel other = new PvmPerformancePanel(null, null, null, null);
+		other.apply(new PanelSnapshot(SidePanelModel.fight(unknown)));
+		assertEquals(0, count(other.fightTab(), SidePanelDrainBar.class));
+		assertTrue(texts(other.fightTab()).contains("Specials' luck"));
 	}
 
 	@Test
-	public void eachLayoutIsBuiltOnceAndUpdatedInPlace()
+	public void theCardIsBuiltOnceAndUpdatedInPlace()
 	{
-		for (SidePanelFightTab.DefenceLayout layout : SidePanelFightTab.DefenceLayout.values())
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.floorNotReached())));
+		final SidePanelFightTab tab = panel.fightTab();
+		SidePanelPictures.draw(panel.tabs(), tab, 1);
+		final int builds = tab.builds();
+		final int layouts = SidePanelParts.relayouts;
+		for (int i = 0; i < 10; i++)
 		{
-			SidePanelFightTab.defenceLayout = layout;
-			final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 			panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.floorNotReached())));
-			final SidePanelFightTab tab = panel.fightTab();
-			SidePanelPictures.draw(panel.tabs(), tab, 1);
-			final int builds = tab.builds();
-			final int layouts = SidePanelParts.relayouts;
-			for (int i = 0; i < 10; i++)
-			{
-				panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.floorNotReached())));
-			}
-			assertEquals(layout.toString(), builds, tab.builds());
-			assertEquals(layout.toString(), layouts, SidePanelParts.relayouts);
 		}
+		assertEquals(builds, tab.builds());
+		assertEquals(layouts, SidePanelParts.relayouts);
 	}
 
 	// ---- no zero "Not matched" row ----

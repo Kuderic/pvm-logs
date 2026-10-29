@@ -747,7 +747,7 @@ final class PanelSnapshot
 		}
 	}
 
-	/** T-076: one of the Defence card's figures, in damage and in seconds, for a row or a tile. */
+	/** T-076: one of the Defence card's figures, in damage and in seconds. */
 	static final class Figure
 	{
 		final String label;

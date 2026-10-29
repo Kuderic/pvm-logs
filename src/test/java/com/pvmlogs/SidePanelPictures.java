@@ -47,11 +47,6 @@ public final class SidePanelPictures
 			textModes(out);
 			return;
 		}
-		if (args.length > 1 && "defence".equals(args[1]))
-		{
-			defenceLayouts(out);
-			return;
-		}
 		if (args.length > 2 && "icons".equals(args[1]))
 		{
 			bossIcons(out, Paths.get(args[2]));
@@ -108,6 +103,7 @@ public final class SidePanelPictures
 			write(out, "18a-sire-emberlight", scale, render(SidePanelExamples.sireEmberlight(), scale));
 			write(out, "18b-floor-not-reached", scale, render(SidePanelExamples.floorNotReached(), scale));
 			write(out, "18c-short-average", scale, render(SidePanelExamples.sireShortAverage(), scale));
+			write(out, "18d-at-its-floor-card", scale, card(SidePanelExamples.atItsFloor(), scale, "defence"));
 		}
 	}
 
@@ -146,40 +142,6 @@ public final class SidePanelPictures
 			}
 		}
 		larger = false;
-		smooth = false;
-		SidePanelStyle.setText(false, false);
-	}
-
-	/**
-	 * T-076: the Defence card's candidate layouts, for Eric to pick: each of them at the Sire kill, a floor not reached,
-	 * a floor reached with a party drain and two hammers one landed, with T-053's settings off and Smooth, at 1× and 2×.
-	 */
-	private static void defenceLayouts(Path out) throws IOException
-	{
-		for (SidePanelFightTab.DefenceLayout layout : SidePanelFightTab.DefenceLayout.values())
-		{
-			SidePanelFightTab.defenceLayout = layout;
-			for (int m = 0; m < 2; m++)
-			{
-				smooth = m == 1;
-				final Path dir = out.resolve(layout.name().toLowerCase(java.util.Locale.ENGLISH) + (smooth ? "-smooth" : ""));
-				Files.createDirectories(dir);
-				for (double scale : new double[]{1, 2})
-				{
-					write(dir, "a-sire-emberlight", scale, render(SidePanelExamples.sireEmberlight(), scale));
-					write(dir, "b-floor-not-reached", scale, render(SidePanelExamples.floorNotReached(), scale));
-					write(dir, "c-at-its-floor", scale, render(SidePanelExamples.atItsFloor(), scale));
-					write(dir, "d-two-hammers-one-landed", scale, render(SidePanelExamples.twoHammersOneLanded(), scale));
-					// The card alone, for comparing the layouts side by side.
-					write(dir, "card-a-sire-emberlight", scale, card(SidePanelExamples.sireEmberlight(), scale, "defence"));
-					write(dir, "card-b-floor-not-reached", scale, card(SidePanelExamples.floorNotReached(), scale, "defence"));
-					write(dir, "card-c-at-its-floor", scale, card(SidePanelExamples.atItsFloor(), scale, "defence"));
-					write(dir, "card-d-two-hammers-one-landed", scale, card(SidePanelExamples.twoHammersOneLanded(), scale,
-						"defence"));
-				}
-			}
-		}
-		SidePanelFightTab.defenceLayout = SidePanelFightTab.DefenceLayout.ROWS;
 		smooth = false;
 		SidePanelStyle.setText(false, false);
 	}
