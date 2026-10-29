@@ -1724,6 +1724,14 @@ final class SidePanelModel
 			rows.add(new Row(Text.small(AVOIDABLE, SidePanelStyle.BODY), Text.small(LedgerRows.number(part) + " ("
 				+ share + "%)", part > 0 ? SidePanelStyle.COST : SidePanelStyle.BODY)));
 		}
+		if (!in.ended)
+		{
+			// T-068 (T-067's finding D-1): while the fight runs, the total only, as the overlay's " damage taken" row. A
+			// live count of the boss's hits is close to an attack counter, and "without protection" in the cost colour a
+			// prayer nudge; the overlay keeps all three for its Summary (T-019). The trip waits for no fight to run.
+			rows.add(new Row(Text.small(AFTER_THE_FIGHT, SidePanelStyle.MUTED), Text.NONE));
+			return new PanelSnapshot.Rows(Text.title(LedgerRows.number(s.damageTaken()), SidePanelStyle.VALUE), rows);
+		}
 		if (hitsTaken > 0)
 		{
 			rows.add(row("hits", LedgerRows.number(hitsTaken)));
@@ -1744,6 +1752,8 @@ final class SidePanelModel
 	}
 
 	static final String AVOIDABLE = "avoidable";
+	/** T-068: the Damage taken card's line while the fight runs. */
+	static final String AFTER_THE_FIGHT = "hits and biggest hit after the fight";
 
 	private static boolean isUnnamed(String attack)
 	{
