@@ -17,8 +17,9 @@ Luck vs Skill is its own Plugin Hub entry. It began as a fork of Arodab's PvM Pe
 - A shot thrown just before a gear switch is scored with what you held when you threw it.
 
 **What it shows**
-- The fight overlay ("Ledger"): live, then the full breakdown and your usual time after the kill.
-- The loadout overlay: your weapon's max hit, accuracy and DPS against the target, and its special's.
+- The fight overlay ("Ledger"): live, then the full breakdown and your usual time after the kill. Execution's parts show only the ones that cost time, unless you choose all of them.
+- The DPS overlay: your weapon's DPS, max hit and accuracy against the monster it names, and its special's. It can stay up outside fights.
+- Times of day show am and pm, so they can't be read as kill times.
 - A new side panel: Fight (where the time went, luck curve, damage by weapon, damage over time, tick strip), History (search, your usual time and execution per boss, every kill) and Trip; boss icons from the game; larger and smooth text options.
 - Settings in four sections; Bosses only is on for new installs.
 

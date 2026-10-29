@@ -42,7 +42,7 @@ import net.runelite.client.ui.overlay.components.PanelComponent;
  * <li>The overlays: rows turned into line components by {@link PvmPerformanceOverlay#lines} as the overlay does, in
  * RuneLite's own {@link PanelComponent} with its standard background, over a neutral dark scene (the overlays are
  * see-through). The fight overlay, its loadout and the Fight tab all come from one simulated kill, {@link Graardor};
- * the ruled kill is {@link LedgerPictures#states()}' Vardorvis.</li>
+ * the ruled kill is {@link #ruledKill()}'s Vardorvis. All with a new install's settings ({@link #asInstalled()}).</li>
  * <li>The side panel's History and Trip tabs, from {@link SidePanelPictures}.</li>
  * <li>A GIF of the Fight tab through a simulated kill, redrawn every {@link PvmPerformancePanel#UPDATE_TICKS} ticks as
  * the panel updates, then the view after the kill, all cut to {@link #MAX_GIF_HEIGHT}.</li>
@@ -75,12 +75,11 @@ public final class ReadmePictures
 		Files.createDirectories(out);
 		RuneLiteLAF.setup();
 
-		final java.util.Map<String, List<LedgerRows.Row>> states = LedgerPictures.states();
 		final Graardor g = new Graardor();
-		png(out, "overlay-mid-fight", overlays(g.mid, LedgerRows.loadout(tentacle(), false)));
+		png(out, "overlay-mid-fight", overlays(g.mid, LedgerRows.loadout(g.versus(tentacle()), false)));
 		png(out, "overlay-after-kill", overlays(g.dead));
-		png(out, "overlay-ruled-kill", overlays(states.get("14-ruled")));
-		png(out, "overlay-loadout", overlays(LedgerRows.loadout(hammer(), false)));
+		png(out, "overlay-ruled-kill", overlays(ruledKill()));
+		png(out, "overlay-loadout", overlays(LedgerRows.loadout(g.versus(hammer()), false)));
 
 		png(out, "panel-fight", SidePanelPictures.render(g.panel, 1));
 		png(out, "panel-history", SidePanelPictures.renderHistory(false, 1));
@@ -106,11 +105,13 @@ public final class ReadmePictures
 		final List<LedgerRows.Row> mid;
 		final List<LedgerRows.Row> dead;
 		final SidePanelModel.Input panel;
+		private final Fight fight;
 
 		Graardor()
 		{
-			final LedgerRows.Settings all = new LedgerRows.Settings();
+			final LedgerRows.Settings all = asInstalled();
 			final Kill kill = Kill.graardor();
+			fight = kill.fight;
 			// Mid-fight: about half its hitpoints gone.
 			while (!kill.over() && kill.hp > HP / 2)
 			{
@@ -136,9 +137,56 @@ public final class ReadmePictures
 			panel.endMillis = kill.now();
 			panel.average = usual;
 		}
+
+		/** The DPS overlay's `vs` line (T-073), named and coloured as the plugin does it for this fight. */
+		LedgerRows.Loadout versus(LedgerRows.Loadout l)
+		{
+			l.versus = LoadoutOverlay.versus(fight);
+			l.versusRgb = LoadoutOverlay.versusColour(fight);
+			return l;
+		}
 	}
 
-	/** The tentacle mid-fight at Graardor, its Defence drained to 175: no special of its own, so no spec rows. */
+	/**
+	 * The fight overlay's settings as a new install has them (T-073: Execution's parts "Costing only"), so the pictures
+	 * show what a new player sees.
+	 */
+	static LedgerRows.Settings asInstalled()
+	{
+		final PvmPerformanceConfig fresh = new PvmPerformanceConfig()
+		{
+		};
+		final LedgerRows.Settings s = new LedgerRows.Settings();
+		s.luck = fresh.overlayLuck();
+		s.parts = fresh.overlayParts();
+		s.details = fresh.overlayDetails();
+		return s;
+	}
+
+	/**
+	 * After a kill at a boss with attack rules (T-043): {@link LedgerPictures}' "14-ruled" Vardorvis figures, with the
+	 * bleed taken by kind (T-062) and a new install's settings.
+	 */
+	static List<LedgerRows.Row> ruledKill()
+	{
+		final LedgerExamples.FakeScope ruled = LedgerExamples.kill();
+		ruled.combatTicks = 216;
+		ruled.ticksLost = 25 + 27;
+		ruled.ticksLostEating = 27;
+		ruled.damageTaken = 263;
+		ruled.avoidableEatingTicks = 21.6;
+		ruled.damageTakenAvoidable = 141;
+		ruled.dotTaken = 27;
+		ruled.dotTakenByKind.put("bleed", 27);
+		ruled.biggestHitTaken = 41;
+		ruled.damageTakenUnprotected = 85;
+		ruled.damageVariance = 11436;
+		ruled.setup(0.98, 0.85, 2.352, 0);
+		return LedgerRows.build(ruled, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), asInstalled());
+	}
+
+	/** The DPS overlay's tentacle mid-fight at Graardor, its Defence drained to 175: no special, so no spec rows. */
 	static LedgerRows.Loadout tentacle()
 	{
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
@@ -150,7 +198,7 @@ public final class ReadmePictures
 		return l;
 	}
 
-	/** The Dragon warhammer, for the loadout picture: its own figures and its special's (×1.5 max hit). */
+	/** The Dragon warhammer, for the DPS overlay's picture: its own figures and its special's (×1.5 max hit). */
 	static LedgerRows.Loadout hammer()
 	{
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
