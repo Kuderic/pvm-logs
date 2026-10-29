@@ -61,6 +61,11 @@ public final class SidePanelPictures
 			// T-034: states 9 to 11.
 			write(out, "9-trip", scale, renderTrip(SidePanelExamples.trip(), scale));
 			write(out, "10-history", scale, renderHistory(false, scale));
+			// T-082: searching, the boss put away, no match, and the close control hovered.
+			write(out, "10c-history-searching", scale, renderHistory(t -> t.search().setText("abyss"), scale));
+			write(out, "10d-history-put-away", scale, renderHistory(SidePanelHistoryTab::putAway, scale));
+			write(out, "10e-history-no-match", scale, renderHistory(t -> t.search().setText("zulrah"), scale));
+			write(out, "10f-history-close-hovered", scale, renderHistory(SidePanelPictures::hoverClose, scale));
 			write(out, "11-saved-kill", scale, renderHistory(true, scale));
 			// T-036: a kill from this session opened from History, with its rows, chart and strip.
 			write(out, "11b-saved-kill-this-session", scale, renderSavedThisSession(scale));
@@ -138,6 +143,8 @@ public final class SidePanelPictures
 				write(dir, "c-ruled-kill", scale, render(SidePanelExamples.ruledKill(true), scale));
 				write(dir, "d-trip", scale, renderTrip(SidePanelExamples.trip(), scale));
 				write(dir, "e-history", scale, renderHistory(false, scale));
+				write(dir, "e2-history-searching", scale, renderHistory(t -> t.search().setText("abyss"), scale));
+				write(dir, "e3-history-put-away", scale, renderHistory(SidePanelHistoryTab::putAway, scale));
 				write(dir, "f-saved-kill", scale, renderSavedThisSession(scale));
 			}
 		}
@@ -275,6 +282,45 @@ public final class SidePanelPictures
 		}
 		styled(panel);
 		return draw(panel.tabs(), tab, scale);
+	}
+
+	/** T-082: the History tab after {@code state} (a search typed, the boss put away). */
+	static BufferedImage renderHistory(java.util.function.Consumer<SidePanelHistoryTab> state, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source());
+		panel.tabs().select(panel.tabs().getTab(1));
+		final SidePanelHistoryTab tab = panel.historyTab();
+		tab.refresh();
+		state.accept(tab);
+		styled(panel);
+		return draw(panel.tabs(), tab, scale);
+	}
+
+	/** T-082: the boss card's close control hovered. */
+	static void hoverClose(SidePanelHistoryTab tab)
+	{
+		for (Component k : all(tab))
+		{
+			if (k instanceof SidePanelHistoryTab.Close)
+			{
+				k.dispatchEvent(new java.awt.event.MouseEvent(k, java.awt.event.MouseEvent.MOUSE_ENTERED, 0L, 0, 2, 2, 0,
+					false));
+			}
+		}
+	}
+
+	private static java.util.List<Component> all(Container c)
+	{
+		final java.util.List<Component> out = new java.util.ArrayList<>();
+		for (Component k : c.getComponents())
+		{
+			out.add(k);
+			if (k instanceof Container)
+			{
+				out.addAll(all((Container) k));
+			}
+		}
+		return out;
 	}
 
 	/** A kill from this session, opened from History: its timeline comes with it (T-036). */
