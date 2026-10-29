@@ -182,7 +182,7 @@ public class MaggotKingTest
 	}
 
 	@Test
-	public void thePunishIsNeverInTheLiveFigures()
+	public void neitherThePunishNorTheSlamIsInTheLiveFigures()
 	{
 		final ModifierTracker tracker = new ModifierTracker(null);
 		tracker.onBossAnim(INDEX, "Maggot King", modifiers(), SLAM, 100);
@@ -190,8 +190,9 @@ public class MaggotKingTest
 		final List<BossRules.ModifierRule> live = ModifierTracker.shownLive(punish);
 		assertFalse(has(live, "punish"));
 		assertFalse(has(live, "punish, crush"));
-		// The slam's version is a phase, which the live figures may follow.
-		assertTrue(has(live, "slam"));
+		// Nor the slam's version: it starts two ticks before the punish click, so a live change on it would time the punish.
+		assertFalse(has(live, "slam"));
+		assertTrue(live.isEmpty());
 		assertEquals(Collections.emptyList(), ModifierTracker.shownLive(Collections.emptyList()));
 	}
 

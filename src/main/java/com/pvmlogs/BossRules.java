@@ -363,7 +363,7 @@ class BossRules
 		/**
 		 * Never in the figures shown live (T-087, the Jagex rule): the attack it
 		 * applies to is scored with it, but the overlay and the side panel never
-		 * change for it - the Maggot King's punish must not read as a timer.
+		 * change for it - the Maggot King's slam and punish must not read as a timer.
 		 */
 		Boolean hiddenLive;
 		String source;

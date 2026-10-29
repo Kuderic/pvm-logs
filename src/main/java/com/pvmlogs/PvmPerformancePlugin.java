@@ -2552,7 +2552,7 @@ public class PvmPerformancePlugin extends Plugin
 			expectedByTick.put(client.getTickCount(), row);
 			modifiersByTick.put(client.getTickCount(), combatCalc.describeBossModifiers(shownId));
 			// T-087: the row above scores the attack going out now with every modifier it lands with. What is shown live
-			// leaves out the ones the player must not be told about - the Maggot King's punish - so the overlay and the side
+			// leaves out the ones the player must not be told about - the Maggot King's slam and punish - so the overlay and the side
 			// panel never change on a slam's tick (Jagex's rule: nothing of the boss's behaviour).
 			if (combatCalc.hiddenModifiersApply(shownId))
 			{
