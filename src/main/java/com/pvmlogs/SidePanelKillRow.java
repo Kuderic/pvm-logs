@@ -28,10 +28,17 @@ final class SidePanelKillRow extends JPanel
 		final SidePanelKillRow r = new SidePanelKillRow(onClick);
 		final JPanel left = new JPanel(new BorderLayout(6, 0));
 		left.setOpaque(false);
-		final SidePanelText clock = new SidePanelText(Text.title(row.clock, SidePanelStyle.VALUE), false);
-		clock.setPreferredSize(new Dimension(SidePanelStyle.columnWidth(SidePanelStyle.Type.TITLE, "0:00", 40),
+		// The kill's time right-aligned in a column as wide as its widest digits (Eric, 2026-10-29), so 1:57 under 2:16
+		// ends where it does and the dates after them start in line. SidePanelText asks for its own width, so the column
+		// is the box around it.
+		final SidePanelText clock = new SidePanelText(Text.title(row.clock, SidePanelStyle.VALUE), true);
+		final JPanel clockBox = new JPanel(new BorderLayout());
+		clockBox.setOpaque(false);
+		clockBox.add(clock, BorderLayout.CENTER);
+		clockBox.setPreferredSize(new Dimension(Math.max(SidePanelStyle.columnWidth(SidePanelStyle.Type.TITLE, "0:00", 40),
+			SidePanelText.reservedWidth(SidePanelStyle.metrics(clock, clock.getFont()), row.clock)),
 			SidePanelStyle.Type.TITLE.lineHeight()));
-		left.add(clock, BorderLayout.WEST);
+		left.add(clockBox, BorderLayout.WEST);
 		left.add(new SidePanelText(Text.small(row.date, SidePanelStyle.SECONDARY), false), BorderLayout.CENTER);
 		r.add(left, BorderLayout.CENTER);
 		r.add(right(row, true), BorderLayout.EAST);

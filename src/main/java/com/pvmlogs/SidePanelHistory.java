@@ -157,10 +157,10 @@ final class SidePanelHistory
 			this.icon = icon;
 		}
 
-		/** The right side: {@code 23 · 1:49} for a boss with an average, else {@code 12 kills}. */
+		/** The right side: {@code 23 kills · 1:49} for a boss with an average, else {@code 12 kills}. */
 		String right()
 		{
-			return boss && average != null ? kills + " · " + average : plural(kills, "kill");
+			return boss && average != null ? plural(kills, "kill") + " · " + average : plural(kills, "kill");
 		}
 
 		/** The sub-line: {@code with Respiratory system, Scion}, {@code not a boss}, or empty. */

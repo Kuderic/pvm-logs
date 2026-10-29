@@ -617,7 +617,7 @@ final class SidePanelParts
 			g.fillRect(0, 0, (int) Math.round(getWidth() * Math.max(0, Math.min(1, share))), getHeight());
 		}
 
-		/** The 36 × 32 icon box: the image centred, or a small swatch in the source's colour. */
+		/** The 36 × 32 icon box, transparent: the image centred, or a small swatch in the source's colour. */
 		private static final class Icon extends javax.swing.JComponent
 		{
 			java.awt.image.BufferedImage image;
@@ -632,8 +632,7 @@ final class SidePanelParts
 			@Override
 			protected void paintComponent(Graphics g)
 			{
-				g.setColor(new Color(0x2A2A2A));
-				g.fillRect(0, 0, getWidth(), getHeight());
+				// No box behind the icon: the row's share bar shows through it (Eric, 2026-10-29).
 				if (image != null)
 				{
 					g.drawImage(image, (getWidth() - image.getWidth()) / 2, (getHeight() - image.getHeight()) / 2, null);
