@@ -213,16 +213,19 @@ public class ShadowCastStunTest
 			lostBefore += PvmPerformancePlugin.attackOverdue(tick, 465, lag) ? 1 : 0;
 		}
 		assertEquals(1, lostBefore);
-		// Booked on its own tick at the spell's speed of 5: due 470, so nothing is lost before the bow's booking.
+		// Booked on its own tick, and the stun resets the attack delay (T-078): due 466, the tick after. The bow's shot thrown
+		// on 466 books on 468, so nothing is lost before it.
+		final int due = 465 + PvmPerformancePlugin.bookedSpeed(true, false, 5, 5);
+		assertEquals(466, due);
 		int lostAfter = 0;
 		for (int tick = 466; tick < 468; tick++)
 		{
-			lostAfter += PvmPerformancePlugin.attackOverdue(tick, 465 + 5, lag) ? 1 : 0;
+			lostAfter += PvmPerformancePlugin.attackOverdue(tick, due, lag) ? 1 : 0;
 		}
 		assertEquals(0, lostAfter);
-		// Waiting instead: ticks are lost from the cast's due tick plus the booking lag, as after any attack.
-		assertFalse(PvmPerformancePlugin.attackOverdue(471, 470, lag));
-		assertTrue(PvmPerformancePlugin.attackOverdue(472, 470, lag));
+		// Waiting instead: ticks are lost from the tick after the cast plus the booking lag, as after any attack.
+		assertFalse(PvmPerformancePlugin.attackOverdue(467, due, lag));
+		assertTrue(PvmPerformancePlugin.attackOverdue(468, due, lag));
 	}
 
 	private static List<String> names(List<BossRules.ModifierRule> mods)

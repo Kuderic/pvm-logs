@@ -34,6 +34,24 @@ class DamageModifiers
 		this.client = client;
 		this.monsters = monsters;
 		this.tracker = new ModifierTracker(line -> debug.log("%s", line));
+		this.tracker.setPresence(this::present);
+	}
+
+	/** Whether an npc of this id is in the scene (T-078: the Leviathan's pathfinder, which ends its stun). */
+	private boolean present(int npcId)
+	{
+		if (client.getTopLevelWorldView() == null)
+		{
+			return false;
+		}
+		for (NPC npc : client.getTopLevelWorldView().npcs())
+		{
+			if (npc != null && npc.getId() == npcId)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private BossRules.Boss bossFor(int npcId)
@@ -133,7 +151,7 @@ class DamageModifiers
 			return Collections.emptyList();
 		}
 		return tracker.applying(npc.getIndex(), boss.damageModifiers, npc.getId(), style == null ? null : style.name(),
-			client.getTickCount() + Math.max(0, delayTicks), behind(npc), this::inside);
+			client.getTickCount(), client.getTickCount() + Math.max(0, delayTicks), behind(npc), this::inside);
 	}
 
 	/** The modifiers' names an attack at this npc goes out with now, for the ATTACK line. */

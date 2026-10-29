@@ -30,6 +30,8 @@ final class ModifierTracker
 		int end;
 		/** Closed by an event, whose line was logged then: running out on the same tick is not logged again (T-066). */
 		boolean closed;
+		/** An attack thrown before the start lands free of it (T-078: the shot the stun's reset attack delay allows). */
+		boolean spareThrownBefore;
 
 		Window(String state, int start, int end)
 		{
@@ -41,6 +43,12 @@ final class ModifierTracker
 		boolean openAt(int tick)
 		{
 			return tick >= start && tick < end;
+		}
+
+		/** Whether an attack thrown on {@code throwTick} and landing on {@code landTick} lands in it. */
+		boolean takes(int throwTick, int landTick)
+		{
+			return openAt(landTick) && !(spareThrownBefore && throwTick < start);
 		}
 	}
 
@@ -66,6 +74,30 @@ final class ModifierTracker
 
 	private final Map<Integer, Boss> bosses = new HashMap<>();
 	private final Consumer<String> log;
+	// Whether an npc of this id is present now (T-078: the Leviathan's pathfinder), for the states that end while one is.
+	private java.util.function.IntPredicate present = id -> false;
+
+	/** Tells the tracker how to ask whether an npc of an id is present, for {@code endWhileNpc}. */
+	void setPresence(java.util.function.IntPredicate present)
+	{
+		this.present = present == null ? id -> false : present;
+	}
+
+	/** The first of the state's {@code endWhileNpc} ids present now, or -1. */
+	private int presentEnder(BossRules.StateRule s)
+	{
+		if (s.endWhileNpc != null)
+		{
+			for (int id : s.endWhileNpc)
+			{
+				if (present.test(id))
+				{
+					return id;
+				}
+			}
+		}
+		return -1;
+	}
 
 	ModifierTracker(Consumer<String> log)
 	{
@@ -93,17 +125,26 @@ final class ModifierTracker
 		return rules == null || rules.modifiers == null ? Collections.emptyList() : rules.modifiers;
 	}
 
-	private void open(Boss b, BossRules.StateRule s, int tick, String signal)
+	private Window open(Boss b, BossRules.StateRule s, int tick, String signal)
 	{
 		final Window w = b.windows.get(s.name);
 		if (w != null && w.openAt(tick))
 		{
-			return;
+			return null;
+		}
+		final int ender = presentEnder(s);
+		if (ender >= 0)
+		{
+			log.accept(String.format("MOD %s: %s not on at tick %d (%s, but npc %d is here)", b.name, s.name, tick, signal,
+				ender));
+			return null;
 		}
 		final int end = s.ticks > 0 ? tick + s.ticks : s.maxTicks > 0 ? tick + s.maxTicks : Integer.MAX_VALUE;
-		b.windows.put(s.name, new Window(s.name, tick, end));
+		final Window opened = new Window(s.name, tick, end);
+		b.windows.put(s.name, opened);
 		log.accept(String.format("MOD %s: %s on at tick %d (%s%s)", b.name, s.name, tick, signal,
 			s.ticks > 0 ? ", for " + s.ticks + " ticks" : ""));
+		return opened;
 	}
 
 	private void close(Boss b, BossRules.StateRule s, int tick, String signal)
@@ -127,7 +168,11 @@ final class ModifierTracker
 		{
 			if (s.startOnPlayerSpell != null && s.startOnPlayerSpell.contains(spell))
 			{
-				open(b, s, landTick, "your " + spell);
+				final Window opened = open(b, s, landTick, "your " + spell);
+				if (opened != null)
+				{
+					opened.spareThrownBefore = s.resetsAttackDelay;
+				}
 			}
 		}
 	}
@@ -200,11 +245,24 @@ final class ModifierTracker
 		}
 	}
 
-	/** Once a tick: windows that ran out are logged closed. */
+	/** Once a tick: windows that ran out are logged closed, and those an npc's presence ends are closed (T-078). */
 	void tick(int now)
 	{
 		for (Boss b : bosses.values())
 		{
+			for (BossRules.StateRule s : states(b.rules))
+			{
+				final Window w = b.windows.get(s.name);
+				final int ender = w == null || w.closed || w.end <= now ? -1 : presentEnder(s);
+				if (ender >= 0)
+				{
+					// One that has not started yet never does.
+					w.end = Math.max(now, w.start);
+					w.closed = true;
+					log.accept(String.format("MOD %s: %s off at tick %d (npc %d is here, after %d ticks)", b.name, s.name,
+						now, ender, Math.max(0, now - w.start)));
+				}
+			}
 			for (Iterator<Window> it = b.windows.values().iterator(); it.hasNext(); )
 			{
 				final Window w = it.next();
@@ -229,6 +287,13 @@ final class ModifierTracker
 		return w != null && w.openAt(tick);
 	}
 
+	private boolean takes(int npcIndex, String state, int throwTick, int landTick)
+	{
+		final Boss b = bosses.get(npcIndex);
+		final Window w = b == null ? null : b.windows.get(state);
+		return w != null && w.takes(throwTick, landTick);
+	}
+
 	/**
 	 * The modifiers an attack takes: landing on {@code landTick} on the boss as
 	 * {@code npcId}, in this style ({@code null} for any), from where the player
@@ -238,6 +303,16 @@ final class ModifierTracker
 	List<BossRules.ModifierRule> applying(int npcIndex, BossRules.DamageModifierRules rules, int npcId, String style,
 		int landTick, boolean behind, InsideCheck insideNpc)
 	{
+		return applying(npcIndex, rules, npcId, style, landTick, landTick, behind, insideNpc);
+	}
+
+	/**
+	 * As above, for an attack thrown on {@code throwTick} (T-078): a window
+	 * that spares attacks thrown before it starts does not take one.
+	 */
+	List<BossRules.ModifierRule> applying(int npcIndex, BossRules.DamageModifierRules rules, int npcId, String style,
+		int throwTick, int landTick, boolean behind, InsideCheck insideNpc)
+	{
 		final List<BossRules.ModifierRule> out = new ArrayList<>(2);
 		for (BossRules.ModifierRule m : modifiers(rules))
 		{
@@ -245,7 +320,7 @@ final class ModifierTracker
 			{
 				continue;
 			}
-			if (m.state != null && !isOpen(npcIndex, m.state, landTick))
+			if (m.state != null && !takes(npcIndex, m.state, throwTick, landTick))
 			{
 				continue;
 			}
