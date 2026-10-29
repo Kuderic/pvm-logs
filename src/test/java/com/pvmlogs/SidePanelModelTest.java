@@ -130,7 +130,7 @@ public class SidePanelModelTest
 		assertEquals(PanelSnapshot.State.DEAD, t.state);
 		assertEquals(" (dead)", t.header.suffix.text);
 		assertEquals(SidePanelStyle.DEAD, t.header.suffix.colour);
-		assertEquals("700 HP · solo · 15:31", t.header.sub.text);
+		assertEquals("700 HP · solo · 3:31 pm", t.header.sub.text);
 		assertEquals("2:16", t.header.clock.text);
 		assertEquals("bottom 20%", tile(t, "Luck").value.text);
 		assertEquals("14 s slower", tile(t, "Luck").sub.text);

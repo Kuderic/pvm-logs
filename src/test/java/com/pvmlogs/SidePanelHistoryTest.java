@@ -243,8 +243,9 @@ public class SidePanelHistoryTest
 		{
 			assertTrue(SidePanelHistory.endMillis(rows.get(i - 1).room) >= SidePanelHistory.endMillis(rows.get(i).room));
 		}
-		assertTrue(rows.get(0).date, rows.get(0).date.startsWith("today "));
-		assertEquals("26 Oct 21:40", rows.get(12).date);
+		// Today's kill is its time alone (T-072: the rows were full before am and pm).
+		assertTrue(rows.get(0).date, rows.get(0).date.matches("\\d{1,2}:\\d{2} [ap]m"));
+		assertEquals("26 Oct 9:40 pm", rows.get(12).date);
 		assertEquals("Show 6 more", SidePanelHistory.showMore(13, SidePanelHistory.FIRST_KILLS));
 		assertNull(SidePanelHistory.showMore(13, 13));
 	}
@@ -277,7 +278,7 @@ public class SidePanelHistoryTest
 			SidePanelExamples.at(11, 0), SidePanelHistoryExamples.NOW, SidePanelExamples.ZONE, SidePanelHistory.Versions.NONE));
 		assertEquals(SidePanelModel.LATER_TEXT, before.later);
 		assertNull(before.damage);
-		assertEquals("26 Oct 21:40 · saved kill", before.header.sub.text);
+		assertEquals("26 Oct 9:40 pm · saved kill", before.header.sub.text);
 		assertEquals(" (dead)", before.header.suffix.text);
 		// Before T-028: the seconds stand in for the curve, in the header too.
 		assertNull(before.curve);
@@ -389,7 +390,7 @@ public class SidePanelHistoryTest
 	{
 		final PanelSnapshot.TripTab t = SidePanelModel.trip(SidePanelExamples.trip());
 		assertEquals("Trip", t.header.name.text);
-		assertEquals("since 14:52 · fighting time", t.header.sub.text);
+		assertEquals("since 2:52 pm · fighting time", t.header.sub.text);
 		assertEquals("12:40", t.header.clock.text);
 		assertEquals("6 kills · 1 ended", t.roomsHint.text);
 		assertEquals(4, t.tiles.size());

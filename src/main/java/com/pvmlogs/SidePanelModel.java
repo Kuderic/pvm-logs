@@ -39,8 +39,12 @@ import java.util.Set;
  */
 final class SidePanelModel
 {
-	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
-	private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("d MMM HH:mm", java.util.Locale.ENGLISH);
+	/**
+	 * T-072: a time of day, 12-hour with no leading zero ({@code 3:31}); {@link #clockTime} adds am or pm, so it can't
+	 * be read as a kill time. English whatever the system locale.
+	 */
+	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("h:mm", java.util.Locale.ENGLISH);
+	private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH);
 	static final String NO_CHARTS_TEXT = "No damage chart for this kill: charts were off, or it was more than 50 fights "
 		+ "ago.";
 	static final String LATER_TEXT = "Kept only for fights since RuneLite started. Saving them with every kill is planned "
@@ -646,6 +650,8 @@ final class SidePanelModel
 	private static PanelSnapshot.Header header(Input in, LedgerRows.Scope s)
 	{
 		final List<String> sub = new ArrayList<>();
+		// T-072: where "solo" or "group" is, for the short form that leaves it out when the time doesn't fit beside it.
+		int soloAt = -1;
 		Text suffix = Text.NONE;
 		if (in.kind == Kind.RAID)
 		{
@@ -674,6 +680,7 @@ final class SidePanelModel
 			if (in.solo != null)
 			{
 				sub.add(in.solo ? "solo" : "group");
+				soloAt = sub.size() - 1;
 			}
 			if (in.ended)
 			{
@@ -685,11 +692,18 @@ final class SidePanelModel
 				}
 			}
 		}
+		List<String> subShort = null;
+		if (soloAt >= 0 && sub.size() > 2)
+		{
+			final List<String> shorter = new ArrayList<>(sub);
+			shorter.remove(soloAt);
+			subShort = Collections.singletonList(String.join(DOT, shorter));
+		}
 		return new PanelSnapshot.Header(Text.title(in.name, SidePanelStyle.VALUE), suffix,
 			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
 			new Text(LedgerRows.clock(s.combatTicks()), SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK),
 			SidePanelBossIcons.sprite(in.name, in.raidType),
-			in.ended || in.kind == Kind.RAID ? Text.NONE : liveDefenceText(in.liveDefence));
+			in.ended || in.kind == Kind.RAID ? Text.NONE : liveDefenceText(in.liveDefence), subShort);
 	}
 
 	/**
@@ -731,11 +745,13 @@ final class SidePanelModel
 		{
 			sub.add("since " + time(in.tripSince, in.zone));
 		}
+		// T-072: where "since 2:52 pm · fighting time" doesn't fit, "since 2:52 pm · in fights", else "since 2:52 pm".
+		final List<String> subShort = sub.isEmpty() ? null : Arrays.asList(sub.get(0) + DOT + "in fights", sub.get(0));
 		sub.add("fighting time");
 		final PanelSnapshot.Header header = new PanelSnapshot.Header(Text.title("Trip", SidePanelStyle.VALUE), Text.NONE,
 			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
 			new Text(LedgerRows.clock(ticks), ticks > 0 ? SidePanelStyle.VALUE : SidePanelStyle.UNSCORED,
-				SidePanelStyle.Type.CLOCK));
+				SidePanelStyle.Type.CLOCK), SidePanelBossIcons.NONE, Text.NONE, subShort);
 		List<Tile> tiles = null;
 		PanelSnapshot.Parts execution = null;
 		PanelSnapshot.Rows taken = null;
@@ -1859,12 +1875,29 @@ final class SidePanelModel
 		return LedgerRows.number(maxHp) + " HP";
 	}
 
-	/** {@code today 15:31}, else {@code 26 Oct 21:40} (spec 3.2's kill rows). */
+	/** {@code today 3:31 pm}, else {@code 26 Oct 9:40 pm} (spec 3.2's kill rows; T-072). */
 	static String date(long millis, long now, ZoneId zone)
 	{
 		final java.time.ZonedDateTime at = Instant.ofEpochMilli(millis).atZone(zone);
 		final java.time.LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
-		return at.toLocalDate().equals(today) ? "today " + TIME.format(at) : DATE.format(at);
+		return (at.toLocalDate().equals(today) ? "today" : DAY.format(at)) + " " + clockTime(at);
+	}
+
+	/**
+	 * T-072: a History kill row's date, as {@link #date} but a kill from today is its time alone, {@code 3:31 pm}: the
+	 * rows were full at 213 px before am and pm, and a time with no day can only be today.
+	 */
+	static String rowDate(long millis, long now, ZoneId zone)
+	{
+		final java.time.ZonedDateTime at = Instant.ofEpochMilli(millis).atZone(zone);
+		final java.time.LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
+		return at.toLocalDate().equals(today) ? clockTime(at) : DAY.format(at) + " " + clockTime(at);
+	}
+
+	/** T-072: {@code 3:31 pm}, {@code 12:05 am}, {@code 12:00 pm}: lower case, no leading zero. */
+	static String clockTime(java.time.ZonedDateTime at)
+	{
+		return TIME.format(at) + (at.getHour() < 12 ? " am" : " pm");
 	}
 
 	/**
@@ -1895,8 +1928,9 @@ final class SidePanelModel
 		return null;
 	}
 
+	/** A time of day, {@code 3:31 pm} (T-072). */
 	static String time(long millis, ZoneId zone)
 	{
-		return TIME.format(Instant.ofEpochMilli(millis).atZone(zone));
+		return clockTime(Instant.ofEpochMilli(millis).atZone(zone));
 	}
 }
