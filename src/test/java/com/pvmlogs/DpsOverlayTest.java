@@ -31,10 +31,11 @@ import org.junit.Test;
  */
 public class DpsOverlayTest
 {
+	/** The {@code  vs} sub-row, straight under the attack (Eric, 2026-10-28). */
 	private static Row vs(String monster)
 	{
-		final String left = "vs " + monster;
-		return new Row(left, "", BODY, BODY, NEUTRAL, NEUTRAL, left);
+		final String left = " vs " + monster;
+		return new Row(left, "", DETAIL, DETAIL, NEUTRAL, NEUTRAL, left);
 	}
 
 	private static Row attack(String name)
@@ -74,11 +75,11 @@ public class DpsOverlayTest
 	// ---- the rows ----
 
 	@Test
-	public void inAFightItNamesTheMonsterThenTheAttackThenItsDps()
+	public void inAFightItNamesTheAttackThenTheMonsterUnderItThenItsDps()
 	{
 		final LedgerRows.Loadout l = LedgerExamples.loadout();
 		l.versus = "Vardorvis";
-		assertEquals(Arrays.asList(vs("Vardorvis"), attack("Abyssal tentacle"), main("DPS", "5.5"), d(" max hit", "49"),
+		assertEquals(Arrays.asList(attack("Abyssal tentacle"), vs("Vardorvis"), main("DPS", "5.5"), d(" max hit", "49"),
 			d(" accuracy", "54%"), d(" spec", "50 max · 71%"), d(" spec damage", "17.8")), LedgerRows.loadout(l, false));
 	}
 
@@ -89,7 +90,8 @@ public class DpsOverlayTest
 		l.versus = "Vardorvis";
 		final List<Row> rows = LedgerRows.loadout(l, true);
 		assertEquals(new Row(LedgerRows.WARNING_TEXT, "", BODY, BODY, WARNING, NEUTRAL), rows.get(0));
-		assertEquals(vs("Vardorvis"), rows.get(1));
+		assertEquals(attack("Abyssal tentacle"), rows.get(1));
+		assertEquals(vs("Vardorvis"), rows.get(2));
 	}
 
 	@Test
@@ -204,9 +206,9 @@ public class DpsOverlayTest
 		final List<Row> rows = LedgerRows.loadout(l, false);
 		final PvmPerformanceOverlay.Lines full = PvmPerformanceOverlay.lines(g, rows, null);
 		final PvmPerformanceOverlay.Lines narrow = PvmPerformanceOverlay.lines(g, rows, new Dimension(110, 0));
-		assertNotEquals(full.rows.get(0).left, narrow.rows.get(0).left);
-		assertTrue(narrow.rows.get(0).left.startsWith("vs "));
-		assertTrue(narrow.rows.get(0).left.endsWith("…"));
+		assertNotEquals(full.rows.get(1).left, narrow.rows.get(1).left);
+		assertTrue(narrow.rows.get(1).left.startsWith(" vs "));
+		assertTrue(narrow.rows.get(1).left.endsWith("…"));
 		// The figures are as they were.
 		for (int i = 2; i < rows.size(); i++)
 		{

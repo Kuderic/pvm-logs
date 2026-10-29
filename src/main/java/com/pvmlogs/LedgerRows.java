@@ -67,8 +67,12 @@ final class LedgerRows
 	 * regular. Both were rendered for Eric; see the status doc.
 	 */
 	static final FontRole TITLE_CLOCK = FontRole.EMPHASIS;
-	/** The DPS overlay's first line, naming what its figures are against (T-073): {@code vs Dusk}. */
-	static final String VERSUS = "vs ";
+	/**
+	 * The DPS overlay's line naming what its figures are against (T-073), a
+	 * sub-row under the attack so the two read together (Eric, 2026-10-28:
+	 * "Bow of Faerdhinen vs The Leviathan"): {@code  vs Dusk}.
+	 */
+	static final String VERSUS = " vs ";
 	/** The middle half's edges, for Luck's band and colour (T-029). */
 	static final double LOW_QUARTILE = 0.25;
 	static final double HIGH_QUARTILE = 0.75;
@@ -1338,9 +1342,9 @@ final class LedgerRows
 	}
 
 	/**
-	 * The DPS overlay's rows (T-073; T-022's loadout overlay): {@code vs} the
-	 * monster, the attack's name as a main row of its own, {@code DPS} as a
-	 * main row, then max hit, accuracy and the spec as sub-rows, each only when
+	 * The DPS overlay's rows (T-073; T-022's loadout overlay): the attack's name
+	 * as a main row of its own, {@code  vs} the monster under it, {@code DPS} as
+	 * a main row, then max hit, accuracy and the spec as sub-rows, each only when
 	 * known. With no monster (before any fight, or gone idle) the figures that
 	 * need one are unknown, so it's the attack's name, max hit and the spec's max
 	 * alone. Nothing at all when none of the figures is known.
@@ -1380,8 +1384,9 @@ final class LedgerRows
 		rows.add(0, new Row(label, "", FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, Colour.NEUTRAL, label));
 		if (l.versus != null && !l.versus.isEmpty())
 		{
+			// Straight under the attack (Eric, 2026-10-28), so it reads "Bow of Faerdhinen vs The Leviathan".
 			final String versus = VERSUS + l.versus;
-			rows.add(0, new Row(versus, "", FontRole.BODY, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL, versus));
+			rows.add(1, new Row(versus, "", FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL, versus));
 		}
 		return rows;
 	}
@@ -1441,7 +1446,8 @@ final class LedgerRows
 		}
 		for (int end = text.length() - 1; end > 0; end--)
 		{
-			final String shorter = text.substring(0, end).trim() + CUT;
+			// Trailing spaces only: a sub-row keeps its indent when cut (" vs Eldric the Fire Qu…").
+			final String shorter = text.substring(0, end).stripTrailing() + CUT;
 			if (width.applyAsInt(shorter) <= room)
 			{
 				return shorter;
