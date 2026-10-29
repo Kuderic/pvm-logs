@@ -43,7 +43,7 @@ public interface PvmPerformanceConfig extends Config
 
 	@ConfigSection(
 		name = "Overlays",
-		description = "The two boxes over the game: the fight overlay and the loadout overlay",
+		description = "The two boxes over the game: the fight overlay and the DPS overlay",
 		position = 0
 	)
 	String OVERLAYS_SECTION = "overlays";
@@ -51,8 +51,8 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "showOverlay",
 		name = "Show fight overlay",
-		description = "The box with Luck, Damage/expected, DPS and Execution for the fight you're in, and its Summary "
-			+ "once it ends",
+		description = "The box with Luck, Damage/expected and Execution for the fight you're in, and its Summary once "
+			+ "it ends",
 		position = 1,
 		section = OVERLAYS_SECTION
 	)
@@ -61,17 +61,48 @@ public interface PvmPerformanceConfig extends Config
 		return true;
 	}
 
+	// T-073: the loadout overlay became the DPS overlay. The key stays, so a saved choice carries over.
 	@ConfigItem(
 		keyName = "overlayShowLoadout",
-		name = "Show loadout overlay",
-		description = "A second box with your attack's expected DPS, max hit, accuracy and spec against the target, "
-			+ "before, during and after the fight. Drag it anywhere",
+		name = "Show DPS overlay",
+		description = "A second box with your attack's expected DPS, max hit, accuracy and spec against the monster it "
+			+ "names, before, during and after the fight. Drag it anywhere",
 		position = 2,
 		section = OVERLAYS_SECTION
 	)
 	default boolean overlayShowLoadout()
 	{
 		return true;
+	}
+
+	// T-073 (Eric, 2026-10-28).
+	@ConfigItem(
+		keyName = "overlayAlwaysDps",
+		name = "Always show DPS overlay",
+		description = "Keep the DPS overlay up outside fights too, against the last monster you fought, whatever "
+			+ "Bosses only and Keep last fight up say",
+		position = 3,
+		section = OVERLAYS_SECTION
+	)
+	default boolean overlayAlwaysDps()
+	{
+		return false;
+	}
+
+	// T-073 (Eric, 2026-10-28 22:58): with "Always show" on, the figures that need a monster go once you stop attacking.
+	@Range(min = 0, max = MAX_HOLD_SECONDS)
+	@ConfigItem(
+		keyName = "overlayDpsIdleSeconds",
+		name = "DPS overlay simplifies after (s)",
+		description = "With Always show DPS overlay on: this long after your last attack, the DPS overlay shows only "
+			+ "your attack, max hit and spec, as nothing is being fought. Your next attack brings the rest back. 0 never "
+			+ "simplifies",
+		position = 4,
+		section = OVERLAYS_SECTION
+	)
+	default int overlayDpsIdleSeconds()
+	{
+		return 60;
 	}
 
 	// On for new installs (Eric, 2026-10-27, T-040). Everyone who has run the plugin already has false saved, as RuneLite
@@ -81,7 +112,7 @@ public interface PvmPerformanceConfig extends Config
 		name = "Bosses only",
 		description = "Show the overlays only while fighting a boss, or anything in a boss's room. The side panel and "
 			+ "your history still record every fight",
-		position = 3,
+		position = 5,
 		section = OVERLAYS_SECTION
 	)
 	default boolean overlayBossesOnly()
@@ -96,7 +127,7 @@ public interface PvmPerformanceConfig extends Config
 		keyName = "overlayHoldSeconds",
 		name = "Keep last fight up (s)",
 		description = "How long a finished fight stays on the overlays. 0 keeps it up until your next fight",
-		position = 4,
+		position = 6,
 		section = OVERLAYS_SECTION
 	)
 	default int overlayHoldSeconds()
@@ -144,13 +175,16 @@ public interface PvmPerformanceConfig extends Config
 		keyName = "overlayParts",
 		name = "Under Execution",
 		description = "The rows under Execution: uptime, prayer, gear and stat boost with the seconds each cost, then "
-			+ "damage taken and eating. Costing only lists the parts that cost real time. Off leaves Execution alone",
+			+ "damage taken and eating. Costing only lists the parts that cost real time. All lists every part. Off leaves "
+			+ "Execution alone",
 		position = 3,
 		section = FIGHT_OVERLAY_SECTION
 	)
 	default ExecutionParts overlayParts()
 	{
-		return ExecutionParts.ALL;
+		// Costing only (T-073, Eric 2026-10-28: the brief said Off; he chose "show losses only"). RuneLite keeps a saved
+		// value, so this reaches new installs only.
+		return ExecutionParts.COSTING;
 	}
 
 	@ConfigItem(

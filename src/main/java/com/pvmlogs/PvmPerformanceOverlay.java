@@ -484,12 +484,15 @@ class PvmPerformanceOverlay extends OverlayPanel
 		final Font body;
 		final Font emphasis;
 		final Font detail;
+		/** T-073: a main row's figure, the interface font's regular weight. */
+		final Font value;
 
-		private FontRoles(Font body, Font emphasis, Font detail)
+		private FontRoles(Font body, Font emphasis, Font detail, Font value)
 		{
 			this.body = body;
 			this.emphasis = emphasis;
 			this.detail = detail;
+			this.value = value;
 		}
 
 		Font get(LedgerRows.FontRole role)
@@ -500,6 +503,8 @@ class PvmPerformanceOverlay extends OverlayPanel
 					return emphasis;
 				case DETAIL:
 					return detail;
+				case VALUE:
+					return value;
 				default:
 					return body;
 			}
@@ -514,16 +519,17 @@ class PvmPerformanceOverlay extends OverlayPanel
 				// Regular and Bold share a family; isBold tells them apart.
 				if (body.getFamily().equals(regular.getFamily()))
 				{
+					// With Bold as the interface font, the figures still read regular beside the bold labels (T-073).
 					return body.isBold()
-						? new FontRoles(body, body, regular)
-						: new FontRoles(body, FontManager.getRunescapeBoldFont(), small);
+						? new FontRoles(body, body, regular, regular)
+						: new FontRoles(body, FontManager.getRunescapeBoldFont(), small, body);
 				}
 				if (body.getFamily().equals(small.getFamily()))
 				{
-					return new FontRoles(body, body, body);
+					return new FontRoles(body, body, body, body);
 				}
 			}
-			return new FontRoles(body, body.deriveFont(Font.BOLD), body);
+			return new FontRoles(body, body.deriveFont(Font.BOLD), body, body.deriveFont(Font.PLAIN));
 		}
 	}
 }

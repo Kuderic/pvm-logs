@@ -175,11 +175,12 @@ public class OverlayCacheTest
 		final LedgerRows.Loadout tentacle = LedgerExamples.loadout();
 		tentacle.attack = "Abyssal tentacle (or)";
 		final List<LedgerRows.Row> wide = LedgerRows.loadout(tentacle, false);
-		final PvmPerformanceOverlay.Lines narrow = PvmPerformanceOverlay.lines(g, wide, new Dimension(130, 0));
+		// T-073: the name has a row of its own, so it takes a narrower box than #18's 130 px to cut it.
+		final PvmPerformanceOverlay.Lines narrow = PvmPerformanceOverlay.lines(g, wide, new Dimension(90, 0));
 		final PvmPerformanceOverlay.Lines full = PvmPerformanceOverlay.lines(g, wide, null);
 		// The cache keys on the fitted rows, so the fallback is what it draws.
 		assertNotEquals(full.rows, narrow.rows);
-		assertNotEquals(full.look(null), narrow.look(new Dimension(130, 0)));
+		assertNotEquals(full.look(null), narrow.look(new Dimension(90, 0)));
 	}
 
 	// ---- rebuilt only when the content changes ----
