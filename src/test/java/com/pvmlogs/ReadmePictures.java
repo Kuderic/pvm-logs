@@ -547,9 +547,10 @@ public final class ReadmePictures
 				r.magicDefenceEnd = -1;
 				r.specs.put("DRAGON_WARHAMMER", new int[]{hammers.length, specsLanded});
 				fight.recordDrain(r);
-				// The drain's worth as realized. The specs' own share of Luck is left at 0: on master a non-zero share
-				// shows as an empty "Not matched to an attack" row on the Damage card (reported in T-067's status).
-				fight.recordSpecOutcomes(0, 0, drainValue, drainValue);
+				// The first hammer missed, so the drain came one swing late: worse than the average outcome by about
+				// what the drain adds over two swings. That share of Luck is the specs' (T-050).
+				final double shift = 2 * (TENTACLE_DRAINED - TENTACLE_FULL) * TENTACLE_MAX / 2.0;
+				fight.recordSpecOutcomes(shift, 0, drainValue, drainValue + shift);
 			}
 			fight.end(true, now());
 			room.end(now());
