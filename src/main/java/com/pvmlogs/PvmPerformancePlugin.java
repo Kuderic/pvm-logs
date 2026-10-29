@@ -122,6 +122,8 @@ public class PvmPerformancePlugin extends Plugin
 	// How far back to look for the loadout that threw a projectile, when a switch has already replaced it. A switch lands
 	// within a tick or two.
 	private static final int SWITCH_LOOKBACK_TICKS = 4;
+	// Worn-item changes remembered for T-065's look back: a switch per tick over the longest booking lag and then some.
+	private static final int GEAR_CHANGES_KEPT = 8;
 	private static final int PRAYER_HISTORY_TICKS = 10;
 	// The switch history needs the same reach as the prayer one, and for the same reason: the gap between an attack and
 	// its booking differs by style.
@@ -341,9 +343,15 @@ public class PvmPerformancePlugin extends Plugin
 	// The tick the attack left on, which is not always the tick its event surfaces: a projectile's start cycle can be a
 	// tick before the plugin hears of it, by which time the player may have switched. Melee has no such gap.
 	private int attackOriginTick = -1;
-	// The figures as they stood when the attack was seen. The per-tick snapshot is written at GameTick, after any switch
-	// made during it; the projectile event fires while the weapon that threw the attack is still in hand.
-	private int gearChangedTick = Integer.MIN_VALUE;
+	// T-065: the tick the attack being observed was thrown on (the observation less its booking lag); the first tick the
+	// worn items changed on since, which the client already shows but the attack was not thrown with (Integer.MIN_VALUE
+	// for none); and the tick whose figures it was scored with because of that switch (Integer.MIN_VALUE for none).
+	private int attackThrownTick = -1;
+	private int attackSwitchTick = Integer.MIN_VALUE;
+	private int attackFiguresTick = Integer.MIN_VALUE;
+	// The figures as they stood when the attack was seen, or on the tick before a switch since it was thrown (T-065). The
+	// per-tick snapshot is written at GameTick, after any switch made during it, and a projectile surfaces two ticks after
+	// its throw, by when the weapon that threw it may be gone.
 	private int attackObservedNpcId = -1;
 	private int attackObservedNpcIndex = -1;
 	private int attackObservedMaxHit;
@@ -404,6 +412,10 @@ public class PvmPerformancePlugin extends Plugin
 	// up, so its varbit falling marks the rebound.
 	private final Reflect reflect = new Reflect();
 	private final Map<Integer, Integer> ringByTick = new HashMap<>();
+	// T-065: the boost as each tick's GameTick read it (potted, the share of the full boost, drained), for an attack seen
+	// ticks after it was thrown; and the recent ticks the worn items changed on, oldest first.
+	private final Map<Integer, double[]> setupByTick = new HashMap<>();
+	private final java.util.ArrayDeque<Integer> gearChangeTicks = new java.util.ArrayDeque<>();
 	private boolean vengeanceUp;
 
 	/** A splat counted beyond what its attack deals, waiting for the tick's re-judging before it is logged. */
@@ -677,6 +689,8 @@ public class PvmPerformancePlugin extends Plugin
 		extrasThisTick.clear();
 		engagedNpcs.clear();
 		ringByTick.clear();
+		setupByTick.clear();
+		gearChangeTicks.clear();
 		reflect.clear();
 		vengeanceUp = false;
 		lastHitsplatTick.clear();
@@ -910,8 +924,10 @@ public class PvmPerformancePlugin extends Plugin
 				: unseenShotThrown(npc.getIndex(), tick, paidOnTick);
 			final boolean booked = !arrivedFromFlight && (melee || unseenShot != Integer.MIN_VALUE)
 				&& burstBooked.add(npc.getIndex());
+			// A melee blow seen after switching off the melee weapon is still a melee blow, a tick old (T-065); only a cast the
+			// animation route missed is as late as its spell.
 			final int bookingLag = unseenShot != Integer.MIN_VALUE ? tick - unseenShot
-				: combatCalc.isMeleeEquipped() ? MELEE_BOOKING_LAG : castLag;
+				: combatCalc.isMeleeEquipped() || !unbookedCast ? MELEE_BOOKING_LAG : castLag;
 			if (booked)
 			{
 				recordAttackObserved(false, npc, bookingLag);
@@ -2441,6 +2457,8 @@ public class PvmPerformancePlugin extends Plugin
 		speedByTick.put(client.getTickCount(), combatCalc.attackSpeedTicks());
 		weaponByTick.put(client.getTickCount(), combatCalc.equippedWeaponId());
 		ringByTick.put(client.getTickCount(), wornRingId());
+		setupByTick.put(client.getTickCount(), new double[]{combatCalc.isPotted() ? 1 : 0, combatCalc.boostShare(),
+			combatCalc.isDrained() ? 1 : 0});
 		if (combatCalc.isMeleeEquipped())
 		{
 			lastMeleeTick = client.getTickCount();
@@ -2450,6 +2468,7 @@ public class PvmPerformancePlugin extends Plugin
 			speedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			weaponByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			ringByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
+			setupByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 		}
 		if (shown != null)
 		{
@@ -2612,8 +2631,13 @@ public class PvmPerformancePlugin extends Plugin
 	/** @param attackTick the tick the attack is booked as thrown on: the timeline knows it by this (T-059) */
 	private void sampleExpected(Fight fight, int attackTick)
 	{
-		// The id the target wore when the attack left, which the tick cache's rows are keyed by too (T-020).
-		final int targetId = targetIdOn(fight, attackOriginTick);
+		// The id the target wore when the attack left, which the tick cache's rows are keyed by too (T-020). The thrown tick,
+		// not the origin, which for a projectile is the tick it surfaced on (T-065).
+		final int targetId = targetIdOn(fight, attackThrownTick);
+		// Where the worn items changed since the throw, the figures from before the switch, which recordAttackObserved found
+		// (T-065); otherwise the tick the attack left on, as before.
+		final boolean beforeSwitch = attackFiguresTick != Integer.MIN_VALUE;
+		final int figuresTick = beforeSwitch ? attackFiguresTick : attackOriginTick;
 		int maxHit = expectedMaxHit;
 		double accuracy = expectedAccuracy;
 		double averageHit = expectedAverageHit;
@@ -2624,15 +2648,16 @@ public class PvmPerformancePlugin extends Plugin
 		double specVariance = expectedSpecVariance;
 		// Prefer the figures from the tick the attack left on. A slow projectile surfaces a tick late, and scoring it with
 		// the loadout held by then credited a shadow's attack to the whip switched to mid-flight.
-		final double[] atOrigin = expectedByTick.get(attackOriginTick);
+		final double[] atOrigin = expectedByTick.get(figuresTick);
 		// A PROJECTILE is scored from the tick it set off, not from the live reading taken when its event surfaced - by then
 		// the player may have switched, and the observed figures are the new weapon's. Alternating a blowpipe and a crossbow
 		// scored every shot with the OTHER one's average, which is what this ordering is for and what it was not doing: the
 		// observed branch below was consulted first and always matched.
 		//
 		// Melee is left alone. It lands on the tick it is thrown, so the figures taken at its hitsplat are already the right
-		// ones.
-		final boolean originIsAuthoritative = attackObservedFromProjectile
+		// ones. Every kind takes the row from before a switch since its throw (T-065): a bow of faerdhinen shot thrown on the
+		// tick before swapping to a blowpipe surfaced with the blowpipe held and was scored as it, origin row and all.
+		final boolean originIsAuthoritative = (attackObservedFromProjectile || beforeSwitch)
 			&& atOrigin != null && (int) atOrigin[EXP_NPC_ID] == targetId
 			&& atOrigin[EXP_ACCURACY] >= 0;
 		if (originIsAuthoritative)
@@ -2714,20 +2739,22 @@ public class PvmPerformancePlugin extends Plugin
 			variance = specVariance;
 			expectedChances = specLandChance;
 		}
-		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f, var %.1f",
-			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance);
+		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f, var %.1f%s",
+			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance,
+			originIsAuthoritative && beforeSwitch ? beforeSwitchNote(figuresTick) : "");
 		// Only an ordinary one-splat attack's max can be checked against a single splat (T-056).
 		final boolean checkable = !special && combatCalc.maxIsOneSplat();
 		// The special in hand on the tick it was thrown, for its drain's outcomes (T-050).
 		final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon = special
-			? DrainLuck.weaponFor(weaponByTick.getOrDefault(attackOriginTick, combatCalc.equippedWeaponId())) : null;
+			? DrainLuck.weaponFor(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick),
+				combatCalc.equippedWeaponId())) : null;
 		if (attackObservedLag == MELEE_BOOKING_LAG)
 		{
 			maxHits.scored(fight, fight.getTargetIndex(), client.getTickCount(), maxHit, checkable,
 				combatCalc.wornNow());
 			fight.recordExpected(maxHit, expectedChances, averageHit, variance);
 			session.recordExpected(expectedChances, averageHit, variance);
-			drainLuck.booked(fight, attackOriginTick, client.getTickCount(), special, specWeapon, averageHit, variance);
+			drainLuck.booked(fight, figuresTick, client.getTickCount(), special, specWeapon, averageHit, variance);
 		}
 		else
 		{
@@ -2735,13 +2762,19 @@ public class PvmPerformancePlugin extends Plugin
 			pendingSamples.add(new PendingSample(fight,
 				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance,
 				line == null ? null : line.latest(), checkable, checkable ? combatCalc.wornNow() : null,
-				attackOriginTick, special, specWeapon));
+				figuresTick, special, specWeapon));
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
 		attackObservedAccuracy = -1;
 		attackObservedAverageHit = -1;
 		attackObservedVariance = -1;
+	}
+
+	/** The {@code scored as} line's note for figures from before a switch (T-065). */
+	static String beforeSwitchNote(int figuresTick)
+	{
+		return String.format(" (as held on tick %d, before a switch)", figuresTick);
 	}
 
 	/**
@@ -2862,7 +2895,7 @@ public class PvmPerformancePlugin extends Plugin
 	// booking, which for a melee special is its hit's tick.
 	private void expectDelayedSplat(Fight fight, int attackTick)
 	{
-		final Integer held = weaponByTick.get(attackOriginTick);
+		final Integer held = weaponByTick.get(heldTick(attackSwitchTick, attackOriginTick));
 		final SpecialAttack special = SpecialAttack.forItem(held != null ? held : combatCalc.equippedWeaponId());
 		final int delay = AttackSplats.delayedSplatTicks(special);
 		if (delay > 0)
@@ -2942,14 +2975,14 @@ public class PvmPerformancePlugin extends Plugin
 
 	// What the attack just booked into this fight was (T-035): named as the loadout names it, from the weapon held on the
 	// tick it was thrown.
-	private void describeForTimeline(Fight fight, int thrownTick)
+	private void describeForTimeline(Fight fight, int thrownTick, int heldTick)
 	{
 		final FightTimeline line = timelines.of(fight);
 		if (line == null)
 		{
 			return;
 		}
-		final Integer held = weaponByTick.get(thrownTick);
+		final Integer held = weaponByTick.get(heldTick);
 		final int weapon = held != null ? held : combatCalc.equippedWeaponId();
 		final Spell spell = combatCalc.timelineSpell();
 		line.describeLatest(CombatCalc.attackName(combatCalc.itemLabel(weapon), spell == null ? null : spell.getDisplayName()),
@@ -3470,7 +3503,9 @@ public class PvmPerformancePlugin extends Plugin
 			final double boostCost = actualSetup >= 0 && boosted >= 0 ? Math.max(0, boosted - actualSetup) : 0;
 			// Read from the tick the attack went out on, never live: by now the gear may be someone else's. Absent means never
 			// sampled, which is not evidence of a missed switch, so it reads as clean.
-			final CombatCalc.SwitchCheck switchCheck = switchedByTick.get(attackTick);
+			// The tick before a switch since the throw, if there was one (T-065): the attack's own tick already shows a swap
+			// made on it, which it was not thrown with.
+			final CombatCalc.SwitchCheck switchCheck = switchedByTick.get(heldTick(attackSwitchTick, attackTick));
 			final boolean switched = switchCheck == null || !switchCheck.isMissed();
 			final double switchCost = switchCheck == null ? 0 : switchCheck.cost();
 			if (!switched && attacker.isScored())
@@ -3488,7 +3523,7 @@ public class PvmPerformancePlugin extends Plugin
 			// this attack was waiting on, before it moves.
 			logEats(foodDelay.attackThrown(attackTick, attackDueTick));
 			attacker.recordAttackMade(potted, boostShare, drained);
-			describeForTimeline(attacker, attackTick);
+			describeForTimeline(attacker, attackTick, heldTick(attackSwitchTick, attackTick));
 			// The room remembers it too. From here every fight under it counts its ticks from the first one, rather than each
 			// waiting to be attacked in its own right.
 			if (currentEncounter != null && !currentEncounter.isEnded())
@@ -3513,7 +3548,7 @@ public class PvmPerformancePlugin extends Plugin
 			// Last of all: everything above describes the attack that just went out, the cooldown included. Taken from the tick
 			// the attack went out on and with the speed in force then - this is the booking tick, which trails the attack, so
 			// reading the speed here reads it off whatever is held now.
-			final Integer threwAt = speedByTick.get(attackTick);
+			final Integer threwAt = speedByTick.get(heldTick(attackSwitchTick, attackTick));
 			final int speed = threwAt != null ? threwAt : combatCalc.attackSpeedTicks();
 			attackDueTick = attackTick + speed;
 			// Every figure here was already worked out above, so the line costs nothing beyond formatting it. An expected
@@ -3733,31 +3768,104 @@ public class PvmPerformancePlugin extends Plugin
 		// A weapon swapped on a tick is not wielded until the next one, so an attack thrown on the tick of a switch used what
 		// was held before it. The client shows the new weapon immediately, which is why the figures have to come from the
 		// tick before the change rather than from now. This holds for every switch, not only one that lands on a melee
-		// weapon: magic to ranged and staff to staff are the same case.
-		if (gearChangedTick >= client.getTickCount() - 1)
-		{
-			for (int tick = gearChangedTick - 1;
-				tick >= gearChangedTick - SWITCH_LOOKBACK_TICKS; tick--)
+		// weapon: magic to ranged and staff to staff are the same case. Judged against the tick the attack was THROWN on
+		// (T-065): a projectile is seen two ticks after its throw, so a switch on the throw's tick was missed, and a bow of
+		// faerdhinen shot fired just before swapping to a blowpipe was scored as the blowpipe.
+		attackThrownTick = client.getTickCount() - bookingLag;
+		attackSwitchTick = switchSinceThrow(attackThrownTick, client.getTickCount(), gearChangeTicks);
+		// The rows are keyed by the id the target wore on their tick, and the attack was rolled against the one it wore at
+		// the throw.
+		final int thrownAtId = targetIds.idOn(attackThrownTick, npc.getIndex(), npcId);
+		attackFiguresTick = figuresTickBeforeSwitch(attackThrownTick, attackSwitchTick, gearChangeTicks,
+			tick ->
 			{
-				final double[] earlier = expectedByTick.get(tick);
-				if (earlier != null && (int) earlier[EXP_NPC_ID] == npcId
-					&& earlier[EXP_ACCURACY] >= 0)
-				{
-					attackObservedMaxHit = (int) earlier[EXP_MAX];
-					attackObservedAccuracy = earlier[EXP_ACCURACY];
-					attackObservedAverageHit = earlier[EXP_AVERAGE];
-					attackObservedSpecMaxHit = (int) earlier[EXP_SPEC_MAX];
-					attackObservedSpecAccuracy = earlier[EXP_SPEC_ACCURACY];
-					attackObservedSpecAverageHit = earlier[EXP_SPEC_AVERAGE];
-					attackObservedVariance = earlier[EXP_VARIANCE];
-					attackObservedSpecVariance = earlier[EXP_SPEC_VARIANCE];
-					break;
-				}
+				final double[] row = expectedByTick.get(tick);
+				return row != null && (int) row[EXP_NPC_ID] == thrownAtId && row[EXP_ACCURACY] >= 0;
+			}, SWITCH_LOOKBACK_TICKS);
+		if (attackFiguresTick != Integer.MIN_VALUE)
+		{
+			final double[] earlier = expectedByTick.get(attackFiguresTick);
+			attackObservedNpcId = thrownAtId;
+			attackObservedMaxHit = (int) earlier[EXP_MAX];
+			attackObservedAccuracy = earlier[EXP_ACCURACY];
+			attackObservedAverageHit = earlier[EXP_AVERAGE];
+			attackObservedSpecMaxHit = (int) earlier[EXP_SPEC_MAX];
+			attackObservedSpecAccuracy = earlier[EXP_SPEC_ACCURACY];
+			attackObservedSpecAverageHit = earlier[EXP_SPEC_AVERAGE];
+			attackObservedVariance = earlier[EXP_VARIANCE];
+			attackObservedSpecVariance = earlier[EXP_SPEC_VARIANCE];
+		}
+		// The boost as it stood at the throw (T-065), where the attack is seen ticks after it: a potion drunk while a shot was
+		// in the air did not boost it, nor one drunk on the tick a melee blow's splat landed. A cast seen on its own tick has
+		// no row for it yet and reads it live, which is the same thing.
+		final double[] setup = bookingLag > 0 ? setupByTick.get(attackThrownTick) : null;
+		attackObservedPotted = setup != null ? setup[0] > 0 : combatCalc.isPotted();
+		attackObservedBoostShare = setup != null ? setup[1] : combatCalc.boostShare();
+		attackObservedDrained = setup != null ? setup[2] > 0 : combatCalc.isDrained();
+	}
+
+	/**
+	 * The first tick the worn items changed on since an attack thrown on
+	 * {@code thrownTick} (T-065), up to {@code now} when it was seen; {@code
+	 * Integer.MIN_VALUE} where nothing changed. A swap is wielded only from the
+	 * tick after it, so a change on the throw's own tick counts: the attack still
+	 * went out with what was held before it.
+	 */
+	static int switchSinceThrow(int thrownTick, int now, Iterable<Integer> changeTicks)
+	{
+		int earliest = Integer.MAX_VALUE;
+		for (int t : changeTicks)
+		{
+			if (t >= thrownTick && t <= now)
+			{
+				earliest = Math.min(earliest, t);
 			}
 		}
-		attackObservedPotted = combatCalc.isPotted();
-		attackObservedBoostShare = combatCalc.boostShare();
-		attackObservedDrained = combatCalc.isDrained();
+		return earliest == Integer.MAX_VALUE ? Integer.MIN_VALUE : earliest;
+	}
+
+	/**
+	 * Which tick's figures an attack thrown on {@code thrownTick} is scored with
+	 * when the worn items changed on {@code switchTick}, at or after the throw
+	 * (T-065): the last tick with figures before that switch. A tick's figures
+	 * are read at its GameTick, after any switch made on it, so the tick before
+	 * the switch holds the loadout the attack was thrown with. Never earlier than
+	 * a change before the throw, whose tick already shows it but whose earlier
+	 * ones do not. {@code Integer.MIN_VALUE} for no switch, or no such figures.
+	 */
+	static int figuresTickBeforeSwitch(int thrownTick, int switchTick, Iterable<Integer> changeTicks,
+		java.util.function.IntPredicate hasFigures, int lookback)
+	{
+		if (switchTick == Integer.MIN_VALUE)
+		{
+			return Integer.MIN_VALUE;
+		}
+		int floor = switchTick - lookback;
+		for (int t : changeTicks)
+		{
+			if (t < thrownTick)
+			{
+				floor = Math.max(floor, t);
+			}
+		}
+		for (int t = switchTick - 1; t >= floor; t--)
+		{
+			if (hasFigures.test(t))
+			{
+				return t;
+			}
+		}
+		return Integer.MIN_VALUE;
+	}
+
+	/**
+	 * The tick whose per-tick records describe the loadout an attack was
+	 * thrown with (T-065): the one before a switch since the throw, else {@code
+	 * otherwise}, the tick each record was already read from.
+	 */
+	static int heldTick(int switchTick, int otherwise)
+	{
+		return switchTick == Integer.MIN_VALUE ? otherwise : switchTick - 1;
 	}
 
 	// Notices the intended prayer going up part-way through a tick, so a prayer switched on and attacked with on the same
@@ -3775,7 +3883,14 @@ public class PvmPerformancePlugin extends Plugin
 		if (event.getContainerId() == InventoryID.WORN)
 		{
 			combatCalc.invalidateGear();
-			gearChangedTick = client.getTickCount();
+			if (gearChangeTicks.isEmpty() || gearChangeTicks.peekLast() != client.getTickCount())
+			{
+				gearChangeTicks.addLast(client.getTickCount());
+				while (gearChangeTicks.size() > GEAR_CHANGES_KEPT)
+				{
+					gearChangeTicks.removeFirst();
+				}
+			}
 		}
 		else if (event.getContainerId() == InventoryID.INV)
 		{
@@ -4104,6 +4219,8 @@ public class PvmPerformancePlugin extends Plugin
 			bursts.clear();
 			reflect.clear();
 			ringByTick.clear();
+		setupByTick.clear();
+		gearChangeTicks.clear();
 			vengeanceUp = false;
 			pendingMineHits.clear();
 			damageByIndex.clear();
