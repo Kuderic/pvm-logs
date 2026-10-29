@@ -83,8 +83,9 @@ import net.runelite.client.util.Filepath;
  * Leviathan's cap while stunned, its wound, its specials and the enrage's
  * pathfinder. {@link DamageModifiers} tracks the states and the expected figures
  * take the effects. A file of an older schema has none: the boss takes every hit
- * as it rolls. T-079 adds {@code rolls} to a modifier within schema 5: a reader
- * without it takes the one roll, so an older build reads the file as it did.
+ * as it rolls. T-079 adds {@code rolls} and T-083 {@code rollsFromMin} to a
+ * modifier within schema 5: a reader without them takes one roll raised to the
+ * minimum, so an older build reads the file as it did.
  */
 @Slf4j
 class BossRules
@@ -306,6 +307,12 @@ class BossRules
 		 * out.
 		 */
 		Integer rolls;
+		/**
+		 * A landed roll is drawn from the minimum ({@link #minHitShare}) up to the
+		 * max, rather than raised to the minimum (T-083: the Leviathan's wound); with
+		 * {@link #rolls}, the best of that many such draws.
+		 */
+		Boolean rollsFromMin;
 		/** No hitsplat above this. */
 		Integer cap;
 		/** The damage times num/den, rounded down: {1, 2} halves. */
