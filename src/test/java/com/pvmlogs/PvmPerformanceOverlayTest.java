@@ -174,13 +174,13 @@ public class PvmPerformanceOverlayTest
 		assertEquals(1, lines.builds());
 	}
 
-	// ---- the loadout's name (T-016) ----
+	// ---- the loadout's name (T-016; T-071: a cast is its spell) ----
 
 	@Test
-	public void theLoadoutIsNamedForTheWeaponAndTheSpellCast()
+	public void theLoadoutIsNamedForTheWeaponOrTheSpellCast()
 	{
 		assertEquals("Abyssal tentacle", CombatCalc.attackName("Abyssal tentacle", null));
-		assertEquals("Purging staff (Fire Surge)", CombatCalc.attackName("Purging staff", "Fire Surge"));
+		assertEquals("Fire Surge", CombatCalc.attackName("Purging staff", "Fire Surge"));
 		assertEquals("Ice Barrage", CombatCalc.attackName(null, "Ice Barrage"));
 		assertEquals("Unarmed", CombatCalc.attackName(null, null));
 	}
@@ -236,11 +236,21 @@ public class PvmPerformanceOverlayTest
 	}
 
 	@Test
-	public void aStaffAndSpellFallsBackToTheSpellBeforeItsCut()
+	public void aSpellTooWideIsCutLikeAnyName()
 	{
-		final LedgerRows.Row row = name("Harmonised nightmare staff (Fire Surge)", "Fire Surge");
-		assertEquals("Fire Surge", PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 175).left);
+		// T-071: the spell is the whole name now, so there is no shorter form to fall back to before it's cut.
+		final LedgerRows.Row row = LedgerRows.loadout(spell("Fire Surge"), false).get(0);
+		assertEquals("Fire Surge", row.shortLeft);
+		assertSame(row, PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 175));
 		assertEquals("Fire\u2026", PvmPerformanceOverlay.fit(row, PvmPerformanceOverlayTest::sevens, 49, 98).left);
+	}
+
+	private static LedgerRows.Loadout spell(String attack)
+	{
+		final LedgerRows.Loadout l = new LedgerRows.Loadout();
+		l.attack = attack;
+		l.dps = 5.5;
+		return l;
 	}
 
 	@Test

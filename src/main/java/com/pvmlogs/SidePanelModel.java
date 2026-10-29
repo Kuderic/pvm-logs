@@ -1527,7 +1527,7 @@ final class SidePanelModel
 		return new PanelSnapshot.Sources(Text.small(LedgerRows.number(whole) + where, SidePanelStyle.SECONDARY), rows);
 	}
 
-	/** The view's attacks grouped by {@link FightTimeline.Attack#rowKey()}, in the order first thrown. */
+	/** The view's attacks grouped by the name shown and whether it was the special, in the order first thrown. */
 	static List<WeaponRow> weaponRows(FightTimeline.View view)
 	{
 		final List<WeaponRow> rows = new ArrayList<>();

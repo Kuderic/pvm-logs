@@ -26,7 +26,7 @@ final class SidePanelWeaponRows
 	/** Attacks added up on the last build, for tests: the tail, plus any newly settled. */
 	private int added;
 
-	/** The rows for {@code view} of the scope {@code scopeKey}: grouped by row key, in the order first thrown. */
+	/** The rows for {@code view} of the scope {@code scopeKey}: grouped by name shown, in the order first thrown. */
 	List<SidePanelModel.WeaponRow> rows(Object scopeKey, FightTimeline.View view)
 	{
 		added = 0;
@@ -80,9 +80,13 @@ final class SidePanelWeaponRows
 	/** One attack into its row, as {@link SidePanelModel#weaponRows} adds it. */
 	static void add(Map<String, SidePanelModel.WeaponRow> rows, FightTimeline.Attack a)
 	{
-		final SidePanelModel.WeaponRow w = rows.computeIfAbsent(a.rowKey(), k -> new SidePanelModel.WeaponRow());
 		final String label = LedgerRows.attackLabel(a.key);
-		w.name = label == null ? a.key : label;
+		final String name = label == null ? a.key : label;
+		// Grouped by the name shown, not the key booked (T-071): a kill saved before casts were named by the spell alone
+		// has "Kodai wand (Ice Barrage)" and "Harmonised nightmare staff (Ice Barrage)", one row of Ice Barrage.
+		final SidePanelModel.WeaponRow w = rows.computeIfAbsent(a.special ? name + " (special)" : name,
+			k -> new SidePanelModel.WeaponRow());
+		w.name = name;
 		w.special = a.special;
 		w.attacks++;
 		w.damage += a.damage;

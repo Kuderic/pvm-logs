@@ -1707,10 +1707,13 @@ class CombatCalc
 	}
 
 	/**
-	 * What the loadout attacks with, as the overlay names it (T-016, Eric): the
-	 * weapon, with the spell in brackets when one is cast, e.g. "Purging staff
-	 * (Fire Surge)". A powered staff's own attack names no spell; a manual cast
-	 * names its spell whatever is held. "Unarmed" with nothing in hand.
+	 * What the loadout attacks with, as the overlay, the side panel and the fight
+	 * timeline name it: the spell alone when one is cast, e.g. "Fire Surge", the
+	 * weapon otherwise (T-071, Eric: "Bow of Faerdhinen (Shadow Rush) becomes
+	 * Shadow Rush"; T-016 had "Purging staff (Fire Surge)"). A powered staff's own
+	 * attack names no spell, so it is the staff; a manual cast names its spell
+	 * whatever is held. "Unarmed" with nothing in hand. The debug log names the
+	 * weapon in its own lines.
 	 */
 	String attackName()
 	{
@@ -1724,11 +1727,11 @@ class CombatCalc
 	/** See {@link #attackName()}: either may be null. */
 	static String attackName(String weapon, String spell)
 	{
-		if (spell == null)
+		if (spell != null)
 		{
-			return weapon == null ? "Unarmed" : weapon;
+			return spell;
 		}
-		return weapon == null ? spell : weapon + " (" + spell + ")";
+		return weapon == null ? "Unarmed" : weapon;
 	}
 
 	/** The attack in hand's style, for the fight timeline (T-035). */
