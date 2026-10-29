@@ -104,6 +104,30 @@ public class DpsOverlayTest
 	}
 
 	@Test
+	public void theVsLineIsInTheBossColour()
+	{
+		// Eric, 2026-10-28: the same colour as the fight overlay's title.
+		final Fight dusk = new Fight("Dusk", NpcID.GARGBOSS_DUSK_PHASE4, 1, 500, 0L, null, 0);
+		assertEquals(BossColours.of("Grotesque Guardians"), LoadoutOverlay.versusColour(dusk));
+		final Fight vardorvis = new Fight("Vardorvis", NpcIds.GOBLIN, 1, 700, 0L, null, 0);
+		assertEquals(BossColours.of("Vardorvis"), LoadoutOverlay.versusColour(vardorvis));
+		final Fight zebak = new Fight("Zebak", NpcIds.GOBLIN, 1, 700, 0L, RaidType.TOMBS_OF_AMASCUT, 1);
+		assertEquals(BossColours.of("Tombs of Amascut"), LoadoutOverlay.versusColour(zebak));
+		assertEquals(-1, LoadoutOverlay.versusColour(new Fight("Goblin", NpcIds.GOBLIN, 1, 5, 0L, null, 0)));
+		assertEquals(-1, LoadoutOverlay.versusColour(null));
+
+		final LedgerRows.Loadout l = LedgerExamples.loadout();
+		l.versus = "Vardorvis";
+		l.versusRgb = BossColours.of("Vardorvis");
+		final Row vs = LedgerRows.loadout(l, false).get(1);
+		assertEquals(" vs Vardorvis", vs.left);
+		assertEquals(LedgerRows.Colour.BOSS, vs.leftColour);
+		assertEquals(BossColours.of("Vardorvis"), vs.leftRgb());
+		// Cut to fit, it keeps the colour.
+		assertEquals(vs.leftRgb(), vs.withLeft(" vs Vard\u2026").leftRgb());
+	}
+
+	@Test
 	public void idleOrBeforeAnyFightItsTheAttackMaxHitAndSpecAlone()
 	{
 		// What LoadoutOverlay.idleLoadout hands over, and what the plugin's figures are with no monster.
