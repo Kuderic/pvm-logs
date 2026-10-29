@@ -85,7 +85,13 @@ import net.runelite.client.util.Filepath;
  * take the effects. A file of an older schema has none: the boss takes every hit
  * as it rolls. T-079 adds {@code rolls} and T-083 {@code rollsFromMin} to a
  * modifier within schema 5: a reader without them takes one roll raised to the
- * minimum, so an older build reads the file as it did.
+ * minimum, so an older build reads the file as it did. T-087 adds, still within
+ * schema 5, a state's {@code startDelay}, a modifier's {@code version},
+ * {@code defenceRoll}, {@code attackTypes}, {@code firstHitOnly},
+ * {@code stacks} and {@code magicDefencePerStack}, and the rules'
+ * {@code stacks} (the Maggot King's phases, burn and punish). The bundled file
+ * ships with the code that reads it; only a user's own file could reach an older
+ * build, which would take the King's punish without its delay or accuracy.
  */
 @Slf4j
 class BossRules
@@ -245,6 +251,25 @@ class BossRules
 	{
 		List<StateRule> states;
 		List<ModifierRule> modifiers;
+		/** Counts the boss carries, read off its splats (T-087: the Maggot King's burn stacks). */
+		List<StackRule> stacks;
+	}
+
+	/**
+	 * A count the boss carries (T-087), read off the damage-over-time splats on it:
+	 * a {@link #fromDot} splat shows how many are on it, as a burn splat deals one
+	 * a stack. Gone once no such splat has come for {@link #lapseTicks}.
+	 */
+	static final class StackRule
+	{
+		String name;
+		/** The kind of damage-over-time splat that shows the count: burn, poison, venom or bleed. */
+		String fromDot;
+		/** The most there can be. */
+		int max;
+		/** Ticks after the last such splat that the count still stands. */
+		int lapseTicks;
+		String source;
 	}
 
 	/** A window of the boss's: what opens it, what closes it, how long it can last. Every field optional. */
@@ -259,6 +284,8 @@ class BossRules
 		String startOnModifierLanded;
 		/** A fixed length in ticks from the start; 0 for none. */
 		int ticks;
+		/** Ticks from what starts it to its start (T-087: the Maggot King's punish, two ticks into its slam). */
+		int startDelay;
 		/** The boss starts one of these animations, at least {@link #minTicks} after the start. */
 		int[] endOnBossAnim;
 		int minTicks;
@@ -317,6 +344,28 @@ class BossRules
 		Integer cap;
 		/** The damage times num/den, rounded down: {1, 2} halves. */
 		int[] multiply;
+		/** The multiply applies to the first hitsplat of an attack only (T-087: the punish on a multi-hit weapon). */
+		Boolean firstHitOnly;
+		/** STAB, SLASH, CRUSH, RANGED or MAGIC: the attack type it rolls with, for {@link #defenceRoll}; any if left out. */
+		List<String> attackTypes;
+		/** The boss's defence roll times num/den, rounded down (T-087: the punish's "85% reduced defence roll"). */
+		int[] defenceRoll;
+		/**
+		 * While it applies, the boss's figures are this version's in the monster
+		 * data (T-087: the Maggot King "Nearby" while it slams); its usual version
+		 * otherwise.
+		 */
+		String version;
+		/** A count the boss carries ({@link StackRule#name}) ... */
+		String stacks;
+		/** ... and the change to its magic defence bonus for each (T-087: burn, -20 each). */
+		Integer magicDefencePerStack;
+		/**
+		 * Never in the figures shown live (T-087, the Jagex rule): the attack it
+		 * applies to is scored with it, but the overlay and the side panel never
+		 * change for it - the Maggot King's slam and punish must not read as a timer.
+		 */
+		Boolean hiddenLive;
 		String source;
 	}
 

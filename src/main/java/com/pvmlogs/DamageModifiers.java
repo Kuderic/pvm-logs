@@ -140,6 +140,41 @@ class DamageModifiers
 		return boss == null || boss.uptimeAllowances == null ? Collections.emptyList() : boss.uptimeAllowances;
 	}
 
+	/** A damage-over-time splat of this kind landed on the npc (T-087: the Maggot King's burn stacks). */
+	void onBossDot(NPC npc, String kind, int amount)
+	{
+		final BossRules.Boss boss = npc == null ? null : bossFor(npc.getId());
+		if (boss != null && boss.damageModifiers.stacks != null)
+		{
+			tracker.onBossDot(npc.getIndex(), boss.name, boss.damageModifiers, kind, amount, client.getTickCount());
+		}
+	}
+
+	/**
+	 * The change to the npc's magic defence bonus an attack going out now takes
+	 * (T-087): each modifier it lands with that counts a stack the boss carries,
+	 * times that many. The stacks are the ones on it now, as the attack is rolled
+	 * when it goes out.
+	 */
+	int magicDefenceChange(NPC npc, CombatCalc.Style style, int delayTicks)
+	{
+		final BossRules.Boss boss = npc == null ? null : bossFor(npc.getId());
+		if (boss == null)
+		{
+			return 0;
+		}
+		int change = 0;
+		for (BossRules.ModifierRule m : forAttack(npc, style, delayTicks))
+		{
+			if (m.stacks != null && m.magicDefencePerStack != null)
+			{
+				change += m.magicDefencePerStack
+					* tracker.stacks(npc.getIndex(), m.stacks, boss.damageModifiers, client.getTickCount());
+			}
+		}
+		return change;
+	}
+
 	void onGameTick()
 	{
 		tracker.tick(client.getTickCount());
@@ -170,8 +205,38 @@ class DamageModifiers
 		{
 			return Collections.emptyList();
 		}
-		return tracker.applying(npc.getIndex(), boss.damageModifiers, npc.getId(), style == null ? null : style.name(),
-			client.getTickCount(), client.getTickCount() + Math.max(0, delayTicks), behind(npc), this::inside);
+		final List<BossRules.ModifierRule> mods = tracker.applying(npc.getIndex(), boss.damageModifiers, npc.getId(),
+			style == null ? null : style.name(), client.getTickCount(), client.getTickCount() + Math.max(0, delayTicks),
+			behind(npc), this::inside);
+		return live ? ModifierTracker.shownLive(mods) : mods;
+	}
+
+	/**
+	 * While set, the modifiers are the ones the live figures may show (T-087):
+	 * those marked {@code hiddenLive} are left out. The attack itself is still
+	 * scored with them, from the figures worked out with this off.
+	 */
+	private boolean live;
+
+	void setLive(boolean live)
+	{
+		this.live = live;
+	}
+
+	/** Whether an attack going out now at this npc lands with a modifier the live figures must not show. */
+	boolean hiddenApply(NPC npc, CombatCalc.Style style, int delayTicks)
+	{
+		final boolean was = live;
+		live = false;
+		try
+		{
+			return ModifierTracker.shownLive(forAttack(npc, style, delayTicks)).size()
+				!= forAttack(npc, style, delayTicks).size();
+		}
+		finally
+		{
+			live = was;
+		}
 	}
 
 	/** The modifiers' names an attack at this npc goes out with now, for the ATTACK line. */

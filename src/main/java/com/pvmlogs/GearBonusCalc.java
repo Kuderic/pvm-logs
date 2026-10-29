@@ -1016,6 +1016,16 @@ class GearBonusCalc
 			m.flat += 3;
 			why.add("chaos gauntlets +3 (bolt spell)");
 		}
+		final String element = spell == null ? null : spell.element();
+		if (element != null && elementalAmuletFits(gear.id(EquipmentInventorySlot.AMULET), element))
+		{
+			// "added before magic damage and elemental weakness modifiers are applied" (wiki, Amulet of fire), as the chaos
+			// gauntlets' +3 is (T-087: Eric's Maggot King kills, whose Twinflame first hits reached 48 against the 45 the
+			// plugin had as their max).
+			m.flat += 2;
+			why.add(gear.id(EquipmentInventorySlot.AMULET) == ItemID.ELEMENTAL_AMULET
+				? "elemental amulet +2 (" + element + " spell)" : "amulet of " + element + " +2");
+		}
 		if (spell != null && spell.isGodSpell())
 		{
 			if (!charge.isUp())
@@ -1115,6 +1125,35 @@ class GearBonusCalc
 			why.add("ahrim's + damned: 25% chance of +30%");
 		}
 		return why;
+	}
+
+	/**
+	 * Whether this amulet adds +2 to a spell of this element (T-087; OSRS Wiki,
+	 * Amulet of fire and Elemental amulet, read 2026-10-29: each of the four adds
+	 * "+2 max hit" to its element's spells; the elemental amulet "combines the
+	 * effects of all four").
+	 */
+	static boolean elementalAmuletFits(int amulet, String element)
+	{
+		if (element == null)
+		{
+			return false;
+		}
+		switch (amulet)
+		{
+			case ItemID.ELEMENTAL_AMULET:
+				return true;
+			case ItemID.AMULET_OF_FIRE:
+				return "fire".equals(element);
+			case ItemID.AMULET_OF_WATER:
+				return "water".equals(element);
+			case ItemID.AMULET_OF_EARTH:
+				return "earth".equals(element);
+			case ItemID.AMULET_OF_AIR:
+				return "air".equals(element);
+			default:
+				return false;
+		}
 	}
 
 	/**
