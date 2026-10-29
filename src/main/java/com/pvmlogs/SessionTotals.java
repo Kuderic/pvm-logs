@@ -24,6 +24,8 @@ class SessionTotals
 	private int damageTaken;
 	private int dotTaken;
 	private int hitsTaken;
+	/** T-076: see Fight's. */
+	private int missedHitsTaken;
 	private int biggestHitTaken;
 	private int damageTakenUnprotected;
 	// T-041: the trip's scored fights that ended at a boss with attack rules, and what Fight's avoidable figures add up
@@ -101,6 +103,7 @@ class SessionTotals
 		damageTaken = 0;
 		dotTaken = 0;
 		hitsTaken = 0;
+		missedHitsTaken = 0;
 		biggestHitTaken = 0;
 		damageTakenUnprotected = 0;
 		ruledFights = 0;
@@ -274,6 +277,10 @@ class SessionTotals
 		final int hit = Math.max(0, damage);
 		damageTaken += hit;
 		hitsTaken++;
+		if (hit == 0)
+		{
+			missedHitsTaken++;
+		}
 		biggestHitTaken = Math.max(biggestHitTaken, hit);
 		if (unprotected)
 		{

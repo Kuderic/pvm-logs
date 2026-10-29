@@ -46,10 +46,18 @@ final class SidePanelTimelineExamples
 	static Built fight(int ticks, int[] specials, int[] lost, int[] eating, int tentacleDamage, double tentacleExpected,
 		int specDamage, double specExpected, double variancePerAttack)
 	{
+		return fight("Vardorvis", "Burning claws", ItemID.BONE_CLAWS, ticks, specials, lost, eating, tentacleDamage,
+			tentacleExpected, specDamage, specExpected, variancePerAttack);
+	}
+
+	/** As above, at this boss and with this special (T-076's Sire with Emberlight). */
+	static Built fight(String boss, String specName, int specItem, int ticks, int[] specials, int[] lost, int[] eating,
+		int tentacleDamage, double tentacleExpected, int specDamage, double specExpected, double variancePerAttack)
+	{
 		final int[] clock = {0};
 		final FightTimeline.Store store = new FightTimeline.Store();
 		store.setClock(() -> clock[0]);
-		final Fight f = new Fight("Vardorvis", NpcIds.GOBLIN, 1, 700, 0L, null, 0);
+		final Fight f = new Fight(boss, NpcIds.GOBLIN, 1, 700, 0L, null, 0);
 		store.attach(f);
 		final FightTimeline line = store.of(f);
 
@@ -91,7 +99,7 @@ final class SidePanelTimelineExamples
 			n++;
 			final boolean special = contains(specials, n);
 			f.recordAttackMade(false, 1.0, false);
-			line.describeLatest(special ? "Burning claws" : "Abyssal tentacle", special ? ItemID.BONE_CLAWS
+			line.describeLatest(special ? specName : "Abyssal tentacle", special ? specItem
 				: ItemID.ABYSSAL_TENTACLE, null, FightTimeline.Style.MELEE, t);
 			if (special)
 			{
@@ -122,7 +130,7 @@ final class SidePanelTimelineExamples
 			cooldown = 3;
 		}
 		f.recordThrallDamage(80);
-		final Encounter room = new Encounter("Vardorvis", null, 0L);
+		final Encounter room = new Encounter(boss, null, 0L);
 		room.add(f);
 		return new Built(f, store, room);
 	}

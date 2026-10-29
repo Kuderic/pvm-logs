@@ -530,6 +530,56 @@ final class SidePanelExamples
 		return f;
 	}
 
+	// ---- T-076: Eric's Sire recording, the Defence card's layouts, one expectation, hits that did damage ----
+
+	/**
+	 * Shaped on Eric's recorded Sire kill (2026-10-28 23:50, illustrative figures): 446 of 576 expected, the attacks as
+	 * thrown 588 (two Emberlight specs landed, 12 better than average), Defence 250 → 174, and 27 taken in 6 hits that
+	 * did damage among 100 splats, 94 of them 0s.
+	 */
+	static SidePanelModel.Input sireEmberlight()
+	{
+		final SidePanelTimelineExamples.Built b = SidePanelTimelineExamples.fight("Abyssal Sire", "Emberlight",
+			net.runelite.api.gameval.ItemID.EMBERLIGHT, 140, new int[]{4, 9}, new int[]{70, 6}, new int[0], 399, 541, 47,
+			47, 150);
+		// T-050: the specials' outcomes averaged 12 below the attacks as thrown; the drains were worth 42.
+		b.fight.recordSpecOutcomes(-12, 0, 42, 40);
+		for (int hit : new int[]{8, 5, 4, 4, 3, 3})
+		{
+			b.fight.recordHitTaken(hit, false, at(23, 50));
+		}
+		for (int i = 0; i < 94; i++)
+		{
+			b.fight.recordHitTaken(0, false, at(23, 50));
+		}
+		final SidePanelModel.Input in = SidePanelTimelineExamples.input(b, true);
+		in.zone = ZONE;
+		in.endMillis = at(23, 52);
+		in.solo = true;
+		in.maxHp = 700;
+		final SidePanelModel.Drain d = drain(250, 174, 250, 0, 0, 42, b.room.luckSeconds(42), 12,
+			b.room.luckSeconds(12));
+		d.specs.put("EMBERLIGHT", new int[]{2, 2});
+		in.drain = d;
+		return in;
+	}
+
+	/** The same kill with an average far shorter than it (Sire kills saved split into rooms before T-055): 0:35. */
+	static SidePanelModel.Input sireShortAverage()
+	{
+		final SidePanelModel.Input in = sireEmberlight();
+		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(35, 33, 37), 4);
+		return in;
+	}
+
+	/** A boss with a Defence floor, not reached: Xarth 170 → 130, floor 102, a hammer and a miss. */
+	static SidePanelModel.Input floorNotReached()
+	{
+		final SidePanelModel.Drain d = drain(170, 130, 170, 102, 0, 31, 2.6, -18, -1.5);
+		d.specs.put("DRAGON_WARHAMMER", new int[]{2, 1});
+		return drainKill("Xarth", d);
+	}
+
 	// ---- T-072: times of day with am and pm ----
 
 	/** The kill, ended at this time of day: the header's {@code 12:00 am}, {@code 12:00 pm}, {@code 12:05 am}. */

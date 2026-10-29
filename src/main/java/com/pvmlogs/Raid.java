@@ -150,6 +150,17 @@ class Raid
 		return total;
 	}
 
+	/** T-076: the hits on the player that were 0s; 0 for fights from before T-076. */
+	int getMissedHitsTaken()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getMissedHitsTaken();
+		}
+		return total;
+	}
+
 	/** The biggest hit on the player in any room (T-018). */
 	int getBiggestHitTaken()
 	{

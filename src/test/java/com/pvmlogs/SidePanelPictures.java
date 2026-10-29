@@ -98,6 +98,12 @@ public final class SidePanelPictures
 			// T-068 part 2: a Sire room with a respiratory system dead runs on; the Sire's death ends it.
 			write(out, "16d-sire-lung-dead-running", scale, render(SidePanelExamples.sireRoom(false), scale));
 			write(out, "16e-sire-dead", scale, render(SidePanelExamples.sireRoom(true), scale));
+			// T-076: the recorded Sire kill (Defence card, no zero "Not matched" row, the chart's expected as thrown,
+			// hits that did damage), a floor not reached, and an average far shorter than the kill.
+			write(out, "18a-sire-emberlight", scale, render(SidePanelExamples.sireEmberlight(), scale));
+			write(out, "18b-floor-not-reached", scale, render(SidePanelExamples.floorNotReached(), scale));
+			write(out, "18c-short-average", scale, render(SidePanelExamples.sireShortAverage(), scale));
+			write(out, "18d-at-its-floor-card", scale, card(SidePanelExamples.atItsFloor(), scale, "defence"));
 		}
 	}
 
@@ -409,6 +415,42 @@ public final class SidePanelPictures
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
 		styled(panel);
 		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/** One section of the Fight tab, cut out of its render: its header and card. */
+	static BufferedImage card(SidePanelModel.Input in, double scale, String id)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection section = sectionOf(panel.fightTab(), id);
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height) * scale));
+		return whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+	}
+
+	static SidePanelSection sectionOf(Container c, String id)
+	{
+		for (Component k : c.getComponents())
+		{
+			if (k instanceof SidePanelSection && id.equals(((SidePanelSection) k).id()))
+			{
+				return (SidePanelSection) k;
+			}
+			if (k instanceof Container)
+			{
+				final SidePanelSection s = sectionOf((Container) k, id);
+				if (s != null)
+				{
+					return s;
+				}
+			}
+		}
+		return null;
 	}
 
 	/** The tab bar across the sidebar, a tab's content under it, RuneLite's scrollbar beside it. */

@@ -832,6 +832,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	 * T-052: the Defence card after a fight with tracked drains: its rows (the path, the floor, the specials thrown and
 	 * landed, the party's drains), then what the drains added and the specials' share of luck in words.
 	 */
+	/**
+	 * The Defence card (T-052; T-076, Eric's pick of three layouts): {@code Drained 76 (30%)} over a bar from the boss's
+	 * base Defence to its level now, the floor ticked, then the labelled rows.
+	 */
 	private void defence(FightTab tab)
 	{
 		if (tab.defence == null)
@@ -839,38 +843,39 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel card = SidePanelParts.card(6);
-		final SidePanelParts.RowsCard rows = flat(tab.defence.rows);
+		final SidePanelDrainBar bar = tab.defence.drop == null ? null : new SidePanelDrainBar(tab.defence.drop);
+		if (bar != null)
+		{
+			card.add(bar);
+		}
+		final SidePanelParts.RowsCard rows = flat(defenceRows(tab.defence));
 		card.add(rows);
-		final SidePanelParts.Paragraph worth = tab.defence.worth == null ? null : paragraph(tab.defence.worth);
-		final SidePanelParts.Paragraph luck = tab.defence.specLuck == null ? null : paragraph(tab.defence.specLuck);
-		if (worth != null)
-		{
-			card.add(worth);
-		}
-		if (luck != null)
-		{
-			card.add(luck);
-		}
 		final SidePanelSection section = new SidePanelSection("defence", "Defence", tab.defence.hint, card, folds);
 		add(section);
 		updaters.add(t ->
 		{
 			section.setHint(t.defence.hint);
-			rows.set(t.defence.rows);
-			if (worth != null)
+			if (bar != null)
 			{
-				worth.set(t.defence.worth.text, t.defence.worth.colour);
+				bar.set(t.defence.drop);
 			}
-			if (luck != null)
-			{
-				luck.set(t.defence.specLuck.text, t.defence.specLuck.colour);
-			}
+			rows.set(defenceRows(t.defence));
 		});
 	}
 
-	private static SidePanelParts.Paragraph paragraph(PanelSnapshot.Text t)
+	/** The card's rows: the facts, then its two figures. */
+	static List<PanelSnapshot.Row> defenceRows(PanelSnapshot.Defence d)
 	{
-		return new SidePanelParts.Paragraph(t.text, t.colour, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
+		final List<PanelSnapshot.Row> rows = new ArrayList<>(d.rows);
+		if (d.worth != null)
+		{
+			rows.add(d.worth.row());
+		}
+		if (d.specLuck != null)
+		{
+			rows.add(d.specLuck.row());
+		}
+		return rows;
 	}
 
 	private void rowsSection(FightTab tab, String id, String title, PanelSnapshot.Rows rows,

@@ -77,6 +77,9 @@ class Fight
 	// Hit splats on the player, 0s included, and the largest of them.
 	private int hitsTaken;
 	private int biggestHitTaken;
+	// T-076: the part of hitsTaken that were 0s (a miss, or a hit the prayer blocked). 0 on a fight from before T-076,
+	// whose hitsTaken stays its one number.
+	private int missedHitsTaken;
 	// The part of damageTaken taken with no protection prayer up (DamageTaken.PROTECTION), by the server's varbits.
 	private int damageTakenUnprotected;
 	// What the hits on the player were, at a boss whose rules describe its attacks (T-041, boss-rules.json schema 3): the
@@ -391,6 +394,10 @@ class Fight
 		final int hit = Math.max(0, amount);
 		damageTaken += hit;
 		hitsTaken++;
+		if (hit == 0)
+		{
+			missedHitsTaken++;
+		}
 		biggestHitTaken = Math.max(biggestHitTaken, hit);
 		if (unprotected)
 		{
