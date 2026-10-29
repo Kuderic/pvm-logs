@@ -814,7 +814,7 @@ public class PvmPerformancePlugin extends Plugin
 			if (couldBeReflected && !xpExact)
 			{
 				final Reflect.Match match = reflect.claim(client.getTickCount(), hitsplat.getAmount(), this::hitsTakenOn,
-					recoilWorn(client.getTickCount()));
+					recoilWorn(client.getTickCount()), hpLeftBefore(npc));
 				if (match != null)
 				{
 					onReflectedSplat(npc, hitsplat, match);
@@ -851,6 +851,14 @@ public class PvmPerformancePlugin extends Plugin
 				{
 					debug.log("hitsplat %d on %s (npc %d) IGNORED: not something that can be fought",
 						hitsplat.getAmount(), npc.getName(), npc.getId());
+					return;
+				}
+				if (isAddOfOpenBoss(npc))
+				{
+					// Swatted in passing (T-084): the boss's fight stays open, and the add's damage, unscored, is nobody's.
+					pendingMineHits.remove(npc.getIndex());
+					debug.log("hitsplat %d on %s (npc %d, index %d): an add of %s, whose fight stays open; not counted",
+						hitsplat.getAmount(), npc.getName(), npc.getId(), npc.getIndex(), current.getTargetName());
 					return;
 				}
 				if (isAoeCollateral(npc, previousMineTick))
@@ -2018,7 +2026,8 @@ public class PvmPerformancePlugin extends Plugin
 			return;
 		}
 		final long now = System.currentTimeMillis();
-		if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
+		// A shot at one of the boss's adds swatted in passing leaves the boss's fight open (T-084: Zulrah's snakelings).
+		if (!isAddOfOpenBoss(npc) && (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex()))
 		{
 			if (!isFightable(npc))
 			{
@@ -3538,6 +3547,24 @@ public class PvmPerformancePlugin extends Plugin
 		return current != null && !current.isEnded() ? targetNpc : null;
 	}
 
+	/** Whether this npc is an add of the open fight's boss that leaves its fight open (T-084: Zulrah's snakelings). */
+	private boolean isAddOfOpenBoss(NPC npc)
+	{
+		return npc != null && current != null && !current.isEnded() && current.getTargetIndex() != npc.getIndex()
+			&& EncounterGroup.addKeepsBossFight(npc.getId(), current.getTargetId());
+	}
+
+	/**
+	 * What an npc had left before the splat being judged, from the monster data
+	 * and the damage counted on it; -1 when its hitpoints are unknown (T-084).
+	 */
+	private int hpLeftBefore(NPC npc)
+	{
+		final MonsterStatsProvider.MonsterStats stats = monsterStats == null ? null : monsterStats.get(npc.getId());
+		return stats == null || stats.getHitpoints() <= 0 ? -1
+			: Math.max(0, stats.getHitpoints() - damageByIndex.getOrDefault(npc.getIndex(), 0));
+	}
+
 	/** A boss that never despawns still drops loot, and that is what says it died. */
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived event)
@@ -3719,7 +3746,12 @@ public class PvmPerformancePlugin extends Plugin
 			// And the fight it was thrown IN, which is not always the one open now. A booking arrives a tick or two after the
 			// attack, and a kill in between opens the next fight first - so the last swings of one kill were being counted
 			// against the next, which began life reading two attacks and two switches before a blow had been struck.
-			final Fight attacker = attackerFor(attackObservedNpcIndex, attackTick, current, lastFinished);
+			// An attack at one of the boss's adds swatted in passing is not the boss's (T-084): the fight open on the attack's
+			// tick would otherwise take it, with the boss's expectation and no splat to answer it.
+			final boolean onAdd = attackObservedNpcIndex >= 0 && attackObservedNpcId >= 0 && current != null
+				&& !current.isEnded() && current.getTargetIndex() != attackObservedNpcIndex
+				&& EncounterGroup.addKeepsBossFight(attackObservedNpcId, current.getTargetId());
+			final Fight attacker = onAdd ? null : attackerFor(attackObservedNpcIndex, attackTick, current, lastFinished);
 			if (attacker == null)
 			{
 				// Thrown during a fight that has since been discarded. The cooldown still has to advance or every tick after
@@ -3728,7 +3760,19 @@ public class PvmPerformancePlugin extends Plugin
 				attackDueTick = attackTick + combatCalc.attackSpeedTicks();
 				lastAttackFromProjectile = attackObservedFromProjectile;
 				combatCalc.noteAttackKind(true);
-				debug.log("ATTACK thrown tick %d belongs to a fight that is gone: counted nowhere", attackTick);
+				if (onAdd)
+				{
+					// At one of the boss's adds (T-084): its tick is time in the boss's fight, as a tick on cooldown; nothing
+					// about it is scored.
+					current.recordTickSpent(false);
+					session.recordTickSpent(current.isScored());
+					debug.log("ATTACK thrown tick %d on an add of %s (npc %d): its tick counted in that fight, nothing scored",
+						attackTick, current.getTargetName(), attackObservedNpcId);
+				}
+				else
+				{
+					debug.log("ATTACK thrown tick %d belongs to a fight that is gone: counted nowhere", attackTick);
+				}
 				return;
 			}
 			// Read on the attack tick: this is when the prayers and boosts are the ones the attack actually rolled with. And

@@ -122,6 +122,17 @@ final class Reflect
 	 */
 	Match claim(int tick, int amount, IntFunction<List<Integer>> hitsOn, boolean recoilWorn)
 	{
+		return claim(tick, amount, hitsOn, recoilWorn, -1);
+	}
+
+	/**
+	 * As above, on an npc with {@code hpLeft} hitpoints before the splat (-1
+	 * when unknown): a reflection bigger than that shows as all it had (T-084).
+	 * Zulrah's snakelings have one hitpoint, so a recoil of 2 off a 13 landed as
+	 * a 1, matched nothing, and was taken for the player's attack.
+	 */
+	Match claim(int tick, int amount, IntFunction<List<Integer>> hitsOn, boolean recoilWorn, int hpLeft)
+	{
 		if (amount <= 0)
 		{
 			return null;
@@ -136,7 +147,7 @@ final class Reflect
 			{
 				for (int hit : hits(hitsOn, hitTick))
 				{
-					if (vengeanceOf(hit) == amount)
+					if (fits(vengeanceOf(hit), amount, hpLeft))
 					{
 						// The varbit and the text can each mark one rebound, a tick apart.
 						for (int t = fired - WINDOW_TICKS; t <= fired + WINDOW_TICKS; t++)
@@ -158,7 +169,7 @@ final class Reflect
 			for (int i = 0; i < hits.size(); i++)
 			{
 				final Set<Integer> answered = recoilAnswered.computeIfAbsent(hitTick, t -> new HashSet<>());
-				if (!answered.contains(i) && recoilOf(hits.get(i)) == amount)
+				if (!answered.contains(i) && fits(recoilOf(hits.get(i)), amount, hpLeft))
 				{
 					answered.add(i);
 					return new Match(Source.RECOIL, hits.get(i), hitTick);
@@ -166,6 +177,12 @@ final class Reflect
 			}
 		}
 		return null;
+	}
+
+	/** Whether a reflection of {@code reflected} shows as a splat of {@code amount}: itself, or capped at what was left. */
+	static boolean fits(int reflected, int amount, int hpLeft)
+	{
+		return reflected == amount || hpLeft > 0 && amount == hpLeft && reflected > amount;
 	}
 
 	private static List<Integer> hits(IntFunction<List<Integer>> hitsOn, int tick)
