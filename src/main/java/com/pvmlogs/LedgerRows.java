@@ -59,6 +59,8 @@ final class LedgerRows
 	static final String WARNING_TEXT = "! Boss data unsure";
 	/** The main row the details sit under once the fight is over (Eric, 2026-10-26). */
 	static final String SUMMARY = "Summary";
+	/** After the title's name once its kill has happened. */
+	static final String DEAD_SUFFIX = " (dead)";
 	/**
 	 * The title's clock (T-073): the title is the one row whose figure stays
 	 * bold, as the box's heading, while every other main row's figure is
@@ -205,6 +207,22 @@ final class LedgerRows
 		int leftRgb()
 		{
 			return leftRgb >= 0 ? leftRgb : leftColour.rgb;
+		}
+
+		/**
+		 * The left side as drawn: a boss's title after its kill has the word
+		 * "(dead)" in Dead's red and the name in the boss's colour (Eric,
+		 * 2026-10-28: "show only the '(dead)' word in red, so you get both
+		 * signals"), by RuneLite's colour tag. Widths are measured without tags.
+		 */
+		String drawnLeft()
+		{
+			if (leftColour != Colour.BOSS || !left.endsWith(DEAD_SUFFIX))
+			{
+				return left;
+			}
+			final int at = left.length() - DEAD_SUFFIX.length() + 1;
+			return left.substring(0, at) + String.format("<col=%06x>", Colour.DEAD.rgb) + left.substring(at);
 		}
 
 		@Override
@@ -1444,7 +1462,7 @@ final class LedgerRows
 					Colour.NEUTRAL);
 			default:
 				final String name = !state.ended ? state.name
-					: state.name + (state.killed ? " (dead)" : " (ended)");
+					: state.name + (state.killed ? DEAD_SUFFIX : " (ended)");
 				return titleRow(name, clock(ticks), state, state.killed ? Colour.DEAD : Colour.NEUTRAL);
 		}
 	}

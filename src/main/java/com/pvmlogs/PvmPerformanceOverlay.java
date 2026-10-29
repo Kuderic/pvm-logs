@@ -230,7 +230,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 			widest = Math.max(widest, leftMetrics.stringWidth(Text.removeTags(row.left))
 				+ rightMetrics.stringWidth(Text.removeTags(row.right)));
 			components.add(LineComponent.builder()
-				.left(row.left)
+				.left(row.drawnLeft())
 				.right(row.right)
 				.leftFont(left)
 				.rightFont(right)

@@ -99,6 +99,20 @@ public class BossColoursTest
 	}
 
 	@Test
+	public void afterTheKillOnlyTheWordDeadIsRed()
+	{
+		// Eric, 2026-10-28: "show only the '(dead)' word in red, so you get both signals".
+		final LedgerRows.Row dead = rows(LedgerRows.State.fight("Vardorvis", true, true, false)).get(0);
+		assertEquals("Vardorvis <col=ff7070>(dead)", dead.drawnLeft());
+		// Running, ended without a kill, or cut to fit: drawn as it reads.
+		assertEquals("Vardorvis", rows(LedgerRows.State.fight("Vardorvis", false, false, false)).get(0).drawnLeft());
+		assertEquals("Vardorvis (ended)", rows(LedgerRows.State.fight("Vardorvis", true, false, false)).get(0).drawnLeft());
+		assertEquals("Vardorvis (de\u2026", dead.withLeft("Vardorvis (de\u2026").drawnLeft());
+		// Something that isn't a boss is all red after its kill, as before.
+		assertEquals("Goblin (dead)", rows(LedgerRows.State.fight("Goblin", true, true, false)).get(0).drawnLeft());
+	}
+
+	@Test
 	public void aCutNameKeepsItsColour()
 	{
 		final LedgerRows.Row title = rows(LedgerRows.State.fight("Vardorvis", false, false, false)).get(0);
