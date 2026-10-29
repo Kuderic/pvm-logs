@@ -130,8 +130,10 @@ public class LedgerRowsTest
 			TENTACLE_DPS,
 			d(" max hit", "49"),
 			d(" accuracy", "54%"),
-			d(" spec", "50 max · 71%"),
-			d(" spec damage", "17.8")),
+			main("Spec", ""),
+			d(" max hit", "50"),
+			d(" accuracy", "71%"),
+			d(" expected", "17.8 dmg")),
 			LedgerRows.loadout(LedgerExamples.loadout(), false));
 	}
 
@@ -569,7 +571,8 @@ public class LedgerRowsTest
 		for (List<Row> rows : states)
 		{
 			assertFalse(rows.stream().anyMatch(row -> row.left.equals(TENTACLE.left) || row.left.equals("Loadout")
-				|| row.left.equals(" max hit") || row.left.equals(" accuracy") || row.left.equals(" spec")));
+				|| row.left.equals(" max hit") || row.left.equals(" accuracy") || row.left.equals(" spec")
+				|| row.left.equals(LedgerRows.SPEC) || row.left.equals(LedgerRows.EXPECTED)));
 		}
 	}
 
@@ -587,8 +590,10 @@ public class LedgerRowsTest
 		claws.specMaxHit = 110;
 		claws.specAccuracy = 0.62;
 		claws.specAverage = 33.4;
-		assertTrue(LedgerRows.loadout(claws, false).containsAll(Arrays.asList(d(" spec", "110 max \u00b7 62%"),
-			d(" spec damage", "33.4"))));
+		// T-077: the spec's own section.
+		final List<Row> rows = LedgerRows.loadout(claws, false);
+		assertEquals(Arrays.asList(main("Spec", ""), d(" max hit", "110"), d(" accuracy", "62%"), d(" expected", "33.4 dmg")),
+			rows.subList(rows.size() - 4, rows.size()));
 	}
 
 	@Test
@@ -659,8 +664,10 @@ public class LedgerRowsTest
 			TENTACLE_DPS,
 			d(" max hit", "49"),
 			d(" accuracy", "54%"),
-			d(" spec", "50 max \u00b7 71%"),
-			d(" spec damage", "17.8")),
+			main("Spec", ""),
+			d(" max hit", "50"),
+			d(" accuracy", "71%"),
+			d(" expected", "17.8 dmg")),
 			LedgerRows.loadout(LedgerExamples.loadout(), true));
 	}
 
@@ -1257,9 +1264,10 @@ public class LedgerRowsTest
 		claws.specExtra = 8.2;
 		claws.specExtraKind = "burn";
 		final List<Row> rows = LedgerRows.loadout(claws, false);
-		assertEquals(d(" spec", "48 max \u00b7 71%"), rows.get(rows.size() - 2));
-		// The total, burn and all, then the burn named.
-		assertEquals(d(" spec damage", "26.0 (8.2 burn)"), rows.get(rows.size() - 1));
+		assertEquals(d(" accuracy", "71%"), rows.get(rows.size() - 2));
+		// The total, burn and all, then the burn named; on a narrow box the total alone (T-077).
+		assertEquals(new Row(" expected", "26.0 dmg (8.2 burn)", DETAIL, DETAIL, NEUTRAL, NEUTRAL, null, "26.0 dmg"),
+			rows.get(rows.size() - 1));
 	}
 
 	@Test
@@ -1273,7 +1281,8 @@ public class LedgerRowsTest
 		// No average known: no damage row, the max and chance still show.
 		l.specAverage = -1;
 		final List<Row> rows = LedgerRows.loadout(l, false);
-		assertEquals(d(" spec", "50 max \u00b7 71%"), rows.get(rows.size() - 1));
+		assertEquals(d(" accuracy", "71%"), rows.get(rows.size() - 1));
+		assertEquals(main("Spec", ""), rows.get(rows.size() - 3));
 	}
 
 	@Test

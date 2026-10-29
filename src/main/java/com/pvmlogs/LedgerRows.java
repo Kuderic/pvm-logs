@@ -34,6 +34,10 @@ final class LedgerRows
 	/** T-075: under a kill's Defence and Magic rows, what the drains were worth: {@code  drains  5 s faster}. */
 	static final String DRAINS = " drains";
 	static final String SPECS = " specs";
+	/** T-077: the DPS overlay's spec section: its head, and its expected damage's label and unit. */
+	static final String SPEC = "Spec";
+	static final String EXPECTED = " expected";
+	static final String DMG = " dmg";
 	private static final String ARROW = " \u2192 ";
 	/** Execution's fifth part after a ruled fight (T-043). */
 	static final String AVOIDABLE_EATING = " avoidable eating";
@@ -1348,7 +1352,8 @@ final class LedgerRows
 	/**
 	 * The DPS overlay's rows (T-073; T-022's loadout overlay): the attack's name
 	 * as a main row of its own, {@code  vs} the monster under it, {@code DPS} as
-	 * a main row, then max hit, accuracy and the spec as sub-rows, each only when
+	 * a main row with max hit and accuracy under it, then a {@code Spec} section
+	 * with the special's max hit, accuracy and expected damage (T-077), each only when
 	 * known. With no monster (before any fight, or gone idle) the figures that
 	 * need one are unknown, so it's the attack's name, max hit and the spec's max
 	 * alone. Nothing at all when none of the figures is known.
@@ -1370,12 +1375,17 @@ final class LedgerRows
 		}
 		if (l.specMaxHit > 0)
 		{
-			// Two rows (Eric, 2026-10-27): the hit, then what a spec deals, burn and all.
-			rows.add(detail(" spec", l.specMaxHit + " max" + (l.specAccuracy >= 0 ? DOT + percent(l.specAccuracy) : ""),
-				Colour.NEUTRAL));
+			// A bold section of its own, like DPS (T-077, Eric 2026-10-29): its max hit, accuracy and expected damage under
+			// it. Gone idle there's no target, so the max hit alone.
+			rows.add(main(SPEC, ""));
+			rows.add(detail(" max hit", String.valueOf(l.specMaxHit), Colour.NEUTRAL));
+			if (l.specAccuracy >= 0)
+			{
+				rows.add(detail(" accuracy", percent(l.specAccuracy), Colour.NEUTRAL));
+			}
 			if (l.specAverage >= 0)
 			{
-				rows.add(detail(" spec damage", specDamage(l), Colour.NEUTRAL));
+				rows.add(specExpected(l));
 			}
 		}
 		if (rows.isEmpty())
@@ -1397,6 +1407,21 @@ final class LedgerRows
 					l.versusRgb));
 		}
 		return rows;
+	}
+
+	/**
+	 * T-077: {@code  expected  22.8 dmg}, or {@code 26.0 dmg (8.2 burn)} when the
+	 * spec deals extra (T-030). On a box saved too narrow the bracket goes first:
+	 * {@code 26.0 dmg}, the total, burn and all.
+	 */
+	static Row specExpected(Loadout l)
+	{
+		final double extra = Math.max(0, l.specExtra);
+		final String total = oneDecimal(l.specAverage + extra) + DMG;
+		final boolean named = extra >= 0.05 && l.specExtraKind != null;
+		final String figure = named ? total + " (" + oneDecimal(extra) + " " + l.specExtraKind + ")" : total;
+		return new Row(EXPECTED, figure, FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL, null,
+			named ? total : null);
 	}
 
 	/**
