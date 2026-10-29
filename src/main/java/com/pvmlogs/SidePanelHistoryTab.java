@@ -33,7 +33,9 @@ import net.runelite.client.ui.components.IconTextField;
 /**
  * The History tab (T-034; spec 3.2, states 10 and 11): search, the boss card
  * with its version picker, usual tiles and sparkline, the kill list, a saved
- * kill's own view, every boss with its adds under it, and the tools.
+ * kill's own view, every boss with its adds under it, and the tools. While the
+ * search has text, only the matching bosses (T-082); a picked boss can be put
+ * away by its row or the card's close control, leaving the list.
  * <p>
  * Built on {@link #refresh()} (after a fight is saved, history loads or is
  * cleared, the tab opens), on typing and on a pick; never per tick (spec 5.1
@@ -150,6 +152,12 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 
 	// What the player picked; kept across refreshes. Rooms are rebuilt each time, so a kill is known by its first fight.
 	private String boss;
+	/**
+	 * T-082: the player put the picked boss away (its row clicked again, or the card's close control), so none is
+	 * picked until they pick one. Kept across refreshes (a fight saved, the tab reopened) while the panel lives; a new
+	 * RuneLite session opens on the default boss again.
+	 */
+	private boolean putAway;
 	private LedgerHistory.Like version;
 	private int shownKills = SidePanelHistory.FIRST_KILLS;
 	private Fight selectedKill;
@@ -173,7 +181,19 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		search.setPreferredSize(new Dimension(SidePanelStyle.CONTENT_WIDTH, 30));
 		search.setBackground(SidePanelStyle.CARD);
 		search.setHoverBackgroundColor(SidePanelStyle.SELECTED);
-		search.setToolTipText("Search bosses");
+		search.setToolTipText("Search bosses. Escape clears it");
+		// T-082: Escape clears the search, and so brings back what it hid.
+		search.addKeyListener(new java.awt.event.KeyAdapter()
+		{
+			@Override
+			public void keyPressed(java.awt.event.KeyEvent e)
+			{
+				if (e.getKeyCode() == java.awt.event.KeyEvent.VK_ESCAPE && !search.getText().isEmpty())
+				{
+					search.setText("");
+				}
+			}
+		});
 		search.getDocument().addDocumentListener(new DocumentListener()
 		{
 			public void insertUpdate(DocumentEvent e)
@@ -254,6 +274,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			openKill = null;
 		}
 		searchBox.setVisible(true);
+		final boolean searching = searching();
 		final List<SidePanelHistory.BossEntry> all = SidePanelHistory.bosses(history, false, "");
 		if (all.isEmpty())
 		{
@@ -262,18 +283,33 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 				SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14));
 			content.add(card);
 		}
+		else if (searching)
+		{
+			// T-082: searching shows only what matches, and changes no pick: clearing it brings the card back.
+			allBosses(history);
+		}
 		else
 		{
-			if (boss == null || all.stream().noneMatch(b -> b.name.equals(boss)))
+			if (boss != null && all.stream().noneMatch(b -> b.name.equals(boss)))
+			{
+				boss = null;
+			}
+			if (boss == null && !putAway)
 			{
 				boss = defaultBoss(history, all);
 				version = null;
 			}
-			bossCard(history);
-			kills(history);
+			if (boss != null)
+			{
+				bossCard(history);
+				kills(history);
+			}
 			allBosses(history);
 		}
-		toolsSection(!history.isEmpty());
+		if (!searching)
+		{
+			toolsSection(!history.isEmpty());
+		}
 		revalidate();
 		repaint();
 	}
@@ -301,8 +337,13 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel box = SidePanelParts.card(6);
-		final SidePanelParts.Line title = new SidePanelParts.Line(Text.title(card.name, SidePanelStyle.VALUE),
+		final SidePanelParts.Line line = new SidePanelParts.Line(Text.title(card.name, SidePanelStyle.VALUE),
 			Text.small(card.kills + (card.kills == 1 ? " kill" : " kills"), SidePanelStyle.SECONDARY));
+		// T-082: a close control after the kill count puts the boss away.
+		final JPanel title = new JPanel(new BorderLayout(6, 0));
+		title.setOpaque(false);
+		title.add(line, BorderLayout.CENTER);
+		title.add(new Close("Put " + card.name + " away and show all bosses", this::putAway), BorderLayout.EAST);
 		box.add(card.icon == SidePanelBossIcons.NONE ? title : withIcon(card.icon, title));
 		if (!card.versions.isEmpty())
 		{
@@ -565,7 +606,8 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		}
 		row.add(text, BorderLayout.CENTER);
 		row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		row.setToolTipText("Show " + b.name + ". Right-click to export its fights to CSV");
+		row.setToolTipText((picked && !searching() ? "Put " + b.name + " away" : "Show " + b.name)
+			+ ". Right-click to export its fights to CSV");
 		final JPopupMenu menu = new JPopupMenu();
 		final JMenuItem export = new JMenuItem("Export " + b.name + " to CSV");
 		export.addActionListener(e -> source.exportNpc(b.name));
@@ -576,11 +618,24 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			@Override
 			public void mouseClicked(MouseEvent e)
 			{
-				if (SwingUtilities.isLeftMouseButton(e) && !b.name.equals(boss))
+				if (!SwingUtilities.isLeftMouseButton(e))
 				{
-					boss = b.name;
-					version = null;
-					shownKills = SidePanelHistory.FIRST_KILLS;
+					return;
+				}
+				if (searching())
+				{
+					// T-082: picking a match picks it and clears the search; clearing it refreshes.
+					select(b.name);
+					search.setText("");
+				}
+				else if (b.name.equals(boss))
+				{
+					// T-082: the picked boss's row again puts it away.
+					putAway();
+				}
+				else
+				{
+					select(b.name);
 					refresh();
 				}
 			}
@@ -612,9 +667,107 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 
 	void pick(String name)
 	{
-		boss = name;
-		version = null;
+		select(name);
 		refresh();
+	}
+
+	/** T-082: picks a boss, which ends a put-away. */
+	private void select(String name)
+	{
+		boss = name;
+		putAway = false;
+		version = null;
+		shownKills = SidePanelHistory.FIRST_KILLS;
+	}
+
+	/** T-082: no boss picked, until the player picks one: the list and the tools. */
+	void putAway()
+	{
+		boss = null;
+		putAway = true;
+		version = null;
+		shownKills = SidePanelHistory.FIRST_KILLS;
+		refresh();
+	}
+
+	/** T-082: whether the search has text, and so the tab shows only the matching bosses. */
+	boolean searching()
+	{
+		return !search.getText().trim().isEmpty();
+	}
+
+	/**
+	 * T-082: the boss card's close control, a small X: Secondary, Value on a Selected square when hovered, as the
+	 * panel's rows hover. Painted, so it doesn't hang on a glyph the RuneScape fonts may lack.
+	 */
+	static final class Close extends JComponent
+	{
+		private boolean hover;
+
+		Close(String tooltip, Runnable onClick)
+		{
+			setOpaque(false);
+			setToolTipText(tooltip);
+			setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			addMouseListener(new MouseAdapter()
+			{
+				@Override
+				public void mouseEntered(MouseEvent e)
+				{
+					hover = true;
+					repaint();
+				}
+
+				@Override
+				public void mouseExited(MouseEvent e)
+				{
+					hover = false;
+					repaint();
+				}
+
+				@Override
+				public void mouseClicked(MouseEvent e)
+				{
+					if (SwingUtilities.isLeftMouseButton(e))
+					{
+						onClick.run();
+					}
+				}
+			});
+		}
+
+		boolean hovered()
+		{
+			return hover;
+		}
+
+		@Override
+		public Dimension getPreferredSize()
+		{
+			final int side = Math.max(14, SidePanelStyle.Type.SMALL.lineHeight() + 2);
+			return new Dimension(side, side);
+		}
+
+		@Override
+		protected void paintComponent(Graphics g)
+		{
+			final int side = Math.min(getWidth(), getHeight());
+			final int x0 = (getWidth() - side) / 2;
+			final int y0 = (getHeight() - side) / 2;
+			if (hover)
+			{
+				g.setColor(SidePanelStyle.SELECTED);
+				g.fillRect(x0, y0, side, side);
+			}
+			final java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+			g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+			g2.setStroke(new java.awt.BasicStroke(1.5f));
+			g2.setColor(hover ? SidePanelStyle.VALUE : SidePanelStyle.SECONDARY);
+			final int inset = Math.max(3, side / 4);
+			g2.drawLine(x0 + inset, y0 + inset, x0 + side - 1 - inset, y0 + side - 1 - inset);
+			g2.drawLine(x0 + side - 1 - inset, y0 + inset, x0 + inset, y0 + side - 1 - inset);
+			g2.dispose();
+		}
 	}
 
 	IconTextField search()
