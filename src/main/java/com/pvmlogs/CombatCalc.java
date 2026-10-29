@@ -554,6 +554,37 @@ class CombatCalc
 	}
 
 	/**
+	 * Whether an attack going out now lands with a boss modifier the live figures
+	 * must not show (T-087: the Maggot King's punish).
+	 */
+	boolean hiddenModifiersApply(int npcId)
+	{
+		final NPC npc = targetNpc;
+		return modifiers != null && npc != null && npc.getId() == npcId && modifiers.hasModifiers(npc)
+			&& modifiers.hiddenApply(npc, weaponStyle(), landsInTicks(npc));
+	}
+
+	/** While set, the figures leave out the modifiers marked {@code hiddenLive}: for what is shown live (T-087). */
+	void setLiveFigures(boolean live)
+	{
+		if (modifiers != null)
+		{
+			modifiers.setLive(live);
+		}
+	}
+
+	/** The change to the target's magic defence bonus its modifiers make for an attack going out now (T-087). */
+	private int bossMagicDefenceChange(int npcId)
+	{
+		final NPC npc = targetNpc;
+		if (modifiers == null || npc == null || npc.getId() != npcId || !modifiers.hasModifiers(npc))
+		{
+			return 0;
+		}
+		return modifiers.magicDefenceChange(npc, weaponStyle(), landsInTicks(npc));
+	}
+
+	/**
 	 * The boss's damage modifiers an ordinary attack going out now lands with
 	 * (T-057): the Sire's halving while it walks, the Leviathan's stun cap, its
 	 * wound, its specials and the pathfinder. Empty for any other target, and for
@@ -606,7 +637,7 @@ class CombatCalc
 	 */
 	double hitChance(int npcId, SpecialAttack spec)
 	{
-		final MonsterStatsProvider.MonsterStats npc = monsters.get(npcId);
+		final MonsterStatsProvider.MonsterStats npc = attackStats(npcId);
 		if (npc == null)
 		{
 			return -1;
@@ -616,15 +647,36 @@ class CombatCalc
 		final AttackType type = spec != null && spec.rollsAgainst() != null && style.getAttackType().isMelee()
 			? spec.rollsAgainst() : style.getAttackType();
 		final double gear = gearBonus(npcId).getAccuracy();
+		// A boss's modifiers on the defence roll (T-087: the Maggot King's punish, 85% off it for a crush).
+		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
 		if (type.isMelee())
 		{
-			return meleeHitChance(style, type, npc, gear, spec);
+			return meleeHitChance(style, type, npc, gear, spec, mods);
 		}
 		if (type == AttackType.RANGED)
 		{
-			return rangedHitChance(style, npc, gear, spec);
+			return rangedHitChance(style, npc, gear, spec, mods);
 		}
-		return magicHitChance(style, npc, gear, npcId, spec);
+		return magicHitChance(style, npc, gear, npcId, spec, mods);
+	}
+
+	/**
+	 * The monster data an attack going out now is judged against (T-087): the
+	 * version a boss's modifier names while it applies (the Maggot King "Nearby"
+	 * while it slams), else the version in use.
+	 */
+	private MonsterStatsProvider.MonsterStats attackStats(int npcId)
+	{
+		final String version = ModifierTracker.version(bossModifiers(npcId));
+		if (version != null)
+		{
+			final MonsterStatsProvider.MonsterStats named = monsters.get(npcId, version);
+			if (named != null)
+			{
+				return named;
+			}
+		}
+		return monsters.get(npcId);
 	}
 
 	/**
@@ -1323,14 +1375,14 @@ class CombatCalc
 	}
 
 	private double meleeHitChance(AttackStyle style, AttackType type,
-		MonsterStatsProvider.MonsterStats npc, double gear, SpecialAttack spec)
+		MonsterStatsProvider.MonsterStats npc, double gear, SpecialAttack spec, List<BossRules.ModifierRule> mods)
 	{
 		final int effAtk = voidScaled((int) Math.floor(boostedLevel(Skill.ATTACK) * meleeAccuracyPrayer())
 			+ style.attackLevelBonus() + 8, type, false);
 		final int attRoll = scaled(attackRoll(effAtk, attackBonus(type), gear), spec);
 		final int defBonus = type == AttackType.STAB ? npc.getDefStab()
 			: type == AttackType.SLASH ? npc.getDefSlash() : npc.getDefCrush();
-		final int defRoll = (defenceLevel(npc) + 9) * (defBonus + 64);
+		final int defRoll = ModifierTracker.defenceRoll(mods, type.name(), (defenceLevel(npc) + 9) * (defBonus + 64));
 		return meleeHitChanceFrom(attRoll, defRoll);
 	}
 
@@ -1340,7 +1392,7 @@ class CombatCalc
 	 * magic defence is its Magic stat and its magic defence bonus (wiki).
 	 */
 	private double magicHitChance(AttackStyle style, MonsterStatsProvider.MonsterStats npc, double gear,
-		int npcId, SpecialAttack spec)
+		int npcId, SpecialAttack spec, List<BossRules.ModifierRule> mods)
 	{
 		final int effMagic = voidScaled((int) Math.floor(boostedLevel(Skill.MAGIC) * magicAccuracyPrayer())
 			+ style.attackLevelBonus() + 9, AttackType.MAGIC, false);
@@ -1348,7 +1400,10 @@ class CombatCalc
 		// effects do.
 		final int attRoll = scaled(attackRoll(effMagic, attackBonus(AttackType.MAGIC),
 			gear * (1.0 + elementalWeakness(npcId) / 100.0)), spec);
-		final int defRoll = (magicDefenceLevel(npc) + 9) * (magicDefenceBonus(npc) + 64);
+		// Burn stacks on the Maggot King take 20 each off its magic defence bonus (T-087).
+		final int bonus = Math.max(0, magicDefenceBonus(npc) + bossMagicDefenceChange(npcId));
+		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.MAGIC.name(),
+			(magicDefenceLevel(npc) + 9) * (bonus + 64));
 		if (!hasConflictionGauntlets())
 		{
 			return hitChanceFrom(attRoll, defRoll);
@@ -1446,12 +1501,13 @@ class CombatCalc
 	}
 
 	private double rangedHitChance(AttackStyle style, MonsterStatsProvider.MonsterStats npc,
-		double gear, SpecialAttack spec)
+		double gear, SpecialAttack spec, List<BossRules.ModifierRule> mods)
 	{
 		final int effRanged = voidScaled((int) Math.floor(boostedLevel(Skill.RANGED) * rangedAccuracyPrayer())
 			+ style.attackLevelBonus() + 8, AttackType.RANGED, false);
 		final int attRoll = scaled(attackRoll(effRanged, attackBonus(AttackType.RANGED), gear), spec);
-		final int defRoll = (defenceLevel(npc) + 9) * (npc.getDefRanged() + 64);
+		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.RANGED.name(),
+			(defenceLevel(npc) + 9) * (npc.getDefRanged() + 64));
 		return hitChanceFrom(attRoll, defRoll);
 	}
 
@@ -2110,9 +2166,10 @@ class CombatCalc
 		int total = 0;
 		// A boss's modifiers (T-057): the cap while stunned, the halving, the doubling for magic into the wound.
 		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
-		for (int max : shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId)))
+		final int[] maxima = shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId));
+		for (int hit = 0; hit < maxima.length; hit++)
 		{
-			total += Math.min(cap, mods.isEmpty() ? max : ModifierTracker.max(mods, max));
+			total += Math.min(cap, mods.isEmpty() ? maxima[hit] : ModifierTracker.max(mods, maxima[hit], hit));
 		}
 		if (weaponStyle() == Style.MAGIC)
 		{
@@ -3106,7 +3163,7 @@ class CombatCalc
 		{
 			return 0;
 		}
-		final MonsterStatsProvider.MonsterStats npc = monsters.get(npcId);
+		final MonsterStatsProvider.MonsterStats npc = attackStats(npcId);
 		if (npc == null || npc.getWeaknessElement() == null || npc.getWeaknessSeverity() <= 0)
 		{
 			return 0;

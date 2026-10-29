@@ -1329,6 +1329,8 @@ public class PvmPerformancePlugin extends Plugin
 				{
 					session.recordDotDamage(amount, type);
 				}
+				// A burn splat shows how many burn stacks the Maggot King carries, which take off its magic defence (T-087).
+				damageModifiers.onBossDot(npc, HitsplatKind.typeName(type), amount);
 				break;
 			case HEAL:
 				current.recordHeal(amount);
@@ -2549,6 +2551,31 @@ public class PvmPerformancePlugin extends Plugin
 			row[EXP_SPEC_VARIANCE] = expectedSpecVariance;
 			expectedByTick.put(client.getTickCount(), row);
 			modifiersByTick.put(client.getTickCount(), combatCalc.describeBossModifiers(shownId));
+			// T-087: the row above scores the attack going out now with every modifier it lands with. What is shown live
+			// leaves out the ones the player must not be told about - the Maggot King's punish - so the overlay and the side
+			// panel never change on a slam's tick (Jagex's rule: nothing of the boss's behaviour).
+			if (combatCalc.hiddenModifiersApply(shownId))
+			{
+				combatCalc.setLiveFigures(true);
+				try
+				{
+					expectedMaxHit = combatCalc.maxHit(shownId);
+					expectedAccuracy = combatCalc.hitChance(shownId);
+					final DamageMoments shownOrdinary = combatCalc.averageHitMoments(shownId);
+					final DamageMoments shownSpecial = combatCalc.specialAttackMoments(shownId);
+					expectedAverageHit = meanOf(shownOrdinary);
+					expectedDps = combatCalc.expectedDps(shownId);
+					expectedSpecMaxHit = combatCalc.specialAttackMaxHit(shownId);
+					expectedSpecAccuracy = combatCalc.specialAttackLandChance(shownId);
+					expectedSpecAverageHit = meanOf(shownSpecial);
+					expectedVariance = varianceOf(shownOrdinary);
+					expectedSpecVariance = varianceOf(shownSpecial);
+				}
+				finally
+				{
+					combatCalc.setLiveFigures(false);
+				}
+			}
 			// The same figures at each state the open fight's outcome distribution holds (T-050), for the attacks made now.
 			if (current != null && !current.isEnded())
 			{

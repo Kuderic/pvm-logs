@@ -57,6 +57,8 @@ final class ModifierTracker
 		final String name;
 		final BossRules.DamageModifierRules rules;
 		final Map<String, Window> windows = new HashMap<>();
+		/** Each count it carries (T-087): {how many, the tick the splat that showed it landed}. */
+		final Map<String, int[]> stacks = new HashMap<>();
 		int npcId = -1;
 
 		Boss(String name, BossRules.DamageModifierRules rules)
@@ -189,9 +191,64 @@ final class ModifierTracker
 			}
 			if (contains(s.startOnBossAnim, anim))
 			{
-				open(b, s, tick, "anim " + anim);
+				open(b, s, tick + Math.max(0, s.startDelay), "anim " + anim
+					+ (s.startDelay > 0 ? " at tick " + tick + ", " + s.startDelay + " ticks on" : ""));
 			}
 		}
+	}
+
+	private static List<BossRules.StackRule> stackRules(BossRules.DamageModifierRules rules)
+	{
+		return rules == null || rules.stacks == null ? Collections.emptyList() : rules.stacks;
+	}
+
+	/**
+	 * A damage-over-time splat of this kind ({@code burn}) landed on the boss
+	 * (T-087): it shows how many of the counts read off it the boss carries.
+	 */
+	void onBossDot(int npcIndex, String name, BossRules.DamageModifierRules rules, String kind, int amount, int tick)
+	{
+		if (kind == null)
+		{
+			return;
+		}
+		Boss b = null;
+		for (BossRules.StackRule r : stackRules(rules))
+		{
+			if (!kind.equalsIgnoreCase(r.fromDot))
+			{
+				continue;
+			}
+			b = b == null ? boss(npcIndex, name, rules) : b;
+			final int count = Math.max(0, Math.min(r.max > 0 ? r.max : Integer.MAX_VALUE, amount));
+			final int[] was = b.stacks.get(r.name);
+			final int before = was == null || tick - was[1] > r.lapseTicks ? 0 : was[0];
+			b.stacks.put(r.name, new int[]{count, tick});
+			if (count != before)
+			{
+				log.accept(String.format("MOD %s: %s %d at tick %d (a %s splat of %d)", b.name, r.name, count, tick, kind,
+					amount));
+			}
+		}
+	}
+
+	/** How many of this count the boss carries on {@code tick}: the last splat's, until it lapses; 0 with none. */
+	int stacks(int npcIndex, String stack, BossRules.DamageModifierRules rules, int tick)
+	{
+		final Boss b = bosses.get(npcIndex);
+		final int[] seen = b == null || stack == null ? null : b.stacks.get(stack);
+		if (seen == null || tick < seen[1])
+		{
+			return seen == null ? 0 : seen[0];
+		}
+		for (BossRules.StackRule r : stackRules(rules))
+		{
+			if (stack.equals(r.name))
+			{
+				return tick - seen[1] > r.lapseTicks ? 0 : seen[0];
+			}
+		}
+		return 0;
 	}
 
 	/** One of the player's attacks landed with these modifiers: the windows they start and end. */
@@ -417,6 +474,12 @@ final class ModifierTracker
 	/** One rolled hitsplat after the modifiers: the minimum hit on a landed roll, then each cap and multiplier. */
 	static int damage(List<BossRules.ModifierRule> mods, int rolled, int max, boolean landed)
 	{
+		return damage(mods, rolled, max, landed, 0);
+	}
+
+	/** As above for an attack's {@code hit}th hitsplat, from 0: a first-hit-only multiplier skips the rest (T-087). */
+	static int damage(List<BossRules.ModifierRule> mods, int rolled, int max, boolean landed, int hit)
+	{
 		int v = rolled;
 		for (BossRules.ModifierRule m : mods)
 		{
@@ -428,7 +491,8 @@ final class ModifierTracker
 			{
 				v = Math.min(v, m.cap);
 			}
-			if (m.multiply != null && m.multiply.length == 2 && m.multiply[1] > 0)
+			if (m.multiply != null && m.multiply.length == 2 && m.multiply[1] > 0
+				&& (hit == 0 || !Boolean.TRUE.equals(m.firstHitOnly)))
 			{
 				v = v * m.multiply[0] / m.multiply[1];
 			}
@@ -439,7 +503,65 @@ final class ModifierTracker
 	/** The most one hitsplat of this max can deal after the modifiers. */
 	static int max(List<BossRules.ModifierRule> mods, int max)
 	{
-		return damage(mods, max, max, true);
+		return damage(mods, max, max, true, 0);
+	}
+
+	/** The most an attack's {@code hit}th hitsplat (from 0) of this max can deal after the modifiers. */
+	static int max(List<BossRules.ModifierRule> mods, int max, int hit)
+	{
+		return damage(mods, max, max, true, hit);
+	}
+
+	/**
+	 * The boss's defence roll after the modifiers (T-087): each {@code defenceRoll}
+	 * whose {@code attackTypes} take this one (STAB, SLASH, CRUSH, RANGED or MAGIC)
+	 * multiplies it, rounded down.
+	 */
+	static int defenceRoll(List<BossRules.ModifierRule> mods, String attackType, int roll)
+	{
+		long r = roll;
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.defenceRoll != null && m.defenceRoll.length == 2 && m.defenceRoll[1] > 0
+				&& (m.attackTypes == null || attackType != null && m.attackTypes.contains(attackType)))
+			{
+				r = r * m.defenceRoll[0] / m.defenceRoll[1];
+			}
+		}
+		return (int) Math.max(0, r);
+	}
+
+	/** The modifiers the live figures may show (T-087): all but those marked {@code hiddenLive}. */
+	static List<BossRules.ModifierRule> shownLive(List<BossRules.ModifierRule> mods)
+	{
+		List<BossRules.ModifierRule> out = null;
+		for (int i = 0; i < mods.size(); i++)
+		{
+			final boolean hidden = Boolean.TRUE.equals(mods.get(i).hiddenLive);
+			if (hidden && out == null)
+			{
+				out = new ArrayList<>(mods.subList(0, i));
+			}
+			else if (!hidden && out != null)
+			{
+				out.add(mods.get(i));
+			}
+		}
+		return out == null ? mods : out;
+	}
+
+	/** The version of the boss the modifiers name (T-087), the last that names one; null for its usual version. */
+	static String version(List<BossRules.ModifierRule> mods)
+	{
+		String v = null;
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.version != null)
+			{
+				v = m.version;
+			}
+		}
+		return v;
 	}
 
 	/** How many damage rolls the attack takes the best of (T-079): the most any modifier asks, one by default. */
@@ -500,20 +622,21 @@ final class ModifierTracker
 		final int rolls = rolls(mods);
 		double mean = 0;
 		double variance = 0;
-		for (int max : maxima)
+		for (int hit = 0; hit < maxima.length; hit++)
 		{
+			final int max = maxima[hit];
 			if (max <= 0)
 			{
 				continue;
 			}
-			final double missValue = Math.min(cap, damage(mods, 0, max, false));
+			final double missValue = Math.min(cap, damage(mods, 0, max, false, hit));
 			double m = (1 - accuracy) * missValue;
 			double second = (1 - accuracy) * missValue * missValue;
 			final int lo = rollFloor(mods, max);
 			for (int r = lo; r <= max; r++)
 			{
 				final double each = accuracy * rollChance(r - lo, max - lo, rolls);
-				final double v = Math.min(cap, damage(mods, r, max, true));
+				final double v = Math.min(cap, damage(mods, r, max, true, hit));
 				m += each * v;
 				second += each * v * v;
 			}

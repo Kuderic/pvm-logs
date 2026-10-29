@@ -368,6 +368,28 @@
       ]
     },
     {
+      "name": "Maggot King",
+      "npcIds": [15742],
+      "variants": [
+        {"version": "Far", "maxHp": 1500, "default": true}
+      ],
+      "damageModifiers": {
+        "states": [
+          {"name": "slam", "startOnBossAnim": [13925], "ticks": 4, "source": "T-087. OSRS Wiki, read 2026-10-29: Maggot King/Strategies: 'During the slam, its magic defence is temporarily raised from +150 to +400' (the DPS calc's 'Nearby' version). The animation is a fit, not a source: in Eric's log of 2026-10-29 (pvm-debug-20261029-135031) the Maggot King's 13925 starts every 4 to 5 ticks in the melee phase only (below ~65% hitpoints, as the wiki has the slam), and 13 of Eric's melee attacks went out exactly 2 ticks after one, every one landing. How long the magic defence stays raised is not stated: 4 ticks, the slam's length to its punish tick and one after, is a guess."},
+          {"name": "punish", "startOnBossAnim": [13925], "startDelay": 3, "ticks": 1, "source": "T-087. OSRS Wiki, read 2026-10-29: Maggot King/Strategies: a player who clicks 'on the same tick that it extends its head' attacks 'without incurring an attack delay' with 'increased accuracy (85% reduced defence roll if using crush) and a 50% damage boost for that attack'. The tick is a fit, not a source: in Eric's log every melee attack thrown 2 ticks into a 13925 (so landing 3 ticks in) hit, 13 of 13, against a 0.62 chance, and reached 75 against a 53 max."}
+        ],
+        "stacks": [
+          {"name": "burn", "fromDot": "burn", "max": 5, "lapseTicks": 4, "source": "T-087. OSRS Wiki, read 2026-10-29: Burn: 'Up to 5 separate instances of the burn effect can be inflicted at once', each taking 'damage equal to the number of burn stacks they currently have', once every four ticks; 'Fire spells apply a burn only when used against the Maggot King'. So a burn splat on the King shows how many stacks it carries; with none for 4 ticks it carries none. Eric's log: burn splats of 1 to 5, four ticks apart."}
+        ],
+        "modifiers": [
+          {"name": "slam", "state": "slam", "version": "Nearby", "source": "T-087: the Maggot King's slam, as the DPS calc's 'Nearby' version: magic defence +400 and a 5% fire weakness against +150 and 80% (Eric's cached monsters.json). Its Defence and crush, stab and slash bonuses are the same, so only magic is changed."},
+          {"name": "punish", "state": "punish", "styles": ["MELEE"], "multiply": [3, 2], "firstHitOnly": true, "hiddenLive": true, "source": "T-087. OSRS Wiki, read 2026-10-29: Maggot King/Strategies: 'a 50% damage boost for that attack'; 'Multi-hit weapons will only have the bonus applied onto the first hit'. Read as the rolled hit times 3/2, rounded down. hiddenLive: the punish window is the boss's behaviour, which nothing live may show."},
+          {"name": "punish, crush", "state": "punish", "styles": ["MELEE"], "attackTypes": ["CRUSH"], "defenceRoll": [15, 100], "hiddenLive": true, "source": "T-087. OSRS Wiki, read 2026-10-29: Maggot King/Strategies: '85% reduced defence roll if using crush'. Eric's 13 punishes, crush assumed: 514 dealt against 484 expected, 13 landed against 12.3; with no change to accuracy, 317 and 8.0."},
+          {"name": "burn", "styles": ["MAGIC"], "stacks": "burn", "magicDefencePerStack": -20, "source": "T-087. OSRS Wiki, read 2026-10-29: Maggot King/Strategies: fire spells 'reducing its magic defence by 20 per burn stack'. The stacks at the tick the cast goes out."}
+        ]
+      }
+    },
+    {
       "name": "The Whisperer",
       "npcIds": [12204, 12205, 12206, 12207],
       "defenceDrain": {

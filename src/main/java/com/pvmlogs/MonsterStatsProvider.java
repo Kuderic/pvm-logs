@@ -233,6 +233,30 @@ class MonsterStatsProvider
 	}
 
 	/**
+	 * The stats of this npc's named version (T-087: a boss rule's phase, the
+	 * Maggot King "Nearby" while it slams), with its rules applied as
+	 * {@link #get(int)} applies them; null when the data lists no such version
+	 * under the id.
+	 */
+	MonsterStats get(int npcId, String version)
+	{
+		final Parsed d = data;
+		final List<MonsterStats> versions = d.versionsById.get(npcId);
+		if (versions == null || version == null)
+		{
+			return null;
+		}
+		for (MonsterStats v : versions)
+		{
+			if (version.equalsIgnoreCase(v.getVersion()))
+			{
+				return applyRules(d, npcId, v);
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * One line on which version of this npc is in use and why, its defence as it
 	 * stands, and any warning against it: for the debug header and ::loadout, so a
 	 * figure that looks wrong can be traced to the entry it came from.

@@ -170,6 +170,8 @@ public class SidePanelBossIconsTest
 		m.put("Xarpus", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("The Maiden of Sugadinti", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("Hespori", HiscoreSkill.HESPORI);
+		// T-087's rules.
+		m.put("Maggot King", HiscoreSkill.MAGGOT_KING);
 		// T-061's groups.
 		m.put("Grotesque Guardians", HiscoreSkill.GROTESQUE_GUARDIANS);
 		m.put("The Royal Titans", HiscoreSkill.THE_ROYAL_TITANS);
