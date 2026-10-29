@@ -657,7 +657,8 @@ class Fight
 			}
 			if (timeline != null)
 			{
-				timeline.expected(averageHit, damageVariance);
+				// T-085: with the max hit and the chance to land, for the side panel's weapon details.
+				timeline.expected(averageHit, damageVariance, maxHit, landed);
 			}
 		}
 	}

@@ -1521,6 +1521,16 @@ final class SidePanelModel
 		int damage;
 		double expected;
 		boolean expectedKnown;
+		/**
+		 * T-085: the ticks spent on its attacks ({@link SidePanelWeaponRows#ticks}), the attacks that landed, the chances
+		 * they were expected to land summed over the attacks that had one, the largest max hit, and the biggest hit.
+		 */
+		int ticks;
+		int landed;
+		double landedExpected;
+		int landedKnown;
+		int maxHit = -1;
+		int biggest;
 		int itemId = -1;
 		Spell spell;
 		FightTimeline.Style style = FightTimeline.Style.UNKNOWN;
@@ -1564,8 +1574,7 @@ final class SidePanelModel
 				final String sub = warning || !w.expectedKnown ? count
 					: count + DOT + "expected " + LedgerRows.number(Math.round(w.expected));
 				final int sprite = SidePanelIcons.spellSprite(w.spell);
-				rows.add(new PanelSnapshot.Source(w.name, sub, LedgerRows.number(w.damage), Math.round(100 * share) + "%",
-					share, styleColour(w.style, w.special), sprite >= 0 ? -1 : w.itemId, sprite));
+				rows.add(weaponSource(w, count, sub, share, warning, sprite));
 			}
 			// What no attack holds: damage waiting for its attack's booking, or from a fight the timeline didn't record;
 			// expectations that arrived before any attack of their fight was booked (a held sample after a target switch).
@@ -1612,6 +1621,127 @@ final class SidePanelModel
 		return Double.isNaN(d) ? 0 : d;
 	}
 
+	// ---- T-085: each weapon's DPS, and its details on hover ----
+
+	/** T-085: where a weapon row shows its DPS; Eric picks one, and the others go. */
+	enum DpsLayout
+	{
+		/** On the sub-line: {@code 32 attacks · 6.1 DPS (exp 7.1)}. */
+		SUB_LINE,
+		/** Under the damage on the right, {@code 6.1 DPS}, with the expected on the sub-line; the share in the tooltip. */
+		RIGHT,
+		/** A third line: {@code 6.1 DPS · expected 7.1}, under the sub-line as it was. */
+		THIRD_LINE
+	}
+
+	static DpsLayout dpsLayout = DpsLayout.SUB_LINE;
+
+	/**
+	 * T-085: a weapon or spell row with its DPS, its damage over the time spent attacking with it
+	 * ({@link SidePanelWeaponRows#ticks}: its attacks and the cooldown after each, up to the next attack), beside its
+	 * expected DPS, the row's expected damage over the same time. Not for a special: its worth is its burst and its
+	 * drain, spent by energy rather than time, so a rate over its few ticks says little. Not under the stats warning's
+	 * expected, nor with no ticks (a row read without its view).
+	 */
+	private static PanelSnapshot.Source weaponSource(WeaponRow w, String count, String sub, double share,
+		boolean warning, int sprite)
+	{
+		final String shareText = Math.round(100 * share) + "%";
+		final double seconds = w.ticks * LedgerRows.SECONDS_PER_TICK;
+		final String dps = !w.special && w.ticks > 0 ? LedgerRows.oneDecimal(Math.max(0, w.damage) / seconds) : null;
+		final String exp = dps != null && w.expectedKnown && !warning ? LedgerRows.oneDecimal(w.expected / seconds) : null;
+		final String tooltip = weaponTooltip(w, shareText, dps, exp, warning);
+		final int item = sprite >= 0 ? -1 : w.itemId;
+		final Color colour = styleColour(w.style, w.special);
+		final String damage = LedgerRows.number(w.damage);
+		if (dps == null)
+		{
+			return new PanelSnapshot.Source(w.name, sub, null, damage, shareText, null, null, share, colour, item, sprite,
+				tooltip, null, null);
+		}
+		final String rate = dps + " DPS";
+		switch (dpsLayout)
+		{
+			case RIGHT:
+				return new PanelSnapshot.Source(w.name, exp == null ? count : count + DOT + "exp " + exp + " DPS",
+					Collections.singletonList(exp == null ? count : "exp " + exp + " DPS"), damage, shareText, rate, null,
+					share, colour, item, sprite, tooltip, dps, exp);
+			case THIRD_LINE:
+				return new PanelSnapshot.Source(w.name, sub, Collections.singletonList(count), damage, shareText, null,
+					exp == null ? rate : rate + DOT + "expected " + exp, share, colour, item, sprite, tooltip, dps, exp);
+			case SUB_LINE:
+			default:
+				// Where it doesn't fit, the attacks go first, then the expected: the DPS is the last to go.
+				final List<String> shorts = new ArrayList<>(2);
+				if (exp != null)
+				{
+					shorts.add(rate + " (exp " + exp + ")");
+				}
+				shorts.add(rate);
+				return new PanelSnapshot.Source(w.name, count + DOT + rate + (exp == null ? "" : " (exp " + exp + ")"),
+					shorts, damage, shareText, null, null, share, colour, item, sprite, tooltip, dps, exp);
+		}
+	}
+
+	/**
+	 * T-085: a weapon row's details, for its tooltip: attacks and the ones that landed, against the chance they had;
+	 * the average and biggest hit, against the max; the expected damage; the time spent attacking and the DPS. HTML,
+	 * built in the snapshot.
+	 */
+	static String weaponTooltip(WeaponRow w, String share, String dps, String exp, boolean warning)
+	{
+		final StringBuilder s = new StringBuilder("<html><b>").append(escape(w.name)).append("</b>");
+		s.append("<br>").append(w.attacks).append(w.special ? (w.attacks == 1 ? " special" : " specials")
+			: (w.attacks == 1 ? " attack" : " attacks")).append(", ").append(w.landed).append(" landed");
+		if (w.attacks > 0)
+		{
+			s.append(" (").append(Math.round(100.0 * w.landed / w.attacks)).append("%");
+			if (w.landedKnown > 0 && !warning)
+			{
+				s.append(", expected ").append(Math.round(100.0 * w.landedExpected / w.landedKnown)).append("%");
+			}
+			s.append(")");
+		}
+		if (w.landed > 0)
+		{
+			s.append("<br>average hit ").append(LedgerRows.oneDecimal((double) Math.max(0, w.damage) / w.landed));
+		}
+		if (w.biggest > 0)
+		{
+			s.append("<br>biggest hit ").append(w.biggest);
+			if (w.maxHit > 0 && !warning)
+			{
+				s.append(" of max ").append(w.maxHit);
+			}
+		}
+		s.append("<br>damage ").append(LedgerRows.number(w.damage));
+		if (w.expectedKnown && !warning)
+		{
+			s.append(", expected ").append(LedgerRows.number(Math.round(w.expected)));
+		}
+		s.append(" (").append(share).append(" of the card)");
+		if (dps != null)
+		{
+			s.append("<br>").append(dps).append(" DPS");
+			if (exp != null)
+			{
+				s.append(" (expected ").append(exp).append(")");
+			}
+			s.append(" over ").append(LedgerRows.duration(w.ticks * LedgerRows.SECONDS_PER_TICK)).append(" attacking, ")
+				.append(w.ticks).append(w.ticks == 1 ? " tick" : " ticks");
+		}
+		else if (w.special)
+		{
+			s.append("<br>no DPS: a special is spent by energy, not time");
+		}
+		return s.append("</html>").toString();
+	}
+
+	private static String escape(String s)
+	{
+		return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+	}
+
 	/** The view's attacks grouped by the name shown and whether it was the special, in the order first thrown. */
 	static List<WeaponRow> weaponRows(FightTimeline.View view)
 	{
@@ -1621,9 +1751,9 @@ final class SidePanelModel
 			return rows;
 		}
 		final Map<String, WeaponRow> byKey = new LinkedHashMap<>();
-		for (FightTimeline.Attack a : view.attacks)
+		for (int i = 0; i < view.attacks.size(); i++)
 		{
-			SidePanelWeaponRows.add(byKey, a);
+			SidePanelWeaponRows.add(byKey, view.attacks.get(i), SidePanelWeaponRows.ticks(view, i));
 		}
 		rows.addAll(byKey.values());
 		return rows;

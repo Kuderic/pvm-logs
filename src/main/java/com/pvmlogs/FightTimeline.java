@@ -79,6 +79,14 @@ final class FightTimeline
 		/** The weapon damage credited to it, and the splats that made it land. */
 		int damage;
 		int hits;
+		/**
+		 * T-085, for the side panel's details on a weapon row: the chance it was expected to land (summed over its parts,
+		 * as {@link #mean} is), its max hit (the largest of its parts'), and the biggest damage credited to it at once.
+		 * -1 until an expectation brings them, or with none.
+		 */
+		double landedChance = -1;
+		int maxHit = -1;
+		int biggest;
 
 		Attack(int tick)
 		{
@@ -160,7 +168,25 @@ final class FightTimeline
 	/** {@link Fight#recordExpected}, when it counts: for the attack the plugin named, else the latest. */
 	void expected(double mean, double damageVariance)
 	{
+		expected(mean, damageVariance, -1, -1);
+	}
+
+	/** As above, with the attack's max hit and chance to land (T-085), for the side panel's details; -1 for unknown. */
+	void expected(double mean, double damageVariance, int maxHit, double landedChance)
+	{
 		final long t0 = PerfProbe.start(probe);
+		final Attack attack = expectFor != null ? expectFor : latest();
+		if (attack != null)
+		{
+			if (maxHit > 0)
+			{
+				attack.maxHit = Math.max(attack.maxHit, maxHit);
+			}
+			if (landedChance >= 0)
+			{
+				attack.landedChance = Math.max(0, attack.landedChance) + landedChance;
+			}
+		}
 		expectedTimed(mean, damageVariance);
 		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
 	}
@@ -442,6 +468,7 @@ final class FightTimeline
 		}
 		attack.damage += amount;
 		attack.hits += hits;
+		attack.biggest = Math.max(attack.biggest, amount);
 		lastCredited = attack;
 	}
 

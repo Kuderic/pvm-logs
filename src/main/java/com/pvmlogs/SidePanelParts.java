@@ -536,7 +536,11 @@ final class SidePanelParts
 		private final SidePanelIcons icons;
 		private final Line top;
 		private final Line bottom;
+		/** T-085: the third line, in the layout that has one; built for the rows that have it (a structure change). */
+		private final SidePanelText third;
 		private final Icon icon = new Icon();
+		/** T-085: hovered, as the panel's other rows: the Selected fill under the share. */
+		private boolean hover;
 		private double share;
 		private Color colour;
 		private int itemId = Integer.MIN_VALUE;
@@ -558,12 +562,39 @@ final class SidePanelParts
 			top = new Line(PanelSnapshot.Text.body(s.name, SidePanelStyle.VALUE),
 				PanelSnapshot.Text.title(s.damage, SidePanelStyle.VALUE));
 			bottom = new Line(PanelSnapshot.Text.small(s.sub, SidePanelStyle.SECONDARY),
-				PanelSnapshot.Text.small(s.share, SidePanelStyle.SECONDARY));
+				PanelSnapshot.Text.small(s.right, SidePanelStyle.SECONDARY));
 			text.add(top);
 			text.add(bottom);
+			third = s.third == null ? null : new SidePanelText(PanelSnapshot.Text.small(s.third, SidePanelStyle.SECONDARY),
+				false);
+			if (third != null)
+			{
+				text.add(third);
+			}
 			add(icon, BorderLayout.WEST);
 			add(text, BorderLayout.CENTER);
+			addMouseListener(new java.awt.event.MouseAdapter()
+			{
+				@Override
+				public void mouseEntered(java.awt.event.MouseEvent e)
+				{
+					hover = getToolTipText() != null;
+					repaint();
+				}
+
+				@Override
+				public void mouseExited(java.awt.event.MouseEvent e)
+				{
+					hover = false;
+					repaint();
+				}
+			});
 			set(s);
+		}
+
+		boolean hovered()
+		{
+			return hover;
 		}
 
 		void set(PanelSnapshot.Source s)
@@ -571,7 +602,17 @@ final class SidePanelParts
 			top.set(new PanelSnapshot.Row(PanelSnapshot.Text.body(s.name, SidePanelStyle.VALUE),
 				PanelSnapshot.Text.title(s.damage, SidePanelStyle.VALUE)));
 			bottom.set(new PanelSnapshot.Row(PanelSnapshot.Text.small(s.sub, SidePanelStyle.SECONDARY),
-				PanelSnapshot.Text.small(s.share, SidePanelStyle.SECONDARY)));
+				PanelSnapshot.Text.small(s.right, SidePanelStyle.SECONDARY)));
+			// T-085: the sub-line's shorter forms where it doesn't fit, the third line, and the details on hover.
+			bottom.left.setShort(s.subShort);
+			if (third != null && s.third != null)
+			{
+				third.set(PanelSnapshot.Text.small(s.third, SidePanelStyle.SECONDARY));
+			}
+			if (!java.util.Objects.equals(s.tooltip, getToolTipText()))
+			{
+				setToolTipText(s.tooltip);
+			}
 			if (s.shareFraction != share || !s.colour.equals(colour))
 			{
 				share = s.shareFraction;
@@ -615,7 +656,7 @@ final class SidePanelParts
 		@Override
 		protected void paintComponent(Graphics g)
 		{
-			g.setColor(SidePanelStyle.CARD);
+			g.setColor(hover ? SidePanelStyle.SELECTED : SidePanelStyle.CARD);
 			g.fillRect(0, 0, getWidth(), getHeight());
 			g.setColor(SidePanelStyle.alpha(colour, 0.30));
 			g.fillRect(0, 0, (int) Math.round(getWidth() * Math.max(0, Math.min(1, share))), getHeight());

@@ -452,6 +452,17 @@ final class PanelSnapshot
 		/** The row's icon: an item's image ({@code ItemManager}), else a sprite ({@code SpriteManager}); -1 for none. */
 		final int itemId;
 		final int spriteId;
+		/** T-085: the sub-line's shorter forms, longest first, drawn where it doesn't fit; empty for none. */
+		final List<String> subShort;
+		/** T-085: under the damage on the right: the share, or the row's DPS in the layout that puts it there. */
+		final String right;
+		/** T-085: a third line under the sub-line, in the layout that has one; null for none. */
+		final String third;
+		/** T-085: the row's details on hover (attacks, accuracy, hits, expected), or null. */
+		final String tooltip;
+		/** T-085: the row's DPS and expected DPS ({@code 6.1}, {@code 7.1}), or null: for tests. */
+		final String dps;
+		final String expectedDps;
 
 		Source(String name, String sub, String damage, String share, double shareFraction, Color colour)
 		{
@@ -461,14 +472,26 @@ final class PanelSnapshot
 		Source(String name, String sub, String damage, String share, double shareFraction, Color colour, int itemId,
 			int spriteId)
 		{
+			this(name, sub, null, damage, share, null, null, shareFraction, colour, itemId, spriteId, null, null, null);
+		}
+
+		Source(String name, String sub, List<String> subShort, String damage, String share, String right, String third,
+			double shareFraction, Color colour, int itemId, int spriteId, String tooltip, String dps, String expectedDps)
+		{
 			this.name = name;
 			this.sub = sub;
+			this.subShort = subShort == null ? Collections.<String>emptyList() : subShort;
 			this.damage = damage;
 			this.share = share;
+			this.right = right == null ? share : right;
+			this.third = third;
 			this.shareFraction = shareFraction;
 			this.colour = colour;
 			this.itemId = itemId;
 			this.spriteId = spriteId;
+			this.tooltip = tooltip;
+			this.dps = dps;
+			this.expectedDps = expectedDps;
 		}
 	}
 
@@ -620,6 +643,19 @@ final class PanelSnapshot
 			this.hint = hint;
 			this.rows = list(rows);
 		}
+
+		/** T-085: whether any row has a third line. */
+		boolean anyThird()
+		{
+			for (Source r : rows)
+			{
+				if (r.third != null)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
 	}
 
 	/** The Fight tab: every section, null where it isn't shown. */
@@ -709,6 +745,17 @@ final class PanelSnapshot
 			s.append(noCurve == null ? "" : "|nc");
 			s.append(execution == null ? "" : "|e" + execution.parts.size());
 			s.append(damage == null ? "" : "|d" + damage.rows.size());
+			if (damage != null)
+			{
+				// T-085: which rows have a third line, in the layout that has one.
+				if (damage.anyThird())
+				{
+					for (Source r : damage.rows)
+					{
+						s.append(r.third != null ? '3' : '-');
+					}
+				}
+			}
 			s.append(later == null ? "" : "|lt");
 			s.append(chart == null ? "" : chart.expectedShown ? "|ch" : "|chx");
 			s.append(chart != null && chart.rangeShown ? "r" : "");

@@ -47,6 +47,11 @@ public final class SidePanelPictures
 			textModes(out);
 			return;
 		}
+		if (args.length > 1 && "dps".equals(args[1]))
+		{
+			dpsLayouts(out);
+			return;
+		}
 		if (args.length > 2 && "icons".equals(args[1]))
 		{
 			bossIcons(out, Paths.get(args[2]));
@@ -114,6 +119,10 @@ public final class SidePanelPictures
 			write(out, "19b-no-allowances", scale, render(SidePanelExamples.dead(), scale));
 			write(out, "19c-old-kill", scale, renderHistory(true, scale));
 			write(out, "18d-at-its-floor-card", scale, card(SidePanelExamples.atItsFloor(), scale, "defence"));
+			// T-085: each weapon's DPS on the Damage card, and a row's details on hover.
+			write(out, "20a-sire-weapons-dps", scale, render(SidePanelExamples.sireWeapons(), scale));
+			write(out, "20b-leviathan-weapons-dps", scale, render(SidePanelExamples.leviathanWeapons(), scale));
+			write(out, "20c-weapon-tooltip", scale, tooltip(SidePanelExamples.sireWeapons(), 0, scale));
 		}
 	}
 
@@ -466,6 +475,74 @@ public final class SidePanelPictures
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
 		styled(panel);
 		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/**
+	 * T-085: the Damage card's DPS layouts, for Eric to pick: the Sire and Leviathan kills in each, with T-053's settings
+	 * off and Smooth, at 1× and 2×, the card alone.
+	 */
+	private static void dpsLayouts(Path out) throws IOException
+	{
+		for (SidePanelModel.DpsLayout layout : SidePanelModel.DpsLayout.values())
+		{
+			SidePanelModel.dpsLayout = layout;
+			for (int m = 0; m < 2; m++)
+			{
+				smooth = m == 1;
+				final Path dir = out.resolve(layout.name().toLowerCase(java.util.Locale.ENGLISH) + (smooth ? "-smooth" : ""));
+				Files.createDirectories(dir);
+				for (double scale : new double[]{1, 2})
+				{
+					write(dir, "a-sire", scale, card(SidePanelExamples.sireWeapons(), scale, "damage"));
+					write(dir, "b-leviathan", scale, card(SidePanelExamples.leviathanWeapons(), scale, "damage"));
+				}
+			}
+		}
+		SidePanelModel.dpsLayout = SidePanelModel.DpsLayout.SUB_LINE;
+		smooth = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-085: row {@code index}'s tooltip on the Damage card, as Swing draws it, under the card with the row hovered. */
+	static BufferedImage tooltip(SidePanelModel.Input in, int index, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		final java.util.List<SidePanelParts.SourceRowView> rows = new java.util.ArrayList<>();
+		for (Component k : all(panel.fightTab()))
+		{
+			if (k instanceof SidePanelParts.SourceRowView)
+			{
+				rows.add((SidePanelParts.SourceRowView) k);
+			}
+		}
+		final SidePanelParts.SourceRowView row = rows.get(index);
+		row.dispatchEvent(new java.awt.event.MouseEvent(row, java.awt.event.MouseEvent.MOUSE_ENTERED, 0L, 0, 2, 2, 0,
+			false));
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection section = sectionOf(panel.fightTab(), "damage");
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final BufferedImage card = whole.getSubimage(0, (int) Math.floor((top + r.y) * scale),
+			(int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), (int) Math.ceil(r.height * scale));
+		final javax.swing.JToolTip tip = row.createToolTip();
+		tip.setTipText(row.getToolTipText());
+		tip.setSize(tip.getPreferredSize());
+		layout(tip);
+		final int w = Math.max(card.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
+		final BufferedImage img = new BufferedImage(w, card.getHeight() + (int) Math.ceil((tip.getHeight() + 8) * scale),
+			BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		g.drawImage(card, 0, 0, null);
+		g.translate(0, card.getHeight() + 4 * scale);
+		g.scale(scale, scale);
+		tip.printAll(g);
+		g.dispose();
+		return img;
 	}
 
 	/** One section of the Fight tab, cut out of its render: its header and card. */
