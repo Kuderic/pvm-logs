@@ -27,6 +27,8 @@ final class LedgerRows
 	static final double SECONDS_PER_TICK = 0.6;
 	/** The eating row's label (T-038). */
 	static final String EATING = " eating";
+	/** T-080: idle time a boss's mechanic forced (T-074), neutral like eating: {@code  mechanics  6 s}. */
+	static final String MECHANICS = " mechanics";
 	/** T-051's rows: the target's Defence and Magic, the drains' worth over a raid or trip, and the specials' luck. */
 	static final String DEFENCE = " defence";
 	static final String MAGIC = " magic";
@@ -365,6 +367,16 @@ final class LedgerRows
 		int ticksLostEating();
 
 		/**
+		 * T-074/T-080: idle ticks a boss's mechanic forced, inside its allowance:
+		 * neither lost nor attacking. 0 for a boss with no allowances and for kills
+		 * saved before T-074.
+		 */
+		default int ticksMechanics()
+		{
+			return 0;
+		}
+
+		/**
 		 * T-041/T-043: the eating ticks the avoidable hits cost, over the ended
 		 * fights at a boss with attack rules; -1 when none (a running fight, no
 		 * rules, a kill saved before T-041).
@@ -574,6 +586,12 @@ final class LedgerRows
 				return room.getTicksLostEating();
 			}
 
+			@Override
+			public int ticksMechanics()
+			{
+				return room.getTicksMechanics();
+			}
+
 			public double avoidableEatingTicks()
 			{
 				return room.getAvoidableEatingTicks();
@@ -772,6 +790,12 @@ final class LedgerRows
 				return raid.getTicksLostEating();
 			}
 
+			@Override
+			public int ticksMechanics()
+			{
+				return raid.getTicksMechanics();
+			}
+
 			public double avoidableEatingTicks()
 			{
 				return raid.getAvoidableEatingTicks();
@@ -953,6 +977,12 @@ final class LedgerRows
 			public int ticksLostEating()
 			{
 				return trip.getTicksLostEating();
+			}
+
+			@Override
+			public int ticksMechanics()
+			{
+				return trip.getTicksMechanics();
 			}
 
 			public double avoidableEatingTicks()
@@ -1191,6 +1221,11 @@ final class LedgerRows
 		 */
 		final double eatingCost;
 		/**
+		 * T-080: the idle seconds a boss's mechanic forced (T-074). Out of uptime
+		 * and out of the setup's time, as eating is; never a cost.
+		 */
+		final double mechanicsCost;
+		/**
 		 * T-043: the eating the avoidable hits cost, in seconds, and its share
 		 * kept (1 − avoidable eating ticks ÷ combat ticks); NaN when unknown (a
 		 * running fight, no attack rules, an old kill).
@@ -1245,6 +1280,7 @@ final class LedgerRows
 			uptime = lostShare < 0 ? Double.NaN : 1 - (lost == 0 ? lostShare : lostShare * idle / lost);
 			uptimeCost = idle * SECONDS_PER_TICK;
 			eatingCost = eating * SECONDS_PER_TICK;
+			mechanicsCost = Math.max(0, s.ticksMechanics()) * SECONDS_PER_TICK;
 
 			efficiency = s.efficiency();
 			final boolean setupKnown = efficiency >= 0;
@@ -1257,10 +1293,10 @@ final class LedgerRows
 			avoidableEatingCost = avoidableKnown ? avoidableTicks * SECONDS_PER_TICK : Double.NaN;
 			avoidableEatingShare = avoidableKnown ? Math.max(0, 1 - avoidableTicks / ticks) : Double.NaN;
 			execution = avoidableKnown ? executionLive * avoidableEatingShare : executionLive;
-			// The setup applies to the time you were attacking: neither idle nor eating. The same number as before T-038, when
-			// uptime's seconds held the eating too.
-			setupCost = setupKnown ? Math.max(0, clock - uptimeCost - eatingCost) * Math.max(0, 1 - efficiency)
-				: Double.NaN;
+			// The setup applies to the time you were attacking: neither idle nor eating, nor held off by a boss's mechanic
+			// (T-080). The same number as before T-038, when uptime's seconds held the eating too.
+			setupCost = setupKnown ? Math.max(0, clock - uptimeCost - eatingCost - mechanicsCost)
+				* Math.max(0, 1 - efficiency) : Double.NaN;
 
 			final int made = s.attacksMade();
 			split = setupKnown && s.boostShare() >= 0 && made > 0;
@@ -1570,6 +1606,7 @@ final class LedgerRows
 			// Under Execution too (Eric, 2026-10-26): the damage you took. Your own HP, nothing about the boss.
 			rows.add(damageTaken(scope, avoidable));
 			eating(rows, n, avoidable);
+			mechanics(rows, n);
 		}
 	}
 
@@ -1688,6 +1725,22 @@ final class LedgerRows
 		if (seconds >= 1)
 		{
 			rows.add(detail(EATING, seconds + " s", Colour.NEUTRAL));
+		}
+	}
+
+	/**
+	 * T-080: {@code  mechanics  6 s}, the idle time a boss's mechanic forced on
+	 * you (T-074: the Leviathan's stun and specials), live and after the fight,
+	 * once it rounds to a second. Beside eating and neutral like it: neither
+	 * uptime lost nor attacking. Nothing for a boss with no allowances, or an old
+	 * kill.
+	 */
+	private static void mechanics(List<Row> rows, Numbers n)
+	{
+		final long seconds = roundHalfAway(n.mechanicsCost);
+		if (seconds >= 1)
+		{
+			rows.add(detail(MECHANICS, seconds + " s", Colour.NEUTRAL));
 		}
 	}
 

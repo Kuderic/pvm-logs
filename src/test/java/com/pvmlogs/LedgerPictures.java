@@ -61,6 +61,16 @@ public final class LedgerPictures
 		final LedgerExamples.FakeScope raid = LedgerExamples.raid();
 		raid.damageVariance = 40_000;
 		s.put("6-raid", LedgerRows.build(raid, LedgerRows.State.raid("Tombs of Amascut", 3, false, false), all));
+		// T-080: a Leviathan kill whose stun and specials held the player off for 10 ticks, with every part and Costing only.
+		final LedgerExamples.FakeScope leviathan = LedgerExamples.kill();
+		leviathan.damageVariance = 11436;
+		leviathan.ticksMechanics = 10;
+		s.put("31-leviathan-mechanics", LedgerRows.build(leviathan, LedgerRows.State.fight("The Leviathan", true, true,
+			false), all));
+		final LedgerRows.Settings costingOnly = new LedgerRows.Settings();
+		costingOnly.parts = ExecutionParts.COSTING;
+		s.put("32-leviathan-costing", LedgerRows.build(leviathan, LedgerRows.State.fight("The Leviathan", false, false,
+			false), costingOnly));
 		// T-075: the trip's drains and specs, in words.
 		final LedgerExamples.FakeScope tripDrains = LedgerExamples.trip();
 		tripDrains.damageVariance = 60_000;
