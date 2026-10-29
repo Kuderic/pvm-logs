@@ -50,9 +50,24 @@ public class LedgerRowsTest
 		return d(left, right, NEUTRAL);
 	}
 
+	/**
+	 * The title: a boss's name in its colour (Eric, 2026-10-28), killed or not; a raid's in the raid's; anything
+	 * else white.
+	 */
 	private static Row title(String left, String clock)
 	{
-		return r(left, clock, EMPHASIS, EMPHASIS, NEUTRAL, NEUTRAL);
+		final String name = left.replaceAll(" \\((dead|ended)\\)$", "");
+		int rgb = BossColours.of(name);
+		if (name.startsWith("CoX \u00b7"))
+		{
+			rgb = BossColours.of("Chambers of Xeric");
+		}
+		else if (name.startsWith("ToA \u00b7"))
+		{
+			rgb = BossColours.of("Tombs of Amascut");
+		}
+		return rgb < 0 ? r(left, clock, EMPHASIS, EMPHASIS, NEUTRAL, NEUTRAL)
+			: new Row(left, clock, EMPHASIS, EMPHASIS, LedgerRows.Colour.BOSS, NEUTRAL, null, null, rgb);
 	}
 
 	/** Luck and Damage: bold label, regular value (T-073; Eric, 2026-10-26: the main rows' labels are bold). */
@@ -153,7 +168,7 @@ public class LedgerRowsTest
 	{
 		// Eric's kill. 688 + thrall 80 - healed 68 = 700, the boss's HP.
 		assertRows(Arrays.asList(
-			r("Vardorvis (dead)", "2:16", EMPHASIS, EMPHASIS, DEAD, NEUTRAL),
+			title("Vardorvis (dead)", "2:16"),
 			emph("Luck", "14 s slower", COST),
 			damage("688/778", COST),
 			main("Execution", "87%"),
@@ -899,7 +914,7 @@ public class LedgerRowsTest
 	{
 		assertEquals(title("Vardorvis", "1:13"),
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)).get(0));
-		assertEquals(r("Vardorvis (dead)", "2:16", EMPHASIS, EMPHASIS, DEAD, NEUTRAL),
+		assertEquals(title("Vardorvis (dead)", "2:16"),
 			build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false)).get(0));
 		assertEquals(title("Vardorvis (ended)", "2:16"),
 			build(LedgerExamples.kill(), State.fight("Vardorvis", true, false, false)).get(0));

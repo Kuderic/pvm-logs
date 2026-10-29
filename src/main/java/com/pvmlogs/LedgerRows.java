@@ -59,6 +59,8 @@ final class LedgerRows
 	static final String WARNING_TEXT = "! Boss data unsure";
 	/** The main row the details sit under once the fight is over (Eric, 2026-10-26). */
 	static final String SUMMARY = "Summary";
+	/** After the title's name once its kill has happened. */
+	static final String DEAD_SUFFIX = " (dead)";
 	/**
 	 * The title's clock (T-073): the title is the one row whose figure stays
 	 * bold, as the box's heading, while every other main row's figure is
@@ -113,7 +115,13 @@ final class LedgerRows
 		BETTER(0x5CFFFF),
 		COST(0xFFB366),
 		WARNING(0xFFFF00),
-		DEAD(0xFF7070);
+		DEAD(0xFF7070),
+		/**
+		 * A boss's name heading the overlay (Eric, 2026-10-28): its own themed
+		 * colour, carried on the row ({@link Row#leftRgb}), this accent where it has
+		 * none. See {@link BossColours}.
+		 */
+		BOSS(BossColours.ACCENT);
 
 		final int rgb;
 
@@ -144,6 +152,8 @@ final class LedgerRows
 		 * Luck row's {@code bottom 20%} without its seconds); null for none.
 		 */
 		final String shortRight;
+		/** A boss's own colour for the left side ({@link Colour#BOSS}), or -1: the left colour's own. */
+		final int leftRgb;
 
 		Row(String left, String right, FontRole leftFont, FontRole rightFont, Colour leftColour, Colour rightColour)
 		{
@@ -159,6 +169,13 @@ final class LedgerRows
 		Row(String left, String right, FontRole leftFont, FontRole rightFont, Colour leftColour, Colour rightColour,
 			String shortLeft, String shortRight)
 		{
+			this(left, right, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight, -1);
+		}
+
+		Row(String left, String right, FontRole leftFont, FontRole rightFont, Colour leftColour, Colour rightColour,
+			String shortLeft, String shortRight, int leftRgb)
+		{
+			this.leftRgb = leftRgb;
 			this.left = left == null ? "" : left;
 			this.right = right == null ? "" : right;
 			this.leftFont = leftFont;
@@ -172,18 +189,40 @@ final class LedgerRows
 		/** This row with its left side swapped, e.g. for a shortened name; the rest as it was. */
 		Row withLeft(String newLeft)
 		{
-			return new Row(newLeft, right, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight);
+			return new Row(newLeft, right, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight, leftRgb);
 		}
 
 		/** This row with its right side swapped for its short form; the rest as it was. */
 		Row withRight(String newRight)
 		{
-			return new Row(left, newRight, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight);
+			return new Row(left, newRight, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight, leftRgb);
 		}
 
 		boolean isBlank()
 		{
 			return left.isEmpty() && right.isEmpty();
+		}
+
+		/** The left side's colour as drawn: a boss's own, else its colour role's. */
+		int leftRgb()
+		{
+			return leftRgb >= 0 ? leftRgb : leftColour.rgb;
+		}
+
+		/**
+		 * The left side as drawn: a boss's title after its kill has the word
+		 * "(dead)" in Dead's red and the name in the boss's colour (Eric,
+		 * 2026-10-28: "show only the '(dead)' word in red, so you get both
+		 * signals"), by RuneLite's colour tag. Widths are measured without tags.
+		 */
+		String drawnLeft()
+		{
+			if (leftColour != Colour.BOSS || !left.endsWith(DEAD_SUFFIX))
+			{
+				return left;
+			}
+			final int at = left.length() - DEAD_SUFFIX.length() + 1;
+			return left.substring(0, at) + String.format("<col=%06x>", Colour.DEAD.rgb) + left.substring(at);
 		}
 
 		@Override
@@ -196,19 +235,20 @@ final class LedgerRows
 			final Row r = (Row) o;
 			return left.equals(r.left) && right.equals(r.right) && leftFont == r.leftFont && rightFont == r.rightFont
 				&& leftColour == r.leftColour && rightColour == r.rightColour && Objects.equals(shortLeft, r.shortLeft)
-				&& Objects.equals(shortRight, r.shortRight);
+				&& Objects.equals(shortRight, r.shortRight) && leftRgb == r.leftRgb;
 		}
 
 		@Override
 		public int hashCode()
 		{
-			return Objects.hash(left, right, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight);
+			return Objects.hash(left, right, leftFont, rightFont, leftColour, rightColour, shortLeft, shortRight, leftRgb);
 		}
 
 		@Override
 		public String toString()
 		{
-			return String.format("[%s|%s %s/%s %s/%s]", left, right, leftFont, rightFont, leftColour, rightColour);
+			return String.format("[%s|%s %s/%s %s%s/%s]", left, right, leftFont, rightFont, leftColour,
+				leftRgb >= 0 ? String.format("#%06X", leftRgb) : "", rightColour);
 		}
 	}
 
@@ -994,16 +1034,22 @@ final class LedgerRows
 		final LedgerHistory.Average average;
 		/** T-051: the running fight's target as tracked now, or null: nothing drained yet, immune, or not running. */
 		final LiveDrain drain;
+		/**
+		 * The title's colour where the name alone can't say it: a raid's room takes
+		 * its raid's (Eric, 2026-10-28). -1: from the name ({@link BossColours#of(String)}).
+		 */
+		final int titleRgb;
 
 		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
 			LedgerHistory.Average average)
 		{
-			this(view, name, count, ended, killed, warning, average, null);
+			this(view, name, count, ended, killed, warning, average, null, -1);
 		}
 
 		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
-			LedgerHistory.Average average, LiveDrain drain)
+			LedgerHistory.Average average, LiveDrain drain, int titleRgb)
 		{
+			this.titleRgb = titleRgb;
 			this.view = view;
 			this.name = name == null ? "" : name;
 			this.count = count;
@@ -1037,13 +1083,25 @@ final class LedgerRows
 		/** The same state with your usual time on the boss, for the details after a kill. */
 		State withAverage(LedgerHistory.Average average)
 		{
-			return new State(view, name, count, ended, killed, warning, average, drain);
+			return new State(view, name, count, ended, killed, warning, average, drain, titleRgb);
+		}
+
+		/** The same state with the title in this colour, or -1 for the name's own; a raid's room takes the raid's. */
+		State withTitleRgb(int rgb)
+		{
+			return new State(view, name, count, ended, killed, warning, average, drain, rgb);
+		}
+
+		/** The colour the title's name is drawn in: the given one, else the name's, else -1 for none. */
+		int titleColour()
+		{
+			return titleRgb >= 0 ? titleRgb : BossColours.of(name);
 		}
 
 		/** The same state with the running fight's tracked Defence and Magic (T-051). */
 		State withDrain(LiveDrain drain)
 		{
-			return new State(view, name, count, ended, killed, warning, average, drain);
+			return new State(view, name, count, ended, killed, warning, average, drain, titleRgb);
 		}
 	}
 
@@ -1241,7 +1299,7 @@ final class LedgerRows
 		{
 			case PRE_ATTACK:
 				// The title alone: the loadout overlay carries the figures (T-022).
-				rows.add(row(state.name, "", FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL));
+				rows.add(titleRow(state.name, "", state, Colour.NEUTRAL));
 				return rows;
 			default:
 				break;
@@ -1400,14 +1458,26 @@ final class LedgerRows
 				return row("Trip" + DOT + plural(state.count, "kill"), clock(ticks),
 					FontRole.EMPHASIS, TITLE_CLOCK, Colour.NEUTRAL, Colour.NEUTRAL);
 			case RAID:
-				return row(raidShortName(state.name) + DOT + plural(state.count, "room"), clock(ticks),
-					FontRole.EMPHASIS, TITLE_CLOCK, Colour.NEUTRAL, Colour.NEUTRAL);
+				return titleRow(raidShortName(state.name) + DOT + plural(state.count, "room"), clock(ticks), state,
+					Colour.NEUTRAL);
 			default:
 				final String name = !state.ended ? state.name
-					: state.name + (state.killed ? " (dead)" : " (ended)");
-				return row(name, clock(ticks),
-					FontRole.EMPHASIS, TITLE_CLOCK, state.killed ? Colour.DEAD : Colour.NEUTRAL, Colour.NEUTRAL);
+					: state.name + (state.killed ? DEAD_SUFFIX : " (ended)");
+				return titleRow(name, clock(ticks), state, state.killed ? Colour.DEAD : Colour.NEUTRAL);
 		}
+	}
+
+	/**
+	 * The title row, its name in the boss's colour (Eric, 2026-10-28), killed
+	 * or not: the words "(dead)" say that. Anything that isn't a boss keeps
+	 * {@code otherwise}: white, or Dead's red after its kill.
+	 */
+	private static Row titleRow(String left, String right, State state, Colour otherwise)
+	{
+		final int rgb = state.titleColour();
+		return rgb < 0
+			? row(left, right, FontRole.EMPHASIS, TITLE_CLOCK, otherwise, Colour.NEUTRAL)
+			: new Row(left, right, FontRole.EMPHASIS, TITLE_CLOCK, Colour.BOSS, Colour.NEUTRAL, null, null, rgb);
 	}
 
 	private static void top(List<Row> rows, Numbers n, Scope scope, State state, Settings settings)

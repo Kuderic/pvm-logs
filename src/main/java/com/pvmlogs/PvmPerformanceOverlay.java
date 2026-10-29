@@ -160,7 +160,9 @@ class PvmPerformanceOverlay extends OverlayPanel
 		final LedgerRows.State state;
 		if (isBeforeFirstAttack(fight, room))
 		{
-			state = LedgerRows.State.preAttack(fight.encounterName());
+			// A raid's room takes the raid's colour (Eric, 2026-10-28).
+			final int raidRgb = fight.getRaidName() == null ? -1 : BossColours.of(fight.getRaidName());
+			state = LedgerRows.State.preAttack(fight.encounterName()).withTitleRgb(raidRgb);
 		}
 		else
 		{
@@ -228,11 +230,11 @@ class PvmPerformanceOverlay extends OverlayPanel
 			widest = Math.max(widest, leftMetrics.stringWidth(Text.removeTags(row.left))
 				+ rightMetrics.stringWidth(Text.removeTags(row.right)));
 			components.add(LineComponent.builder()
-				.left(row.left)
+				.left(row.drawnLeft())
 				.right(row.right)
 				.leftFont(left)
 				.rightFont(right)
-				.leftColor(new Color(row.leftColour.rgb))
+				.leftColor(new Color(row.leftRgb()))
 				.rightColor(new Color(row.rightColour.rgb))
 				.build());
 		}
@@ -408,7 +410,9 @@ class PvmPerformanceOverlay extends OverlayPanel
 		final boolean over = isOver(fight, room);
 		final boolean killed = over && room.isKilled();
 		return LedgerRows.State.fight(room.getName(), over, killed, warning)
-			.withAverage(killed && room.getRaid() == null ? average.apply(room) : null);
+			.withAverage(killed && room.getRaid() == null ? average.apply(room) : null)
+			// A raid's room takes the raid's colour (Eric, 2026-10-28).
+			.withTitleRgb(BossColours.of(room.getRaid()));
 	}
 
 	/**
