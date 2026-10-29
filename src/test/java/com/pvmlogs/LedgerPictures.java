@@ -298,7 +298,7 @@ public final class LedgerPictures
 					{
 						lines.add(row.isBlank() ? "G" : String.format("L|%s|%s|lf=%s rf=%s lc=%06X rc=%06X",
 							row.left, row.right, roleName(roles.get(row.leftFont)), roleName(roles.get(row.rightFont)),
-							row.leftColour.rgb, row.rightColour.rgb));
+							row.leftRgb(), row.rightColour.rgb));
 					}
 					Files.write(out.resolve(name + ".txt"), lines, StandardCharsets.UTF_8);
 				}
