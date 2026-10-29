@@ -1016,6 +1016,8 @@ final class LedgerRows
 		 * Null with no monster (before any fight, or gone idle): no line.
 		 */
 		String versus;
+		/** The {@code vs} line's colour: the boss's, as the fight overlay's title has it (Eric, 2026-10-28); -1 white. */
+		int versusRgb = -1;
 	}
 
 	/** Which state the overlay is in, beyond the numbers. */
@@ -1386,7 +1388,11 @@ final class LedgerRows
 		{
 			// Straight under the attack (Eric, 2026-10-28), so it reads "Bow of Faerdhinen vs The Leviathan".
 			final String versus = VERSUS + l.versus;
-			rows.add(1, new Row(versus, "", FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL, versus));
+			// In the boss's colour, as the fight overlay's title (Eric, 2026-10-28).
+			rows.add(1, l.versusRgb < 0
+				? new Row(versus, "", FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL, versus)
+				: new Row(versus, "", FontRole.DETAIL, FontRole.DETAIL, Colour.BOSS, Colour.NEUTRAL, versus, null,
+					l.versusRgb));
 		}
 		return rows;
 	}

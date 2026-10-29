@@ -147,7 +147,28 @@ class LoadoutOverlay extends OverlayPanel
 	{
 		final LedgerRows.Loadout l = loadout(plugin);
 		l.versus = versus(fight);
+		l.versusRgb = versusColour(fight);
 		return l;
+	}
+
+	/**
+	 * The {@code vs} line's colour (Eric, 2026-10-28): the boss's, as the fight
+	 * overlay's title has it. A raid's rooms take the raid's; a boss's part or
+	 * add takes its room's (Dusk the Grotesque Guardians'); else the target's
+	 * own; -1 (white) for anything that isn't a boss.
+	 */
+	static int versusColour(Fight fight)
+	{
+		if (fight == null)
+		{
+			return -1;
+		}
+		if (fight.getRaidName() != null)
+		{
+			return BossColours.of(fight.getRaidName());
+		}
+		final int room = BossColours.of(fight.encounterName());
+		return room >= 0 ? room : BossColours.of(fight.getTargetName());
 	}
 
 	/**

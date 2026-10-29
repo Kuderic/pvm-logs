@@ -169,6 +169,7 @@ public final class LedgerPictures
 		final LedgerRows.Loadout blowpipe = new LedgerRows.Loadout();
 		blowpipe.attack = "Toxic blowpipe";
 		blowpipe.versus = "Dusk";
+		blowpipe.versusRgb = BossColours.of("Grotesque Guardians");
 		blowpipe.maxHit = 27;
 		blowpipe.accuracy = 0.58;
 		blowpipe.dps = 6.4;
@@ -184,6 +185,7 @@ public final class LedgerPictures
 		final LedgerRows.Loadout queen = LedgerExamples.loadout();
 		queen.attack = "Toxic blowpipe";
 		queen.versus = "Eldric the Fire Queen";
+		queen.versusRgb = BossColours.of("The Royal Titans");
 		s.put("28-dps-narrow", LedgerRows.loadout(queen, false));
 		// T-022: the loadout overlay under the Ledger, in the states it's worth seeing in. Each is drawn as its own picture,
 		// "<state>.L", which the sheet stacks under the Ledger's as RuneLite stacks the two boxes.
@@ -208,6 +210,7 @@ public final class LedgerPictures
 		final LedgerRows.Loadout tentacle = LedgerExamples.loadout();
 		// T-073: the DPS overlay names the monster.
 		tentacle.versus = "Vardorvis";
+		tentacle.versusRgb = BossColours.of("Vardorvis");
 		// Without monster data there is no accuracy to show; the max hit is known.
 		final LedgerRows.Loadout fang = new LedgerRows.Loadout();
 		fang.attack = "Osmumten's fang";
