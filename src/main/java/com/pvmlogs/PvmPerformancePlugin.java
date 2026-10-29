@@ -142,7 +142,7 @@ public class PvmPerformancePlugin extends Plugin
 	private static final int AOE_WINDOW_TICKS = 5;
 	// How many ticks after an attack goes out it is booked. Measured, not reasoned about: with a flick on the attack tick
 	// the mark lands two ticks below the booking tick for a projectile and one for a melee blow.
-	private static final int MELEE_BOOKING_LAG = 1;
+	static final int MELEE_BOOKING_LAG = 1;
 	private static final int PROJECTILE_BOOKING_LAG = 2;
 	// None at all for a cast with no projectile, which is booked from the caster's animation and so is seen on the tick it
 	// goes out.
@@ -404,16 +404,16 @@ public class PvmPerformancePlugin extends Plugin
 	// The expected figures as they stood on each of the last few ticks, so an attack can be scored with the loadout that
 	// actually threw it. Each row carries the ordinary figures AND the special's, because which of the two an attack needs
 	// is not known until it is booked - see sampleExpected.
-	private static final int EXP_MAX = 0;
-	private static final int EXP_ACCURACY = 1;
+	static final int EXP_MAX = 0;
+	static final int EXP_ACCURACY = 1;
 	private static final int EXP_AVERAGE = 2;
-	private static final int EXP_NPC_ID = 3;
+	static final int EXP_NPC_ID = 3;
 	private static final int EXP_SPEC_MAX = 4;
 	private static final int EXP_SPEC_ACCURACY = 5;
 	private static final int EXP_SPEC_AVERAGE = 6;
 	private static final int EXP_VARIANCE = 7;
 	private static final int EXP_SPEC_VARIANCE = 8;
-	private static final int EXP_WIDTH = 9;
+	static final int EXP_WIDTH = 9;
 	private final Map<Integer, double[]> expectedByTick = new HashMap<>();
 	// The tick the special attack energy last fell, which is the tick a special went out on. Read back at the booking
 	// rather than at the sample: the varp can arrive after the tick's onGameTick has already run. How long after the
@@ -2794,9 +2794,10 @@ public class PvmPerformancePlugin extends Plugin
 		// tick before swapping to a blowpipe surfaced with the blowpipe held and was scored as it, origin row and all.
 		// A shot that dropped a spell click that never cast takes the figures read once the click was gone (T-078): every
 		// row while it was in hand has the spell's.
-		final boolean originIsAuthoritative = (attackObservedFromProjectile || beforeSwitch) && !attackDroppedCast
-			&& atOrigin != null && (int) atOrigin[EXP_NPC_ID] == targetId
-			&& atOrigin[EXP_ACCURACY] >= 0;
+		// A melee punish takes its throw's row too (T-086): the punish window is the tick it was thrown on, and figures read
+		// at its hitsplat are an ordinary swing's.
+		final boolean originIsAuthoritative = scoresFromRow(attackObservedFromProjectile, beforeSwitch, punishedAttack(),
+			attackDroppedCast, atOrigin, targetId);
 		if (originIsAuthoritative)
 		{
 			maxHit = (int) atOrigin[EXP_MAX];
@@ -2878,7 +2879,8 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f, var %.1f%s",
 			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance,
-			originIsAuthoritative && beforeSwitch ? beforeSwitchNote(figuresTick) : "");
+			originIsAuthoritative && beforeSwitch ? beforeSwitchNote(figuresTick)
+				: originIsAuthoritative && punishedAttack() ? " (a punish, from its throw's row on tick " + figuresTick + ")" : "");
 		// Only an ordinary one-splat attack's max can be checked against a single splat (T-056).
 		final boolean checkable = !special && combatCalc.maxIsOneSplat();
 		// The special in hand on the tick it was thrown, for its drain's outcomes (T-050).
@@ -3496,19 +3498,50 @@ public class PvmPerformancePlugin extends Plugin
 	static int scoringTick(int beforeSwitchTick, boolean fromProjectile, boolean thrownHasFigures, int thrownTick,
 		int originTick)
 	{
+		return scoringTick(beforeSwitchTick, fromProjectile, false, thrownHasFigures, thrownTick, originTick);
+	}
+
+	/**
+	 * As above, for a melee punish too (T-086): it is scored from its throw's
+	 * row, where its one-tick window is open. Its hitsplat's tick, where the
+	 * figures of a melee blow are otherwise read, is a tick past it.
+	 */
+	static int scoringTick(int beforeSwitchTick, boolean fromProjectile, boolean punish, boolean thrownHasFigures,
+		int thrownTick, int originTick)
+	{
 		if (beforeSwitchTick != Integer.MIN_VALUE)
 		{
 			return beforeSwitchTick;
 		}
-		return fromProjectile && thrownHasFigures ? thrownTick : originTick;
+		return (fromProjectile || punish) && thrownHasFigures ? thrownTick : originTick;
 	}
 
 	private int scoringTick()
 	{
 		// Not the throw's row for a shot that dropped a spell click that never cast: that tick's figures were worked out
 		// with the click in hand, so the bow's 35 was judged against Shadow Rush's 14 (Eric's 05:01 log, [314]-[317]).
-		return scoringTick(attackFiguresTick, attackObservedFromProjectile && !attackDroppedCast,
+		return scoringTick(attackFiguresTick, attackObservedFromProjectile && !attackDroppedCast, punishedAttack(),
 			expectedByTick.containsKey(attackThrownTick), attackThrownTick, attackOriginTick);
+	}
+
+	/** Whether the attack being booked is a melee punish (T-086): thrown on its tick, and proven by no cast or shot. */
+	private boolean punishedAttack()
+	{
+		return attackIsPunish && !attackObservedFromCast && !attackObservedFromProjectile;
+	}
+
+	/**
+	 * Whether an attack is scored from the row of {@code figuresTick} rather
+	 * than the figures read when it was seen: a projectile, or an attack thrown
+	 * before a switch (T-065), or a melee punish (T-086), where that row is the
+	 * target's and was worked out. A shot that dropped a spell click that never
+	 * cast never is (T-078).
+	 */
+	static boolean scoresFromRow(boolean fromProjectile, boolean beforeSwitch, boolean punish, boolean droppedCast,
+		double[] row, int targetId)
+	{
+		return (fromProjectile || beforeSwitch || punish) && !droppedCast && row != null
+			&& (int) row[EXP_NPC_ID] == targetId && row[EXP_ACCURACY] >= 0;
 	}
 
 	/** Whether this spell starts one of this npc's damage-modifier states (T-057's stun). */
@@ -4007,7 +4040,7 @@ public class PvmPerformancePlugin extends Plugin
 			final Integer threwAt = speedByTick.get(heldTick(attackSwitchTick, attackTick));
 			final int speed = bookedSpeed(attackResetsDelay, attackDroppedCast && attackSwitchTick == Integer.MIN_VALUE,
 				threwAt, combatCalc.attackSpeedTicks());
-			final boolean punished = attackIsPunish && !attackObservedFromCast && !attackObservedFromProjectile;
+			final boolean punished = punishedAttack();
 			attackDueTick = dueAfter(punished, attackDueTick, attackTick, speed);
 			if (punished)
 			{

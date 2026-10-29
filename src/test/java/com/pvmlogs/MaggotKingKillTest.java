@@ -120,6 +120,91 @@ public class MaggotKingKillTest
 	}
 
 	@Test
+	public void oneEntryPerBoss() throws Exception
+	{
+		// BossRules keeps the last entry per npc id, so a second entry for an id drops the first one's rules silently.
+		final java.util.Set<Integer> seen = new java.util.HashSet<>();
+		try (java.io.InputStream in = BossRules.class.getResourceAsStream("boss-rules.json"))
+		{
+			final com.google.gson.JsonObject file = new Gson().fromJson(
+				new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8), com.google.gson.JsonObject.class);
+			for (com.google.gson.JsonElement b : file.getAsJsonArray("bosses"))
+			{
+				final com.google.gson.JsonObject boss = b.getAsJsonObject();
+				for (com.google.gson.JsonElement id : boss.getAsJsonArray("npcIds"))
+				{
+					assertTrue(boss.get("name").getAsString() + ": npc " + id + " is in two entries", seen.add(id.getAsInt()));
+				}
+			}
+		}
+	}
+
+	private static BossRules.StateRule state(String name)
+	{
+		for (BossRules.StateRule s : RULES.forNpc(KING).damageModifiers.states)
+		{
+			if (name.equals(s.name))
+			{
+				return s;
+			}
+		}
+		throw new AssertionError(name);
+	}
+
+	@Test
+	public void theBookingAndTheScoringAgreeOnThePunishTick()
+	{
+		// T-086 books the blow thrown 2 ticks into the slam as the punish; T-087's window opens on the tick it lands, a
+		// melee blow's booking lag later. The two are one tick, or a punish is booked and scored as an ordinary swing.
+		final BossRules.MeleePunish punish = RULES.forNpc(KING).meleePunish;
+		final BossRules.StateRule window = state("punish");
+		assertEquals(window.startDelay, punish.afterTicks + PvmPerformancePlugin.MELEE_BOOKING_LAG);
+		assertEquals(punish.onBossAnim, window.startOnBossAnim[0]);
+		assertEquals(1, window.ticks);
+	}
+
+	@Test
+	public void thePunishIsScoredFromItsThrowsRow()
+	{
+		// The slam starts on 1429; the axe's punish is thrown on 1431 and its splat lands, and books it, on 1432.
+		final BossRules.DamageModifierRules rules = RULES.forNpc(KING).damageModifiers;
+		final ModifierTracker tracker = new ModifierTracker(null);
+		tracker.onBossAnim(KING_INDEX, "Maggot King", rules, AnimationID.MAGGOT_KING_MELEEATTACK, 1429);
+		final ModifierTracker.InsideCheck nowhere = (id, range) -> false;
+		// The row refreshExpected writes on the throw's tick: a blow going out then lands in the punish window.
+		final List<BossRules.ModifierRule> atThrow = tracker.applying(KING_INDEX, rules, KING, "MELEE", 1431, 1432, false,
+			nowhere);
+		// The figures read at the splat, as a melee blow's were: a blow going out then lands a tick past it.
+		final List<BossRules.ModifierRule> atSplat = tracker.applying(KING_INDEX, rules, KING, "MELEE", 1432, 1433, false,
+			nowhere);
+		// The axe's 53 (the log's [458]) is 79 in the punish, and the crush defence roll is cut to 15%.
+		assertEquals(79, ModifierTracker.max(atThrow, 53));
+		final int defenceRoll = (200 + 9) * (45 + 64);
+		assertEquals(defenceRoll * 15 / 100, ModifierTracker.defenceRoll(atThrow, "CRUSH", defenceRoll));
+		assertEquals(53, ModifierTracker.max(atSplat, 53));
+		assertEquals(defenceRoll, ModifierTracker.defenceRoll(atSplat, "CRUSH", defenceRoll));
+
+		// recordAttackObserved marks it a punish; sampleExpected then scores it from the throw's row, not the splat's figures.
+		final int thrown = 1432 - PvmPerformancePlugin.MELEE_BOOKING_LAG;
+		assertTrue(PvmPerformancePlugin.isPunishTick(Collections.singletonList(1429), thrown,
+			RULES.forNpc(KING).meleePunish.afterTicks));
+		assertEquals(1431, PvmPerformancePlugin.scoringTick(Integer.MIN_VALUE, false, true, true, 1431, 1432));
+		final double[] row = new double[PvmPerformancePlugin.EXP_WIDTH];
+		row[PvmPerformancePlugin.EXP_MAX] = ModifierTracker.max(atThrow, 53);
+		row[PvmPerformancePlugin.EXP_ACCURACY] = 0.9;
+		row[PvmPerformancePlugin.EXP_NPC_ID] = KING;
+		assertTrue(PvmPerformancePlugin.scoresFromRow(false, false, true, false, row, KING));
+		assertEquals(79, (int) row[PvmPerformancePlugin.EXP_MAX]);
+		// An ordinary swing is as before: the splat's own tick and figures.
+		assertEquals(1432, PvmPerformancePlugin.scoringTick(Integer.MIN_VALUE, false, false, true, 1431, 1432));
+		assertFalse(PvmPerformancePlugin.scoresFromRow(false, false, false, false, row, KING));
+		// No row for the throw, or one for another target: the splat's figures, never nothing.
+		assertEquals(1432, PvmPerformancePlugin.scoringTick(Integer.MIN_VALUE, false, true, false, 1431, 1432));
+		assertFalse(PvmPerformancePlugin.scoresFromRow(false, false, true, false, row, LARVA));
+		assertFalse(PvmPerformancePlugin.scoresFromRow(false, false, true, false, null, KING));
+	}
+
+	@Test
 	public void thePunishIsTheBlowTwoTicksAfterTheSlam()
 	{
 		// The slams the log shows beside the splats on Eric, and his axe 2 ticks later: 1429 -> 1431, 1434 -> 1436.

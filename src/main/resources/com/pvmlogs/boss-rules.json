@@ -302,11 +302,6 @@
       ]
     },
     {
-      "name": "Maggot King",
-      "npcIds": [15742],
-      "meleePunish": {"onBossAnim": 13925, "afterTicks": 2, "source": "T-086. The wiki (Maggot King/Strategies): on a slam, players 'will automatically attack the boss without incurring an attack delay', clicking 'on the same tick that it extends its head'. 13925 is MAGGOT_KING_MELEEATTACK (gamevals). The 2 ticks are from Eric's log of 2026-10-29: of the 14 starts of 13925 it shows (beside the splats on Eric), 13 have an axe attack of his 2 ticks later. 9 of the 13 came before the axe's 5 ticks were up (899, 904, 909, 1406, 1431, 1436, 1441, 1446, 1914), and the axe's next attack came on its own cadence after each (1432 after 1427 and the punish on 1431), so the punish neither waits for the cooldown nor starts one. Booking only: what it does to accuracy and damage is T-087's."}
-    },
-    {
       "name": "Vorkath",
       "npcIds": [8058, 8059, 8060, 8061],
       "defenceDrain": {
@@ -378,6 +373,7 @@
       "variants": [
         {"version": "Far", "maxHp": 1500, "default": true}
       ],
+      "meleePunish": {"onBossAnim": 13925, "afterTicks": 2, "source": "T-086. The wiki (Maggot King/Strategies): on a slam, players 'will automatically attack the boss without incurring an attack delay', clicking 'on the same tick that it extends its head'. 13925 is MAGGOT_KING_MELEEATTACK (gamevals). The 2 ticks are from Eric's log of 2026-10-29: of the 14 starts of 13925 it shows (beside the splats on Eric), 13 have an axe attack of his 2 ticks later. 9 of the 13 came before the axe's 5 ticks were up (899, 904, 909, 1406, 1431, 1436, 1441, 1446, 1914), and the axe's next attack came on its own cadence after each (1432 after 1427 and the punish on 1431), so the punish neither waits for the cooldown nor starts one. Booking only: what it does to accuracy and damage is T-087's."},
       "damageModifiers": {
         "states": [
           {"name": "slam", "startOnBossAnim": [13925], "ticks": 4, "source": "T-087. OSRS Wiki, read 2026-10-29: Maggot King/Strategies: 'During the slam, its magic defence is temporarily raised from +150 to +400' (the DPS calc's 'Nearby' version). The animation is a fit, not a source: in Eric's log of 2026-10-29 (pvm-debug-20261029-135031) the Maggot King's 13925 starts every 4 to 5 ticks in the melee phase only (below ~65% hitpoints, as the wiki has the slam), and 13 of Eric's melee attacks went out exactly 2 ticks after one, every one landing. How long the magic defence stays raised is not stated: 4 ticks, the slam's length to its punish tick and one after, is a guess."},
