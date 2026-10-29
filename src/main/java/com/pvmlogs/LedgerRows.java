@@ -1614,7 +1614,7 @@ final class LedgerRows
 		}
 		if (costingOnly && rows.size() == before)
 		{
-			rows.add(detail(" no losses", "", Colour.NEUTRAL));
+			rows.add(detail(" no time lost", "", Colour.NEUTRAL));
 		}
 	}
 

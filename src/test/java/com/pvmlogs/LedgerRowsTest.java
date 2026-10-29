@@ -681,7 +681,7 @@ public class LedgerRowsTest
 		final Settings s = new Settings();
 		s.parts = ExecutionParts.COSTING;
 		final List<Row> rows = LedgerRows.build(clean, State.fight("Vardorvis", false, false, false), s);
-		assertEquals(d(" no losses", ""), rows.get(rows.size() - 2));
+		assertEquals(d(" no time lost", ""), rows.get(rows.size() - 2));
 		assertEquals(d(" damage taken", "248"), rows.get(rows.size() - 1));
 	}
 
