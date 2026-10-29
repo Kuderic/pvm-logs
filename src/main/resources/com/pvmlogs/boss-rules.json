@@ -298,7 +298,7 @@
         ]
       },
       "uptimeAllowances": [
-        {"state": "diving", "from": "open", "maxTicks": 8, "afterTicks": 6, "source": "T-084, PROPOSED, for Eric to approve. Zulrah's dives between forms, and getting into position and switching gear for the next form after it emerges. Measured over the same log's 26 counted dives in 5 Zulrah fights (each placed at its emerge: the form change, or 5073 where the form stays; the dive 3 ticks before), idle ticks from the dive to 6 after the emerge: median 6.5, 75th percentile 8, 90th 8.5, most 10. The cap is the 75th percentile."}
+        {"state": "diving", "from": "open", "maxTicks": 8, "afterTicks": 6, "source": "T-084, approved by Eric 2026-10-29 (cap 8). Zulrah's dives between forms, and getting into position and switching gear for the next form after it emerges. Measured over the same log's 26 counted dives in 5 Zulrah fights (each placed at its emerge: the form change, or 5073 where the form stays; the dive 3 ticks before), idle ticks from the dive to 6 after the emerge: median 6.5, 75th percentile 8, 90th 8.5, most 10. The cap is the 75th percentile. Checked on the log's 5 later kills by the Orchestrator, with a looser measure (idle ticks between the last attack before each dive and the first after, 25 dives): median 7, 75th percentile 8, mostly 4-10."}
       ]
     },
     {
