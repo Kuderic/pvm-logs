@@ -85,7 +85,9 @@ public class SidePanelModelTest
 		assertEquals(damage.right, damageTile.value.text);
 		assertEquals(SidePanelStyle.of(damage.rightColour), damageTile.value.colour);
 
-		assertEquals(row(rows, "DPS").right, tile(t, "DPS").value.text);
+		// T-073: the overlay has no DPS row any more; the tile reads the same Numbers the overlay's rows do.
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
+		assertEquals(Double.isNaN(n.dps) ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps), tile(t, "DPS").value.text);
 		assertEquals(row(rows, "Execution").right, tile(t, "Execution").value.text);
 		assertEquals(row(rows, "Execution").right, t.execution.hint.text);
 

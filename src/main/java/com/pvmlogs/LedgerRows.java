@@ -59,6 +59,14 @@ final class LedgerRows
 	static final String WARNING_TEXT = "! Boss data unsure";
 	/** The main row the details sit under once the fight is over (Eric, 2026-10-26). */
 	static final String SUMMARY = "Summary";
+	/**
+	 * The title's clock (T-073): the title is the one row whose figure stays
+	 * bold, as the box's heading, while every other main row's figure is
+	 * regular. Both were rendered for Eric; see the status doc.
+	 */
+	static final FontRole TITLE_CLOCK = FontRole.EMPHASIS;
+	/** The DPS overlay's first line, naming what its figures are against (T-073): {@code vs Dusk}. */
+	static final String VERSUS = "vs ";
 	/** The middle half's edges, for Luck's band and colour (T-029). */
 	static final double LOW_QUARTILE = 0.25;
 	static final double HIGH_QUARTILE = 0.75;
@@ -89,7 +97,13 @@ final class LedgerRows
 		/** The title's name and the Luck and Damage values. */
 		EMPHASIS,
 		/** Sub-rows, the ones whose left text starts with a space. */
-		DETAIL
+		DETAIL,
+		/**
+		 * A main row's figure (T-073, Eric 2026-10-28: "keep bold on the left and
+		 * change the numbers on the right unboldened"): the interface font's
+		 * regular weight, beside a bold label.
+		 */
+		VALUE
 	}
 
 	/** What a colour means. Always beside a sign or a word, never alone: Better and Cost are blue and orange, not green and red. */
@@ -952,6 +966,12 @@ final class LedgerRows
 		double specExtra = -1;
 		/** What {@link #specExtra} is, for its bracket: "burn". */
 		String specExtraKind;
+		/**
+		 * T-073: the monster the figures are against, for the {@code vs} line: the
+		 * fight's own target, so the part being fought in a grouped room ("Dusk").
+		 * Null with no monster (before any fight, or gone idle): no line.
+		 */
+		String versus;
 	}
 
 	/** Which state the overlay is in, beyond the numbers. */
@@ -1260,13 +1280,20 @@ final class LedgerRows
 	}
 
 	/**
-	 * The attack's name as a main row, with max hit, accuracy, expected DPS and
-	 * the spec under it as sub-rows (Eric, 2026-10-26), each only when known.
-	 * Nothing at all when none of the figures is.
+	 * The DPS overlay's rows (T-073; T-022's loadout overlay): {@code vs} the
+	 * monster, the attack's name as a main row of its own, {@code DPS} as a
+	 * main row, then max hit, accuracy and the spec as sub-rows, each only when
+	 * known. With no monster (before any fight, or gone idle) the figures that
+	 * need one are unknown, so it's the attack's name, max hit and the spec's max
+	 * alone. Nothing at all when none of the figures is known.
 	 */
 	private static List<Row> loadout(Loadout l)
 	{
 		final List<Row> rows = new ArrayList<>();
+		if (l.dps >= 0)
+		{
+			rows.add(main("DPS", oneDecimal(l.dps)));
+		}
 		if (l.maxHit > 0)
 		{
 			rows.add(detail(" max hit", String.valueOf(l.maxHit), Colour.NEUTRAL));
@@ -1285,14 +1312,18 @@ final class LedgerRows
 				rows.add(detail(" spec damage", specDamage(l), Colour.NEUTRAL));
 			}
 		}
-		if (!rows.isEmpty() || l.dps >= 0)
+		if (rows.isEmpty())
 		{
-			// The expected DPS beside the attack's name rather than under it (Eric, 2026-10-26).
-			final String name = attackLabel(l.attack);
-			final String dps = l.dps >= 0 ? oneDecimal(l.dps) + " DPS" : "";
-			rows.add(0, name == null
-				? main("Loadout", dps)
-				: new Row(name, dps, FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL, name));
+			return rows;
+		}
+		// The attack's name on a row of its own (T-073), its figures under it. A name too wide for a saved width is cut.
+		final String name = attackLabel(l.attack);
+		final String label = name == null ? "Loadout" : name;
+		rows.add(0, new Row(label, "", FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, Colour.NEUTRAL, label));
+		if (l.versus != null && !l.versus.isEmpty())
+		{
+			final String versus = VERSUS + l.versus;
+			rows.add(0, new Row(versus, "", FontRole.BODY, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL, versus));
 		}
 		return rows;
 	}
@@ -1367,15 +1398,15 @@ final class LedgerRows
 		{
 			case TRIP:
 				return row("Trip" + DOT + plural(state.count, "kill"), clock(ticks),
-					FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL);
+					FontRole.EMPHASIS, TITLE_CLOCK, Colour.NEUTRAL, Colour.NEUTRAL);
 			case RAID:
 				return row(raidShortName(state.name) + DOT + plural(state.count, "room"), clock(ticks),
-					FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL);
+					FontRole.EMPHASIS, TITLE_CLOCK, Colour.NEUTRAL, Colour.NEUTRAL);
 			default:
 				final String name = !state.ended ? state.name
 					: state.name + (state.killed ? " (dead)" : " (ended)");
 				return row(name, clock(ticks),
-					FontRole.EMPHASIS, FontRole.EMPHASIS, state.killed ? Colour.DEAD : Colour.NEUTRAL, Colour.NEUTRAL);
+					FontRole.EMPHASIS, TITLE_CLOCK, state.killed ? Colour.DEAD : Colour.NEUTRAL, Colour.NEUTRAL);
 		}
 	}
 
@@ -1388,7 +1419,7 @@ final class LedgerRows
 		{
 			// A short form for a panel saved too narrow: the band without its seconds (T-029).
 			final String band = Double.isNaN(n.luck) || Double.isNaN(n.percentile) ? null : band(n.percentile);
-			rows.add(new Row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour, null,
+			rows.add(new Row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, luckColour, null,
 				band));
 			specs(rows, n, scope, state);
 		}
@@ -1403,11 +1434,11 @@ final class LedgerRows
 			// which RuneLite can't wrap, so on a panel saved too narrow it would run into the figures: it falls back to
 			// "Damage" instead, as the figures still read damage against expected.
 			rows.add(new Row("Damage/expected", number(n.damage) + "/" + number(Math.round(n.expected)),
-				FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, luckColour, "Damage"));
+				FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, luckColour, "Damage"));
 		}
 		else
 		{
-			rows.add(row("Damage", number(n.damage), FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL));
+			rows.add(main("Damage", number(n.damage)));
 			if (!state.warning)
 			{
 				rows.add(detail(" no monster data yet", "", Colour.NEUTRAL));
@@ -1417,8 +1448,7 @@ final class LedgerRows
 		{
 			drain(rows, n, scope, state);
 		}
-		// The main rows' labels are bold (Eric, 2026-10-26); their sub-rows stay in the detail font.
-		rows.add(main("DPS", Double.isNaN(n.dps) ? UNKNOWN : oneDecimal(n.dps)));
+		// No DPS row (T-073, Eric 2026-10-28: "remove DPS"): the side panel has its tile, the DPS overlay the expected DPS.
 		// T-043: avoidable eating counts once the fight is over, at a boss with attack rules, and only then: nothing about
 		// the boss's attacks is shown live (Jagex's rule). A room still running may hold an ended fight's figure; it waits.
 		final boolean avoidable = state.ended && !Double.isNaN(n.avoidableEatingCost);
@@ -1889,10 +1919,13 @@ final class LedgerRows
 		return row(left, right, FontRole.BODY, FontRole.BODY, Colour.NEUTRAL, Colour.NEUTRAL);
 	}
 
-	/** A main row: bold label, bold value (Eric, 2026-10-26: "bold all the big numbers next to bold titles"). */
+	/**
+	 * A main row: bold label, regular value (T-073, Eric 2026-10-28; before it
+	 * both were bold). Its sub-rows stay in the detail font.
+	 */
 	private static Row main(String left, String right)
 	{
-		return row(left, right, FontRole.EMPHASIS, FontRole.EMPHASIS, Colour.NEUTRAL, Colour.NEUTRAL);
+		return row(left, right, FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, Colour.NEUTRAL);
 	}
 
 	private static Row detail(String left, String right, Colour rightColour)

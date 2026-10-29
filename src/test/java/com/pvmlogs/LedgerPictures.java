@@ -155,6 +155,36 @@ public final class LedgerPictures
 		old.dotTaken = 27;
 		s.put("22-old-kill", LedgerRows.build(old, LedgerRows.State.fight("Vardorvis", true, true, false)
 			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
+		// T-073: "Under Execution" at its new default, Costing only, and Off, after the kill and mid-fight.
+		final LedgerRows.Settings costing = new LedgerRows.Settings();
+		costing.parts = ExecutionParts.COSTING;
+		final LedgerRows.Settings off = new LedgerRows.Settings();
+		off.parts = ExecutionParts.OFF;
+		s.put("23-costing-mid", LedgerRows.build(mid, LedgerRows.State.fight("Vardorvis", false, false, false), costing));
+		s.put("24-costing-dead", LedgerRows.build(dead, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), costing));
+		s.put("25-parts-off", LedgerRows.build(mid, LedgerRows.State.fight("Vardorvis", false, false, false), off));
+		// T-073: the DPS overlay on its own: a grouped room's part, idle (and before any fight, the same rows), and a
+		// narrow saved width.
+		final LedgerRows.Loadout blowpipe = new LedgerRows.Loadout();
+		blowpipe.attack = "Toxic blowpipe";
+		blowpipe.versus = "Dusk";
+		blowpipe.maxHit = 27;
+		blowpipe.accuracy = 0.58;
+		blowpipe.dps = 6.4;
+		blowpipe.specMaxHit = 40;
+		blowpipe.specAccuracy = 0.58;
+		blowpipe.specAverage = 11.6;
+		s.put("26-dps-grouped", LedgerRows.loadout(blowpipe, false));
+		final LedgerRows.Loadout idle = new LedgerRows.Loadout();
+		idle.attack = "Abyssal tentacle";
+		idle.maxHit = 46;
+		idle.specMaxHit = 48;
+		s.put("27-dps-idle", LedgerRows.loadout(idle, false));
+		final LedgerRows.Loadout queen = LedgerExamples.loadout();
+		queen.attack = "Toxic blowpipe";
+		queen.versus = "Eldric the Fire Queen";
+		s.put("28-dps-narrow", LedgerRows.loadout(queen, false));
 		// T-022: the loadout overlay under the Ledger, in the states it's worth seeing in. Each is drawn as its own picture,
 		// "<state>.L", which the sheet stacks under the Ledger's as RuneLite stacks the two boxes.
 		final Map<String, List<LedgerRows.Row>> both = new LinkedHashMap<>();
@@ -176,12 +206,16 @@ public final class LedgerPictures
 	static
 	{
 		final LedgerRows.Loadout tentacle = LedgerExamples.loadout();
+		// T-073: the DPS overlay names the monster.
+		tentacle.versus = "Vardorvis";
 		// Without monster data there is no accuracy to show; the max hit is known.
 		final LedgerRows.Loadout fang = new LedgerRows.Loadout();
 		fang.attack = "Osmumten's fang";
 		fang.maxHit = 44;
+		fang.versus = "Vardorvis";
 		final LedgerRows.Loadout staff = LedgerExamples.loadout();
 		staff.attack = "Harmonised nightmare staff (Fire Surge)";
+		staff.versus = "Vardorvis";
 		LOADOUTS.put("1-pre", LedgerRows.loadout(tentacle, false));
 		LOADOUTS.put("2-mid", LedgerRows.loadout(tentacle, false));
 		LOADOUTS.put("3-dead", LedgerRows.loadout(tentacle, false));
@@ -210,6 +244,7 @@ public final class LedgerPictures
 	{
 		SAVED_WIDTH.put("12-saved-width", 160);
 		SAVED_WIDTH.put("12-saved-width.L", 160);
+		SAVED_WIDTH.put("28-dps-narrow", 120);
 	}
 
 	public static void main(String[] args) throws IOException

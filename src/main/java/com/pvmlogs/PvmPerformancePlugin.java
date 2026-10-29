@@ -270,6 +270,10 @@ public class PvmPerformancePlugin extends Plugin
 	private double expectedAccuracy = -1;
 	private double expectedAverageHit = -1;
 	private int expectedSpecMaxHit;
+	// T-073: the max hit and the spec's with no monster, for the DPS overlay once it has gone idle. Worked out only while
+	// "Always show DPS overlay" is on and the player has stopped attacking; -1 otherwise.
+	private int idleMaxHit = -1;
+	private int idleSpecMaxHit = -1;
 	private double expectedSpecAccuracy = -1;
 	private double expectedSpecAverageHit = -1;
 	/** T-030: what the special deals beyond its own hitsplats on average (Burning barrage's burn), for the loadout only. */
@@ -2546,6 +2550,18 @@ public class PvmPerformancePlugin extends Plugin
 			expectedVariance = -1;
 			expectedSpecVariance = -1;
 			expectedForNpcId = -1;
+		}
+		// T-073: with no monster, as above, for the DPS overlay gone idle. Once a tick, and only then.
+		if (shown != null && config.overlayAlwaysDps()
+			&& LoadoutOverlay.idle(client.getTickCount(), lastAttackSeenTick, config.overlayDpsIdleSeconds()))
+		{
+			idleMaxHit = combatCalc.maxHit(-1);
+			idleSpecMaxHit = combatCalc.specialAttackMaxHit(-1);
+		}
+		else
+		{
+			idleMaxHit = -1;
+			idleSpecMaxHit = -1;
 		}
 	}
 
@@ -5111,6 +5127,24 @@ public class PvmPerformancePlugin extends Plugin
 	int getExpectedMaxHit()
 	{
 		return expectedMaxHit;
+	}
+
+	/** T-073: the max hit with no monster while the DPS overlay is idle, else -1. */
+	int getIdleMaxHit()
+	{
+		return idleMaxHit;
+	}
+
+	/** T-073: the spec's max hit with no monster while the DPS overlay is idle, else -1. */
+	int getIdleSpecMaxHit()
+	{
+		return idleSpecMaxHit;
+	}
+
+	/** T-073: the tick the player's last attack went out on, or Integer.MIN_VALUE before any. */
+	int getLastAttackSeenTick()
+	{
+		return lastAttackSeenTick;
 	}
 
 	/** Expected hit chance vs the shown target (0..1), or -1 if unavailable. */

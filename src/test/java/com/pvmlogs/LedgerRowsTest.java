@@ -8,6 +8,7 @@ import static com.pvmlogs.LedgerRows.Colour.WARNING;
 import static com.pvmlogs.LedgerRows.FontRole.BODY;
 import static com.pvmlogs.LedgerRows.FontRole.DETAIL;
 import static com.pvmlogs.LedgerRows.FontRole.EMPHASIS;
+import static com.pvmlogs.LedgerRows.FontRole.VALUE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -54,31 +55,32 @@ public class LedgerRowsTest
 		return r(left, clock, EMPHASIS, EMPHASIS, NEUTRAL, NEUTRAL);
 	}
 
-	/** Luck and Damage: bold label, bold value (Eric, 2026-10-26: the main rows' labels are bold). */
+	/** Luck and Damage: bold label, regular value (T-073; Eric, 2026-10-26: the main rows' labels are bold). */
 	private static Row emph(String left, String right, Colour rc)
 	{
-		return r(left, right, EMPHASIS, EMPHASIS, NEUTRAL, rc);
+		return r(left, right, EMPHASIS, VALUE, NEUTRAL, rc);
 	}
 
-	/** DPS, Execution and the loadout's attack: bold label, bold value (Eric, 2026-10-26). */
+	/** Execution, the Summary's head and the DPS overlay's DPS: bold label, regular value (T-073). */
 	private static Row main(String left, String right)
 	{
-		return r(left, right, EMPHASIS, EMPHASIS, NEUTRAL, NEUTRAL);
+		return r(left, right, EMPHASIS, VALUE, NEUTRAL, NEUTRAL);
 	}
 
-	/** The loadout's main row: the attack's name and its expected DPS beside it. */
-	private static final Row TENTACLE = attack("Abyssal tentacle", "5.5 DPS", "Abyssal tentacle");
+	/** The DPS overlay's attack row: the attack's name alone (T-073), its DPS on the row under it. */
+	private static final Row TENTACLE = attack("Abyssal tentacle", "", "Abyssal tentacle");
+	private static final Row TENTACLE_DPS = r("DPS", "5.5", EMPHASIS, VALUE, NEUTRAL, NEUTRAL);
 
 	/** "Damage/expected", which falls back to "Damage" on a panel too narrow for it. */
 	private static Row damage(String figures, Colour rc)
 	{
-		return new Row("Damage/expected", figures, EMPHASIS, EMPHASIS, NEUTRAL, rc, "Damage");
+		return new Row("Damage/expected", figures, EMPHASIS, VALUE, NEUTRAL, rc, "Damage");
 	}
 
-	/** The loadout's main row: the attack's name, its DPS, and the short form the overlay may fall back to. */
-	private static Row attack(String name, String dps, String shortName)
+	/** The DPS overlay's attack row: the attack's name, and the short form the overlay may cut it to. */
+	private static Row attack(String name, String right, String shortName)
 	{
-		return new Row(name, dps, EMPHASIS, EMPHASIS, NEUTRAL, NEUTRAL, shortName);
+		return new Row(name, right, EMPHASIS, VALUE, NEUTRAL, NEUTRAL, shortName);
 	}
 
 	private static List<Row> build(LedgerRows.Scope scope, State state)
@@ -110,6 +112,7 @@ public class LedgerRowsTest
 	{
 		assertRows(Arrays.asList(
 			TENTACLE,
+			TENTACLE_DPS,
 			d(" max hit", "49"),
 			d(" accuracy", "54%"),
 			d(" spec", "50 max · 71%"),
@@ -122,7 +125,7 @@ public class LedgerRowsTest
 	{
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.maxHit = 41;
-		assertRows(Arrays.asList(main("Loadout", ""), d(" max hit", "41")), LedgerRows.loadout(l, false));
+		assertRows(Arrays.asList(attack("Loadout", "", "Loadout"), d(" max hit", "41")), LedgerRows.loadout(l, false));
 	}
 
 	@Test
@@ -135,7 +138,6 @@ public class LedgerRowsTest
 			title("Vardorvis", "1:13"),
 			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
-			main("DPS", "5.1"),
 			main("Execution", "92%"),
 			d(" uptime", "93% (-5 s)", COST),
 			d(" prayer", "100%"),
@@ -154,7 +156,6 @@ public class LedgerRowsTest
 			r("Vardorvis (dead)", "2:16", EMPHASIS, EMPHASIS, DEAD, NEUTRAL),
 			emph("Luck", "14 s slower", COST),
 			damage("688/778", COST),
-			main("DPS", "5.0"),
 			main("Execution", "87%"),
 			d(" uptime", "89% (-15 s)", COST),
 			d(" prayer", "100%"),
@@ -177,7 +178,6 @@ public class LedgerRowsTest
 			title("Vardorvis (ended)", "2:20"),
 			emph("Luck", "15 s slower", COST),
 			damage("721/812", COST),
-			main("DPS", "5.1"),
 			main("Execution", "93%"),
 			d(" uptime", "94% (-8 s)", COST),
 			d(" prayer", "100%"),
@@ -201,7 +201,6 @@ public class LedgerRowsTest
 			title("Trip · 6 kills", "12:40"),
 			emph("Luck", "14 s slower", NEUTRAL),
 			damage("4,120/4,201", NEUTRAL),
-			main("DPS", "5.4"),
 			main("Execution", "93%"),
 			d(" uptime", "96% (-31 s)", COST),
 			d(" prayer", "99% (-3 s)"),
@@ -222,7 +221,7 @@ public class LedgerRowsTest
 	public void tripDuringAFightHasNoDetails()
 	{
 		final List<Row> rows = build(LedgerExamples.trip(), State.trip(6, true, false));
-		assertEquals(11, rows.size());
+		assertEquals(10, rows.size());
 		assertFalse(rows.stream().anyMatch(Row::isBlank));
 	}
 
@@ -233,7 +232,6 @@ public class LedgerRowsTest
 			title("ToA · 3 rooms", "9:12"),
 			emph("Luck", "13 s faster", BETTER),
 			damage("8,410/8,200", BETTER),
-			main("DPS", "15.2"),
 			main("Execution", "86%"),
 			d(" uptime", "90% (-55 s)", COST),
 			d(" prayer", "98% (-12 s)", COST),
@@ -267,7 +265,6 @@ public class LedgerRowsTest
 			r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL),
 			d(" luck hidden until it's fixed", ""),
 			emph("Damage", "370", NEUTRAL),
-			main("DPS", "5.1"),
 			main("Execution", "92%"),
 			d(" uptime", "93% (-5 s)", COST),
 			d(" prayer", "100%"),
@@ -278,15 +275,46 @@ public class LedgerRowsTest
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, true)));
 	}
 
+	// ---- T-073: no DPS row; bold labels, regular figures ----
+
+	@Test
+	public void noDpsRowInAnyScope()
+	{
+		for (List<Row> rows : Arrays.asList(
+			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)),
+			build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false)),
+			build(LedgerExamples.trip(), State.trip(6, false, false)),
+			build(LedgerExamples.raid(), State.raid("Tombs of Amascut", 3, false, false))))
+		{
+			assertFalse(rows.stream().anyMatch(row -> row.left.equals("DPS")));
+		}
+	}
+
+	@Test
+	public void everyMainRowIsBoldOnTheLeftAndRegularOnTheRight()
+	{
+		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false));
+		for (Row row : rows)
+		{
+			if (row.leftFont == EMPHASIS && row != rows.get(0))
+			{
+				assertEquals(row.left, VALUE, row.rightFont);
+			}
+		}
+		// The title keeps its bold clock, as the box's heading (LedgerRows.TITLE_CLOCK).
+		assertEquals(EMPHASIS, rows.get(0).rightFont);
+		assertEquals(LedgerRows.TITLE_CLOCK, rows.get(0).rightFont);
+	}
+
 	@Test
 	public void theDetailsHaveNoDurationRow()
 	{
 		// Eric, 2026-10-26: the clock is in the title and Luck right under it, so "Duration / expected" only repeated them.
 		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false));
 		assertFalse(rows.stream().anyMatch(row -> row.left.startsWith("Duration")));
-		assertEquals(b("", ""), rows.get(11));
-		assertEquals(main("Summary", ""), rows.get(12));
-		assertEquals(d(" hits/expected", "32/30.2"), rows.get(13));
+		assertEquals(b("", ""), rows.get(10));
+		assertEquals(main("Summary", ""), rows.get(11));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(12));
 	}
 
 	// ---- gear (Eric, 2026-10-26) ----
@@ -420,10 +448,10 @@ public class LedgerRowsTest
 		// Eric, 2026-10-26: " vs your average 1:59" made no sense as a heading; 2026-10-27: no " this kill",
 		// " luck removed" or " luckier than" with it. The median clock, cut to whole seconds like the title's.
 		final List<Row> rows = deadWith(average(119.9, 115, 125));
-		assertEquals(b("", ""), rows.get(11));
-		assertEquals(main("Summary", ""), rows.get(12));
-		assertEquals(d(" your average", "1:59"), rows.get(13));
-		assertEquals(d(" hits/expected", "32/30.2"), rows.get(14));
+		assertEquals(b("", ""), rows.get(10));
+		assertEquals(main("Summary", ""), rows.get(11));
+		assertEquals(d(" your average", "1:59"), rows.get(12));
+		assertEquals(d(" hits/expected", "32/30.2"), rows.get(13));
 		assertFalse(rows.stream().anyMatch(row -> row.left.equals(" this kill") || row.left.equals(" luck removed")
 			|| row.left.equals(" luckier than")));
 	}
@@ -459,7 +487,6 @@ public class LedgerRowsTest
 			emph("Luck", "—", NEUTRAL),
 			emph("Damage", "212", NEUTRAL),
 			d(" no monster data yet", ""),
-			main("DPS", "4.4"),
 			main("Execution", "—"),
 			d(" uptime", "95% (-2 s)", COST),
 			d(" damage taken", "36")),
@@ -473,7 +500,6 @@ public class LedgerRowsTest
 			title("Vardorvis", "1:13"),
 			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
-			main("DPS", "5.1"),
 			main("Execution", "92%"),
 			d(" uptime", "93% (-5 s)", COST),
 			d(" setup", "98% (-1 s)"),
@@ -492,7 +518,6 @@ public class LedgerRowsTest
 			title("Vardorvis", "1:13"),
 			emph("Luck", "8 s slower", COST),
 			damage("370/418", COST),
-			main("DPS", "5.1"),
 			main("Execution", "92%"),
 			d(" uptime", "93% (-5 s)", COST),
 			d(" prayer", "100%"),
@@ -539,7 +564,7 @@ public class LedgerRowsTest
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.attack = "Fire Surge";
 		l.dps = 6.1;
-		assertEquals(Arrays.asList(attack("Fire Surge", "6.1 DPS", "Fire Surge")),
+		assertEquals(Arrays.asList(attack("Fire Surge", "", "Fire Surge"), main("DPS", "6.1")),
 			LedgerRows.loadout(l, false));
 		final LedgerRows.Loadout claws = new LedgerRows.Loadout();
 		claws.attack = "Burning claws";
@@ -567,8 +592,8 @@ public class LedgerRowsTest
 	{
 		// Eric, 2026-10-26: under Execution, the damage you took.
 		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false));
-		assertEquals(d(" stat boost", "85% (-2 s)"), rows.get(8));
-		assertEquals(d(" damage taken", "248"), rows.get(9));
+		assertEquals(d(" stat boost", "85% (-2 s)"), rows.get(7));
+		assertEquals(d(" damage taken", "248"), rows.get(8));
 		final Settings off = new Settings();
 		off.parts = ExecutionParts.OFF;
 		assertFalse(LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false), off).stream()
@@ -600,7 +625,7 @@ public class LedgerRowsTest
 	{
 		final List<Row> rows = build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false));
 		assertEquals(Arrays.asList(" uptime", " prayer", " gear", " stat boost"),
-			Arrays.asList(rows.get(5).left, rows.get(6).left, rows.get(7).left, rows.get(8).left));
+			Arrays.asList(rows.get(4).left, rows.get(5).left, rows.get(6).left, rows.get(7).left));
 	}
 
 	@Test
@@ -616,6 +641,7 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL),
 			TENTACLE,
+			TENTACLE_DPS,
 			d(" max hit", "49"),
 			d(" accuracy", "54%"),
 			d(" spec", "50 max \u00b7 71%"),
@@ -643,7 +669,7 @@ public class LedgerRowsTest
 		s.parts = ExecutionParts.COSTING;
 		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false), s);
 		assertEquals(Arrays.asList(main("Execution", "87%"), d(" uptime", "89% (-15 s)", COST), d(" damage taken", "248"),
-			d(" eating", "4 s")), rows.subList(4, rows.size()));
+			d(" eating", "4 s")), rows.subList(3, rows.size()));
 	}
 
 	@Test
@@ -675,16 +701,16 @@ public class LedgerRowsTest
 		final Settings s = new Settings();
 		s.details = false;
 		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false), s);
-		assertEquals(11, rows.size());
-		assertEquals(d(" stat boost", "85% (-2 s)"), rows.get(8));
-		assertEquals(d(" damage taken", "248"), rows.get(9));
-		assertEquals(d(" eating", "4 s"), rows.get(10));
+		assertEquals(10, rows.size());
+		assertEquals(d(" stat boost", "85% (-2 s)"), rows.get(7));
+		assertEquals(d(" damage taken", "248"), rows.get(8));
+		assertEquals(d(" eating", "4 s"), rows.get(9));
 	}
 
 	@Test
 	public void noDetailsWhileTheFightRuns()
 	{
-		assertEquals(11, build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false)).size());
+		assertEquals(10, build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false)).size());
 	}
 
 	// ---- section 8's numbers ----
@@ -946,7 +972,7 @@ public class LedgerRowsTest
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.attack = "Abyssal tentacle (or)";
 		l.dps = 5.5;
-		assertEquals(Arrays.asList(TENTACLE), LedgerRows.loadout(l, false));
+		assertEquals(Arrays.asList(TENTACLE, TENTACLE_DPS), LedgerRows.loadout(l, false));
 	}
 
 	@Test
@@ -1095,7 +1121,8 @@ public class LedgerRowsTest
 		assertEquals(title("Abyssal Sire", "1:51").left + " (dead)", rows.get(0).left);
 		assertEquals("1:51", rows.get(0).right);
 		assertEquals("20 s slower", rows.get(1).right);
-		assertTrue(rows.contains(main("DPS", "6.2")));
+		// T-073: no DPS row on the overlay; the side panel's tile reads Numbers.dps.
+		assertFalse(rows.stream().anyMatch(row -> row.left.equals("DPS")));
 	}
 
 	@Test
@@ -1673,7 +1700,7 @@ public class LedgerRowsTest
 	public void liveTrackedOverBaseUnderDamageExpected()
 	{
 		final List<Row> rows = running(LedgerExamples.midFight(), live(145, 0, 150));
-		assertEquals(Arrays.asList(d(" defence", "145 / 215"), main("DPS", "5.1")), afterDamage(rows, 2));
+		assertEquals(Arrays.asList(d(" defence", "145 / 215"), main("Execution", "92%")), afterDamage(rows, 2));
 	}
 
 	@Test

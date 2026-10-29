@@ -103,7 +103,8 @@ public class SettingsLayoutTest
 	{
 		// Every kept setting keeps its key, so users keep their values (T-040 proposal, section 5).
 		assertEquals(Arrays.asList(
-			"showOverlay", "overlayShowLoadout", "overlayBossesOnly", "overlayHoldSeconds",
+			"showOverlay", "overlayShowLoadout", "overlayAlwaysDps", "overlayDpsIdleSeconds", "overlayBossesOnly",
+			"overlayHoldSeconds",
 			"overlayCovers", "overlayLuck", "overlayParts", "overlayDetails",
 			"panelLive", "panelCharts", "panelLargerText", "panelSmoothFont",
 			"debugLogging"), keys());
@@ -121,7 +122,10 @@ public class SettingsLayoutTest
 	{
 		final Map<String, String> names = items().stream().collect(Collectors.toMap(ConfigItem::keyName, ConfigItem::name));
 		assertEquals("Show fight overlay", names.get("showOverlay"));
-		assertEquals("Show loadout overlay", names.get("overlayShowLoadout"));
+		// T-073: the loadout overlay is the DPS overlay; its key stays.
+		assertEquals("Show DPS overlay", names.get("overlayShowLoadout"));
+		assertEquals("Always show DPS overlay", names.get("overlayAlwaysDps"));
+		assertEquals("DPS overlay simplifies after (s)", names.get("overlayDpsIdleSeconds"));
 		assertEquals("Bosses only", names.get("overlayBossesOnly"));
 		assertEquals("Keep last fight up (s)", names.get("overlayHoldSeconds"));
 		assertEquals("Covers", names.get("overlayCovers"));
@@ -154,7 +158,10 @@ public class SettingsLayoutTest
 		assertEquals(60, d.overlayHoldSeconds());
 		assertEquals(OverlayCovers.FIGHT, d.overlayCovers());
 		assertTrue(d.overlayLuck());
-		assertEquals(ExecutionParts.ALL, d.overlayParts());
+		// T-073: Costing only for new installs (Eric, 2026-10-28; the brief said Off).
+		assertEquals(ExecutionParts.COSTING, d.overlayParts());
+		assertFalse(d.overlayAlwaysDps());
+		assertEquals(60, d.overlayDpsIdleSeconds());
 		assertTrue(d.overlayDetails());
 		assertTrue(d.panelLive());
 		assertTrue(d.panelCharts());
