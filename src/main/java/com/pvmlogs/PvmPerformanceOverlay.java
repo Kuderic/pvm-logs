@@ -164,7 +164,9 @@ class PvmPerformanceOverlay extends OverlayPanel
 		}
 		else
 		{
-			final boolean running = !fight.isEnded();
+			// T-070: the after-fight view waits for the room's kill, not an add's or one titan's death.
+			final boolean over = isOver(fight, room);
+			final boolean running = !over;
 			final OverlayCovers covers = config.overlayCovers();
 			final SessionTotals session = covers == OverlayCovers.TRIP ? plugin.getSession() : null;
 			final Raid raid = covers == OverlayCovers.RAID ? plugin.getCurrentRaid() : null;
@@ -183,9 +185,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 			else if (room != null)
 			{
 				scope = LedgerRows.of(room);
-				final boolean killed = fight.isEnded() && room.isKilled();
-				state = LedgerRows.State.fight(room.getName(), fight.isEnded(), room.isKilled(), warning)
-					.withAverage(killed && room.getRaid() == null ? average(room) : null).withDrain(drain);
+				state = roomState(fight, room, warning, this::average).withDrain(drain);
 			}
 			else
 			{
@@ -395,6 +395,32 @@ class PvmPerformanceOverlay extends OverlayPanel
 			return false;
 		}
 		return !bossesOnly || boss;
+	}
+
+	/**
+	 * The room view's state (T-070): running until the room is over; then
+	 * {@code (dead)} only for the room's kill, and ` your average` only then, and
+	 * only outside a raid. {@code average} is asked only for a killed room.
+	 */
+	static LedgerRows.State roomState(Fight fight, Encounter room, boolean warning,
+		java.util.function.Function<Encounter, LedgerHistory.Average> average)
+	{
+		final boolean over = isOver(fight, room);
+		final boolean killed = over && room.isKilled();
+		return LedgerRows.State.fight(room.getName(), over, killed, warning)
+			.withAverage(killed && room.getRaid() == null ? average.apply(room) : null);
+	}
+
+	/**
+	 * Whether the overlay shows the after-fight view (T-070): the fight on show
+	 * has ended and so has its room ({@link Encounter#isOver()}). A boss's add or
+	 * one titan dying ends its own fight while the room runs on; until the
+	 * room's kill, that finished fight reads as running, with the room's figures.
+	 * With no room on show, the fight alone decides, as before.
+	 */
+	static boolean isOver(Fight fight, Encounter room)
+	{
+		return fight != null && fight.isEnded() && (room == null || room.isOver());
 	}
 
 	/**

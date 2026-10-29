@@ -131,17 +131,147 @@ class Encounter
 		return false;
 	}
 
-	/** Whether any of this encounter's targets died. */
+	/**
+	 * Whether the room's kill has happened (T-070): the boss is dead, not merely
+	 * something in its room. It is when
+	 * <ul>
+	 * <li>the room closed on its kill, by the boss's loot or its death rule
+	 * (T-055, T-061): the fight it closed on carries {@code closedRoom}, which
+	 * history keeps too;</li>
+	 * <li>an ungrouped target died: the room is the fight;</li>
+	 * <li>in a group that is one boss in parts ({@code FallKind.ONE_BOSS}, T-064),
+	 * a fight on the boss itself ended killed. Its adds' deaths (the Sire's
+	 * respiratory systems, spawns and scions, Akkha's shadows) are not the kill;</li>
+	 * <li>in a raid, in a group of separate monsters ({@code SEPARATE}: the
+	 * vanguards, the Nylocas waves), every one of them the player fought is dead.
+	 * No loot fires inside a raid, so nothing else would say so. Outside a raid a
+	 * separate group's room closes on its loot (the Grotesque Guardians) or its
+	 * death rule (the Royal Titans), so one titan down, or Dawn, is not the kill.</li>
+	 * </ul>
+	 */
 	boolean isKilled()
 	{
+		boolean ungroupedDied = false;
 		for (Fight fight : fights)
 		{
-			if (fight.isTargetDied())
+			if (fight.isClosedRoom())
+			{
+				return true;
+			}
+			ungroupedDied |= fight.getGroupName() == null && fight.isTargetDied();
+		}
+		if (ungroupedDied)
+		{
+			return true;
+		}
+		if (fights.isEmpty())
+		{
+			return false;
+		}
+		final EncounterGroup.Falls rule = EncounterGroup.falls(fights.get(0).getTargetId());
+		if (rule == null)
+		{
+			// A group with no fall rule (EncounterGroupFallsTest keeps there being none): any death, as before T-070.
+			for (Fight fight : fights)
+			{
+				if (fight.isTargetDied())
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		if (rule.kind == EncounterGroup.FallKind.ONE_BOSS)
+		{
+			for (Fight fight : fights)
+			{
+				if (fight.isTargetDied() && rule.boss.contains(fight.getTargetId())
+					&& !EncounterGroup.isUnscored(fight.getTargetId()))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		return inRaid() && everyOneFoughtIsDead();
+	}
+
+	/**
+	 * Whether the room is a raid's. Asked of its fights too: the CSV export and the
+	 * history rebuild their rooms from the saved fights with no raid type.
+	 */
+	private boolean inRaid()
+	{
+		if (raid != null)
+		{
+			return true;
+		}
+		for (Fight fight : fights)
+		{
+			if (fight.getRaidName() != null)
 			{
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Whether every monster the player fought in the room is dead, each by its
+	 * last fight (a target switched away from and back to has several), adds and
+	 * unscored NPCs aside; false while any of them is still being fought.
+	 */
+	private boolean everyOneFoughtIsDead()
+	{
+		final java.util.Map<Integer, Fight> last = new java.util.HashMap<>();
+		for (Fight fight : fights)
+		{
+			if (fight.isScored() && EncounterGroup.lootIsTheKill(fight.getTargetId()))
+			{
+				last.put(fight.getTargetIndex(), fight);
+			}
+		}
+		if (last.isEmpty())
+		{
+			return false;
+		}
+		for (Fight fight : last.values())
+		{
+			if (!fight.isEnded() || !fight.isTargetDied())
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Whether the room on show is over (T-070), so the overlay and the side panel
+	 * may show the after-fight view: its kill has happened ({@link #isKilled()}),
+	 * or the player has left it - the room was ended (the next room opened, a
+	 * logout or hop, the raid changed), or an ungrouped target's fight ended
+	 * without a kill, which is the player walking off. An add's death, or one part
+	 * of a separate group going down, is none of these: the room runs on.
+	 */
+	boolean isOver()
+	{
+		if (isEnded() || isKilled())
+		{
+			return true;
+		}
+		if (fights.isEmpty())
+		{
+			return false;
+		}
+		// Ungrouped: the room is its fight (PvmPerformancePlugin.opensRoom), over when that ends.
+		for (Fight fight : fights)
+		{
+			if (fight.getGroupName() != null || !fight.isEnded())
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** Our thrall's damage across the room's fights, which damage dealt leaves out. */
