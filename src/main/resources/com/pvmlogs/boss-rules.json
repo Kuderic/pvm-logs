@@ -355,8 +355,8 @@
         ]
       },
       "uptimeAllowances": [
-        {"state": "stunned", "from": "cast", "maxTicks": 7, "afterTicks": 0, "source": "T-074, PROPOSED, for Eric to approve. Running behind the stunned Leviathan to shoot its wound is the mechanic (Eric, 2026-10-28 23:36). Measured over his 13 Leviathan logs of 2026-10-28/29 (87 stuns), idle ticks from the cast to the stun's end (the wound shot, or 15 ticks from the landing), with the cast and free shot counted as T-078 counts them: median 6, 75th percentile 7, 90th 9, most 15. The cap is the 75th percentile."},
-        {"state": "special", "from": "open", "maxTicks": 4, "afterTicks": 6, "source": "T-074, PROPOSED, for Eric to approve. Dodging the Leviathan's lightning barrage and smoke blast, and getting back into position after. Over the same logs (61 specials), idle ticks inside the window and the 6 ticks after it: median 0, 75th percentile 4, 90th 7, most 17 (the smoke blasts alone: 75th 3; the barrages: 75th 4). The cap is the 75th percentile."}
+        {"state": "stunned", "from": "cast", "maxTicks": 7, "afterTicks": 0, "source": "T-074, approved by Eric 2026-10-29 (cap 7). Running behind the stunned Leviathan to shoot its wound is the mechanic (Eric, 2026-10-28 23:36). Measured over his 13 Leviathan logs of 2026-10-28/29 (87 stuns), idle ticks from the cast to the stun's end (the wound shot, or 15 ticks from the landing), with the cast and free shot counted as T-078 counts them: median 6, 75th percentile 7, 90th 9, most 15. The cap is the 75th percentile."},
+        {"state": "special", "from": "open", "maxTicks": 4, "afterTicks": 6, "source": "T-074, approved by Eric 2026-10-29 (cap 4). Dodging the Leviathan's lightning barrage and smoke blast, and getting back into position after. Over the same logs (61 specials), idle ticks inside the window and the 6 ticks after it: median 0, 75th percentile 4, 90th 7, most 17 (the smoke blasts alone: 75th 3; the barrages: 75th 4). The cap is the 75th percentile."}
       ]
     },
     {
