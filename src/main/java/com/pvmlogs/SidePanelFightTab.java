@@ -816,9 +816,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
 		final List<SidePanelParts.SourceRowView> rows = new ArrayList<>();
+		// T-085: the weapon rows' sub-lines in one form, the longest that fits them all.
+		final SidePanelText.FormGroup forms = new SidePanelText.FormGroup();
 		for (PanelSnapshot.Source s : tab.damage.rows)
 		{
-			final SidePanelParts.SourceRowView v = new SidePanelParts.SourceRowView(s, icons);
+			final SidePanelParts.SourceRowView v = new SidePanelParts.SourceRowView(s, icons, forms);
 			rows.add(v);
 			list.add(v);
 		}

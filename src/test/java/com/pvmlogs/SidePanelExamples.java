@@ -600,6 +600,49 @@ final class SidePanelExamples
 		return in;
 	}
 
+	// ---- T-085: each weapon's DPS on the Damage card ----
+
+	/**
+	 * Shaped on Eric's Sire kills (illustrative): Emberlight's attacks (4 ticks), two of its specials, and the Scorching
+	 * bow's (4 ticks, rapid) at the respiratory systems' phase.
+	 */
+	static SidePanelModel.Input sireWeapons()
+	{
+		final SidePanelTimelineExamples.Built b = SidePanelTimelineExamples.plan("Abyssal Sire",
+			new SidePanelTimelineExamples.Stretch("Scorching bow", net.runelite.api.gameval.ItemID.SCORCHING_BOW,
+				FightTimeline.Style.RANGED, false, 4, SidePanelTimelineExamples.hits(12, 18, 0, 25, 9), 13.5, 38, 0.7, 6),
+			new SidePanelTimelineExamples.Stretch("Emberlight", net.runelite.api.gameval.ItemID.EMBERLIGHT,
+				FightTimeline.Style.MELEE, true, 4, new int[]{31, 16}, 22, 50, 0.8, 0),
+			new SidePanelTimelineExamples.Stretch("Emberlight", net.runelite.api.gameval.ItemID.EMBERLIGHT,
+				FightTimeline.Style.MELEE, false, 4, SidePanelTimelineExamples.hits(30, 24, 31, 0, 17, 40, 12), 18.2, 46, 0.82,
+				0));
+		return weaponsKill(b, 23, 50);
+	}
+
+	/** A Leviathan kill (illustrative): the Twisted bow (5 ticks) and the blowpipe (2 ticks) between its stuns. */
+	static SidePanelModel.Input leviathanWeapons()
+	{
+		final SidePanelTimelineExamples.Built b = SidePanelTimelineExamples.plan("The Leviathan",
+			new SidePanelTimelineExamples.Stretch("Twisted bow", net.runelite.api.gameval.ItemID.TWISTED_BOW,
+				FightTimeline.Style.RANGED, false, 5, SidePanelTimelineExamples.hits(26, 52, 61, 0, 47, 70), 44.5, 79, 0.78, 8),
+			new SidePanelTimelineExamples.Stretch("Toxic blowpipe", net.runelite.api.gameval.ItemID.TOXIC_BLOWPIPE,
+				FightTimeline.Style.RANGED, false, 2, SidePanelTimelineExamples.hits(30, 14, 0, 19, 22, 9), 12.4, 27, 0.72, 4),
+			new SidePanelTimelineExamples.Stretch("Twisted bow", net.runelite.api.gameval.ItemID.TWISTED_BOW,
+				FightTimeline.Style.RANGED, false, 5, SidePanelTimelineExamples.hits(14, 55, 0, 64, 49), 44.5, 79, 0.78, 0));
+		return weaponsKill(b, 14, 20);
+	}
+
+	private static SidePanelModel.Input weaponsKill(SidePanelTimelineExamples.Built b, int hour, int minute)
+	{
+		b.fight.end(true, at(hour, minute));
+		final SidePanelModel.Input in = SidePanelTimelineExamples.input(b, true);
+		in.zone = ZONE;
+		in.endMillis = at(hour, minute);
+		in.solo = true;
+		in.maxHp = 900;
+		return in;
+	}
+
 	// ---- T-072: times of day with am and pm ----
 
 	/** The kill, ended at this time of day: the header's {@code 12:00 am}, {@code 12:00 pm}, {@code 12:05 am}. */

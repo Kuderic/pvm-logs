@@ -452,6 +452,16 @@ final class PanelSnapshot
 		/** The row's icon: an item's image ({@code ItemManager}), else a sprite ({@code SpriteManager}); -1 for none. */
 		final int itemId;
 		final int spriteId;
+		/**
+		 * T-085: the sub-line's shorter forms, longest first; empty for none. A weapon row's has three, and the card draws
+		 * every weapon row in the same form, the longest that fits them all.
+		 */
+		final List<String> subShort;
+		/** T-085: the row's details on hover (attacks, accuracy, hits, expected), or null. */
+		final String tooltip;
+		/** T-085: the row's DPS and expected DPS ({@code 6.1}, {@code 7.1}), or null: for tests. */
+		final String dps;
+		final String expectedDps;
 
 		Source(String name, String sub, String damage, String share, double shareFraction, Color colour)
 		{
@@ -461,14 +471,24 @@ final class PanelSnapshot
 		Source(String name, String sub, String damage, String share, double shareFraction, Color colour, int itemId,
 			int spriteId)
 		{
+			this(name, sub, null, damage, share, shareFraction, colour, itemId, spriteId, null, null, null);
+		}
+
+		Source(String name, String sub, List<String> subShort, String damage, String share, double shareFraction,
+			Color colour, int itemId, int spriteId, String tooltip, String dps, String expectedDps)
+		{
 			this.name = name;
 			this.sub = sub;
+			this.subShort = subShort == null ? Collections.<String>emptyList() : subShort;
 			this.damage = damage;
 			this.share = share;
 			this.shareFraction = shareFraction;
 			this.colour = colour;
 			this.itemId = itemId;
 			this.spriteId = spriteId;
+			this.tooltip = tooltip;
+			this.dps = dps;
+			this.expectedDps = expectedDps;
 		}
 	}
 
@@ -620,6 +640,7 @@ final class PanelSnapshot
 			this.hint = hint;
 			this.rows = list(rows);
 		}
+
 	}
 
 	/** The Fight tab: every section, null where it isn't shown. */

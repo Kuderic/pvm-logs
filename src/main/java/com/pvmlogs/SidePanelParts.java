@@ -536,7 +536,11 @@ final class SidePanelParts
 		private final SidePanelIcons icons;
 		private final Line top;
 		private final Line bottom;
+		/** T-085: the card's weapon rows draw their sub-lines in one form; null for a row on its own. */
+		private final SidePanelText.FormGroup forms;
 		private final Icon icon = new Icon();
+		/** T-085: hovered, as the panel's other rows: the Selected fill under the share. */
+		private boolean hover;
 		private double share;
 		private Color colour;
 		private int itemId = Integer.MIN_VALUE;
@@ -549,7 +553,14 @@ final class SidePanelParts
 
 		SourceRowView(PanelSnapshot.Source s, SidePanelIcons icons)
 		{
+			this(s, icons, null);
+		}
+
+		/** T-085: with the card's {@code forms}, which its weapon rows' sub-lines join. */
+		SourceRowView(PanelSnapshot.Source s, SidePanelIcons icons, SidePanelText.FormGroup forms)
+		{
 			super(new BorderLayout(6, 0));
+			this.forms = forms;
 			this.icons = icons == null ? SidePanelIcons.NONE : icons;
 			setOpaque(false);
 			setBorder(new EmptyBorder(2, 2, 2, 6));
@@ -563,7 +574,28 @@ final class SidePanelParts
 			text.add(bottom);
 			add(icon, BorderLayout.WEST);
 			add(text, BorderLayout.CENTER);
+			addMouseListener(new java.awt.event.MouseAdapter()
+			{
+				@Override
+				public void mouseEntered(java.awt.event.MouseEvent e)
+				{
+					hover = getToolTipText() != null;
+					repaint();
+				}
+
+				@Override
+				public void mouseExited(java.awt.event.MouseEvent e)
+				{
+					hover = false;
+					repaint();
+				}
+			});
 			set(s);
+		}
+
+		boolean hovered()
+		{
+			return hover;
 		}
 
 		void set(PanelSnapshot.Source s)
@@ -572,6 +604,16 @@ final class SidePanelParts
 				PanelSnapshot.Text.title(s.damage, SidePanelStyle.VALUE)));
 			bottom.set(new PanelSnapshot.Row(PanelSnapshot.Text.small(s.sub, SidePanelStyle.SECONDARY),
 				PanelSnapshot.Text.small(s.share, SidePanelStyle.SECONDARY)));
+			// T-085: the sub-line's shorter forms, in the card's one form for a weapon row; the details on hover.
+			bottom.left.setShort(s.subShort);
+			if (forms != null)
+			{
+				bottom.left.setGroup(s.dps != null && !s.subShort.isEmpty() ? forms : null);
+			}
+			if (!java.util.Objects.equals(s.tooltip, getToolTipText()))
+			{
+				setToolTipText(s.tooltip);
+			}
 			if (s.shareFraction != share || !s.colour.equals(colour))
 			{
 				share = s.shareFraction;
@@ -615,7 +657,7 @@ final class SidePanelParts
 		@Override
 		protected void paintComponent(Graphics g)
 		{
-			g.setColor(SidePanelStyle.CARD);
+			g.setColor(hover ? SidePanelStyle.SELECTED : SidePanelStyle.CARD);
 			g.fillRect(0, 0, getWidth(), getHeight());
 			g.setColor(SidePanelStyle.alpha(colour, 0.30));
 			g.fillRect(0, 0, (int) Math.round(getWidth() * Math.max(0, Math.min(1, share))), getHeight());

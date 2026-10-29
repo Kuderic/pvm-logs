@@ -47,7 +47,7 @@ final class SidePanelWeaponRows
 		while (settledCount < attacks.size() && attacks.get(settledCount).tick <= cutoff)
 		{
 			lastSettled = attacks.get(settledCount);
-			add(settled, lastSettled);
+			add(settled, lastSettled, ticks(view, settledCount));
 			settledCount++;
 			added++;
 		}
@@ -58,7 +58,7 @@ final class SidePanelWeaponRows
 		}
 		for (int i = settledCount; i < attacks.size(); i++)
 		{
-			add(rows, attacks.get(i));
+			add(rows, attacks.get(i), ticks(view, i));
 			added++;
 		}
 		return new ArrayList<>(rows.values());
@@ -77,8 +77,40 @@ final class SidePanelWeaponRows
 		settled.clear();
 	}
 
-	/** One attack into its row, as {@link SidePanelModel#weaponRows} adds it. */
+	/**
+	 * T-085: the ticks spent on attack {@code i} of {@code view}: its own tick and the cooldown after it, up to the next
+	 * attack. Only the ticks the timeline drew as the attack, the special or cooldown count: lost ticks, eating and a
+	 * boss's mechanic don't. So a weapon's ticks are its attacks times its speed, and a switch before the cooldown ends
+	 * gives the earlier weapon only the ticks it held. Over all the attacks they add up to the time spent attacking.
+	 * Ticks are where each attack was booked, which trails the throw by its weapon's lag: switching between weapons of
+	 * different lags moves a tick between them.
+	 */
+	static int ticks(FightTimeline.View view, int i)
+	{
+		final List<FightTimeline.Attack> attacks = view.attacks;
+		final int from = attacks.get(i).tick - view.startTick;
+		final int to = Math.min(view.states.length, i + 1 < attacks.size() ? attacks.get(i + 1).tick - view.startTick
+			: view.states.length);
+		int n = 0;
+		for (int k = Math.max(0, from); k < to; k++)
+		{
+			final byte s = view.states[k];
+			if (s == FightTimeline.ATTACK || s == FightTimeline.SPECIAL || s == FightTimeline.COOLDOWN)
+			{
+				n++;
+			}
+		}
+		return n;
+	}
+
+	/** One attack into its row with no ticks: for rows read without their view. */
 	static void add(Map<String, SidePanelModel.WeaponRow> rows, FightTimeline.Attack a)
+	{
+		add(rows, a, 0);
+	}
+
+	/** One attack into its row, as {@link SidePanelModel#weaponRows} adds it, with the ticks spent on it (T-085). */
+	static void add(Map<String, SidePanelModel.WeaponRow> rows, FightTimeline.Attack a, int ticks)
 	{
 		final String label = LedgerRows.attackLabel(a.key);
 		final String name = label == null ? a.key : label;
@@ -90,6 +122,19 @@ final class SidePanelWeaponRows
 		w.special = a.special;
 		w.attacks++;
 		w.damage += a.damage;
+		// T-085: the time spent on it, and its details.
+		w.ticks += ticks;
+		if (a.hits > 0)
+		{
+			w.landed++;
+		}
+		if (a.landedChance >= 0)
+		{
+			w.landedExpected += a.landedChance;
+			w.landedKnown++;
+		}
+		w.maxHit = Math.max(w.maxHit, a.maxHit);
+		w.biggest = Math.max(w.biggest, a.biggest);
 		if (a.mean >= 0)
 		{
 			w.expected += a.mean;
@@ -118,6 +163,12 @@ final class SidePanelWeaponRows
 		c.damage = r.damage;
 		c.expected = r.expected;
 		c.expectedKnown = r.expectedKnown;
+		c.ticks = r.ticks;
+		c.landed = r.landed;
+		c.landedExpected = r.landedExpected;
+		c.landedKnown = r.landedKnown;
+		c.maxHit = r.maxHit;
+		c.biggest = r.biggest;
 		c.itemId = r.itemId;
 		c.spell = r.spell;
 		c.style = r.style;

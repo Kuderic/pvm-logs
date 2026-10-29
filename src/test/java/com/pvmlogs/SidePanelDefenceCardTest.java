@@ -157,11 +157,12 @@ public class SidePanelDefenceCardTest
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.sireEmberlight());
 		assertEquals("446/576", tab.tiles.get(1).value.text);
 		assertEquals("expected 588 as thrown", tab.chart.expectedLegend);
-		// The Damage rows' expectations add up to the chart's.
+		// The Damage rows' expectations add up to the chart's (T-085: in each row's details).
 		int held = 0;
 		for (PanelSnapshot.Source s : tab.damage.rows)
 		{
-			final java.util.regex.Matcher m = java.util.regex.Pattern.compile("expected (\\d+)").matcher(s.sub);
+			final java.util.regex.Matcher m = java.util.regex.Pattern.compile("expected (\\d+) \\(").matcher(
+				s.tooltip == null ? "" : s.tooltip);
 			held += m.find() ? Integer.parseInt(m.group(1)) : 0;
 		}
 		assertEquals(588, held);

@@ -234,7 +234,8 @@ public class SidePanelChartsTest
 		assertEquals("768 yours", d.hint.text);
 		assertEquals("Abyssal tentacle", d.rows.get(0).name);
 		assertEquals("612", d.rows.get(0).damage);
-		assertTrue(d.rows.get(0).sub, d.rows.get(0).sub.endsWith("expected 690"));
+		// T-085: the expected damage is in the row's details; its sub-line has the DPS against expected.
+		assertTrue(d.rows.get(0).tooltip, d.rows.get(0).tooltip.contains("damage 612, expected 690 ("));
 		assertEquals(ItemID.ABYSSAL_TENTACLE, d.rows.get(0).itemId);
 		assertEquals(SidePanelStyle.MELEE, d.rows.get(0).colour);
 		assertEquals("Burning claws", d.rows.get(1).name);
@@ -307,7 +308,8 @@ public class SidePanelChartsTest
 		assertFalse(t.chart.expectedShown);
 		assertFalse(t.chart.rangeShown);
 		assertEquals(SidePanelStyle.VALUE, t.chart.actual);
-		assertEquals("27 attacks", t.damage.rows.get(0).sub);
+		// T-085: the DPS, but no expected beside it.
+		assertEquals("27 attacks · 5.1 DPS", t.damage.rows.get(0).sub);
 	}
 
 	@Test

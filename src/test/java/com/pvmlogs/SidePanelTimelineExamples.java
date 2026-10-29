@@ -150,6 +150,97 @@ final class SidePanelTimelineExamples
 		return new Built(f, store, room);
 	}
 
+	/**
+	 * T-085: one stretch of a fight's plan: {@code attacks} with one weapon at {@code speed} ticks, each expected to deal
+	 * {@code expected} with a {@code maxHit} and a chance {@code accuracy} to land; {@code damage} is what each dealt in
+	 * turn (0 for a miss), and {@code lostAfter} idle ticks follow the stretch.
+	 */
+	static final class Stretch
+	{
+		final String name;
+		final int itemId;
+		final FightTimeline.Style style;
+		final boolean special;
+		final int speed;
+		final int[] damage;
+		final double expected;
+		final int maxHit;
+		final double accuracy;
+		final int lostAfter;
+
+		Stretch(String name, int itemId, FightTimeline.Style style, boolean special, int speed, int[] damage,
+			double expected, int maxHit, double accuracy, int lostAfter)
+		{
+			this.name = name;
+			this.itemId = itemId;
+			this.style = style;
+			this.special = special;
+			this.speed = speed;
+			this.damage = damage;
+			this.expected = expected;
+			this.maxHit = maxHit;
+			this.accuracy = accuracy;
+			this.lostAfter = lostAfter;
+		}
+	}
+
+	/** T-085: a fight played stretch by stretch, through the plugin's own calls, as {@link #fight} plays one weapon. */
+	static Built plan(String boss, Stretch... stretches)
+	{
+		final int[] clock = {0};
+		final FightTimeline.Store store = new FightTimeline.Store();
+		store.setClock(() -> clock[0]);
+		final Fight f = new Fight(boss, NpcIds.GOBLIN, 1, 900, 0L, null, 0);
+		store.attach(f);
+		final FightTimeline line = store.of(f);
+		int t = 0;
+		for (Stretch st : stretches)
+		{
+			for (int amount : st.damage)
+			{
+				clock[0] = t;
+				f.recordAttackMade(false, 1.0, false);
+				line.describeLatest(st.name, st.itemId, null, st.style, t);
+				if (st.special)
+				{
+					line.markLatestSpecial();
+				}
+				f.recordExpected(st.maxHit, st.accuracy, st.expected, st.expected * st.expected / 3);
+				f.recordAttackResolved(true, true, 0.98, 1.0, 0.012, 0);
+				if (amount > 0)
+				{
+					f.recordDamageDealt(amount, 0L, true);
+					line.attributeSplat(Integer.MIN_VALUE);
+				}
+				for (int k = 1; k < st.speed; k++)
+				{
+					clock[0] = ++t;
+					f.recordTickSpent();
+				}
+				t++;
+			}
+			for (int k = 0; k < st.lostAfter; k++)
+			{
+				clock[0] = t++;
+				f.recordTickLost(false);
+			}
+		}
+		final Encounter room = new Encounter(boss, null, 0L);
+		room.add(f);
+		return new Built(f, store, room);
+	}
+
+	/** {@code n} hits of the pattern, cycled: {@code hits(10, 30, 0, 22)}. */
+	static int[] hits(int n, int... pattern)
+	{
+		final int[] out = new int[n];
+		for (int i = 0; i < n; i++)
+		{
+			out[i] = pattern[i % pattern.length];
+		}
+		return out;
+	}
+
 	private static boolean in(int t, int[] spans)
 	{
 		for (int i = 0; i + 1 < spans.length; i += 2)
