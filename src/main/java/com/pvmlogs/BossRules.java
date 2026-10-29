@@ -207,6 +207,31 @@ class BossRules
 		DrainRules defenceDrain;
 		/** Schema 5: what it does to the player's damage, and when; null for nothing. */
 		DamageModifierRules damageModifiers;
+		/** T-074: the idle ticks its mechanics may excuse from uptime, by the damage-modifier state they ride on. */
+		List<UptimeAllowance> uptimeAllowances;
+	}
+
+	/**
+	 * T-074: downtime a boss forces on the player. Idle ticks inside one of the
+	 * named state's windows, up to {@link #maxTicks} a window, are neutral
+	 * "mechanics" ticks rather than lost; those beyond the cap are still lost.
+	 */
+	static final class UptimeAllowance
+	{
+		/** The {@link StateRule} name whose windows it covers. */
+		String state;
+		/** {@code "cast"}: from the player's cast that started the window (the Leviathan's stun); else from its opening. */
+		String from;
+		/** The idle ticks one window may excuse. */
+		int maxTicks;
+		/** Ticks after the window closes it still covers (getting back into position after a special). */
+		int afterTicks;
+		String source;
+
+		boolean fromCast()
+		{
+			return "cast".equals(from);
+		}
 	}
 
 	/**

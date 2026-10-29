@@ -468,6 +468,17 @@ class Raid
 		return total;
 	}
 
+	/** Idle ticks its bosses' mechanics excused (T-074). */
+	int getTicksMechanics()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getTicksMechanics();
+		}
+		return total;
+	}
+
 	int getTicksLostEating()
 	{
 		int total = 0;

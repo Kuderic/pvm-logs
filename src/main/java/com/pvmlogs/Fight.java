@@ -172,6 +172,9 @@ class Fight
 
 	private int ticksLostEating;
 	private int ticksLostOther;
+	// Idle ticks a boss's mechanic forced, inside its allowance (T-074): neutral, like eating, but not lost either. Counted
+	// in combatTicks, so the uptime leaves them out as it leaves eating out. Additive: a fight saved before has none.
+	private int ticksMechanics;
 	private int combatTicks;
 	private boolean attacking;
 	// This session's attack-by-attack and tick-by-tick record (T-035), fed from the methods below where each counts, so
@@ -979,6 +982,24 @@ class Fight
 		if (timeline != null)
 		{
 			timeline.tickLost(eating);
+		}
+	}
+
+	/**
+	 * An idle tick a boss's mechanic excused (T-074): counted as a combat tick
+	 * and not as lost, so uptime leaves it out. Ignored before the first attack.
+	 */
+	void recordTickMechanic(boolean roomEngaged)
+	{
+		if (!attacking && !roomEngaged)
+		{
+			return;
+		}
+		ticksMechanics++;
+		combatTicks++;
+		if (timeline != null)
+		{
+			timeline.tickMechanic();
 		}
 	}
 
