@@ -87,6 +87,10 @@ public final class SidePanelPictures
 			write(out, "15c-two-kinds-dealt", scale, render(SidePanelExamples.twoKindsDealt(), scale));
 			write(out, "15d-old-kill", scale, render(SidePanelExamples.oldKill(), scale));
 			write(out, "15e-trip-old-and-new", scale, renderTrip(SidePanelExamples.tripMixedOldAndNew(), scale));
+			// T-072: times of day with am and pm: a kill at midnight, noon and 12:05 am.
+			write(out, "17a-dead-at-midnight", scale, render(SidePanelExamples.deadAt(0, 0), scale));
+			write(out, "17b-dead-at-noon", scale, render(SidePanelExamples.deadAt(12, 0), scale));
+			write(out, "17c-dead-at-12-05-am", scale, render(SidePanelExamples.deadAt(0, 5), scale));
 			// T-068: the Damage taken card mid-fight (the total only) and after; the trip while a fight runs.
 			write(out, "16a-taken-mid-fight", scale, render(SidePanelExamples.takenMidFight(), scale));
 			write(out, "16b-taken-after", scale, render(SidePanelExamples.ruledKill(true), scale));

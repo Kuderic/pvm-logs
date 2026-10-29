@@ -236,6 +236,8 @@ final class PanelSnapshot
 		final int icon;
 		/** T-052: the target's tracked Defence while the fight runs, once a drain has landed; empty before. */
 		final Text defence;
+		/** T-072: sub-lines drawn instead when {@link #sub} doesn't fit, longest first: the first that fits; empty for none. */
+		final List<String> subShort;
 
 		Header(Text name, Text suffix, Text sub, Text clock)
 		{
@@ -249,6 +251,12 @@ final class PanelSnapshot
 
 		Header(Text name, Text suffix, Text sub, Text clock, int icon, Text defence)
 		{
+			this(name, suffix, sub, clock, icon, defence, null);
+		}
+
+		Header(Text name, Text suffix, Text sub, Text clock, int icon, Text defence, List<String> subShort)
+		{
+			this.subShort = subShort == null ? java.util.Collections.<String>emptyList() : list(subShort);
 			this.name = name;
 			this.suffix = suffix;
 			this.sub = sub;

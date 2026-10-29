@@ -27,8 +27,11 @@ final class SidePanelText extends JComponent
 	private final boolean right;
 	/** A hint after a label gives way before the label does; a name's {@code (dead)} doesn't. */
 	private boolean cutSuffixFirst;
-	/** T-063: a shorter text drawn instead when the text doesn't fit ({@code +80 thrall, 38 DoT}); null for none. */
-	private String shortText;
+	/**
+	 * T-063, T-072: shorter texts, longest first, the first that fits drawn instead when the text doesn't
+	 * ({@code +80 thrall, 38 DoT}); empty for none.
+	 */
+	private java.util.List<String> shortTexts = java.util.Collections.emptyList();
 	/**
 	 * T-046: the widest this text has been, which is the width it asks for. It
 	 * never shrinks, so a value that grows back to an earlier width (a clock's
@@ -169,9 +172,16 @@ final class SidePanelText extends JComponent
 	 */
 	void setShort(String s)
 	{
-		if (!Objects.equals(s, shortText))
+		setShort(s == null ? java.util.Collections.<String>emptyList() : java.util.Collections.singletonList(s));
+	}
+
+	/** As {@link #setShort(String)}, with several forms, longest first: the first that fits is drawn. */
+	void setShort(java.util.List<String> forms)
+	{
+		final java.util.List<String> now = forms == null ? java.util.Collections.<String>emptyList() : forms;
+		if (!now.equals(shortTexts))
 		{
-			shortText = s;
+			shortTexts = now;
 			repaint();
 		}
 	}
@@ -228,7 +238,20 @@ final class SidePanelText extends JComponent
 		final int suffixWidth = sm.stringWidth(after);
 		final int room = Math.max(0, getWidth() - suffixWidth);
 		// The short form where the text would be cut (T-063), cut itself only if even it doesn't fit.
-		final String full = shortText != null && fm.stringWidth(text) > room ? shortText : text;
+		String full = text;
+		if (!shortTexts.isEmpty() && fm.stringWidth(text) > room)
+		{
+			// The first short form that fits; the shortest, to be cut, when none does.
+			full = shortTexts.get(shortTexts.size() - 1);
+			for (String form : shortTexts)
+			{
+				if (fm.stringWidth(form) <= room)
+				{
+					full = form;
+					break;
+				}
+			}
+		}
 		final String shown = LedgerRows.cut(full, fm::stringWidth, room);
 		final int width = fm.stringWidth(shown) + suffixWidth;
 		final int x = right ? Math.max(0, getWidth() - width) : 0;

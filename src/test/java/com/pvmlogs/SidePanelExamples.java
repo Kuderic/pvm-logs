@@ -530,6 +530,16 @@ final class SidePanelExamples
 		return f;
 	}
 
+	// ---- T-072: times of day with am and pm ----
+
+	/** The kill, ended at this time of day: the header's {@code 12:00 am}, {@code 12:00 pm}, {@code 12:05 am}. */
+	static SidePanelModel.Input deadAt(int hour, int minute)
+	{
+		final SidePanelModel.Input in = dead();
+		in.endMillis = at(hour, minute);
+		return in;
+	}
+
 	// ---- T-063: damage over time by kind ----
 
 	/** A kill with this damage over time dealt and taken, by kind; the remainder is what has no kind. */

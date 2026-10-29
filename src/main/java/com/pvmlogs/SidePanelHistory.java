@@ -600,7 +600,7 @@ final class SidePanelHistory
 		final boolean warning = room.getStatsWarning() != null;
 		final long end = endMillis(room);
 		return new KillRow(room, LedgerRows.clock(room.getCombatTicks()),
-			end > 0 ? SidePanelModel.date(end, now, zone) : "", SidePanelModel.chip(n, warning),
+			end > 0 ? SidePanelModel.rowDate(end, now, zone) : "", SidePanelModel.chip(n, warning),
 			chipFill(n, warning), Double.isNaN(n.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(n.execution),
 			room.getName(), !isKill(room));
 	}

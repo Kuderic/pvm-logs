@@ -357,6 +357,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final JPanel left = SidePanelParts.stack(4);
 		final SidePanelText name = new SidePanelText(tab.header.name, false);
 		final SidePanelText sub = new SidePanelText(tab.header.sub, false);
+		sub.setShort(tab.header.subShort);
 		left.add(name);
 		left.add(sub);
 		// T-052: the target's tracked Defence while the fight runs, from the first drain; the structure says whether.
@@ -380,6 +381,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			name.set(t.header.name, t.header.suffix);
 			sub.set(t.header.sub);
+			sub.setShort(t.header.subShort);
 			clock.set(t.header.clock);
 			if (icon != null)
 			{

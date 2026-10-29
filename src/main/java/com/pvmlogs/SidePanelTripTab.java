@@ -155,6 +155,7 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		{
 			name.set(t.header.name);
 			sub.set(t.header.sub);
+			sub.setShort(t.header.subShort);
 			clock.set(t.header.clock);
 		});
 	}
