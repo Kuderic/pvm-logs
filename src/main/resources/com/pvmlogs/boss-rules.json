@@ -302,6 +302,11 @@
       ]
     },
     {
+      "name": "Maggot King",
+      "npcIds": [15742],
+      "meleePunish": {"onBossAnim": 13925, "afterTicks": 2, "source": "T-086. The wiki (Maggot King/Strategies): on a slam, players 'will automatically attack the boss without incurring an attack delay', clicking 'on the same tick that it extends its head'. 13925 is MAGGOT_KING_MELEEATTACK (gamevals). The 2 ticks are from Eric's log of 2026-10-29: of the 14 starts of 13925 it shows (beside the splats on Eric), 13 have an axe attack of his 2 ticks later. 9 of the 13 came before the axe's 5 ticks were up (899, 904, 909, 1406, 1431, 1436, 1441, 1446, 1914), and the axe's next attack came on its own cadence after each (1432 after 1427 and the punish on 1431), so the punish neither waits for the cooldown nor starts one. Booking only: what it does to accuracy and damage is T-087's."}
+    },
+    {
       "name": "Vorkath",
       "npcIds": [8058, 8059, 8060, 8061],
       "defenceDrain": {

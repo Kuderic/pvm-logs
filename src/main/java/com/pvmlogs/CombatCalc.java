@@ -70,6 +70,8 @@ class CombatCalc
 	private static final double TICK_SECONDS = 0.6;
 
 	private static final int MANUAL_CAST_TICKS = 8;
+	/** The twinflame staff's cast speed (T-086). */
+	static final int TWINFLAME_CAST_TICKS = 6;
 	// Clicks that may be outstanding at once. Two covers a click made while the previous cast is still in the air; the
 	// third is slack.
 	private static final int MAX_PENDING_CASTS = 3;
@@ -2128,7 +2130,7 @@ class CombatCalc
 	/**
 	 * Casting runs on its own clock: the weapon's speed applies only to powered
 	 * staves and salamanders. Everything else casts in 5 ticks, or 4 for the
-	 * harmonised staff on the standard spellbook.
+	 * harmonised staff on the standard spellbook, or 6 for the twinflame staff.
 	 */
 	private int castSpeedTicks(int weaponTicks)
 	{
@@ -2141,11 +2143,21 @@ class CombatCalc
 		{
 			return weaponTicks;
 		}
-		final Spell spell = activeSpell();
-		if (weaponItemId() == ItemID.NIGHTMARE_STAFF_HARMONISED
-			&& spell != null && spell.getSpellbook() == Spellbook.STANDARD)
+		return spellClockTicks(weaponItemId(), activeSpell());
+	}
+
+	/** A spell's cast speed from a staff that does not attack on its own: 5, but for the staves that change it. */
+	static int spellClockTicks(int weaponId, Spell spell)
+	{
+		if (weaponId == ItemID.NIGHTMARE_STAFF_HARMONISED && spell != null && spell.getSpellbook() == Spellbook.STANDARD)
 		{
 			return 4;
+		}
+		// The twinflame staff has "an attack and cast speed of 6" (wiki, Twinflame staff). T-086: booked at 5, Eric's casts at
+		// the Maggot King went out every 6 ticks (72 of 85 gaps between them, 2026-10-29), each leaving a tick read as lost.
+		if (weaponId == ItemID.TWINFLAME_STAFF)
+		{
+			return TWINFLAME_CAST_TICKS;
 		}
 		return 5;
 	}

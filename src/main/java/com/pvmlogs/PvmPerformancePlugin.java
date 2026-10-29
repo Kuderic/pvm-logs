@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -341,6 +342,8 @@ public class PvmPerformancePlugin extends Plugin
 	private static final int IDLE_ANIMATION = -1;
 	/** How long after a swap a landing blow may still be the melee weapon's. */
 	private static final int MELEE_SWAP_GRACE_TICKS = 1;
+	// The starts of a punished animation kept (T-086): a melee blow is booked a tick after its throw, two after the start.
+	private static final int PUNISH_ANIMS_KEPT = 4;
 	// The tick an attack was last seen going out on, from the events that prove one rather than from what the player looks
 	// like, and which event proved it: a projectile is a cast or a shot, a hitsplat a melee blow.
 	private int attackObservedTick = -1;
@@ -371,6 +374,15 @@ public class PvmPerformancePlugin extends Plugin
 	private boolean attackResetsDelay;
 	private int delayResetTick = Integer.MIN_VALUE;
 	private boolean attackDroppedCast;
+	// T-086: the attack being observed is a melee punish (the Maggot King's slam), thrown outside the weapon's speed, so it
+	// leaves the next attack due when it was; the ticks the fought boss started the animation a punish answers; and the
+	// fought boss's last animation, for the BOSS ANIM line.
+	private boolean attackIsPunish;
+	private final ArrayDeque<Integer> punishAnimTicks = new ArrayDeque<>();
+	private int lastBossAnim = Integer.MIN_VALUE;
+	// The last tick a melee blow at an add of the open boss was booked from its splat (T-086), so its next splat is not
+	// another.
+	private int lastAddBlowTick = Integer.MIN_VALUE;
 	// The boss modifiers each tick's figures were worked out with (T-078), for the ATTACK line: read at the booking they
 	// were the ones left after the attack's own splat had closed its window.
 	private final Map<Integer, String> modifiersByTick = new HashMap<>();
@@ -856,7 +868,16 @@ public class PvmPerformancePlugin extends Plugin
 				if (isAddOfOpenBoss(npc))
 				{
 					// Swatted in passing (T-084): the boss's fight stays open, and the add's damage, unscored, is nobody's.
-					pendingMineHits.remove(npc.getIndex());
+					final List<PendingHit> flew = pendingMineHits.remove(npc.getIndex());
+					// A melee blow at it is seen only here, where a shot was booked from its projectile (T-086: an axe at a
+					// Maggot King larva that had landed). Booked as an attack at the add: a tick in the boss's fight, with the
+					// weapon on cooldown after it.
+					if ((flew == null || flew.isEmpty()) && combatCalc.isMeleeEquipped()
+						&& !withinTicks(client.getTickCount(), lastAddBlowTick, 1))
+					{
+						lastAddBlowTick = client.getTickCount();
+						recordAttackObserved(false, npc);
+					}
 					debug.log("hitsplat %d on %s (npc %d, index %d): an add of %s, whose fight stays open; not counted",
 						hitsplat.getAmount(), npc.getName(), npc.getId(), npc.getIndex(), current.getTargetName());
 					return;
@@ -872,7 +893,12 @@ public class PvmPerformancePlugin extends Plugin
 			// Grouped by adjacency, and nothing swings faster than two ticks, so no two real attacks merge.
 			final int tick = client.getTickCount();
 			final Integer seen = lastHitsplatTick.put(npc.getIndex(), tick);
-			final boolean newBurst = seen == null || tick - seen > 1;
+			final AttackSplats.Burst open = bursts.get(npc.getIndex());
+			// Or a single-hit melee weapon's second splat at a boss whose slam is punished (T-086): the punish and the weapon's
+			// own swing a tick apart are two attacks, not one blow's two splats.
+			final boolean newBurst = seen == null || tick - seen > 1
+				|| punishRuleFor(npc.getId()) != null && combatCalc.isMeleeEquipped() && burstBooked.contains(npc.getIndex())
+				&& secondSplatIsOwnAttack(open, tick);
 			if (newBurst)
 			{
 				burstLanded.remove(npc.getIndex());
@@ -1555,7 +1581,10 @@ public class PvmPerformancePlugin extends Plugin
 		// the fight, and read against no target its bonus would be missing.
 		int targetId = current != null && !current.isEnded() ? targetLiveId : -1;
 		final Player me = client.getLocalPlayer();
-		if (targetId < 0 && me != null && me.getInteracting() instanceof NPC)
+		// Or an add of the boss's the player is aimed at (T-086): a shot at a Maggot King larva pays at the larva's bonus,
+		// and read at the King's x2.45 it was undecodable.
+		if (me != null && me.getInteracting() instanceof NPC
+			&& (targetId < 0 || isAddOfOpenBoss((NPC) me.getInteracting())))
 		{
 			targetId = ((NPC) me.getInteracting()).getId();
 		}
@@ -1574,7 +1603,10 @@ public class PvmPerformancePlugin extends Plugin
 			// The drop is on the attack tick, so it proves an attack thrown now. If the last booking says the weapon was still
 			// busy, that booking was not the player's - most likely a thrall's splat taken for a blow. Not undone here: a
 			// booking touches the fight, the room and the session, and re-scoring belongs in the analyzer (workstream 03).
-			if (attackDueTick != Integer.MIN_VALUE && tick < attackDueTick && current != null && !current.isEnded())
+			// A punish (T-086) is thrown while the weapon is busy, and is no contradiction.
+			final BossRules.MeleePunish punish = targetId < 0 ? null : punishRuleFor(targetId);
+			if (attackDueTick != Integer.MIN_VALUE && tick < attackDueTick && current != null && !current.isEnded()
+				&& (punish == null || !isPunishTick(punishAnimTicks, tick, punish.afterTicks)))
 			{
 				debug.log("XP CONTRADICTS BOOKING: an attack was thrown on %d, but the last booking had the weapon busy until "
 					+ "%d", tick, attackDueTick);
@@ -3265,6 +3297,7 @@ public class PvmPerformancePlugin extends Plugin
 			&& ((NPC) event.getActor()).getIndex() == current.getTargetIndex())
 		{
 			targetSeen.noteAnimation(client.getTickCount(), current.getTargetIndex(), event.getActor().getAnimation());
+			noteBossAnimation((NPC) event.getActor());
 		}
 		// A boss's damage-modifier windows its animations open and close (T-057: the Leviathan's specials).
 		if (event.getActor() instanceof NPC && damageModifiers.hasModifiers((NPC) event.getActor()))
@@ -3591,6 +3624,78 @@ public class PvmPerformancePlugin extends Plugin
 		return since != Integer.MIN_VALUE && (long) now - since <= window;
 	}
 
+	/** The melee punish of this npc's boss (T-086: the Maggot King's slam), or null for none. */
+	private BossRules.MeleePunish punishRuleFor(int npcId)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final BossRules.Boss boss = rules == null ? null : rules.forNpc(npcId);
+		return boss == null ? null : boss.meleePunish;
+	}
+
+	/**
+	 * The fought boss started an animation (T-086): one BOSS ANIM line each, so
+	 * a new boss's phases can be found from a log, and the tick of the one a
+	 * punish answers kept.
+	 */
+	private void noteBossAnimation(NPC npc)
+	{
+		final int tick = client.getTickCount();
+		final int anim = npc.getAnimation();
+		debug.log("BOSS ANIM %s (npc %d, index %d): %d at tick %d (was %s)", current.getTargetName(), npc.getId(),
+			npc.getIndex(), anim, tick, lastBossAnim == Integer.MIN_VALUE ? "not seen" : String.valueOf(lastBossAnim));
+		lastBossAnim = anim;
+		final BossRules.MeleePunish punish = punishRuleFor(npc.getId());
+		if (punish != null && anim == punish.onBossAnim)
+		{
+			punishAnimTicks.addLast(tick);
+			while (punishAnimTicks.size() > PUNISH_ANIMS_KEPT)
+			{
+				punishAnimTicks.removeFirst();
+			}
+		}
+	}
+
+	/**
+	 * The weapon's next due tick after an attack thrown on {@code thrownTick}
+	 * at {@code speed}: a punish (T-086) waited for no cooldown and starts none,
+	 * so the weapon's own next attack is due when it was, or on the next tick
+	 * where it was already free.
+	 */
+	static int dueAfter(boolean punish, int dueBefore, int thrownTick, int speed)
+	{
+		return punish ? Math.max(dueBefore, thrownTick + 1) : thrownTick + speed;
+	}
+
+	/**
+	 * Whether an attack thrown on {@code thrownTick} is a punish (T-086): the
+	 * boss started the animation it answers {@code afterTicks} before.
+	 */
+	static boolean isPunishTick(Iterable<Integer> animTicks, int thrownTick, int afterTicks)
+	{
+		for (int t : animTicks)
+		{
+			if (t + afterTicks == thrownTick)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether a splat on {@code tick} is an attack of its own rather than the
+	 * open burst's next splat (T-086), at a boss whose slam is punished: the
+	 * burst is an ordinary blow of one splat that has had it, landed the tick
+	 * before. A punish and the weapon's own swing land a tick apart, each its own
+	 * attack: in Eric's Maggot King log each Zombie axe pair that dealt damage
+	 * twice had two experience drops, a tick apart (58 then 22, 66 then 18).
+	 */
+	static boolean secondSplatIsOwnAttack(AttackSplats.Burst open, int tick)
+	{
+		return open != null && !open.isSpecial() && open.splats().count == 1 && open.given() >= 1
+			&& open.lastTick() == tick - 1;
+	}
+
 	/** Whether this npc is an add of the open fight's boss that leaves its fight open (T-084: Zulrah's snakelings). */
 	private boolean isAddOfOpenBoss(NPC npc)
 	{
@@ -3801,7 +3906,10 @@ public class PvmPerformancePlugin extends Plugin
 				// Thrown during a fight that has since been discarded. The cooldown still has to advance or every tick after
 				// this reads as lost, and the eats before it were spent waiting for it.
 				logEats(foodDelay.attackThrown(attackTick, attackDueTick));
-				attackDueTick = attackTick + combatCalc.attackSpeedTicks();
+				// At the speed held when it went out (T-086): a bow shot at a larva is booked two ticks later, by when the staff
+				// is often back in hand.
+				final Integer threwAt = onAdd ? speedByTick.get(heldTick(attackSwitchTick, attackTick)) : null;
+				attackDueTick = attackTick + (threwAt != null ? threwAt : combatCalc.attackSpeedTicks());
 				lastAttackFromProjectile = attackObservedFromProjectile;
 				combatCalc.noteAttackKind(true);
 				if (onAdd)
@@ -3899,7 +4007,15 @@ public class PvmPerformancePlugin extends Plugin
 			final Integer threwAt = speedByTick.get(heldTick(attackSwitchTick, attackTick));
 			final int speed = bookedSpeed(attackResetsDelay, attackDroppedCast && attackSwitchTick == Integer.MIN_VALUE,
 				threwAt, combatCalc.attackSpeedTicks());
-			attackDueTick = attackTick + speed;
+			final boolean punished = attackIsPunish && !attackObservedFromCast && !attackObservedFromProjectile;
+			attackDueTick = dueAfter(punished, attackDueTick, attackTick, speed);
+			if (punished)
+			{
+				final BossRules.MeleePunish punish = punishRuleFor(targetId);
+				debug.log("  PUNISH: thrown %d ticks after the boss's anim %d, outside the weapon's speed: the next attack is "
+					+ "still due on %d", punish == null ? -1 : punish.afterTicks, punish == null ? -1 : punish.onBossAnim,
+					attackDueTick);
+			}
 			if (attackResetsDelay)
 			{
 				debug.log("  the stun resets the attack delay: the weapon's next attack is due on %d", attackDueTick);
@@ -4159,6 +4275,10 @@ public class PvmPerformancePlugin extends Plugin
 		// faerdhinen shot fired just before swapping to a blowpipe was scored as the blowpipe.
 		attackThrownTick = client.getTickCount() - bookingLag;
 		attackSwitchTick = switchSinceThrow(attackThrownTick, client.getTickCount(), gearChangeTicks);
+		// A melee blow thrown on the tick a slam is punished on (T-086). The booking also asks that no cast or projectile
+		// proved it.
+		final BossRules.MeleePunish punish = fromProjectile || !combatCalc.isMeleeEquipped() ? null : punishRuleFor(npcId);
+		attackIsPunish = punish != null && isPunishTick(punishAnimTicks, attackThrownTick, punish.afterTicks);
 		// The rows are keyed by the id the target wore on their tick, and the attack was rolled against the one it wore at
 		// the throw.
 		final int thrownAtId = targetIds.idOn(attackThrownTick, npc.getIndex(), npcId);
@@ -4653,6 +4773,8 @@ public class PvmPerformancePlugin extends Plugin
 		// Tags stripped: some names carry colour markup and it was reaching the CSV verbatim, "<col=00ffff>Rubble</col>" and
 		// all.
 		mechanics.reset();
+		punishAnimTicks.clear();
+		lastBossAnim = Integer.MIN_VALUE;
 		current = new Fight(Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(),
 			maxHp, now,
 			raidType, raidCounter);
