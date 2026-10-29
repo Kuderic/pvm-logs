@@ -183,6 +183,16 @@ public class LeviathanStunFollowupsTest
 	}
 
 	@Test
+	public void aShotThatDroppedAClickIsNotScoredFromTheThrowsRow()
+	{
+		// Eric's 05:01 log, [313]-[317] (shape only): Shadow Rush clicked on 313 never cast; the bow's shot thrown on 314
+		// dropped the click when it surfaced on 316. The row of 314 was worked out with the click in hand (max 14), so the
+		// shot is scored from the figures read once it was gone, as the call site passes it: not as a projectile's throw.
+		assertEquals(316, PvmPerformancePlugin.scoringTick(Integer.MIN_VALUE, false, true, 314, 316));
+		assertEquals(314, PvmPerformancePlugin.scoringTick(Integer.MIN_VALUE, true, true, 314, 316));
+	}
+
+	@Test
 	public void aClickThatDidNotCastLeavesTheWeaponsSpeed()
 	{
 		// The tick the bow's shot was thrown on recorded the spell's 5, the click still in hand; the drop says it was the
