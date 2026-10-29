@@ -1664,7 +1664,8 @@ class CombatCalc
 	void dropManualCast()
 	{
 		manualCast.drop();
-		memoStyle = null;
+		// Every figure worked out this tick was the spell's, not only the style (T-078 follow-up).
+		memoTick = Integer.MIN_VALUE;
 	}
 
 	private Spell activeManualCast()
@@ -1690,7 +1691,7 @@ class CombatCalc
 	{
 		if (manualCast.attackThrown(meleeProvenAttack, client.getTickCount()))
 		{
-			memoStyle = null;
+			memoTick = Integer.MIN_VALUE;
 		}
 	}
 

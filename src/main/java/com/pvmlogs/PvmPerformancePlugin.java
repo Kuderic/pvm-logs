@@ -2724,7 +2724,9 @@ public class PvmPerformancePlugin extends Plugin
 		// Melee is left alone. It lands on the tick it is thrown, so the figures taken at its hitsplat are already the right
 		// ones. Every kind takes the row from before a switch since its throw (T-065): a bow of faerdhinen shot thrown on the
 		// tick before swapping to a blowpipe surfaced with the blowpipe held and was scored as it, origin row and all.
-		final boolean originIsAuthoritative = (attackObservedFromProjectile || beforeSwitch)
+		// A shot that dropped a spell click that never cast takes the figures read once the click was gone (T-078): every
+		// row while it was in hand has the spell's.
+		final boolean originIsAuthoritative = (attackObservedFromProjectile || beforeSwitch) && !attackDroppedCast
 			&& atOrigin != null && (int) atOrigin[EXP_NPC_ID] == targetId
 			&& atOrigin[EXP_ACCURACY] >= 0;
 		if (originIsAuthoritative)
@@ -3434,8 +3436,10 @@ public class PvmPerformancePlugin extends Plugin
 
 	private int scoringTick()
 	{
-		return scoringTick(attackFiguresTick, attackObservedFromProjectile, expectedByTick.containsKey(attackThrownTick),
-			attackThrownTick, attackOriginTick);
+		// Not the throw's row for a shot that dropped a spell click that never cast: that tick's figures were worked out
+		// with the click in hand, so the bow's 35 was judged against Shadow Rush's 14 (Eric's 05:01 log, [314]-[317]).
+		return scoringTick(attackFiguresTick, attackObservedFromProjectile && !attackDroppedCast,
+			expectedByTick.containsKey(attackThrownTick), attackThrownTick, attackOriginTick);
 	}
 
 	/** Whether this spell starts one of this npc's damage-modifier states (T-057's stun). */
