@@ -61,6 +61,13 @@ public final class LedgerPictures
 		final LedgerExamples.FakeScope raid = LedgerExamples.raid();
 		raid.damageVariance = 40_000;
 		s.put("6-raid", LedgerRows.build(raid, LedgerRows.State.raid("Tombs of Amascut", 3, false, false), all));
+		// T-075: the trip's drains and specs, in words.
+		final LedgerExamples.FakeScope tripDrains = LedgerExamples.trip();
+		tripDrains.damageVariance = 60_000;
+		tripDrains.secondsPerDamage = 14.0 / 182;
+		tripDrains.drainValueDamage = 520;
+		tripDrains.specLuckDamage = 65;
+		s.put("30-trip-drains", LedgerRows.build(tripDrains, LedgerRows.State.trip(6, false, false), all));
 		s.put("7-unsure", LedgerRows.build(LedgerExamples.midFight(),
 			LedgerRows.State.fight("Vardorvis", false, false, true), all));
 		s.put("8-nodata", LedgerRows.build(LedgerExamples.noData(),
@@ -125,6 +132,10 @@ public final class LedgerPictures
 		drained.drainValueDamage = 182;
 		drained.specLuckDamage = 65;
 		s.put("18-drained-kill", LedgerRows.build(drained, LedgerRows.State.fight("Vardorvis", true, true, false)
+			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
+		// T-075: specs that cost time read "slower".
+		drained.specLuckDamage = -65;
+		s.put("29-specs-slower", LedgerRows.build(drained, LedgerRows.State.fight("Vardorvis", true, true, false)
 			.withAverage(new LedgerHistory.Average(new LedgerHistory.Spread(119, 115, 125), 10)), all));
 		drained.specLuckDamage = 0;
 		s.put("19-party-drained", LedgerRows.build(drained, LedgerRows.State.fight("Vardorvis", true, true, false)
