@@ -26,14 +26,19 @@ public class FreshInstallTest
 		final Map<String, String> d = new TreeMap<>();
 		// Overlays
 		d.put("showOverlay", "true");
+		// "Show DPS overlay" (the key is the old loadout overlay's, T-073).
 		d.put("overlayShowLoadout", "true");
+		// T-073: "Always show DPS overlay" off; it simplifies after 60 s without an attack.
+		d.put("overlayAlwaysDps", "false");
+		d.put("overlayDpsIdleSeconds", "60");
 		// Bosses only: on for new installs (Eric, 2026-10-27, T-040).
 		d.put("overlayBossesOnly", "true");
 		d.put("overlayHoldSeconds", "60");
 		d.put("overlayCovers", "FIGHT");
 		// Fight overlay
 		d.put("overlayLuck", "true");
-		d.put("overlayParts", "ALL");
+		// "Under Execution": Costing only for new installs (T-073, Eric 2026-10-28).
+		d.put("overlayParts", "COSTING");
 		d.put("overlayDetails", "true");
 		// Side panel: live and charts on; larger and smooth text off, so it looks as it always has (T-053).
 		d.put("panelLive", "true");

@@ -17,11 +17,11 @@ Live during the fight, the full breakdown after the kill.
 
 <table>
 <tr>
-<td><img src="docs/images/overlay-mid-fight.png" alt="The fight overlay mid-fight at General Graardor, with the Defence a special took and the loadout overlay under it"></td>
+<td><img src="docs/images/overlay-mid-fight.png" alt="The fight overlay mid-fight at General Graardor, with the Defence a special took and the DPS overlay under it"></td>
 <td><img src="docs/images/overlay-after-kill.png" alt="The fight overlay after a General Graardor kill"></td>
 </tr>
 <tr>
-<td>Mid-fight, with the loadout overlay under it</td>
+<td>Mid-fight, with the DPS overlay under it</td>
 <td>After the kill: the drain's worth, and your usual time</td>
 </tr>
 </table>
@@ -30,10 +30,10 @@ After a kill at a boss with attack rules, Execution gains an **avoidable eating*
 
 <img src="docs/images/overlay-ruled-kill.png" alt="The fight overlay after a Vardorvis kill, with avoidable eating and avoidable damage taken">
 
-### The loadout overlay
-Your current weapon's max hit, accuracy and DPS against the target, and its special attack's.
+### The DPS overlay
+Your current weapon's DPS, max hit and accuracy against the monster it names, and its special attack's. It can also stay up outside fights ("Always show DPS overlay"), against the last monster you fought; after a minute without an attack it shrinks to what needs no monster: the max hit and the special's.
 
-<img src="docs/images/overlay-loadout.png" alt="The loadout overlay for a Dragon warhammer, with its special attack">
+<img src="docs/images/overlay-loadout.png" alt="The DPS overlay for a Dragon warhammer against General Graardor, with its special attack">
 
 ### The side panel
 - **Fight:** where the time went, Luck, the Defence your specials took, Execution, damage by weapon and source, damage over time, a tick strip, and damage taken.
@@ -76,7 +76,6 @@ One download, and nothing uploaded.
   - burn from burning claws in *expected* damage (it's counted once it lands);
   - the coloured hitsplats some bosses use for shields or poise (Verzik's first phase, Kephri, the Wardens), which count as damage.
 - **Guessed, where no source says:** what counts as behind the Leviathan for a back shot, and how its 33% reduction rounds; how fast drained Defence comes back (mostly from a wiki user's measurements), and that it starts coming back at the first drain.
-- **The Leviathan:** a Shadow spell's stun isn't picked up yet, so the next shot is scored wrongly and Luck there reads lucky.
 - **Thralls:** a zombie thrall's timing hasn't been confirmed in a log, and in a group where teammates summon at the same moment, a teammate's thrall could be taken for yours.
 - **Rules about the boss's attacks** (for avoidable damage and eating) exist for Vardorvis only.
 
