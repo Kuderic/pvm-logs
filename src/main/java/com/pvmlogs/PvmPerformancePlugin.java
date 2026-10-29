@@ -944,13 +944,13 @@ public class PvmPerformancePlugin extends Plugin
 			// so is exactly as late as the spell was slow.
 			final int castLag = magicHitDelay(castDistance(npc));
 			final boolean unbookedCast = combatCalc.castLandsWithoutProjectile()
-				&& client.getTickCount() - lastCastBookedTick > castLag;
+				&& !withinTicks(client.getTickCount(), lastCastBookedTick, castLag);
 			// Melee as it was when the blow was THROWN, not as the client shows it now. A swap is not wielded until the tick
 			// after it, so swinging and then switching to a blowpipe left the melee hitsplat arriving while a ranged weapon was
 			// on screen - the attack was never booked and its damage counted against no expectation. Only non-projectile
 			// hitsplats reach here, so widening this cannot claim a ranged attack.
 			final boolean meleeRecently = combatCalc.isMeleeEquipped()
-				|| client.getTickCount() - lastMeleeTick <= MELEE_SWAP_GRACE_TICKS;
+				|| withinTicks(client.getTickCount(), lastMeleeTick, MELEE_SWAP_GRACE_TICKS);
 			final boolean melee = meleeRecently || unbookedCast;
 			final boolean firstOfBurst = !burstBooked.contains(npc.getIndex());
 			// A ranged or magic splat that arrived as no projectile of mine: one whose projectile was not taken as mine, which
@@ -1532,7 +1532,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			projectileDue |= cast.npcIndex == index && Math.abs(cast.resolveTick - tick) <= FLIGHT_SLACK_TICKS;
 		}
-		final boolean melee = combatCalc.isMeleeEquipped() || tick - lastMeleeTick <= MELEE_SWAP_GRACE_TICKS;
+		final boolean melee = combatCalc.isMeleeEquipped() || withinTicks(tick, lastMeleeTick, MELEE_SWAP_GRACE_TICKS);
 		// The weapon's own due tick from the last booking: a blow thrown before it is impossible, which is what stops a
 		// thrall's splat booking an attack inside the weapon's cooldown (T-003, Vardorvis ticks 199 and 203).
 		return ThrallTracker.classifyPlayer(state, projectileDue, melee, tick, attackDueTick, lastAttackFromProjectile);
@@ -3551,6 +3551,19 @@ public class PvmPerformancePlugin extends Plugin
 		return current != null && !current.isEnded() ? targetNpc : null;
 	}
 
+	/**
+	 * Whether {@code since} was no more than {@code window} ticks before {@code
+	 * now}; never for {@code Integer.MIN_VALUE}, "not yet". Subtracted as ints,
+	 * {@code now - Integer.MIN_VALUE} overflows to a negative, so "never wielded
+	 * melee" read as "melee a moment ago": every splat that came with no
+	 * projectile of the player's was booked as a melee blow (T-084, Eric's 13:20
+	 * Zulrah log, 14 of them, each pushing the next real shot out as "too soon").
+	 */
+	static boolean withinTicks(int now, int since, int window)
+	{
+		return since != Integer.MIN_VALUE && (long) now - since <= window;
+	}
+
 	/** Whether this npc is an add of the open fight's boss that leaves its fight open (T-084: Zulrah's snakelings). */
 	private boolean isAddOfOpenBoss(NPC npc)
 	{
@@ -4833,7 +4846,7 @@ public class PvmPerformancePlugin extends Plugin
 			return false;
 		}
 		// Close behind an attack we booked, which is the ordinary case...
-		if (client.getTickCount() - lastAttackSeenTick <= AOE_WINDOW_TICKS)
+		if (withinTicks(client.getTickCount(), lastAttackSeenTick, AOE_WINDOW_TICKS))
 		{
 			return true;
 		}
