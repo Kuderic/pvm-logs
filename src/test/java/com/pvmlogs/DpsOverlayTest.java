@@ -80,7 +80,8 @@ public class DpsOverlayTest
 		final LedgerRows.Loadout l = LedgerExamples.loadout();
 		l.versus = "Vardorvis";
 		assertEquals(Arrays.asList(attack("Abyssal tentacle"), vs("Vardorvis"), main("DPS", "5.5"), d(" max hit", "49"),
-			d(" accuracy", "54%"), d(" spec", "50 max · 71%"), d(" spec damage", "17.8")), LedgerRows.loadout(l, false));
+			d(" accuracy", "54%"), main("Spec", ""), d(" max hit", "50"), d(" accuracy", "71%"), d(" expected", "17.8 dmg")),
+			LedgerRows.loadout(l, false));
 	}
 
 	@Test
@@ -135,13 +136,58 @@ public class DpsOverlayTest
 		l.attack = "Abyssal tentacle (or)";
 		l.maxHit = 46;
 		l.specMaxHit = 48;
-		assertEquals(Arrays.asList(attack("Abyssal tentacle"), d(" max hit", "46"), d(" spec", "48 max")),
+		// T-077: idle, the Spec section keeps its max hit only.
+		assertEquals(Arrays.asList(attack("Abyssal tentacle"), d(" max hit", "46"), main("Spec", ""), d(" max hit", "48")),
 			LedgerRows.loadout(l, false));
 		// A weapon with no special: the attack and its max hit.
 		final LedgerRows.Loadout bow = new LedgerRows.Loadout();
 		bow.attack = "Twisted bow";
 		bow.maxHit = 70;
 		assertEquals(Arrays.asList(attack("Twisted bow"), d(" max hit", "70")), LedgerRows.loadout(bow, false));
+	}
+
+	@Test
+	public void aWeaponWithNoSpecialHasNoSpecSection()
+	{
+		final LedgerRows.Loadout bow = new LedgerRows.Loadout();
+		bow.attack = "Twisted bow";
+		bow.maxHit = 70;
+		bow.accuracy = 0.8;
+		bow.dps = 9.1;
+		final List<Row> rows = LedgerRows.loadout(bow, false);
+		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPEC) || r.left.equals(LedgerRows.EXPECTED)));
+		assertEquals(Arrays.asList(attack("Twisted bow"), main("DPS", "9.1"), d(" max hit", "70"), d(" accuracy", "80%")),
+			rows);
+	}
+
+	@Test
+	public void burningClawsExpectedKeepsItsBurnAndANarrowBoxDropsTheBracketFirst()
+	{
+		final LedgerRows.Loadout claws = new LedgerRows.Loadout();
+		claws.attack = "Burning claws";
+		claws.versus = "Vardorvis";
+		claws.maxHit = 41;
+		claws.accuracy = 0.62;
+		claws.dps = 5.9;
+		claws.specMaxHit = 48;
+		claws.specAccuracy = 0.71;
+		claws.specAverage = 17.8;
+		claws.specExtra = 8.2;
+		claws.specExtraKind = "burn";
+		final List<Row> rows = LedgerRows.loadout(claws, false);
+		assertEquals(Arrays.asList(main("Spec", ""), d(" max hit", "48"), d(" accuracy", "71%")),
+			rows.subList(rows.size() - 4, rows.size() - 1));
+		assertEquals("26.0 dmg (8.2 burn)", rows.get(rows.size() - 1).right);
+		final Graphics2D g = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics();
+		for (Font font : Arrays.asList(FontManager.getRunescapeFont(), FontManager.getRunescapeBoldFont(),
+			FontManager.getRunescapeSmallFont()))
+		{
+			g.setFont(font);
+			final PvmPerformanceOverlay.Lines narrow = PvmPerformanceOverlay.lines(g, rows, new Dimension(110, 0));
+			final Row expected = narrow.rows.get(narrow.rows.size() - 1);
+			assertEquals(font.getName(), " expected", expected.left);
+			assertEquals(font.getName(), "26.0 dmg", expected.right);
+		}
 	}
 
 	@Test
