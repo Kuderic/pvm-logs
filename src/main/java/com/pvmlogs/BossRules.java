@@ -211,6 +211,25 @@ class BossRules
 		DamageModifierRules damageModifiers;
 		/** T-074: the idle ticks its mechanics may excuse from uptime, by the damage-modifier state they ride on. */
 		List<UptimeAllowance> uptimeAllowances;
+		/** T-086: an attack on the tick of one of its animations that ignores the weapon's attack delay; null for none. */
+		MeleePunish meleePunish;
+	}
+
+	/**
+	 * T-086: a boss move the player may answer with an attack outside the
+	 * weapon's speed (the Maggot King's slam). The attack thrown {@link
+	 * #afterTicks} after the boss starts {@link #onBossAnim} is the punish: it
+	 * neither waits for the weapon's cooldown nor starts one, so the weapon's
+	 * next attack is still due when it was. Booking only; what the punish does to
+	 * the attack's accuracy and damage is the calc's.
+	 */
+	static final class MeleePunish
+	{
+		/** The boss animation the punish answers. */
+		int onBossAnim;
+		/** Ticks from the animation's start to the tick the punish is thrown on. */
+		int afterTicks;
+		String source;
 	}
 
 	/**

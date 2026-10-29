@@ -137,6 +137,8 @@ public class SidePanelBossIconsTest
 		m.put("Muttadiles", HiscoreSkill.CHAMBERS_OF_XERIC);
 		m.put("Pestilent Bloat", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("Zulrah", HiscoreSkill.ZULRAH);
+		// T-086: in the rules for his punish, and grouped with his larvae.
+		m.put("Maggot King", HiscoreSkill.MAGGOT_KING);
 		m.put("Vorkath", HiscoreSkill.VORKATH);
 		m.put("Cerberus", HiscoreSkill.CERBERUS);
 		m.put("Commander Zilyana", HiscoreSkill.COMMANDER_ZILYANA);

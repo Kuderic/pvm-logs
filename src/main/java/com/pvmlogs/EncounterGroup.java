@@ -20,9 +20,9 @@ final class EncounterGroup
 	private static final Map<String, Falls> FALLS = buildFalls();
 	// Groups whose adds are swatted in passing while the boss fight goes on (T-084): a hit on one, or its death, never ends
 	// the boss's fight. Not the Sire's, Kraken's or Hespori's, whose adds are the phase the boss waits through and get their
-	// own fights in the room.
+	// own fights in the room. The Maggot King's larvae too (T-086): one shot each as it flies, between the King's attacks.
 	private static final Set<String> ADDS_KEEP_BOSS_FIGHT = Collections.unmodifiableSet(new HashSet<>(
-		Collections.singletonList("Zulrah")));
+		Arrays.asList("Zulrah", "Maggot King")));
 
 	private EncounterGroup()
 	{
@@ -369,6 +369,9 @@ final class EncounterGroup
 		put(groups, "Zulrah",
 			NpcID.SNAKEBOSS_BOSS_RANGED, NpcID.SNAKEBOSS_BOSS_MELEE, NpcID.SNAKEBOSS_BOSS_MAGIC,
 			NpcID.SNAKEBOSS_MINION_MELEE, NpcID.SNAKEBOSS_MINION_MAGIC, NpcID.SNAKEBOSS_MINION_DYING);
+		// The Maggot King (T-086) and his ur-maggot larvae, launched with his screeches from about 83% (wiki, Maggot
+		// King/Strategies). Not his corpse, which only stands to be looted.
+		put(groups, "Maggot King", NpcID.MAGGOT_KING, NpcID.UR_MAGGOT_LARVAE);
 		put(groups, "The Hueycoatl",
 			NpcID.HUEY_HEAD, NpcID.HUEY_HEAD_INVULNERABLE, NpcID.HUEY_HEAD_DEFEATED,
 			NpcID.HUEY_HEAD_ENRAGED, NpcID.HUEY_TAIL, NpcID.HUEY_TAIL_BROKEN,
@@ -481,6 +484,8 @@ final class EncounterGroup
 			NpcID.RT_SUMMON_ELEMENTAL_FIRE, NpcID.RT_SUMMON_ELEMENTAL_ICE,
 			// Zulrah's snakelings (T-084).
 			NpcID.SNAKEBOSS_MINION_MELEE, NpcID.SNAKEBOSS_MINION_MAGIC, NpcID.SNAKEBOSS_MINION_DYING,
+			// The Maggot King's larvae (T-086).
+			NpcID.UR_MAGGOT_LARVAE,
 			// Hespori's flowers.
 			NpcID.HESPORI_HEALER_ACTIVE, NpcID.HESPORI_HEALER_INACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE, NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
@@ -512,6 +517,10 @@ final class EncounterGroup
 			// Zulrah's snakelings (T-084): one hitpoint each, so any hit kills one and its "luck" would be noise; the time on
 			// them is Zulrah's.
 			NpcID.SNAKEBOSS_MINION_MELEE, NpcID.SNAKEBOSS_MINION_MAGIC, NpcID.SNAKEBOSS_MINION_DYING,
+			// The Maggot King's larvae (T-086): 30 hitpoints, and one "hit with standard ranged (bow and arrows) before it
+			// lands on the arena" is "instantly killed" (wiki, Maggot King/Strategies). Eric's log of 2026-10-29 shows it:
+			// every bow shot at one is a 30, on maxes of 24 to 37, which read as luck. The shot's tick is the King's time.
+			NpcID.UR_MAGGOT_LARVAE,
 			// The Judge is Yama's own add. Grouped so killing it does not reset what is on screen, and unscored so it does not
 			// lend its figures to his. Ignoring it outright would have been worse than either: with nothing tracking the Judge,
 			// the time spent killing its 400 hitpoints would have been booked against Yama as ticks lost.
@@ -618,6 +627,9 @@ final class EncounterGroup
 		final Map<String, DeathClose> rules = new HashMap<>();
 		rules.put("Hespori", new DeathClose(1, ids(NpcID.HESPORI), ids()));
 		rules.put("Hespori (A Night at the Theatre)", new DeathClose(1, ids(NpcID.TOBQUEST_HESPORI), ids()));
+		// The Maggot King drops no loot event: he dies, and a corpse is left to loot (Eric's four kills of 2026-10-29, no
+		// LOOT line in any). His death closes the room (T-086).
+		rules.put("Maggot King", new DeathClose(1, ids(NpcID.MAGGOT_KING), ids()));
 		rules.put("The Royal Titans", new DeathClose(2, ids(NpcID.RT_FIRE_QUEEN, NpcID.RT_ICE_KING),
 			ids(NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE)));
 		return Collections.unmodifiableMap(rules);
@@ -692,6 +704,8 @@ final class EncounterGroup
 		oneBoss(rules, "Kraken", NpcID.SLAYER_KRAKEN_BOSS, NpcID.SLAYER_KRAKEN_BOSS_WHIRLPOOL);
 		// Zulrah's forms are one boss; a snakeling's death ends nothing but a fight on itself (T-084).
 		oneBoss(rules, "Zulrah", NpcID.SNAKEBOSS_BOSS_RANGED, NpcID.SNAKEBOSS_BOSS_MELEE, NpcID.SNAKEBOSS_BOSS_MAGIC);
+		// The King is the boss; a larva dying ends nothing but a fight on itself (T-086).
+		oneBoss(rules, "Maggot King", NpcID.MAGGOT_KING);
 		// One snake: the head, the tail and the body segments are all it.
 		oneBossAll(rules, "The Hueycoatl");
 		oneBoss(rules, "Abyssal Sire", NpcID.ABYSSALSIRE_SIRE_STASIS_SLEEPING, NpcID.ABYSSALSIRE_SIRE_STASIS_AWAKE,
