@@ -231,6 +231,16 @@ final class SidePanelExamples
 		rows.add(tripRow("Vardorvis", false, "1:41", "top 9%", LedgerRows.Colour.BETTER));
 		rows.add(tripRow("Vardorvis", false, "2:09", "bottom 15%", LedgerRows.Colour.COST));
 		in.tripRows = rows;
+		// Every room saved, none running: the trip's after-fight rows show (T-068), as the panel reads it.
+		in.ended = true;
+		return in;
+	}
+
+	/** T-068: the trip while a fight runs: its Damage taken card is the total only. */
+	static SidePanelModel.Input tripWhileFighting()
+	{
+		final SidePanelModel.Input in = trip();
+		in.ended = false;
 		return in;
 	}
 
@@ -456,6 +466,15 @@ final class SidePanelExamples
 	{
 		final SidePanelModel.Input in = trip();
 		in.drain = drain(-1, -1, -1, -1, 0, 338, 26.9, 13, 1.1);
+		return in;
+	}
+
+	// ---- T-068: the Damage taken card waits for the fight's end ----
+
+	/** The ruled kill still running: its Damage taken card mid-fight. */
+	static SidePanelModel.Input takenMidFight()
+	{
+		final SidePanelModel.Input in = ruledKill(false);
 		return in;
 	}
 

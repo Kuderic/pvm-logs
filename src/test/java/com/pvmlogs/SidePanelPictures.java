@@ -87,6 +87,10 @@ public final class SidePanelPictures
 			write(out, "15c-two-kinds-dealt", scale, render(SidePanelExamples.twoKindsDealt(), scale));
 			write(out, "15d-old-kill", scale, render(SidePanelExamples.oldKill(), scale));
 			write(out, "15e-trip-old-and-new", scale, renderTrip(SidePanelExamples.tripMixedOldAndNew(), scale));
+			// T-068: the Damage taken card mid-fight (the total only) and after; the trip while a fight runs.
+			write(out, "16a-taken-mid-fight", scale, render(SidePanelExamples.takenMidFight(), scale));
+			write(out, "16b-taken-after", scale, render(SidePanelExamples.ruledKill(true), scale));
+			write(out, "16c-trip-while-fighting", scale, renderTrip(SidePanelExamples.tripWhileFighting(), scale));
 		}
 	}
 
