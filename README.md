@@ -66,7 +66,7 @@ All the pictures here are drawn by the plugin's own code (see Developing) from m
 ## What it sends
 One download, and nothing uploaded.
 - **Monster stats:** when the plugin starts and its copy is missing or more than 7 days old, it downloads `monsters.json`, the monster data of the [OSRS Wiki's DPS calculator](https://github.com/weirdgloop/osrs-dps-calc), from GitHub (`raw.githubusercontent.com`). It uses RuneLite's own web client and identifies itself only as `RuneLite plugin luck-vs-skill`. Like any download, GitHub sees your IP address; nothing about your account goes with it. The copy is kept in your data folder; if the download fails, the plugin uses the copy it has.
-- **Everything else stays on your computer:** your fight history (`history.json`), CSV exports and debug logs, in `~/.runelite/plugin-data/luck-vs-skill/`. Boss icons come from the game client itself.
+- **Everything else stays on your computer:** your fight history (`history.json`), CSV exports, debug logs and a random id for this install (`install-id`, not tied to your account and not sent anywhere), in `~/.runelite/plugin-data/luck-vs-skill/`. Boss icons come from the game client itself.
 
 ## Known limits
 - **Checked against real kills:** Vardorvis, the Abyssal Sire and the Leviathan, and Defence drain once (a special at the Sire). Every other boss, the raids, and the other drain rules come from the OSRS Wiki and the DPS calculator, not yet from logs.
