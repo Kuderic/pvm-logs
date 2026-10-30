@@ -37,6 +37,7 @@
 - **Evidence:** any claim about how the game behaves needs a debug log from Eric's client or a test. Say which, and label a guess as one.
 - **Read `docs/HANDOFF.md` first** before working on thralls, or on any damage that isn't the player's attack. It lists what has already been measured and failed.
 - **Getting logs:** ask Eric to attach the debug log. Never commit a log as a fixture without his OK.
+- **Check the build first:** a log's first line, or its `===` header when saved, names the build that wrote it (`build <commit> (<branch>, clean or dirty …)`, or `release <version>` from the Plugin Hub). Before reading a log against a fix, check that commit has the fix.
 
 ## Names that must not drift
 Once released, users' settings live in the settings group and their fight history in the data folder, so changing either resets their settings or hides their history.

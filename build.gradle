@@ -29,6 +29,61 @@ dependencies {
 
 group = 'com.pvmlogs'
 
+// Which build wrote a debug log (T-096): the commit, the branch, how many tracked files had uncommitted changes, the
+// commit's date and the build's time, written into the build on every build so `./gradlew run` after a pull says the new
+// commit. It goes under build/, never src/main: the Plugin Hub's build copies only src/main and has no such file, and the
+// plugin then names the release instead. Nothing else goes in: no path, user or machine name.
+def buildInfoDir = layout.buildDirectory.dir('generated/build-info')
+
+def git = { List<String> command ->
+	try
+	{
+		def process = new ProcessBuilder(['git'] + command).directory(projectDir).redirectErrorStream(false).start()
+		process.outputStream.close()
+		def out = process.inputStream.getText('UTF-8')
+		process.errorStream.getText('UTF-8')
+		return process.waitFor() == 0 ? out.trim() : null
+	}
+	catch (IOException ignored)
+	{
+		return null
+	}
+}
+
+tasks.register('buildInfo') {
+	description = 'Writes which commit this build is from into the plugin, for its debug log.'
+	outputs.dir(buildInfoDir)
+	// Git's state is not a Gradle input, so the file is written again on every build.
+	outputs.upToDateWhen { false }
+	doLast {
+		def file = buildInfoDir.get().file('com/pvmlogs/build-info.properties').asFile
+		file.parentFile.mkdirs()
+		def commit = git(['rev-parse', '--short=7', 'HEAD'])
+		if (commit == null)
+		{
+			// Not a git checkout, or no git: no file, rather than a stale one from an earlier build.
+			file.delete()
+			logger.lifecycle('buildInfo: git could not be read, so the debug log will say the build is unknown')
+			return
+		}
+		// Changed tracked files, and new files under src/ (a new class changes the build; a note at the root doesn't).
+		def status = git(['status', '--porcelain', '--untracked-files=all'])
+		def lines = [
+			'# Written by build.gradle (buildInfo) on every build; read by BuildInfo for the debug log.',
+			'commit=' + commit,
+			'branch=' + (git(['rev-parse', '--abbrev-ref', 'HEAD']) ?: ''),
+			'dirtyFiles=' + (status == null ? '' : status.readLines().findAll {
+				!it.trim().isEmpty() && (!it.startsWith('??') || it.substring(3).startsWith('src/'))
+			}.size()),
+			'commitTime=' + (git(['log', '-1', '--format=%cI', 'HEAD']) ?: ''),
+			'buildTime=' + java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).withNano(0),
+		]
+		file.setText(lines.join('\n') + '\n', 'UTF-8')
+	}
+}
+
+sourceSets.main.resources.srcDir(tasks.named('buildInfo'))
+
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)

@@ -51,6 +51,8 @@ They're in `C:\Users\<user>\.runelite\plugin-data\luck-vs-skill\`:
 - `pvm-debug-<stamp>.log`: the stream while the **Debug logging** setting is on;
 - `history.json`, CSV exports (`pvm-<label>-<stamp>.csv`), and the `monsters.json` cache.
 
+**Check the build first (T-096).** A log's first line (streamed) or `===` header (saved) names the build that wrote it: `build <commit> (<branch>, clean or dirty: N files changed, committed …, built …)`, or `release <version>` from the Plugin Hub. Before reading a log against a fix, check that commit has the fix.
+
 Older logs:
 - written before T-060 (2026-10-28) stay in `...\.runelite\plugin-data\pvm-performance-tracker\`. Eric copies that folder's files into the new one once, by hand (the PowerShell command is in T-060's PR); nothing in the plugin moves them;
 - written between T-004 and T-009 were in `...\.runelite\pvm-performance-tracker\`. RuneLite moved them into `plugin-data\pvm-performance-tracker\` the first time a T-009 build started;
