@@ -62,6 +62,11 @@ public final class SidePanelPictures
 			switchInHeader(out);
 			return;
 		}
+		if (args.length > 1 && "calibration".equals(args[1]))
+		{
+			calibration(out);
+			return;
+		}
 		if (args.length > 1 && "bosses".equals(args[1]))
 		{
 			bossesAndMonsters(out);
@@ -969,6 +974,67 @@ public final class SidePanelPictures
 		g.fillRect(0, 0, img.getWidth(), img.getHeight());
 		g.drawImage(card, 0, 0, null);
 		g.translate(0, card.getHeight() + 4 * scale);
+		g.scale(scale, scale);
+		tip.printAll(g);
+		g.dispose();
+		return img;
+	}
+
+	/**
+	 * T-111: History's Tools with the Calibration report button, its tooltip, the status after a click, and greyed
+	 * with nothing saved. Normal and Smooth, 1× and 2×, a folder each.
+	 */
+	private static void calibration(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = false;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-tools", scale, renderHistory(source(), SidePanelHistoryTab::putAway, scale));
+				write(dir, "b-after-a-click", scale, renderHistory(source(), t ->
+				{
+					t.putAway();
+					t.setStatus(PvmPerformancePanel.calibrationStatus(3));
+				}, scale));
+				write(dir, "c-nothing-saved", scale, renderHistory(source(java.util.Collections.emptyList()), t ->
+				{
+				}, scale));
+				write(dir, "d-tooltip", scale, buttonTooltip(scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-111: the Calibration report button's tooltip under History's Tools. */
+	private static BufferedImage buttonTooltip(double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source());
+		panel.tabs().select(panel.tabs().getTab(1));
+		final SidePanelHistoryTab tab = panel.historyTab();
+		tab.refresh();
+		tab.putAway();
+		styled(panel);
+		final BufferedImage whole = draw(panel.tabs(), tab, scale);
+		final javax.swing.JButton b = tab.calibrationButton();
+		final javax.swing.JToolTip tip = b.createToolTip();
+		tip.setTipText(b.getToolTipText());
+		tip.setSize(tip.getPreferredSize());
+		layout(tip);
+		final int w = Math.max(whole.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
+		final BufferedImage img = new BufferedImage(w, whole.getHeight() + (int) Math.ceil((tip.getHeight() + 8) * scale),
+			BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		g.drawImage(whole, 0, 0, null);
+		g.translate(0, whole.getHeight() + 4 * scale);
 		g.scale(scale, scale);
 		tip.printAll(g);
 		g.dispose();

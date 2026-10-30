@@ -73,6 +73,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 
 		void clearHistory();
 
+		/** T-111: builds the calibration report off Swing's and the client's threads, and saves it. */
+		default void calibrationReport()
+		{
+		}
+
 		/** The room/raid switch, true for Whole raid. */
 		void wholeRaid(boolean whole);
 

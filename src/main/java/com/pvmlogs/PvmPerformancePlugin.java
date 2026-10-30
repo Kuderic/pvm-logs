@@ -5698,6 +5698,15 @@ public class PvmPerformancePlugin extends Plugin
 	 * groups first. For the side panel's Tools button (T-111): it reads a copy
 	 * of the history, so call it off the client thread.
 	 */
+	/**
+	 * T-111: the data folder, for the side panel's Calibration report button to save the report in; null when
+	 * RuneLite couldn't give one. Read-only.
+	 */
+	Filepath getDataDirectory()
+	{
+		return dataDirectory;
+	}
+
 	String calibrationReport()
 	{
 		// A copy-on-write list: the copy is safe from any thread.
