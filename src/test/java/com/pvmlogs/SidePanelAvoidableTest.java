@@ -145,7 +145,7 @@ public class SidePanelAvoidableTest
 		// The words carry it, and Cost colours them.
 		assertEquals(SidePanelStyle.COST, facts.get(1).hint.colour);
 		// The rows from before follow.
-		assertTrue(rows.get(7).startsWith("hits | 21"));
+		assertTrue(rows.get(7).startsWith("times hit | 21"));
 	}
 
 	@Test
@@ -202,7 +202,7 @@ public class SidePanelAvoidableTest
 		{
 			assertFalse(r, r.startsWith("avoidable"));
 		}
-		assertEquals("hits | 21", t.taken.rows.get(0).toString());
+		assertEquals("times hit | 21", t.taken.rows.get(0).toString());
 		// Every eating second is one stretch, as T-038 drew it.
 		int eating = 0;
 		for (PanelSnapshot.Segment s : t.budget.segments)

@@ -85,14 +85,136 @@ final class SidePanelParts
 		final SidePanelText left;
 		final SidePanelText right;
 
+		/** T-119: the right text's short forms; with any, the label is kept whole before they are used. */
+		private List<String> rightShort = java.util.Collections.emptyList();
+
 		Line(PanelSnapshot.Text l, PanelSnapshot.Text r)
 		{
-			super(new BorderLayout(6, 0));
+			super(null);
+			setLayout(new LineLayout());
 			setOpaque(false);
 			left = new SidePanelText(l, false);
 			right = new SidePanelText(r == null ? PanelSnapshot.Text.NONE : r, true);
 			add(left, BorderLayout.CENTER);
 			add(right, BorderLayout.EAST);
+		}
+
+		/**
+		 * BorderLayout's CENTER and EAST, as a Line had them: the label on the left, the value right-aligned at its full
+		 * width, 6 px between (a section's header swaps the value for a panel holding a hint component, T-105). T-119: a
+		 * value with a short form gives up width to the label first: it takes only what the whole label leaves (down to its
+		 * short form's width), and draws its short form there.
+		 */
+		private final class LineLayout implements java.awt.LayoutManager2
+		{
+			private static final int GAP = 6;
+			private java.awt.Component center;
+			private java.awt.Component east;
+
+			@Override
+			public void addLayoutComponent(java.awt.Component comp, Object constraints)
+			{
+				if (BorderLayout.EAST.equals(constraints))
+				{
+					east = comp;
+				}
+				else
+				{
+					center = comp;
+				}
+			}
+
+			@Override
+			public void addLayoutComponent(String name, java.awt.Component comp)
+			{
+				addLayoutComponent(comp, name);
+			}
+
+			@Override
+			public void removeLayoutComponent(java.awt.Component comp)
+			{
+				if (comp == east)
+				{
+					east = null;
+				}
+				if (comp == center)
+				{
+					center = null;
+				}
+			}
+
+			private java.awt.Dimension size(java.awt.Component c)
+			{
+				return c == null || !c.isVisible() ? new java.awt.Dimension(0, 0) : c.getPreferredSize();
+			}
+
+			@Override
+			public java.awt.Dimension preferredLayoutSize(java.awt.Container parent)
+			{
+				final java.awt.Insets in = parent.getInsets();
+				final java.awt.Dimension l = size(center);
+				final java.awt.Dimension r = size(east);
+				final int gap = l.width > 0 && r.width > 0 ? GAP : 0;
+				return new java.awt.Dimension(l.width + gap + r.width + in.left + in.right,
+					Math.max(l.height, r.height) + in.top + in.bottom);
+			}
+
+			@Override
+			public java.awt.Dimension minimumLayoutSize(java.awt.Container parent)
+			{
+				final java.awt.Insets in = parent.getInsets();
+				return new java.awt.Dimension(in.left + in.right, preferredLayoutSize(parent).height);
+			}
+
+			@Override
+			public java.awt.Dimension maximumLayoutSize(java.awt.Container target)
+			{
+				return new java.awt.Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE);
+			}
+
+			@Override
+			public float getLayoutAlignmentX(java.awt.Container target)
+			{
+				return 0.5f;
+			}
+
+			@Override
+			public float getLayoutAlignmentY(java.awt.Container target)
+			{
+				return 0.5f;
+			}
+
+			@Override
+			public void invalidateLayout(java.awt.Container target)
+			{
+			}
+
+			@Override
+			public void layoutContainer(java.awt.Container parent)
+			{
+				final java.awt.Insets in = parent.getInsets();
+				final int w = Math.max(0, parent.getWidth() - in.left - in.right);
+				final int h = Math.max(0, parent.getHeight() - in.top - in.bottom);
+				int rw = Math.min(w, size(east).width);
+				if (!rightShort.isEmpty() && east == right && center == left)
+				{
+					final int labelWhole = left.naturalWidth();
+					if (labelWhole + GAP + rw > w)
+					{
+						// Down to the shortest form's width; the text draws the longest form that fits what it gets.
+						rw = Math.min(rw, Math.max(w - GAP - labelWhole, right.widthOf(rightShort.get(rightShort.size() - 1))));
+					}
+				}
+				final int lw = Math.max(0, w - rw - (rw > 0 && center != null ? GAP : 0));
+				if (center != null)
+				{
+					center.setBounds(in.left, in.top, lw, h);
+				}
+				if (east != null)
+				{
+					east.setBounds(in.left + w - rw, in.top, rw, h);
+				}
+			}
 		}
 
 		Line(PanelSnapshot.Row row)
@@ -121,6 +243,13 @@ final class SidePanelParts
 			}
 			left.set(row.left, row.hint.isEmpty() ? null : row.hint);
 			right.set(row.right);
+			// T-119: the value's short form, for where the full one would cut the label.
+			if (!java.util.Objects.equals(rightShort, row.rightShort))
+			{
+				rightShort = row.rightShort;
+				right.setShort(rightShort);
+				relayout(this);
+			}
 			// T-109: a row's tooltip on the whole line, both its texts.
 			setToolTipText(row.tooltip);
 			left.setToolTipText(row.tooltip);

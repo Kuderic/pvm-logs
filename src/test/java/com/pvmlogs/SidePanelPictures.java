@@ -87,6 +87,11 @@ public final class SidePanelPictures
 			fightOrder(out);
 			return;
 		}
+		if (args.length > 1 && "wording".equals(args[1]))
+		{
+			wording(out);
+			return;
+		}
 		if (args.length > 1 && "bosses".equals(args[1]))
 		{
 			bossesAndMonsters(out);
@@ -1433,6 +1438,38 @@ public final class SidePanelPictures
 			}
 		}
 		return in;
+	}
+
+	/**
+	 * T-119: Damage taken, Other damage dealt and Defence drains reworded: the Trip tab like Eric's (heavy venom, the
+	 * room's damage, warhammer and godsword specials), the same without this session's timelines, a kill with drains and
+	 * damage taken, and a kill with none taken. Normal, Smooth and Larger, 1× and 2×.
+	 */
+	private static void wording(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-trip-like-erics", scale, renderTrip(SidePanelWordingExamples.ericsTrip(), scale));
+				final SidePanelModel.Input old = SidePanelWordingExamples.ericsTrip();
+				old.drain = SidePanelWordingExamples.drains(false);
+				write(dir, "b-trip-no-timelines", scale, renderTrip(old, scale));
+				final SidePanelModel.Input kill = SidePanelExamples.sireEmberlight();
+				write(dir, "c-kill", scale, render(kill, scale));
+				final SidePanelModel.Input none = SidePanelExamples.dead();
+				((LedgerExamples.FakeScope) none.scope).damageTaken = 0;
+				write(dir, "d-kill-nothing-taken", scale, render(none, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
 	}
 
 	/** One section of the Fight tab, cut out of its render: its header and card. */

@@ -40,10 +40,13 @@ public class SidePanelDefenceDrainTest
 		assertNotNull(d);
 		assertEquals("250 → 175", d.hint.text);
 		// T-076: no row repeats the header's drop, and no floor where the boss has none.
-		assertEquals(Arrays.asList("Dragon warhammer | 1 of 2 landed"), rows(d));
-		assertEquals("Damage added | +182 · 14 s faster", d.worth.toString());
-		assertEquals("Specials' luck | -41 · 3 s slower", d.specLuck.toString());
-		assertEquals(SidePanelStyle.COST, d.specLuck.colour);
+		// T-119: what the hammers did (no timeline here, so no chance), the worth's time and the specials' luck on hover.
+		assertEquals(Arrays.asList("Dragon warhammer | landed 1 of 2"), rows(d));
+		assertEquals("Drains added | +182 dmg", d.worth.toString());
+		assertTrue(d.worth.tooltip, d.worth.tooltip.contains("14 s faster"));
+		assertNull(d.specLuck);
+		assertTrue(d.rows.get(0).tooltip, d.rows.get(0).tooltip.contains("3 s slower"));
+		assertTrue(d.rows.get(0).tooltip, d.rows.get(0).tooltip.contains("-41"));
 		// Luck's card says the specials' share is in it.
 		assertTrue(tab.curve.caption, tab.curve.caption.endsWith(". Your specials' share: 3 s slower"));
 	}
@@ -52,21 +55,21 @@ public class SidePanelDefenceDrainTest
 	public void aBandosGodsword()
 	{
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.bandosGodsword());
-		assertEquals(Arrays.asList("Bandos godsword | 1 of 1 landed"), rows(tab.defence));
-		assertEquals("Damage added | +96 · 8 s faster", tab.defence.worth.toString());
-		assertEquals("Specials' luck | +52 · 4 s faster", tab.defence.specLuck.toString());
-		assertEquals(SidePanelStyle.BETTER, tab.defence.specLuck.colour);
+		assertEquals(Arrays.asList("Bandos godsword | landed 1 of 1"), rows(tab.defence));
+		assertEquals("Drains added | +96 dmg", tab.defence.worth.toString());
+		assertTrue(tab.defence.worth.tooltip.contains("8 s faster"));
+		assertTrue(tab.defence.rows.get(0).tooltip.contains("4 s faster"));
 	}
 
 	@Test
 	public void aBossAtItsFloor()
 	{
 		final PanelSnapshot.Defence d = SidePanelModel.fight(SidePanelExamples.atItsFloor()).defence;
-		assertEquals(Arrays.asList("Floor [reached] | 102", "Dragon warhammer | 2 of 2 landed", "Party drains | 1"), rows(d));
+		assertEquals(Arrays.asList("Floor [reached] | 102", "Dragon warhammer | landed 2 of 2", "Party drains | 1"), rows(d));
 		// A party member's drain is in the worth too.
-		assertEquals("Damage added | +60 · 5 s faster", d.worth.toString());
-		assertEquals("Specials' luck | +2 · about even", d.specLuck.toString());
-		assertEquals(SidePanelStyle.BODY, d.specLuck.colour);
+		assertEquals("Drains added | +60 dmg", d.worth.toString());
+		assertTrue(d.worth.tooltip.contains("5 s faster"));
+		assertTrue(d.rows.get(1).tooltip, d.rows.get(1).tooltip.contains("about as well as average"));
 		// The bar: base to now, the floor ticked.
 		assertEquals(170, d.drop.base);
 		assertEquals(102, d.drop.end);
@@ -119,7 +122,7 @@ public class SidePanelDefenceDrainTest
 		d.specs.put("EYE_OF_AYAK", new int[]{1, 1});
 		d.magicStart = 150;
 		d.magicEnd = 120;
-		assertEquals(Arrays.asList("Magic | 150 → 120", "Eye of ayak | 1 of 1 landed"), rows(SidePanelModel.defence(d)));
+		assertEquals(Arrays.asList("Magic | 150 → 120", "Eye of ayak | landed 1 of 1"), rows(SidePanelModel.defence(d)));
 	}
 
 	@Test
@@ -277,8 +280,10 @@ public class SidePanelDefenceDrainTest
 		{
 			rows.add(r.toString());
 		}
-		assertEquals(Arrays.asList("expected dmg added | +338 · 27 s faster", "your specials' luck | 1 s faster"), rows);
-		assertTrue(trip.structure().contains("|dr2"));
+		// T-119: "drains added", its time on hover; the specials' luck on the specials' rows (the fixture has none).
+		assertEquals(Arrays.asList("drains added | +338 dmg"), rows);
+		assertTrue(trip.drains.rows.get(0).tooltip, trip.drains.rows.get(0).tooltip.contains("27 s faster"));
+		assertTrue(trip.structure().contains("|dr1"));
 		// None known, or nothing worth showing: no section.
 		assertNull(SidePanelModel.trip(SidePanelExamples.trip()).drains);
 		assertNull(SidePanelModel.tripDrains(SidePanelExamples.drain(-1, -1, -1, -1, 0, 0, 0, 0.2, 0.01)));

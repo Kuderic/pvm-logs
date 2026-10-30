@@ -37,9 +37,11 @@ public class SidePanelDefenceCardTest
 		final PanelSnapshot.Defence d = SidePanelModel.fight(SidePanelExamples.sireEmberlight()).defence;
 		assertEquals("250 → 174", d.hint.text);
 		// No row repeats the drop, no floor where the boss has none, no sentences.
-		assertEquals(Arrays.asList("Emberlight | 2 of 2 landed", "Damage added | +42 · 5 s faster",
-			"Specials' luck | +12 · 2 s faster"), rows(SidePanelFightTab.defenceRows(d)));
-		assertEquals(SidePanelStyle.BETTER, d.specLuck.colour);
+		// T-119: Emberlight drains on landing: what landed against its chance (the kill's timeline has it); the worth's
+		// time and the specials' luck on hover.
+		assertEquals(Arrays.asList("Emberlight | landed 2 of 2 (expected 1.1)", "Drains added | +42 dmg"),
+			rows(SidePanelFightTab.defenceRows(d)));
+		assertTrue(d.rows.get(0).tooltip, d.rows.get(0).tooltip.contains("2 s faster"));
 		for (String r : rows(SidePanelFightTab.defenceRows(d)))
 		{
 			assertFalse(r, r.startsWith("defence") || r.startsWith("floor") || r.endsWith("none") || r.endsWith("."));
@@ -51,7 +53,7 @@ public class SidePanelDefenceCardTest
 	public void aBossWithAFloorHasItsRowAndItsTick()
 	{
 		final PanelSnapshot.Defence d = SidePanelModel.fight(SidePanelExamples.floorNotReached()).defence;
-		assertEquals(Arrays.asList("Floor | 102", "Dragon warhammer | 1 of 2 landed"), rows(d.rows));
+		assertEquals(Arrays.asList("Floor | 102", "Dragon warhammer | landed 1 of 2"), rows(d.rows));
 		assertEquals(102, d.drop.floor);
 		assertEquals("40 (24%)", d.drop.value.text);
 		// Without one, the bar has no tick.
@@ -70,8 +72,8 @@ public class SidePanelDefenceCardTest
 		final int drained = texts.indexOf("Drained");
 		assertTrue(texts.toString(), drained >= 0);
 		assertEquals("76 (30%)", texts.get(drained + 1));
-		assertEquals(Arrays.asList("Emberlight", "2 of 2 landed", "Damage added", "+42 · 5 s faster", "Specials' luck",
-			"+12 · 2 s faster"), texts.subList(drained + 2, drained + 8));
+		assertEquals(Arrays.asList("Emberlight", "landed 2 of 2 (expected 1.1)", "Drains added", "+42 dmg"),
+			texts.subList(drained + 2, drained + 6));
 		assertFalse(texts.toString(), texts.contains("floor"));
 		// Levels unknown: the rows alone.
 		final SidePanelModel.Input unknown = SidePanelExamples.sireEmberlight();
@@ -79,7 +81,7 @@ public class SidePanelDefenceCardTest
 		final PvmPerformancePanel other = new PvmPerformancePanel(null, null, null, null);
 		other.apply(new PanelSnapshot(SidePanelModel.fight(unknown)));
 		assertEquals(0, count(other.fightTab(), SidePanelDrainBar.class));
-		assertTrue(texts(other.fightTab()).contains("Specials' luck"));
+		assertTrue(texts(other.fightTab()).contains(SidePanelModel.WORTH));
 	}
 
 	@Test
@@ -167,8 +169,8 @@ public class SidePanelDefenceCardTest
 			held += m.find() ? Integer.parseInt(m.group(1)) : 0;
 		}
 		assertEquals(588, held);
-		// And the Defence card's specials row is the difference.
-		assertEquals("+12", tab.defence.specLuck.damage);
+		// And the specials' luck, on the Defence card's specials' rows (T-119), is the difference.
+		assertTrue(tab.defence.rows.get(0).tooltip, tab.defence.rows.get(0).tooltip.contains("+12 expected damage"));
 	}
 
 	@Test
@@ -186,8 +188,9 @@ public class SidePanelDefenceCardTest
 	{
 		final PanelSnapshot.Rows taken = SidePanelModel.fight(SidePanelExamples.sireEmberlight()).taken;
 		assertEquals("27", taken.hint.text);
-		assertEquals(Arrays.asList("hits | 6", "missed or blocked | 94", "biggest hit | 8", "without protection | 0"),
-			rows(taken.rows));
+		// T-119: a count, its average (27 / 6), the 0s, the largest, off prayer.
+		assertEquals(Arrays.asList("times hit | 6", "avg per hit | 4.5", "hits of 0 | 94", "largest hit taken | 8",
+			"off-prayer damage | 0"), rows(taken.rows));
 	}
 
 	@Test
@@ -195,7 +198,7 @@ public class SidePanelDefenceCardTest
 	{
 		// Saved before T-076: no 0s counted apart, so its hits are the count it always showed.
 		final List<String> r = rows(SidePanelModel.fight(SidePanelExamples.dead()).taken.rows);
-		assertTrue(r.toString(), r.contains("hits | 14"));
+		assertTrue(r.toString(), r.contains("times hit | 14"));
 		assertFalse(r.toString(), r.stream().anyMatch(s -> s.startsWith(SidePanelModel.MISSED)));
 	}
 

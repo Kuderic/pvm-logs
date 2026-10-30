@@ -41,7 +41,8 @@ public class SidePanelTakenAfterFightTest
 	public void afterTheFightTheRows()
 	{
 		final List<String> rows = labels(SidePanelModel.fight(SidePanelExamples.ruledKill(true)).taken);
-		assertTrue(rows.toString(), rows.containsAll(Arrays.asList("hits", "biggest hit", "without protection")));
+		assertTrue(rows.toString(), rows.containsAll(Arrays.asList(SidePanelModel.TIMES_HIT, SidePanelModel.LARGEST_HIT,
+			SidePanelModel.OFF_PRAYER)));
 		assertTrue(rows.toString(), !rows.contains(SidePanelModel.AFTER_THE_FIGHT));
 	}
 
@@ -52,7 +53,8 @@ public class SidePanelTakenAfterFightTest
 		assertEquals("1,404", running.taken.hint.text);
 		assertEquals(Collections.singletonList(SidePanelModel.AFTER_THE_FIGHT), labels(running.taken));
 		final List<String> idle = labels(SidePanelModel.trip(SidePanelExamples.trip()).taken);
-		assertTrue(idle.toString(), idle.containsAll(Arrays.asList("hits", "biggest hit", "without protection")));
+		assertTrue(idle.toString(), idle.containsAll(Arrays.asList(SidePanelModel.TIMES_HIT, SidePanelModel.LARGEST_HIT,
+			SidePanelModel.OFF_PRAYER)));
 	}
 
 	@Test

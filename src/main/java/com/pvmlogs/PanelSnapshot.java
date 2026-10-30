@@ -224,6 +224,11 @@ final class PanelSnapshot
 		final boolean heading;
 		/** T-112: a row under a subheading, set in a little. */
 		final boolean indent;
+		/**
+		 * T-119: the right text's short forms, longest first ({@code 5 of 8}), drawn only where the full one would cut the
+		 * label; empty for none.
+		 */
+		final List<String> rightShort;
 
 		Row(Text left, Text right)
 		{
@@ -242,6 +247,12 @@ final class PanelSnapshot
 
 		Row(Text left, Text hint, Text right, String tooltip, boolean heading, boolean indent)
 		{
+			this(left, hint, right, tooltip, heading, indent, java.util.Collections.<String>emptyList());
+		}
+
+		Row(Text left, Text hint, Text right, String tooltip, boolean heading, boolean indent, List<String> rightShort)
+		{
+			this.rightShort = list(rightShort);
 			this.left = left;
 			this.hint = hint == null ? Text.NONE : hint;
 			this.right = right;
@@ -253,7 +264,13 @@ final class PanelSnapshot
 		/** T-112: this row set in under a subheading. */
 		Row indented()
 		{
-			return new Row(left, hint, right, tooltip, heading, true);
+			return new Row(left, hint, right, tooltip, heading, true, rightShort);
+		}
+
+		/** T-119: this row with short forms for its right text, longest first, for where the full one would cut the label. */
+		Row withRightShort(String... forms)
+		{
+			return new Row(left, hint, right, tooltip, heading, indent, java.util.Arrays.asList(forms));
 		}
 
 		/** T-112: a group's subheading. */
@@ -936,23 +953,31 @@ final class PanelSnapshot
 		final String label;
 		/** {@code +42}. */
 		final String damage;
-		/** {@code 5 s faster}, {@code about even}; empty where it rounds to nothing. */
+		/** {@code 5 s faster}, {@code about even}; empty where it rounds to nothing, or where it's the tooltip's (T-119). */
 		final String seconds;
 		final Color colour;
+		/** T-119: what the figure is worth on the clock, on hover; null for none. */
+		final String tooltip;
 
 		Figure(String label, String damage, String seconds, Color colour)
+		{
+			this(label, damage, seconds, colour, null);
+		}
+
+		Figure(String label, String damage, String seconds, Color colour, String tooltip)
 		{
 			this.label = label;
 			this.damage = damage;
 			this.seconds = seconds == null ? "" : seconds;
 			this.colour = colour;
+			this.tooltip = tooltip;
 		}
 
-		/** As a row: {@code Damage added    +42 · 5 s faster}. */
+		/** As a row: {@code Drains added    +42 dmg}, its time on hover (T-119). */
 		Row row()
 		{
-			return new Row(Text.small(label, SidePanelStyle.BODY),
-				Text.small(seconds.isEmpty() ? damage : damage + " · " + seconds, colour));
+			return new Row(Text.small(label, SidePanelStyle.BODY), Text.NONE,
+				Text.small(seconds.isEmpty() ? damage : damage + " · " + seconds, colour), tooltip);
 		}
 
 		@Override

@@ -121,7 +121,8 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		}
 		if (tab.other != null)
 		{
-			rows("tripOther", "Other damage", tab.other, t -> t.other);
+			// T-119 (Eric, 2026-10-30): dealt, beside Damage taken. The id stays, so a fold the player set is kept.
+			rows("tripOther", OTHER_DAMAGE_DEALT, tab.other, t -> t.other);
 		}
 		if (tab.drains != null)
 		{
@@ -311,6 +312,8 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 			return new Dimension(SidePanelStyle.CONTENT_WIDTH, SidePanelKillRow.rowHeight());
 		}
 	}
+
+	static final String OTHER_DAMAGE_DEALT = "Other damage dealt";
 
 	private void rows(String id, String title, PanelSnapshot.Rows rows,
 		java.util.function.Function<TripTab, PanelSnapshot.Rows> get)

@@ -147,6 +147,12 @@ final class SidePanelModel
 		/** T-050's spec luck in damage and seconds; NaN unknown. */
 		double specLuckDamage = Double.NaN;
 		double specLuckSeconds = Double.NaN;
+		/**
+		 * T-119: the specials' rows from this session's timelines ({@link SidePanelWeaponRows}), for what each drain
+		 * special was expected to do: the chance it landed, or its expected damage. Empty for a kill saved before this
+		 * session, whose drain record keeps only what was thrown and what landed.
+		 */
+		List<WeaponRow> specRows = Collections.emptyList();
 
 		int ownThrown()
 		{
@@ -936,6 +942,9 @@ final class SidePanelModel
 				in.roomDamageSources);
 			if (!raid && !run && in.drain != null)
 			{
+				// T-119: with what each drain special was expected to do, from the room's timeline where it has one.
+				in.drain.specRows = specials(in.weaponRows != null ? in.weaponRows : in.view == null
+					? Collections.<WeaponRow>emptyList() : weaponRows(in.view));
 				b.defence = defence(in.drain);
 			}
 		}
@@ -1714,16 +1723,14 @@ final class SidePanelModel
 		{
 			rows.add(row("Magic", path(d.magicStart, d.magicEnd)));
 		}
-		for (Map.Entry<String, int[]> e : d.specs.entrySet())
-		{
-			rows.add(row(weaponName(e.getKey()), e.getValue()[1] + " of " + e.getValue()[0] + " landed"));
-		}
+		specRows(rows, d);
 		if (d.partyDrains > 0)
 		{
 			rows.add(row("Party drains", String.valueOf(d.partyDrains)));
 		}
+		// T-119: the specials' luck is no row of its own now; its time is on the specials' rows, on hover.
 		return new PanelSnapshot.Defence(Text.small(path(d.defenceStart, d.defenceEnd), SidePanelStyle.SECONDARY), rows,
-			drainWorth(d), specLuck(d), drop(d));
+			drainWorth(d), null, drop(d));
 	}
 
 	/** Whether the boss has a Defence floor above 0 and below its base (T-049's rules). */
@@ -1771,7 +1778,10 @@ final class SidePanelModel
 		return lower.isEmpty() ? lower : Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
 	}
 
-	/** T-050's drain value: {@code Damage added  +182 · 14 s faster}. Null when unknown. */
+	/**
+	 * T-050's drain value: {@code Drains added  +182 dmg}, what it was worth on the clock on hover (T-119: the time cut the
+	 * label off at 1×). Null when unknown.
+	 */
 	static PanelSnapshot.Figure drainWorth(Drain d)
 	{
 		if (Double.isNaN(d.valueDamage))
@@ -1779,12 +1789,124 @@ final class SidePanelModel
 			return null;
 		}
 		final long dmg = LedgerRows.roundHalfAway(d.valueDamage);
-		final String secs = Double.isNaN(d.valueSeconds) || LedgerRows.roundHalfAway(d.valueSeconds) == 0 ? ""
-			: LedgerRows.fasterOrSlower(d.valueSeconds);
-		return new PanelSnapshot.Figure(WORTH, signed(dmg), secs, SidePanelStyle.VALUE);
+		return new PanelSnapshot.Figure(WORTH, signed(dmg) + " dmg", "", SidePanelStyle.VALUE, worthTip(d));
 	}
 
-	static final String WORTH = "Damage added";
+	/** T-119: the drains' worth on the clock, for its row's tooltip; null when unknown. */
+	static String worthTip(Drain d)
+	{
+		final String time = Double.isNaN(d.valueSeconds) || LedgerRows.roundHalfAway(d.valueSeconds) == 0 ? "about even"
+			: LedgerRows.fasterOrSlower(d.valueSeconds);
+		return "The expected damage the defence drains added, from Defence lowered: worth " + time + " on the kill time.";
+	}
+
+	static final String WORTH = "Drains added";
+
+	/**
+	 * T-119 (Eric, 2026-10-30: "your specials luck 2s faster doesn't make sense as a statistic"): a row a drain special,
+	 * what it did against its chance. A special that drains on landing ({@link DrainRule#drainsOnLanding}, a warhammer)
+	 * reads {@code landed 5 of 8 (expected 4.8)}; one that drains by its damage (a Bandos godsword) {@code 152 dmg
+	 * (expected 130)}. Without this session's timeline for it, {@code landed 5 of 8} alone. The specials' luck (T-050)
+	 * is on each row's tooltip.
+	 */
+	static void specRows(List<Row> rows, Drain d)
+	{
+		final String tip = specLuckTip(d);
+		for (Map.Entry<String, int[]> e : d.specs.entrySet())
+		{
+			final int thrown = e.getValue()[0];
+			final int landed = e.getValue()[1];
+			final net.runelite.client.plugins.specialcounter.SpecialWeapon w = specialWeapon(e.getKey());
+			final WeaponRow r = specRow(d.specRows, w);
+			final String count = landed + " of " + thrown;
+			final List<String> forms = new ArrayList<>(3);
+			if (r != null && !DrainRule.drainsOnLanding(w) && r.expectedKnown)
+			{
+				final String dmg = LedgerRows.number(Math.max(0, r.damage));
+				final long expected = Math.round(r.expected);
+				forms.add(dmg + " dmg (expected " + LedgerRows.number(expected) + ")");
+				forms.add(dmg + " (exp " + LedgerRows.number(expected) + ")");
+				forms.add(dmg + " dmg");
+			}
+			else if (r != null && r.landedKnown > 0)
+			{
+				final String expected = LedgerRows.oneDecimal(r.landedExpected / r.landedKnown * thrown);
+				forms.add("landed " + count + " (expected " + expected + ")");
+				forms.add(count + " (exp " + expected + ")");
+				forms.add(count);
+			}
+			else
+			{
+				forms.add("landed " + count);
+				forms.add(count);
+			}
+			rows.add(new Row(Text.small(weaponName(e.getKey()), SidePanelStyle.BODY), Text.NONE,
+				Text.small(forms.get(0), SidePanelStyle.VALUE), tip).withRightShort(forms.subList(1, forms.size())
+				.toArray(new String[0])));
+		}
+	}
+
+	/** T-119: the special rows of these weapon rows. */
+	static List<WeaponRow> specials(List<WeaponRow> rows)
+	{
+		final List<WeaponRow> out = new ArrayList<>();
+		for (WeaponRow r : rows)
+		{
+			if (r.special)
+			{
+				out.add(r);
+			}
+		}
+		return out;
+	}
+
+	/** T-119: the drain record's weapon (RuneLite's enum name) as RuneLite's special weapon; null when unknown. */
+	private static net.runelite.client.plugins.specialcounter.SpecialWeapon specialWeapon(String name)
+	{
+		try
+		{
+			return name == null ? null : net.runelite.client.plugins.specialcounter.SpecialWeapon.valueOf(name);
+		}
+		catch (IllegalArgumentException e)
+		{
+			return null;
+		}
+	}
+
+	/** T-119: the timeline's row for this special, by its item id; null when there's none. */
+	private static WeaponRow specRow(List<WeaponRow> rows, net.runelite.client.plugins.specialcounter.SpecialWeapon w)
+	{
+		if (w == null)
+		{
+			return null;
+		}
+		for (WeaponRow r : rows)
+		{
+			if (r.itemId >= 0)
+			{
+				for (int id : w.getItemID())
+				{
+					if (id == r.itemId)
+					{
+						return r;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	/** T-119: the specials' luck (T-050) in words, for the specials' rows' tooltip; null without it. */
+	static String specLuckTip(Drain d)
+	{
+		final String phrase = specLuckPhrase(d);
+		if (phrase == null)
+		{
+			return null;
+		}
+		final long dmg = Double.isNaN(d.specLuckDamage) ? 0 : LedgerRows.roundHalfAway(d.specLuckDamage);
+		return "Your drain specials " + phrase + " (" + signed(dmg) + " expected damage against average landings).";
+	}
 	static final String SPEC_LUCK = "Specials' luck";
 
 	private static String signed(long n)
@@ -1833,7 +1955,11 @@ final class SidePanelModel
 		return "Your specials' share: " + (r == 0 ? "about even" : LedgerRows.fasterOrSlower(d.specLuckSeconds));
 	}
 
-	/** T-052: the trip's drains, or null where none were worth anything. */
+	/**
+	 * T-052: the trip's drains, or null where none were worth anything. T-119 (Eric, 2026-10-30): {@code drains added
+	 * +630 dmg} (the time on hover: {@code expected dmg added +630 · 67 s faster} was cut off at 1×), then a row a drain
+	 * special, what it did against its chance ({@link #specRows}), with the specials' luck on hover.
+	 */
 	static PanelSnapshot.Rows tripDrains(Drain d)
 	{
 		if (d == null || Double.isNaN(d.valueDamage))
@@ -1842,22 +1968,18 @@ final class SidePanelModel
 		}
 		final long dmg = LedgerRows.roundHalfAway(d.valueDamage);
 		final boolean luck = !Double.isNaN(d.specLuckSeconds) && LedgerRows.roundHalfAway(d.specLuckSeconds) != 0;
-		if (dmg == 0 && !luck)
+		if (dmg == 0 && !luck && d.specs.isEmpty())
 		{
 			return null;
 		}
-		final List<Row> rows = new ArrayList<>(2);
-		final String secs = Double.isNaN(d.valueSeconds) || LedgerRows.roundHalfAway(d.valueSeconds) == 0 ? ""
-			: DOT + LedgerRows.fasterOrSlower(d.valueSeconds);
-		rows.add(row("expected dmg added", (dmg > 0 ? "+" : "") + LedgerRows.number(dmg) + secs));
-		if (luck)
-		{
-			final long r = LedgerRows.roundHalfAway(d.specLuckSeconds);
-			rows.add(new Row(Text.small("your specials' luck", SidePanelStyle.BODY),
-				Text.small(LedgerRows.fasterOrSlower(d.specLuckSeconds), r > 0 ? SidePanelStyle.BETTER : SidePanelStyle.COST)));
-		}
+		final List<Row> rows = new ArrayList<>(1 + d.specs.size());
+		rows.add(new Row(Text.small(DRAINS_ADDED, SidePanelStyle.BODY), Text.NONE,
+			Text.small((dmg > 0 ? "+" : "") + LedgerRows.number(dmg) + " dmg", SidePanelStyle.BODY), worthTip(d)));
+		specRows(rows, d);
 		return new PanelSnapshot.Rows(null, rows);
 	}
+
+	static final String DRAINS_ADDED = "drains added";
 
 	// ---- the luck curve ----
 
@@ -2574,37 +2696,60 @@ final class SidePanelModel
 			rows.add(new Row(Text.small(AFTER_THE_FIGHT, SidePanelStyle.MUTED), Text.NONE));
 			return new PanelSnapshot.Rows(Text.title(LedgerRows.number(s.damageTaken()), SidePanelStyle.VALUE), rows);
 		}
-		final List<Row> total = new ArrayList<>(4);
+		// T-119 (Eric, 2026-10-30): the header is everything taken, hits and damage over time; the groups show the split.
+		final List<Row> total = new ArrayList<>(6);
+		if (dotShown && s.damageTaken() > 0)
+		{
+			total.add(row(FROM_HITS, LedgerRows.number(s.damageTaken())));
+		}
 		if (hitsTaken > 0)
 		{
-			total.add(row("hits", LedgerRows.number(hitsTaken)));
+			// A count, not damage, then what a hit cost on average.
+			total.add(row(TIMES_HIT, LedgerRows.number(hitsTaken)));
+			total.add(row(AVG_PER_HIT, LedgerRows.oneDecimal((double) Math.max(0, s.damageTaken()) / hitsTaken)));
 		}
 		if (missed > 0)
 		{
-			total.add(row(MISSED, LedgerRows.number(missed)));
+			total.add(new Row(Text.small(HITS_OF_0, SidePanelStyle.BODY), Text.NONE,
+				Text.small(LedgerRows.number(missed), SidePanelStyle.BODY), HITS_OF_0_TIP));
 		}
 		if (s.biggestHitTaken() > 0)
 		{
-			total.add(row("biggest hit", LedgerRows.number(s.biggestHitTaken())));
+			total.add(row(LARGEST_HIT, LedgerRows.number(s.biggestHitTaken())));
 		}
-		total.add(new Row(Text.small("without protection", SidePanelStyle.BODY),
+		total.add(new Row(Text.small(OFF_PRAYER, SidePanelStyle.BODY), Text.NONE,
 			Text.small(LedgerRows.number(s.damageTakenUnprotected()), s.damageTakenUnprotected() > 0
-				? SidePanelStyle.COST : SidePanelStyle.BODY)));
+				? SidePanelStyle.COST : SidePanelStyle.BODY), OFF_PRAYER_TIP));
 		// By kind, as the overlay has them (T-062, T-063): poison taken, venom taken, ..., then DoT taken.
 		final List<Row> overTime = new ArrayList<>(3);
 		if (dotShown)
 		{
 			dotRows(overTime, s.dotTakenByKind(), s.dotTaken(), " taken");
 		}
-		return new PanelSnapshot.Rows(Text.title(LedgerRows.number(s.damageTaken()), SidePanelStyle.VALUE),
+		final int all = Math.max(0, s.damageTaken()) + (dotShown ? s.dotTaken() : 0);
+		return new PanelSnapshot.Rows(Text.title(LedgerRows.number(all), SidePanelStyle.VALUE),
 			grouped(new String[]{BY_ATTACK, TOTAL, OVER_TIME}, rows, total, overTime));
 	}
 
 	static final String AVOIDABLE = "avoidable";
-	/** T-076: the Damage taken card's 0s. */
-	static final String MISSED = "missed or blocked";
+	/**
+	 * T-076: the Damage taken card's 0s. T-119 (Eric, 2026-10-30: "missed or blocked is confusing"): the attacks that did
+	 * 0, with what they were in the tooltip.
+	 */
+	static final String MISSED = "hits of 0";
+	static final String HITS_OF_0 = MISSED;
+	static final String HITS_OF_0_TIP = "Attacks on you that did no damage: they missed, or your protection prayer blocked"
+		+ " them.";
+	/** T-119: the Damage taken card's rows (Eric, 2026-10-30): a count, its average, the largest, off prayer. */
+	static final String TIMES_HIT = "times hit";
+	static final String AVG_PER_HIT = "avg per hit";
+	static final String LARGEST_HIT = "largest hit taken";
+	static final String OFF_PRAYER = "off-prayer damage";
+	static final String OFF_PRAYER_TIP = "Damage taken from attacks your protection prayer didn't cover.";
+	/** T-119: the hits' part of a header that counts damage over time too. */
+	static final String FROM_HITS = "from hits";
 	/** T-068: the Damage taken card's line while the fight runs. */
-	static final String AFTER_THE_FIGHT = "hits and biggest hit after the fight";
+	static final String AFTER_THE_FIGHT = "times hit and largest hit after the fight";
 
 	private static boolean isUnnamed(String attack)
 	{
