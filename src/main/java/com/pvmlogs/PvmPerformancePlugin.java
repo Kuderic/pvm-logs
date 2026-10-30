@@ -321,6 +321,8 @@ public class PvmPerformancePlugin extends Plugin
 	// rather than read off a health bar that is bucketed into thirtieths and not always drawn. Per npc because one AoE
 	// attack puts damage on several and only the target's own counts towards what the target has left.
 	private final Map<Integer, Integer> damageByIndex = new HashMap<>();
+	// T-108: of damageByIndex, what the room's boss took while the player was on one of its adds, for RECONCILE.
+	private final Map<Integer, Integer> whileOnAnAdd = new HashMap<>();
 	// T-089: the monsters of the open run's kind the player's damage reached, whose deaths are its kills; and where the
 	// player stood last tick, so a teleport ends the run.
 	private final MonsterRooms monsterRooms = new MonsterRooms();
@@ -959,6 +961,7 @@ public class PvmPerformancePlugin extends Plugin
 					// Nothing carried to it: what was counted, and drained, was the other one's.
 					health.forget(npc.getIndex());
 					damageByIndex.remove(npc.getIndex());
+					whileOnAnAdd.remove(npc.getIndex());
 					drain.forget(npc);
 					startFight(npc, now);
 				}
@@ -1414,10 +1417,13 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void onNotMineSplat(NPC npc, Hitsplat hitsplat)
 	{
-		if (current == null || current.isEnded() || npc.getIndex() != current.getTargetIndex())
+		// The current fight's target, or the room's boss while the fight is on one of its adds (T-108).
+		final Fight fight = bookedFightFor(npc);
+		if (fight == null)
 		{
 			return;
 		}
+		final boolean offTarget = fight != current;
 		final int index = npc.getIndex();
 		final int amount = hitsplat.getAmount();
 		final int type = hitsplat.getHitsplatType();
@@ -1430,8 +1436,8 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			case DAMAGE_OVER_TIME:
 				// Damage over time is the target's health going down with no attack behind it: no activity, no hit, no attempt.
-				current.recordDotDamage(amount, type);
-				if (current.isScored())
+				fight.recordDotDamage(amount, type);
+				if (fight.isScored())
 				{
 					session.recordDotDamage(amount, type);
 				}
@@ -1439,23 +1445,23 @@ public class PvmPerformancePlugin extends Plugin
 				damageModifiers.onBossDot(npc, HitsplatKind.typeName(type), amount);
 				break;
 			case HEAL:
-				current.recordHeal(amount);
+				fight.recordHeal(amount);
 				health.heal(index, npc.getId(), amount, tick);
 				// T-041: Vardorvis heals off his melee and spikes, not his axes: that is how they are told apart.
-				if (attackNames != null && avoidableFight == current)
+				if (attackNames != null && !offTarget && avoidableFight == current)
 				{
 					attackNames.onBossHeal(tick, amount);
 				}
 				damageByIndex.compute(index, (i, v) -> Math.max(0, (v == null ? 0 : v) - Math.max(0, amount)));
 				break;
 			case OTHER_PLAYER:
-				current.recordOthersDamage(amount);
+				fight.recordOthersDamage(amount);
 				break;
 			case ROOM:
-				current.recordRoomDamage(amount);
+				fight.recordRoomDamage(amount);
 				break;
 			case UNCLASSIFIED:
-				current.recordUnclassifiedDamage(amount);
+				fight.recordUnclassifiedDamage(amount);
 				break;
 			default:
 				break;
@@ -1464,7 +1470,13 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			health.damage(index, npc.getId(), amount, tick);
 			damageByIndex.merge(index, Math.max(0, amount), Integer::sum);
+			if (offTarget)
+			{
+				whileOnAnAdd.merge(index, Math.max(0, amount), Integer::sum);
+			}
 		}
+		final String booked = offTarget ? String.format(" [while on %s: booked to %s's fight from tick %d]",
+			current.getTargetName(), fight.getTargetName(), fight.getStartTick()) : "";
 		if (kind == HitsplatKind.ROOM || kind == HitsplatKind.OTHER_PLAYER)
 		{
 			final BossRules rules = monsterStats == null ? null : monsterStats.rules();
@@ -1473,16 +1485,64 @@ public class PvmPerformancePlugin extends Plugin
 				: RoomDamage.sourceOf(boss.roomDamage, amount, leftBefore, state -> damageModifiers.isOpen(npc, state));
 			// "(type 17, others')" stays as before, for the replay tests' parsers; the kind leads.
 			debug.log("splat %d %s (type %d, others') on %s (npc %d, index %d): %s%s, %d other players here, target has %d "
-					+ "left (%s)",
-				amount, kind == HitsplatKind.ROOM ? "room's" : "another player's", type, current.getTargetName(), npc.getId(),
+					+ "left (%s)%s",
+				amount, kind == HitsplatKind.ROOM ? "room's" : "another player's", type, fight.getTargetName(), npc.getId(),
 				index, kind, source == null ? "" : ", " + source, others, health.remaining(index, tick),
-				health.source(index, tick));
+				health.source(index, tick), booked);
 			return;
 		}
-		debug.log("splat %d %s (type %d, %s) on %s (npc %d, index %d): %s, target has %d left (%s)",
+		debug.log("splat %d %s (type %d, %s) on %s (npc %d, index %d): %s, target has %d left (%s)%s",
 			amount, HitsplatKind.typeName(type), type, hitsplat.isOthers() ? "others'" : "no owner",
-			current.getTargetName(), npc.getId(), index, kind, health.remaining(index, tick),
-			health.source(index, tick));
+			fight.getTargetName(), npc.getId(), index, kind, health.remaining(index, tick),
+			health.source(index, tick), booked);
+	}
+
+	/**
+	 * The fight a splat on this npc is booked to (T-108): the current fight, on its
+	 * target; while the current fight is on an add of a grouped room, the boss's
+	 * latest fight in the room for a splat on the boss; else null. Before, every
+	 * splat on Araxxor while the player was on an araxyte went uncounted: the room's
+	 * explosions, his cleave, the burn. His kill came out 1 to 17 short of his bar.
+	 */
+	private Fight bookedFightFor(NPC npc)
+	{
+		if (current == null || current.isEnded())
+		{
+			return null;
+		}
+		return npc.getIndex() == current.getTargetIndex() ? current : roomBossFight(npc);
+	}
+
+	/**
+	 * While the current fight is on an add, the room's latest fight on this npc
+	 * if it is a part of that add's boss (T-108); null otherwise. That fight
+	 * ended when the player turned to the add, and the room is still open: the
+	 * boss's hitpoints went on falling, so what took them is the boss's. One with
+	 * no attempts was never kept, so it is passed over.
+	 */
+	private Fight roomBossFight(NPC npc)
+	{
+		return roomBossFight(currentEncounter, current, npc.getIndex(), npc.getId());
+	}
+
+	/** {@link #roomBossFight(NPC)} on its parts, for the tests. */
+	static Fight roomBossFight(Encounter room, Fight current, int npcIndex, int npcId)
+	{
+		if (current == null || current.isEnded() || room == null || room.isEnded()
+			|| !EncounterGroup.isBossOfAdd(npcId, current.getTargetId()))
+		{
+			return null;
+		}
+		final List<Fight> fights = room.getFights();
+		for (int i = fights.size() - 1; i >= 0; i--)
+		{
+			final Fight f = fights.get(i);
+			if (f != current && f.getTargetIndex() == npcIndex && f.getAttempts() > 0)
+			{
+				return f;
+			}
+		}
+		return null;
 	}
 
 	/** The players in the scene besides the local player (T-106): whether another's splat can be another player's. */
@@ -1543,8 +1603,15 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
 			health.damage(npc.getIndex(), npc.getId(), amount, tick);
-			current.recordThrallDamage(amount);
-			if (current.isScored())
+			// T-108: the thrall's splat on the room's boss while the player is on an add is the boss fight's, not the add's.
+			final Fight boss = roomBossFight(npc);
+			final Fight fight = boss != null ? boss : current;
+			if (boss != null)
+			{
+				whileOnAnAdd.merge(npc.getIndex(), amount, Integer::sum);
+			}
+			fight.recordThrallDamage(amount);
+			if (fight.isScored())
 			{
 				session.recordThrallDamage(amount);
 			}
@@ -4037,6 +4104,11 @@ public class PvmPerformancePlugin extends Plugin
 		final int to = npc.getIndex();
 		if (from != to)
 		{
+			final Integer onAnAdd = whileOnAnAdd.remove(from);
+			if (onAnAdd != null)
+			{
+				whileOnAnAdd.put(to, onAnAdd);
+			}
 			final Integer dealt = damageByIndex.remove(from);
 			if (dealt != null)
 			{
@@ -4351,6 +4423,7 @@ public class PvmPerformancePlugin extends Plugin
 			if (npc.isDead())
 			{
 				damageByIndex.remove(npc.getIndex());
+				whileOnAnAdd.remove(npc.getIndex());
 			}
 		}
 		if (current == null || current.isEnded())
@@ -5363,6 +5436,7 @@ public class PvmPerformancePlugin extends Plugin
 			vengeanceUp = false;
 			pendingMineHits.clear();
 			damageByIndex.clear();
+			whileOnAnAdd.clear();
 			health.clear();
 			lastHealthBarReading = Long.MIN_VALUE;
 			drain.clear();
@@ -6126,13 +6200,17 @@ public class PvmPerformancePlugin extends Plugin
 		final int counted = health.damageCounted(index);
 		final int healed = health.healed(index);
 		final int net = counted - healed;
+		// T-108: what the room's boss took while the player was on an add, booked to its fight before, so in no line's terms.
+		final int onAnAdd = whileOnAnAdd.getOrDefault(index, 0);
 		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + room %d "
-				+ "+ others %d + unclassified %d, healed %d; on the target %d - %d = %d against %d full hp (%s)%s; bar last read "
-				+ "%d, now %d left (%s)",
+				+ "+ others %d + unclassified %d, healed %d%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
+				+ "read %d, now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
 			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),
 			current.getDotDamage(), current.getRoomDamage(), current.getOthersDamage(),
-			current.getUnclassifiedDamage(), current.getHealed(), counted, healed, net, full, fullFrom,
+			current.getUnclassifiedDamage(), current.getHealed(),
+			onAnAdd == 0 ? "" : String.format(" (the room so far, taken while the player was on an add: %d)", onAnAdd),
+			counted, healed, net, full, fullFrom,
 			died && full > 0 ? String.format(", diff %+d (%.1f%%)", net - full, 100.0 * (net - full) / full) : "",
 			health.lastHudHp(index), health.remaining(index, tick), health.source(index, tick));
 		maxHits.endTick(client.getTickCount());
@@ -6358,6 +6436,7 @@ public class PvmPerformancePlugin extends Plugin
 			combatCalc.forgetConflictionCharge();
 			pendingMineHits.clear();
 			damageByIndex.clear();
+			whileOnAnAdd.clear();
 			health.clear();
 		}
 		else if (died)
@@ -6379,6 +6458,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			pendingMineHits.remove(index);
 			damageByIndex.remove(index);
+			whileOnAnAdd.remove(index);
 			health.forget(index);
 		}
 		// Nothing is being fought, so no drain should be read against anything.

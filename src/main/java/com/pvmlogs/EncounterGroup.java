@@ -80,6 +80,17 @@ final class EncounterGroup
 	}
 
 	/**
+	 * Whether {@code npcId} is a part of the boss of the room whose add {@code addId}
+	 * is (T-108): one group, the one an add and the other not. While the player is
+	 * on an araxyte, Araxxor's hitpoints still fall to the explosions, his cleave,
+	 * the burn and the thrall.
+	 */
+	static boolean isBossOfAdd(int npcId, int addId)
+	{
+		return ADDS.contains(addId) && !ADDS.contains(npcId) && sameGroup(npcId, addId);
+	}
+
+	/**
 	 * What closes the room of a boss that drops no loot event (T-061): this
 	 * many of its parts going down, each counted once. A part goes down by
 	 * despawning dead while wearing one of {@link #live}, or by changing into one
