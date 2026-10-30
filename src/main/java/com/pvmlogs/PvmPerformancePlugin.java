@@ -70,6 +70,7 @@ import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
@@ -388,6 +389,12 @@ public class PvmPerformancePlugin extends Plugin
 	// spell click that never cast, so it went out at the weapon's speed, not the spell's.
 	private boolean attackResetsDelay;
 	private int delayResetTick = Integer.MIN_VALUE;
+	// T-121: the Royal Titans' elementals the player's splats killed, by the tick each went down, and their indices so each
+	// counts once. Each brings the next attack a tick sooner (wiki, Royal Titans/Strategies: "For each elemental killed, the
+	// player receives a 1-tick reduction to their attack delay"): at [7239] of the 10:30 log a Fire Wave killed three ice
+	// elementals and the Twinflame staff cast again at [7242], 3 ticks into its 6.
+	private final java.util.TreeMap<Integer, Integer> elementalKills = new java.util.TreeMap<>();
+	private final Set<Integer> elementalsDown = new HashSet<>();
 	private boolean attackDroppedCast;
 	// T-086: the attack being observed is a melee punish (the Maggot King's slam), thrown outside the weapon's speed, so it
 	// leaves the next attack due when it was; the ticks the fought boss started the animation a punish answers; and the
@@ -1099,6 +1106,7 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				damageByIndex.merge(npc.getIndex(), hitsplat.getAmount(), Integer::sum);
 				health.damage(npc.getIndex(), npc.getId(), hitsplat.getAmount(), tick);
+				noteElementalKill(npc, tick);
 			}
 			else
 			{
@@ -2401,8 +2409,9 @@ public class PvmPerformancePlugin extends Plugin
 		// Judged on the tick the projectile SET OFF, and against the fastest speed seen lately rather than the live one - see
 		// fastestSpeedSeen for why the live reading is unusable here.
 		final int firedTick = startTick(projectile);
-		if (tooSoonToBeMine(firedTick, lastAttackSeenTick,
-			speedSinceLastAttack(delayResetTick, lastAttackSeenTick, fastestSpeedSeen())))
+		if (tooSoonToBeMine(firedTick, lastAttackSeenTick, Math.max(1,
+			speedSinceLastAttack(delayResetTick, lastAttackSeenTick, fastestSpeedSeen())
+				- hasteSince(elementalKills, lastAttackSeenTick))))
 		{
 			debug.log("projectile %d at npc %d NOT taken as mine: from my tile, but set off on %d with my last attack seen on %d",
 				projectile.getId(), ((NPC) target).getId(), firedTick, lastAttackSeenTick);
@@ -3690,7 +3699,10 @@ public class PvmPerformancePlugin extends Plugin
 			&& (current.getTargetIndex() == npc.getIndex()
 			|| EncounterGroup.otherFallEndsFight(npc.getId(), current.getTargetId())))
 		{
-			finalizeFight(true, System.currentTimeMillis(), "changed into its beaten form");
+			// A partner part's fall the room goes on past keeps what the others have left (T-121): Eldric falling cleared
+			// Branda's count, so her kill reconciled 57 of 600.
+			finalizeFight(true, System.currentTimeMillis(), "changed into its beaten form",
+				separatePartGoesOn(currentEncounter, current, npc.getId(), npc.getIndex(), true));
 		}
 		closeRoomOnFall(npc);
 	}
@@ -4136,6 +4148,49 @@ public class PvmPerformancePlugin extends Plugin
 	 * so the weapon's own next attack is due when it was, or on the next tick
 	 * where it was already free.
 	 */
+	/** The Royal Titans' elementals, each of whose deaths to the player brings the next attack a tick sooner (T-121). */
+	static final Set<Integer> HASTENS_ON_KILL = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		NpcID.RT_SUMMON_ELEMENTAL_FIRE, NpcID.RT_SUMMON_ELEMENTAL_ICE)));
+
+	/** How many ticks sooner kills since {@code fromTick} bring the next attack (T-121): one each. */
+	static int hasteSince(java.util.NavigableMap<Integer, Integer> kills, int fromTick)
+	{
+		if (fromTick == Integer.MIN_VALUE)
+		{
+			return 0;
+		}
+		int haste = 0;
+		for (int n : kills.tailMap(fromTick, true).values())
+		{
+			haste += n;
+		}
+		return haste;
+	}
+
+	/**
+	 * A splat of mine on an elemental of the Royal Titans that took its last
+	 * hitpoints (T-121): once per elemental, the next attack a tick sooner -
+	 * now, for a cooldown already booked, and for the attack whose own splats
+	 * these were when it is booked after them, from {@link #elementalKills}.
+	 */
+	private void noteElementalKill(NPC npc, int tick)
+	{
+		if (!HASTENS_ON_KILL.contains(npc.getId()) || health.countedRemaining(npc.getIndex()) != 0
+			|| !elementalsDown.add(npc.getIndex()))
+		{
+			return;
+		}
+		elementalKills.merge(tick, 1, Integer::sum);
+		elementalKills.headMap(tick - 30).clear();
+		final int before = attackDueTick;
+		if (attackDueTick != Integer.MIN_VALUE)
+		{
+			attackDueTick--;
+		}
+		debug.log("ELEMENTAL DOWN %s (index %d): the next attack a tick sooner, due %d (was %d)", Text.removeTags(npc.getName()),
+			npc.getIndex(), attackDueTick, before);
+	}
+
 	static int dueAfter(boolean punish, int dueBefore, int thrownTick, int speed)
 	{
 		return punish ? Math.max(dueBefore, thrownTick + 1) : thrownTick + speed;
@@ -4492,6 +4547,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		closeOnDespawn(npc);
 		deadSince.remove(npc.getIndex());
+		elementalsDown.remove(npc.getIndex());
 		// After the fight on it is closed. Whatever was fighting it: a death a party member landed counts as well.
 		if (npc.isDead())
 		{
@@ -4546,7 +4602,8 @@ public class PvmPerformancePlugin extends Plugin
 			// An add of the room dying is the room going on (T-021): what the boss and the other adds have left is kept. So is
 			// a monster of the run (T-089).
 			finalizeFight(npc.isDead(), System.currentTimeMillis(), npc.isDead() ? "target died" : "target despawned",
-				npc.isDead() && roomGoesOnAtDeath(currentEncounter, current, npc.getId()));
+				npc.isDead() && (roomGoesOnAtDeath(currentEncounter, current, npc.getId())
+					|| separatePartGoesOn(currentEncounter, current, npc.getId(), npc.getIndex(), false)));
 			return;
 		}
 		// A boss made of several NPCs does not die on the one being hit: the Hueycoatl is killed at its head while the fight
@@ -4644,7 +4701,8 @@ public class PvmPerformancePlugin extends Plugin
 				// At the speed held when it went out (T-086): a bow shot at a larva is booked two ticks later, by when the staff
 				// is often back in hand.
 				final Integer threwAt = onAdd ? speedByTick.get(heldTick(attackSwitchTick, attackTick)) : null;
-				attackDueTick = attackTick + (threwAt != null ? threwAt : combatCalc.attackSpeedTicks());
+				attackDueTick = attackTick + (threwAt != null ? threwAt : combatCalc.attackSpeedTicks())
+					- hasteSince(elementalKills, attackTick);
 				lastAttackFromProjectile = attackObservedFromProjectile;
 				combatCalc.noteAttackKind(true);
 				if (onAdd)
@@ -4751,6 +4809,13 @@ public class PvmPerformancePlugin extends Plugin
 				threwAt, combatCalc.attackSpeedTicks());
 			final boolean punished = punishedAttack();
 			attackDueTick = dueAfter(punished, attackDueTick, attackTick, speed);
+			// Elementals its own splats killed before it was booked, as a projectile's are on the tick it is seen (T-121).
+			final int haste = punished ? 0 : hasteSince(elementalKills, attackTick);
+			if (haste > 0)
+			{
+				attackDueTick -= haste;
+				debug.log("  ELEMENTALS: %d killed since it was thrown, so the next attack is due on %d", haste, attackDueTick);
+			}
 			if (punished)
 			{
 				final BossRules.MeleePunish punish = punishRuleFor(targetId);
@@ -5538,6 +5603,8 @@ public class PvmPerformancePlugin extends Plugin
 			countedProjectiles.clear();
 			capBeforeLanding.clear();
 			deadSince.clear();
+			elementalKills.clear();
+			elementalsDown.clear();
 			taken.clear();
 			targetSeen.clear();
 			recentTiles.clear();
@@ -5889,6 +5956,22 @@ public class PvmPerformancePlugin extends Plugin
 		return (EncounterGroup.isUnscored(npcId) || !EncounterGroup.lootIsTheKill(npcId))
 			&& switchesWithinRoom(room, fight, npcId)
 			|| fight.isMonsterRoom() && room != null && !room.isEnded();
+	}
+
+	/**
+	 * Whether the room goes on past one of its separate parts going down (T-121),
+	 * keeping what the others have left: a part of a SEPARATE group (T-064: the
+	 * Royal Titans, the Grotesque Guardians, the Chambers' vanguards, guardians,
+	 * shamans, mystics and Olm's hands, the muttadiles, the baboons, the nylocas)
+	 * dying or falling while its room is open and isn't closed by it. Eric's
+	 * 10:30 log: Eldric's fall at [7428] cleared every count, so Branda's kill at
+	 * [7437] reconciled 57 of her 600.
+	 */
+	static boolean separatePartGoesOn(Encounter room, Fight fight, int npcId, int npcIndex, boolean fell)
+	{
+		final EncounterGroup.Falls rule = EncounterGroup.falls(npcId);
+		return rule != null && rule.kind == EncounterGroup.FallKind.SEPARATE && switchesWithinRoom(room, fight, npcId)
+			&& !room.wouldCloseOnDeathOf(npcId, npcIndex, fell);
 	}
 
 	/** Whether this NPC is a monster rather than a boss (T-089): see {@link MonsterRooms#isMonster}. */
@@ -6249,6 +6332,7 @@ public class PvmPerformancePlugin extends Plugin
 		final boolean landed = ownRoll && damage > 0 && burstLanded.add(npc.getIndex());
 		damageByIndex.merge(npc.getIndex(), damage, Integer::sum);
 		health.damage(npc.getIndex(), npc.getId(), damage, tick);
+		noteElementalKill(npc, tick);
 		current.recordExtraTarget(damage, now, newTarget, landed);
 		noteMonsterHit(npc, damage);
 		// The attack whose splat on the fight's target it lands beside (T-059): a chinchompa's collateral otherwise waited for
@@ -6830,13 +6914,16 @@ public class PvmPerformancePlugin extends Plugin
 
 	/**
 	 * Which fight the game's kill message belongs to (T-110): the last fight to
-	 * end, if it ended in the last {@link #KILL_MESSAGE_MILLIS} and on a death
-	 * or a closed room; else the one still open (a message ahead of the death).
+	 * end, if it ended in the last {@link #KILL_MESSAGE_MILLIS} and closed its
+	 * room, or killed a boss that stands alone; else the one still open (a
+	 * message ahead of the death). A grouped part's death isn't the kill
+	 * (T-121): the 10:30 log's kill count came as Branda fell, onto Eldric's
+	 * fight, which had ended at his fall 9 ticks before.
 	 */
 	static Fight killMessageFight(Fight lastFinished, Fight current, long now)
 	{
 		if (lastFinished != null && lastFinished.isEnded() && now - lastFinished.getEndMillis() <= KILL_MESSAGE_MILLIS
-			&& (lastFinished.isTargetDied() || lastFinished.isClosedRoom()))
+			&& (lastFinished.isTargetDied() && lastFinished.getGroupName() == null || lastFinished.isClosedRoom()))
 		{
 			return lastFinished;
 		}
