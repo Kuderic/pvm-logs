@@ -115,6 +115,13 @@ class Fight
 	// Whether this fight is the last of its room: the one the boss's loot dropped on. Not targetDied, which a Hueycoatl
 	// sets several times on the way down.
 	private boolean closedRoom;
+	// T-100: why the room this fight closed ended without its kill: "died" (the player died) or "left" (the boss left
+	// alive and a fresh one came, a hop, a logout). Null when it closed on the kill, and on a fight saved before T-100,
+	// which only ever closed on one. A boundary either way, so History rebuilds the same rooms as were shown live.
+	private String roomEnd;
+	// T-100: the player died while this fight was open, or it was the room's last when they did. False in an older
+	// history file.
+	private boolean playerDied;
 	private long endMillis;
 	// T-088: trips away from this target the player came back from, and their time, which the kill's time leaves out.
 	// Saved, so History can say a kill was resumed; 0 in an older history file, which is right for those.
@@ -475,6 +482,25 @@ class Fight
 	void closeRoom()
 	{
 		closedRoom = true;
+	}
+
+	/** The room ends on this fight without its kill (T-100): {@code why} is "died" or "left". */
+	void closeRoomWithoutKill(String why)
+	{
+		closedRoom = true;
+		roomEnd = why;
+	}
+
+	/** Whether the room closed on this fight because the boss was killed: its loot or its death rule (T-055, T-061). */
+	boolean isClosedRoomOnKill()
+	{
+		return closedRoom && roomEnd == null;
+	}
+
+	/** The player died during this fight, or it was the room's last when they did (T-100). */
+	void markPlayerDied()
+	{
+		playerDied = true;
 	}
 
 	/**

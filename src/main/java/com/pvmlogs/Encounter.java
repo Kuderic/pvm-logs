@@ -146,6 +146,77 @@ class Encounter
 	}
 
 	/**
+	 * Ends the room without its kill (T-100): the player died ({@code why}
+	 * "died"), or the boss left alive and a fresh one came ("left"). The room's
+	 * last fight with anything thrown in it - the history keeps only those -
+	 * carries the boundary, as the fight a kill closes on does, so History
+	 * rebuilds the same rooms as were shown live; its reason keeps it from
+	 * reading as a kill. The fight that was open, if any, has been ended first.
+	 *
+	 * @return the fight that carries the boundary, or null when nothing was thrown in the room
+	 */
+	Fight closeWithoutKill(long now, String why)
+	{
+		end(now);
+		final Fight last = lastAttempted();
+		if (last != null)
+		{
+			last.closeRoomWithoutKill(why);
+		}
+		return last;
+	}
+
+	/**
+	 * The room's boss parts that left alive on a trip (T-100, T-088), by npc
+	 * index, with their npc ids; a part that came back is taken off.
+	 */
+	private final java.util.Map<Integer, Integer> leftAlive = new java.util.HashMap<>();
+
+	/**
+	 * One of the room's parts left alive with the player (T-088's trip: a
+	 * loading screen as it despawned). Only a boss part, never an add, and never
+	 * in a raid, whose rooms go on across phases.
+	 */
+	void noteLeftAlive(int npcIndex, int npcId)
+	{
+		if (!inRaid() && EncounterGroup.lootIsTheKill(npcId) && !EncounterGroup.isUnscored(npcId))
+		{
+			leftAlive.put(npcIndex, npcId);
+		}
+	}
+
+	/** A part that left alive came back on this index (T-088's resume): it is still the same attempt. */
+	void noteBack(int npcIndex)
+	{
+		leftAlive.remove(npcIndex);
+	}
+
+	/**
+	 * Whether this fight is on a fresh boss after a trip (T-100): a part of
+	 * this room left alive with the player and never came back, and a boss part
+	 * of the same group is fought now under another index. A new attempt, so a
+	 * new room. The Giant Mole back on a new index after a trip never gets here
+	 * (T-088 resumes her: one per world), and a part changing npc mid-kill
+	 * without a trip never left.
+	 */
+	boolean freshPartAfterLeaving(Fight fight)
+	{
+		if (leftAlive.isEmpty() || isEnded() || leftAlive.containsKey(fight.getTargetIndex())
+			|| !EncounterGroup.lootIsTheKill(fight.getTargetId()) || EncounterGroup.isUnscored(fight.getTargetId()))
+		{
+			return false;
+		}
+		for (int id : leftAlive.values())
+		{
+			if (id == fight.getTargetId() || EncounterGroup.sameGroup(id, fight.getTargetId()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Whether anything in this room has been attacked yet. Latched rather than
 	 * counted, so the answer is the same after the fight that did it has been
 	 * replaced - which is the whole point of asking the room instead of the
@@ -217,7 +288,8 @@ class Encounter
 		boolean ungroupedDied = false;
 		for (Fight fight : fights)
 		{
-			if (fight.isClosedRoom())
+			// Not a room that ended without its kill (T-100): the player died, or the boss left alive.
+			if (fight.isClosedRoomOnKill())
 			{
 				return true;
 			}

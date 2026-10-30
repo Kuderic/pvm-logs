@@ -45,6 +45,7 @@ import net.runelite.api.Skill;
 import net.runelite.api.Projectile;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.BeforeRender;
 import net.runelite.api.events.ChatMessage;
@@ -396,6 +397,10 @@ public class PvmPerformancePlugin extends Plugin
 	private BossAway away;
 	// T-097: the run back to a boss come back into view after a burrow, until the next attack.
 	private BossAway.Chase chase;
+	// T-100: the player's own death, from either signal, once a life.
+	private final PlayerDeath playerDeath = new PlayerDeath();
+	// T-100: died in a raid, where the room goes on: the player's ticks count as nothing until they attack again.
+	private boolean deadInRaid;
 	private int lastLoadingTick = Integer.MIN_VALUE;
 	private boolean barCheckOnReturn;
 	private long returnLastSeenMillis;
@@ -2403,6 +2408,13 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
+		// The player's hitpoints reaching 0 is one of the two death signals (T-100); back above 0 is the respawn. Only once
+		// the stats are loaded: a first reading at login is not a death.
+		if (client.getGameState() == GameState.LOGGED_IN && client.getRealSkillLevel(Skill.HITPOINTS) > 0
+			&& playerDeath.hitpoints(event.getBoostedLevel(), client.getTickCount()))
+		{
+			playerDied("hitpoints 0");
+		}
 		// Only a rise in experience counts: this event also fires for a level change, and hitpoints has one every time the
 		// player regenerates or eats.
 		final int was = hitpointsXp;
@@ -3801,6 +3813,11 @@ public class PvmPerformancePlugin extends Plugin
 			System.currentTimeMillis(), BossAway.playerLeft(state, lastLoadingTick, tick), lastBossAnim);
 		debug.log("OUT OF VIEW %s (npc %d, index %d) on world %d at tick %d: %s", away.name, away.npcId, away.npcIndex,
 			away.world, tick, away.why(state, lastLoadingTick));
+		// A boss part left alive on a trip (T-100): a fresh one under another index on the return is a new attempt.
+		if (away.playerLeft && currentEncounter != null && currentEncounter.getFights().contains(current))
+		{
+			currentEncounter.noteLeftAlive(npc.getIndex(), npc.getId());
+		}
 	}
 
 	/**
@@ -3824,6 +3841,11 @@ public class PvmPerformancePlugin extends Plugin
 			drain.move(from, to);
 		}
 		final long gone = System.currentTimeMillis() - away.millis;
+		if (currentEncounter != null)
+		{
+			// Still the same attempt (T-100), on the index it left from or, for a boss of one per world, another.
+			currentEncounter.noteBack(from);
+		}
 		if (away.playerLeft)
 		{
 			current.resumeAfterTrip(to, gone);
@@ -3979,6 +4001,98 @@ public class PvmPerformancePlugin extends Plugin
 		return b.toString();
 	}
 
+	/** The other death signal (T-100): RuneLite's own, for the local player, as its Death Indicator plugin reads it. */
+	@Subscribe
+	public void onActorDeath(ActorDeath event)
+	{
+		if (event.getActor() != null && event.getActor() == client.getLocalPlayer()
+			&& playerDeath.died(client.getTickCount()))
+		{
+			playerDied("ActorDeath");
+		}
+	}
+
+	/**
+	 * The player died (T-100). Outside a raid the attempt is over: the open
+	 * fight ends there, and the room closes without its kill - a boss's room
+	 * with "died" on its last fight, a run of monsters at its last attack with
+	 * its kills kept. No T-088 hold follows: the respawn's loading screen is not
+	 * a trip. In a raid the team can still kill the boss, so the room goes on,
+	 * the death is marked, and the player's ticks count as nothing until they
+	 * attack again (a guess: no raid log yet).
+	 */
+	private void playerDied(String signal)
+	{
+		final int tick = client.getTickCount();
+		final long now = System.currentTimeMillis();
+		final PlayerDeath.Outcome outcome = PlayerDeath.outcome(raidType != null, currentEncounter);
+		debug.log("PLAYER DIED at tick %d (signal %s)%s", tick, signal, outcome == PlayerDeath.Outcome.RAID_GOES_ON
+			? ": in a raid, the room goes on and the player's ticks count as nothing until they attack again" : "");
+		if (outcome == PlayerDeath.Outcome.RAID_GOES_ON)
+		{
+			final Fight marked = current != null && !current.isEnded() ? current
+				: currentEncounter == null ? null : currentEncounter.lastAttempted();
+			if (marked != null)
+			{
+				marked.markPlayerDied();
+			}
+			deadInRaid = true;
+			return;
+		}
+		final Encounter room = currentEncounter;
+		final boolean inRoom = current != null && !current.isEnded() && room != null && room.getFights().contains(current);
+		if (current != null && !current.isEnded())
+		{
+			if (inRoom || outcome == PlayerDeath.Outcome.NO_ROOM)
+			{
+				current.markPlayerDied();
+			}
+			finalizeFight(false, now, "the player died");
+		}
+		away = null;
+		chase = null;
+		if (outcome == PlayerDeath.Outcome.RUN_ENDS)
+		{
+			final Fight last = room.lastAttempted();
+			if (last != null)
+			{
+				last.markPlayerDied();
+			}
+			endRoom(room, now, "the player died");
+		}
+		else if (outcome == PlayerDeath.Outcome.ROOM_ENDS)
+		{
+			final Fight last = room.closeWithoutKill(now, "died");
+			if (last != null)
+			{
+				last.markPlayerDied();
+			}
+			debug.log("ROOM '%s' ended (the player died): not a kill, %d fights", room.getName(), room.getFights().size());
+			saveHistory();
+		}
+		// A run set aside for another kind ends too: the player is not coming back to it from a respawn.
+		endRoom(setAsideRun, now, "the player died");
+		setAsideRun = null;
+	}
+
+	/**
+	 * Ends a boss's room the player left without its kill (T-100): a logout or
+	 * a hop. Its last fight carries the boundary, with "left", so History does
+	 * not join it to the next attempt under the same name. A run of monsters, a
+	 * killed room or an empty one ends as before.
+	 */
+	private void endRoomLeft(Encounter room, long now, String why)
+	{
+		if (room != null && !room.isEnded() && !room.isMonsterRoom() && room.hasAttempts() && !room.isKilled())
+		{
+			room.closeWithoutKill(now, "left");
+			debug.log("ROOM '%s' ended (%s): not a kill, %d fights", room.getName(), why, room.getFights().size());
+			saveHistory();
+			return;
+		}
+		endRoom(room, now, why);
+	}
+
 	@Subscribe
 	public void onNpcDespawned(NpcDespawned event)
 	{
@@ -4038,9 +4152,10 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
-		if (current.getTargetIndex() == npc.getIndex() && !npc.isDead())
+		if (current.getTargetIndex() == npc.getIndex() && !npc.isDead() && PlayerDeath.holdsOnDespawn(playerDeath.isDead()))
 		{
-			// Gone alive (T-088): a burrow, or the player leaving on a trip. Held, not finished.
+			// Gone alive (T-088): a burrow, or the player leaving on a trip. Held, not finished. Never after a death (T-100):
+			// the fight ended there, and the respawn's loading screen is not a trip.
 			leaveView(npc);
 			return;
 		}
@@ -4084,6 +4199,16 @@ public class PvmPerformancePlugin extends Plugin
 			// Nothing pending to hold back, so nothing eaten out of a fight carries into the next one.
 			foodDelay.reset();
 			return;
+		}
+		if (deadInRaid)
+		{
+			// Died in a raid (T-100): nothing counts until the player attacks again.
+			if (!attacked)
+			{
+				debug.log("tick UNCOUNTED: the player died on %d", playerDeath.tick());
+				return;
+			}
+			deadInRaid = false;
 		}
 		if (attacked && chase != null)
 		{
@@ -4981,10 +5106,13 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			away = null;
 			barCheckOnReturn = false;
+			playerDeath.clear();
+			deadInRaid = false;
 			// And the ROOM with it. Left open, it waits for a kill that may be a night away and counts the whole gap as
 			// room time: one Hueycoatl room in a real export ran 33,541 seconds across a night's sleep and swallowed two
 			// kills, because a room only ends at its loot drop and nothing else was closing it.
-			endRoom(currentEncounter, System.currentTimeMillis(), state == GameState.LOGIN_SCREEN ? "logged out" : "hopped");
+			// A boss's room left without its kill carries a boundary, so History keeps it apart from the next attempt (T-100).
+			endRoomLeft(currentEncounter, System.currentTimeMillis(), state == GameState.LOGIN_SCREEN ? "logged out" : "hopped");
 			endRoom(setAsideRun, System.currentTimeMillis(), state == GameState.LOGIN_SCREEN ? "logged out" : "hopped");
 			setAsideRun = null;
 			monsterRooms.clear();
@@ -5541,6 +5669,15 @@ public class PvmPerformancePlugin extends Plugin
 		// Only a grouped NPC continues a room. Without that a second Vorkath would join the first - same name, same room -
 		// and the overlay would quietly become a running total of the trip.
 		final String name = fight.encounterName();
+		// A fresh boss after a trip is a new attempt (T-100): the part that left alive never came back, and another of it is
+		// fought now. The old room ends without its kill, so this one opens its own.
+		if (currentEncounter != null && currentEncounter.freshPartAfterLeaving(fight))
+		{
+			currentEncounter.closeWithoutKill(now, "left");
+			debug.log("ROOM '%s' ended (the boss left alive and a fresh one is fought, index %d): not a kill, %d fights",
+				currentEncounter.getName(), fight.getTargetIndex(), currentEncounter.getFights().size());
+			saveHistory();
+		}
 		// An ended room takes nothing more. It is left on show so the kill can be read, and this is what stops the fight
 		// after it being added to it. Nor does one nothing was thrown in: a fight opens on merely looking at an npc, and a
 		// grouped room opened by a look carried on into the next kill with the gap counted as its time - one Abyssal Sire
@@ -5635,6 +5772,7 @@ public class PvmPerformancePlugin extends Plugin
 		setAsideRun = null;
 		raidType = now_;
 		olmPhase = null;
+		deadInRaid = false;
 		if (raidType != null)
 		{
 			currentRaid = new Raid(raidType, ++raidCounter, now);
@@ -5882,9 +6020,10 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void finalizeFight(boolean died, long now, String reason, boolean keepCounts)
 	{
-		// Whatever ends a fight ends its hold (T-088), and its chase (T-097).
+		// Whatever ends a fight ends its hold (T-088), and its chase (T-097), and a death's uncounted ticks (T-100).
 		away = null;
 		chase = null;
+		deadInRaid = false;
 		barCheckOnReturn = false;
 		mechanics.finish();
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
