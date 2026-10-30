@@ -138,7 +138,8 @@ public class SidePanelDefenceCardTest
 			.filter(r -> r.name.startsWith("Not matched")).findFirst().orElse(null);
 		assertNotNull(row);
 		assertEquals("0", row.damage);
-		assertTrue(row.sub, row.sub.endsWith("expected 30"));
+		// T-112 item 6: in brackets, as the DPS rows have it.
+		assertEquals("weapon damage (expected 30)", row.sub);
 	}
 
 	@Test

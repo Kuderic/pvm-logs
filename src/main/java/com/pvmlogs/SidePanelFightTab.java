@@ -120,6 +120,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private final SidePanelIcons icons;
 	/** Swing's copy of the chart's series, extended a tick at a time (spec 5.1); kept across rebuilds. */
 	private final SidePanelChartData chartData = new SidePanelChartData();
+	/** T-112: the chart and strip on show, for the shared hover line; null when the tab has none. */
+	private SidePanelDamageChart chartView;
+	private SidePanelTickStrip stripView;
 	/**
 	 * T-099: the Damage card's switch, Boss, Adds or All ({@link FightTab#byTarget}), for the session: in memory, as
 	 * the room/raid switch is, and the same in the live tab and a kill opened from History.
@@ -252,6 +255,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	{
 		builds++;
 		removeAll();
+		chartView = null;
+		stripView = null;
 		updaters.clear();
 		statusLine = null;
 		switch (tab.state)
@@ -273,18 +278,21 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				break;
 			default:
 				// One order for both: the live order, with the after-fight sections slotted in (spec 3.1).
+				// T-112 (Eric, 2026-10-30): the tiles, then Damage and Luck, then where the time went and Execution, then
+				// the rest. One order live and after: a section that only exists after the fight just isn't there live.
 				raidSwitch(tab);
 				header(tab);
 				banner(tab);
 				unscored(tab);
+				// The tiles under the header, the at-a-glance summary (Eric's pick, 07:45).
+				tiles(tab);
+				damage(tab);
+				curve(tab);
+				budget(tab);
+				execution(tab);
 				listSection(tab, "targets", "Targets", tab.targets, t -> t.targets, false);
 				listSection(tab, "rooms", "Rooms", tab.rooms, t -> t.rooms, true);
-				budget(tab);
-				tiles(tab);
-				curve(tab);
 				defence(tab);
-				execution(tab);
-				damage(tab);
 				later(tab);
 				chart(tab);
 				strip(tab);
@@ -590,6 +598,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		final JPanel card = SidePanelParts.card(5);
 		final SidePanelLuckCurve curve = new SidePanelLuckCurve(tab.curve.z);
+		curve.setToolTipText(tab.curve.tooltip);
 		card.add(curve);
 		final JPanel legend = new JPanel(new LegendCells());
 		legend.setOpaque(false);
@@ -606,6 +615,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		updaters.add(t ->
 		{
 			curve.set(t.curve.z);
+			curve.setToolTipText(t.curve.tooltip);
 			caption.set(t.curve.caption, SidePanelStyle.SECONDARY);
 			section.setHint(t.curve.headerValue);
 		});
@@ -728,6 +738,24 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final JPanel card = SidePanelParts.card(5);
 		final SidePanelDamageChart chart = new SidePanelDamageChart(chartData);
 		chart.setPerf(perf);
+		chartView = chart;
+		// T-112: hovering the chart draws a line there, and outlines that tick in the strip.
+		final java.awt.event.MouseAdapter onChart = new java.awt.event.MouseAdapter()
+		{
+			@Override
+			public void mouseMoved(MouseEvent e)
+			{
+				hover(chart.tickAt(e.getX()));
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				hover(-1);
+			}
+		};
+		chart.addMouseListener(onChart);
+		chart.addMouseMotionListener(onChart);
 		card.add(chart);
 		final SidePanelParts.Line ends = new SidePanelParts.Line(Text.small("0:00", SidePanelStyle.MUTED),
 			Text.small(tab.chart.end, SidePanelStyle.MUTED));
@@ -774,6 +802,24 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final JPanel card = SidePanelParts.card(5);
 		final SidePanelTickStrip strip = new SidePanelTickStrip(chartData);
 		strip.setPerf(perf);
+		stripView = strip;
+		// T-112: hovering a tick cell draws the chart's line at its time.
+		final java.awt.event.MouseAdapter onStrip = new java.awt.event.MouseAdapter()
+		{
+			@Override
+			public void mouseMoved(MouseEvent e)
+			{
+				hover(strip.tickAt(e.getX(), e.getY()));
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				hover(-1);
+			}
+		};
+		strip.addMouseListener(onStrip);
+		strip.addMouseMotionListener(onStrip);
 		card.add(strip);
 		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(legend);
@@ -994,6 +1040,25 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			hover = view;
 			paintWords();
+		}
+	}
+
+	/**
+	 * T-112: the tick under the mouse on the chart or the strip, -1 when it leaves: both paint it over their cached
+	 * images. A repaint of those two only, which Swing folds into one pass a frame; no layout, no rebuild (T-046).
+	 */
+	void hover(int tick)
+	{
+		if (chartData.setHover(tick))
+		{
+			if (chartView != null)
+			{
+				chartView.repaint();
+			}
+			if (stripView != null)
+			{
+				stripView.repaint();
+			}
 		}
 	}
 

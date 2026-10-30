@@ -239,7 +239,7 @@ public class SidePanelChartsTest
 		assertEquals(ItemID.ABYSSAL_TENTACLE, d.rows.get(0).itemId);
 		assertEquals(SidePanelStyle.MELEE, d.rows.get(0).colour);
 		assertEquals("Burning claws", d.rows.get(1).name);
-		assertEquals("2 specs · expected 88", d.rows.get(1).sub);
+		assertEquals("2 specs (expected 88 dmg)", d.rows.get(1).sub);
 		// A special's colour: its style's, 70% toward white (#FFD6DA from melee's #E06C75, rounded).
 		assertEquals(SidePanelStyle.towardWhite(SidePanelStyle.MELEE, 0.7), d.rows.get(1).colour);
 		assertEquals("Thrall", d.rows.get(2).name);

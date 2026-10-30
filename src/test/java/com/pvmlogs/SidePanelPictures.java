@@ -77,6 +77,16 @@ public final class SidePanelPictures
 			detailsGroups(out, Paths.get(args[2]));
 			return;
 		}
+		if (args.length > 1 && "spec".equals(args[1]))
+		{
+			specRow(out);
+			return;
+		}
+		if (args.length > 1 && "order".equals(args[1]))
+		{
+			fightOrder(out);
+			return;
+		}
 		if (args.length > 1 && "bosses".equals(args[1]))
 		{
 			bossesAndMonsters(out);
@@ -1222,6 +1232,207 @@ public final class SidePanelPictures
 		final int y0 = (int) Math.floor((top + ra.y) * scale);
 		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + rb.y + rb.height) * scale));
 		return whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+	}
+
+	/**
+	 * T-112: the Fight tab's new order (after a kill, live, a monster run, and History's picked kill); the luck curve at the top 1%, the middle and the bottom 10% with its tooltip; and the hover
+	 * line at three moments on the chart and once from the strip. Normal, Smooth and Larger, 1× and 2×, a folder each.
+	 */
+	private static void fightOrder(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-kill", scale, render(SidePanelExamples.dead(), scale));
+				write(dir, "b-live", scale, render(SidePanelExamples.live(), scale));
+				write(dir, "c-monster-run", scale, render(SidePanelRunExamples.saved(), scale));
+				write(dir, "d-history-picked-kill", scale, renderSavedThisSession(scale));
+				write(dir, "e1-curve-top-1", scale, curveTooltip(SidePanelExamples.luckSaved(15), scale));
+				write(dir, "e2-curve-middle", scale, curveTooltip(SidePanelExamples.luckSaved(2), scale));
+				write(dir, "e3-curve-bottom-10", scale, curveTooltip(SidePanelExamples.luckSaved(-7), scale));
+				final SidePanelModel.Input kill = SidePanelExamples.dead();
+				write(dir, "f1-hover-early", scale, hoverCrop(kill, scale, 30, false));
+				write(dir, "f2-hover-middle", scale, hoverCrop(kill, scale, 115, false));
+				write(dir, "f3-hover-late", scale, hoverCrop(kill, scale, 215, false));
+				write(dir, "f4-hover-from-strip", scale, hoverCrop(kill, scale, 71, true));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-112: the Luck card with its tooltip under it. */
+	static BufferedImage curveTooltip(SidePanelModel.Input in, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final BufferedImage card = crop(panel, whole, scale, "curve", "curve");
+		SidePanelLuckCurve curve = null;
+		for (Component k : all(panel.fightTab()))
+		{
+			if (k instanceof SidePanelLuckCurve)
+			{
+				curve = (SidePanelLuckCurve) k;
+			}
+		}
+		return withTooltip(card, curve, scale);
+	}
+
+	/**
+	 * T-112: Damage over time and Ticks with tick {@code tick} hovered: from the chart, or from its cell in the strip
+	 * ({@code fromStrip}), through the same mouse listeners a pointer would reach.
+	 */
+	static BufferedImage hoverCrop(SidePanelModel.Input in, double scale, int tick, boolean fromStrip)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		draw(panel.tabs(), panel.fightTab(), scale);
+		SidePanelDamageChart chart = null;
+		SidePanelTickStrip strip = null;
+		for (Component k : all(panel.fightTab()))
+		{
+			if (k instanceof SidePanelDamageChart)
+			{
+				chart = (SidePanelDamageChart) k;
+			}
+			if (k instanceof SidePanelTickStrip)
+			{
+				strip = (SidePanelTickStrip) k;
+			}
+		}
+		final Component target = fromStrip ? strip : chart;
+		final int x = fromStrip ? (int) Math.round((tick % SidePanelTickStrip.PER_ROW) * (SidePanelTickStrip.TICK
+			+ SidePanelTickStrip.GAP) + 1) : (int) Math.round(chart.xOf(tick));
+		final int y = fromStrip ? (tick / SidePanelTickStrip.PER_ROW) * (SidePanelTickStrip.TICK_HEIGHT
+			+ SidePanelTickStrip.ROW_GAP) + 2 : 10;
+		for (java.awt.event.MouseMotionListener l : target.getMouseMotionListeners())
+		{
+			l.mouseMoved(new java.awt.event.MouseEvent(target, java.awt.event.MouseEvent.MOUSE_MOVED, 0L, 0, x, y, 0,
+				false));
+		}
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		return crop(panel, whole, scale, "chart", "ticks");
+	}
+
+	/** The Fight tab's render from section {@code first}'s top to section {@code last}'s bottom. */
+	private static BufferedImage crop(PvmPerformancePanel panel, BufferedImage whole, double scale, String first,
+		String last)
+	{
+		final SidePanelSection a = sectionOf(panel.fightTab(), first);
+		final SidePanelSection b = sectionOf(panel.fightTab(), last);
+		final java.awt.Rectangle ra = javax.swing.SwingUtilities.convertRectangle(a.getParent(), a.getBounds(),
+			panel.fightTab());
+		final java.awt.Rectangle rb = javax.swing.SwingUtilities.convertRectangle(b.getParent(), b.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + ra.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + rb.y + rb.height) * scale));
+		return whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+	}
+
+	/** {@code image} with {@code c}'s tooltip drawn under it. */
+	private static BufferedImage withTooltip(BufferedImage image, javax.swing.JComponent c, double scale)
+	{
+		final javax.swing.JToolTip tip = c.createToolTip();
+		tip.setTipText(c.getToolTipText());
+		tip.setSize(tip.getPreferredSize());
+		layout(tip);
+		final int w = Math.max(image.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
+		final BufferedImage img = new BufferedImage(w, image.getHeight() + (int) Math.ceil((tip.getHeight() + 8) * scale),
+			BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		g.drawImage(image, 0, 0, null);
+		g.translate(0, image.getHeight() + 4 * scale);
+		g.scale(scale, scale);
+		tip.printAll(g);
+		g.dispose();
+		return img;
+	}
+
+	/**
+	 * T-112 item 6: the Damage card with the fixture's Emberlight specials (which drain on landing), one spec of a weapon
+	 * that drains by damage, an unmatched row, a warhammer, an elder maul that missed, and a Bandos godsword. Normal,
+	 * Smooth and Larger, at 1× and 2×.
+	 */
+	private static void specRow(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				final SidePanelModel.Input two = SidePanelExamples.sireWeapons();
+				write(dir, "a-two-specs", scale, card(two, scale, "damage"));
+				final SidePanelModel.Input one = SidePanelExamples.sireWeapons();
+				one.weaponRows = new java.util.ArrayList<>(SidePanelModel.weaponRows(one.view));
+				for (SidePanelModel.WeaponRow w : one.weaponRows)
+				{
+					if (w.special)
+					{
+						w.name = "Voidwaker";
+						w.itemId = -1;
+						w.attacks = 1;
+					}
+				}
+				write(dir, "b-one-spec", scale, card(one, scale, "damage"));
+				final SidePanelModel.Input unmatched = SidePanelExamples.sireWeapons();
+				unmatched.weaponRows = new java.util.ArrayList<>(SidePanelModel.weaponRows(unmatched.view));
+				for (SidePanelModel.WeaponRow w : unmatched.weaponRows)
+				{
+					if (w.special)
+					{
+						w.expected = 36;
+					}
+				}
+				write(dir, "c-unmatched", scale, card(unmatched, scale, "damage"));
+				// T-112 item 6, Eric 06:52: specials that drain on landing read their landing.
+				write(dir, "d-warhammer-one-of-two", scale, card(special(SidePanelExamples.sireWeapons(),
+					"Dragon warhammer", net.runelite.api.gameval.ItemID.DRAGON_WARHAMMER, 2, 1), scale, "damage"));
+				write(dir, "e-elder-maul-missed", scale, card(special(SidePanelExamples.sireWeapons(), "Elder maul",
+					net.runelite.api.gameval.ItemID.ELDER_MAUL, 1, 0), scale, "damage"));
+				write(dir, "f-bgs-damage", scale, card(special(SidePanelExamples.sireWeapons(), "Bandos godsword",
+					net.runelite.api.gameval.ItemID.BGS, 2, 2), scale, "damage"));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-112 item 6: the fixture's special row as this weapon, {@code landed} of {@code attacks} landing. */
+	private static SidePanelModel.Input special(SidePanelModel.Input in, String name, int itemId, int attacks, int landed)
+	{
+		in.weaponRows = new java.util.ArrayList<>(SidePanelModel.weaponRows(in.view));
+		for (SidePanelModel.WeaponRow w : in.weaponRows)
+		{
+			if (w.special)
+			{
+				final double chance = w.landedKnown == 0 ? 0 : w.landedExpected / w.landedKnown;
+				w.name = name;
+				w.itemId = itemId;
+				w.attacks = attacks;
+				w.landed = landed;
+				w.landedKnown = attacks;
+				w.landedExpected = chance * attacks;
+			}
+		}
+		return in;
 	}
 
 	/** One section of the Fight tab, cut out of its render: its header and card. */

@@ -207,6 +207,34 @@ final class DrainRule
 	}
 
 	/**
+	 * T-112 item 6: whether how much this special drains is set by its landing rather than by its damage: the Dragon
+	 * warhammer and elder maul (a share of the current Defence), Arclight, Darklight and Emberlight (a share of the base
+	 * stats), the accursed sceptre (to 85% of the base), and the Tonalztics of ralos (an eighth of Magic a glaive that
+	 * lands). For these, what landed matters, not the damage. The rest of {@link #drains} drain by the damage dealt.
+	 * Read-only; states the facts listed above.
+	 */
+	static boolean drainsOnLanding(SpecialWeapon weapon)
+	{
+		if (weapon == null)
+		{
+			return false;
+		}
+		switch (weapon)
+		{
+			case DRAGON_WARHAMMER:
+			case ELDER_MAUL:
+			case ARCLIGHT:
+			case DARKLIGHT:
+			case EMBERLIGHT:
+			case ACCURSED_SCEPTRE:
+			case TONALZTICS_OF_RALOS:
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	/**
 	 * One special landing (or missing) on the target.
 	 *
 	 * @param hit    the damage its splat showed; for the Tonalztics of ralos, the number of glaives that landed

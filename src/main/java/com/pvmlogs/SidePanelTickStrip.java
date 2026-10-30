@@ -116,6 +116,37 @@ final class SidePanelTickStrip extends JComponent
 		}
 		// Device pixels one to one: the image is at the screen's scale.
 		g2.drawImage(image, unscale, null);
+		hoverCell(g2);
+	}
+
+	/** T-112: the tick under ({@code x}, {@code y}), or -1 between rows or past the last tick. */
+	int tickAt(int x, int y)
+	{
+		final int col = (int) Math.floor(x / (TICK + GAP));
+		final int row = (int) Math.floor((double) y / (TICK_HEIGHT + ROW_GAP));
+		if (x < 0 || y < 0 || col >= PER_ROW || y - row * (TICK_HEIGHT + ROW_GAP) >= TICK_HEIGHT)
+		{
+			return -1;
+		}
+		final int i = row * PER_ROW + col;
+		return i < data.length() ? i : -1;
+	}
+
+	/** T-112: the hovered tick, shared with the chart, outlined over the cached image. */
+	private void hoverCell(Graphics2D g)
+	{
+		final int i = data.hover();
+		if (i < 0)
+		{
+			return;
+		}
+		final double x = (i % PER_ROW) * (TICK + GAP);
+		final double y = (i / PER_ROW) * (TICK_HEIGHT + ROW_GAP);
+		final Graphics2D g2 = (Graphics2D) g.create();
+		g2.setColor(SidePanelStyle.VALUE);
+		g2.setStroke(new java.awt.BasicStroke(1f));
+		g2.draw(new java.awt.geom.Rectangle2D.Double(x - 0.5, y - 0.5, TICK + 1, TICK_HEIGHT + 1));
+		g2.dispose();
 	}
 
 	/** Whether the image is the component's size at scale {@code s}. */
