@@ -92,6 +92,9 @@ import net.runelite.client.util.Filepath;
  * {@code stacks} (the Maggot King's phases, burn and punish). The bundled file
  * ships with the code that reads it; only a user's own file could reach an older
  * build, which would take the King's punish without its delay or accuracy.
+ * T-120 adds, still within schema 5, a modifier's {@code attackRoll} and
+ * {@code outOfMelee} (the Royal Titans' ranged accuracy): an older build reads
+ * neither, and scores the titans as before.
  */
 @Slf4j
 class BossRules
@@ -406,6 +409,16 @@ class BossRules
 		List<String> attackTypes;
 		/** The boss's defence roll times num/den, rounded down (T-087: the punish's "85% reduced defence roll"). */
 		int[] defenceRoll;
+		/** The player's attack roll times num/den, rounded down (T-120: the Royal Titans' ranged x6); by attackTypes. */
+		int[] attackRoll;
+		/**
+		 * The player out of the boss's melee distance when the attack goes out (true), or in it (false); either if
+		 * null (T-120). In melee distance is on a tile cardinally next to its footprint, as {@link DamageModifiers}
+		 * reads it.
+		 */
+		Boolean outOfMelee;
+		/** The {@link #state} judged on the attack's throw tick, not its landing (T-120: the titans' boost is rolled then). */
+		Boolean stateAtThrow;
 		/**
 		 * While it applies, the boss's figures are this version's in the monster
 		 * data (T-087: the Maggot King "Nearby" while it slams); its usual version

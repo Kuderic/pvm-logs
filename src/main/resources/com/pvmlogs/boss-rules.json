@@ -64,6 +64,63 @@
       ]
     },
     {
+      "name": "The Royal Titans",
+      "npcIds": [
+        12596,
+        14147
+      ],
+      "notes": "T-120. Branda (12596) and Eldric (14147) fighting; 14148 and 14149 are their beaten forms. Ranged and magic defence +700 (light, standard, heavy), stab and slash +12, crush 0, Defence 100 (wiki infoboxes; the DPS calc's monsters.json agrees). Their elemental weaknesses (Branda water 50%, Eldric fire 50%) are in monsters.json and applied by CombatCalc to a spell of that element, accuracy and damage.",
+      "damageModifiers": {
+        "states": [
+          {
+            "name": "elemental blast",
+            "startOnBossAnim": [
+              11979,
+              11981
+            ],
+            "ticks": 16,
+            "source": "T-120. OSRS Wiki, read 2026-10-30: Branda the Fire Queen: 'the player's ranged accuracy is increased by 500% (x6) whenever she is out of melee distance, and lasts until she moves back within melee distance'; 'This boost also applies during the entirety of the Titans' Elemental Blast attack, which includes the charging portion.' Eldric the Ice King says the same of him. Royal Titans/Strategies: 'players get a hidden +500% (a 6x multiplier) to ranged accuracy whenever the titans are out of melee distance'; in phase 2, 'the player's ranged accuracy gets a 6x multiplier during the charging, attack, and for a few seconds after'. The animations, from RuneLite 1.13.4's gamevals: 11979 ICE_GIANT_EDRIC_KING_ATTACK_AOE01 and 11980 _AOE02 (Eldric), 11981 FIRE_GIANT_BRANDA_QUEEN_ATTACK_AOE01 and 11982 _AOE02 (Branda). Eric's log of 2026-10-30 10:30 (pvm-debug-20261030-103025, build 4f6ca3c): Eldric 11979 at [7353], 11980 at [7359], idle at [7366]; again [7382]/[7388], and [7411]/[7417]/[7423]; Branda 11981 at [7295], 11982 at [7301]. Read as the charge (AOE01, 6 ticks) and the three blasts (AOE02, 6-7 ticks): 12-13 ticks in all, and the wiki's 'few seconds after' taken as 3 ticks more, 16 from the charge. The 3 is a guess, for the MOD lines to settle."
+          }
+        ],
+        "modifiers": [
+          {
+            "name": "out of melee distance",
+            "styles": [
+              "RANGED"
+            ],
+            "attackTypes": [
+              "RANGED"
+            ],
+            "outOfMelee": true,
+            "attackRoll": [
+              6,
+              1
+            ],
+            "hiddenLive": true,
+            "source": "T-120. OSRS Wiki, read 2026-10-30: Branda the Fire Queen: 'the player's ranged accuracy is increased by 500% (x6) whenever she is out of melee distance, and lasts until she moves back within melee distance'; 'This boost also applies during the entirety of the Titans' Elemental Blast attack, which includes the charging portion.' Eldric the Ice King says the same of him. Royal Titans/Strategies: 'players get a hidden +500% (a 6x multiplier) to ranged accuracy whenever the titans are out of melee distance'; in phase 2, 'the player's ranged accuracy gets a 6x multiplier during the charging, attack, and for a few seconds after'. The DPS calc (c1f7737) has an 'In Melee Range' / 'Out of Melee Range' phase toggle on both titans, and multiplies the ranged attack roll by 6/1 out of melee range, last; it does not model the blast. Out of melee distance is read as the player not on a tile cardinally next to the titan's footprint, from which it could melee them, on the attack's throw tick: a reading, not a source. hiddenLive (the Jagex rule): a live jump at the titan's walking off would announce its movement."
+          },
+          {
+            "name": "elemental blast",
+            "state": "elemental blast",
+            "stateAtThrow": true,
+            "styles": [
+              "RANGED"
+            ],
+            "attackTypes": [
+              "RANGED"
+            ],
+            "outOfMelee": false,
+            "attackRoll": [
+              6,
+              1
+            ],
+            "hiddenLive": true,
+            "source": "T-120. OSRS Wiki, read 2026-10-30: Branda the Fire Queen: 'the player's ranged accuracy is increased by 500% (x6) whenever she is out of melee distance, and lasts until she moves back within melee distance'; 'This boost also applies during the entirety of the Titans' Elemental Blast attack, which includes the charging portion.' Eldric the Ice King says the same of him. Royal Titans/Strategies: 'players get a hidden +500% (a 6x multiplier) to ranged accuracy whenever the titans are out of melee distance'; in phase 2, 'the player's ranged accuracy gets a 6x multiplier during the charging, attack, and for a few seconds after'. In melee distance, during this titan's own blast (from its charge), judged on the throw tick; out of melee distance the rule above already has the x6, so the two never stack. Whether a blast by one titan boosts a shot at the other isn't said: each titan's own is taken. hiddenLive: a live jump would announce the charge."
+          }
+        ]
+      }
+    },
+    {
       "name": "Araxytes",
       "npcIds": [13671, 13673, 13675],
       "damageModifiers": {

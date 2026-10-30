@@ -1501,7 +1501,8 @@ class CombatCalc
 	{
 		final int effAtk = voidScaled((int) Math.floor(boostedLevel(Skill.ATTACK) * meleeAccuracyPrayer())
 			+ style.attackLevelBonus() + 8, type, false);
-		final int attRoll = scaled(attackRoll(effAtk, attackBonus(type), gear), spec);
+		final int attRoll = ModifierTracker.attackRoll(mods, type.name(), scaled(attackRoll(effAtk, attackBonus(type), gear),
+			spec));
 		final int defBonus = type == AttackType.STAB ? npc.getDefStab()
 			: type == AttackType.SLASH ? npc.getDefSlash() : npc.getDefCrush();
 		final int defRoll = ModifierTracker.defenceRoll(mods, type.name(), (defenceLevel(npc) + 9) * (defBonus + 64));
@@ -1520,8 +1521,8 @@ class CombatCalc
 			+ style.attackLevelBonus() + 9, AttackType.MAGIC, false);
 		// Elemental weakness is worth as much accuracy as it is damage, a point each, and multiplies the roll as the gear
 		// effects do.
-		final int attRoll = scaled(attackRoll(effMagic, attackBonus(AttackType.MAGIC),
-			gear * (1.0 + elementalWeakness(npcId) / 100.0)), spec);
+		final int attRoll = ModifierTracker.attackRoll(mods, AttackType.MAGIC.name(), scaled(attackRoll(effMagic,
+			attackBonus(AttackType.MAGIC), gear * (1.0 + elementalWeakness(npcId) / 100.0)), spec));
 		// Burn stacks on the Maggot King take 20 each off its magic defence bonus (T-087).
 		final int bonus = Math.max(0, magicDefenceBonus(npc) + bossMagicDefenceChange(npcId));
 		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.MAGIC.name(),
@@ -1627,7 +1628,9 @@ class CombatCalc
 	{
 		final int effRanged = voidScaled((int) Math.floor(boostedLevel(Skill.RANGED) * rangedAccuracyPrayer())
 			+ style.attackLevelBonus() + 8, AttackType.RANGED, false);
-		final int attRoll = scaled(attackRoll(effRanged, attackBonus(AttackType.RANGED), gear), spec);
+		// T-120: the Royal Titans' x6 out of melee distance and during Elemental Blast.
+		final int attRoll = ModifierTracker.attackRoll(mods, AttackType.RANGED.name(),
+			scaled(attackRoll(effRanged, attackBonus(AttackType.RANGED), gear), spec));
 		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.RANGED.name(),
 			(defenceLevel(npc) + 9) * (npc.getDefRanged() + 64));
 		return hitChanceFrom(attRoll, defRoll);

@@ -4726,6 +4726,12 @@ public class PvmPerformancePlugin extends Plugin
 				prayed, potted, boostShare, boostCost, switched, switchCost, attackObservedFromProjectile,
 				attacker.isScored(), actualSetup, idealSetup, modifiersByTick.getOrDefault(scoringTick(),
 					combatCalc.describeBossModifiers(targetLiveId >= 0 ? targetLiveId : targetId)));
+			// T-120: where the player stood against the Royal Titans when a ranged attack went out, and the boost it took.
+			final String meleeLine = damageModifiers.meleeDistanceLine(attacker.getTargetIndex(), scoringTick());
+			if (meleeLine != null)
+			{
+				debug.log("%s", meleeLine);
+			}
 			lastAttackFromProjectile = attackObservedFromProjectile;
 			if (attackObservedFromProjectile || attackObservedFromCast)
 			{

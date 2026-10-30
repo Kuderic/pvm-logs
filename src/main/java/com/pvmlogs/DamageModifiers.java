@@ -198,6 +198,7 @@ class DamageModifiers
 	{
 		tracker.clear();
 		insideSeen.clear();
+		meleeSeen.clear();
 	}
 
 	/**
@@ -211,10 +212,145 @@ class DamageModifiers
 		{
 			return Collections.emptyList();
 		}
+		final int distance = hasMeleeRule(boss.damageModifiers) ? meleeDistance(npc) : NO_DISTANCE;
+		final Boolean inMelee = distance == NO_DISTANCE ? null : distance == IN_MELEE;
 		final List<BossRules.ModifierRule> mods = tracker.applying(npc.getIndex(), boss.damageModifiers, npc.getId(),
 			style == null ? null : style.name(), client.getTickCount(), client.getTickCount() + Math.max(0, delayTicks),
-			behind(npc), this::inside);
+			behind(npc), this::inside, inMelee);
+		if (distance != NO_DISTANCE)
+		{
+			meleeSeen.put(client.getTickCount(), new MeleeSeen(npc.getIndex(), npc.getName(), distance, style, mods));
+			meleeSeen.keySet().removeIf(t -> client.getTickCount() - t > MELEE_SEEN_TICKS);
+		}
 		return live ? ModifierTracker.shownLive(mods) : mods;
+	}
+
+	// What the player's melee distance from a boss with an outOfMelee rule was on each recent tick, and the modifiers it
+	// gave (T-120), for the MOD line at the attack's booking, which trails its throw.
+	private static final int MELEE_SEEN_TICKS = 10;
+	private static final int NO_DISTANCE = Integer.MIN_VALUE;
+	// Cardinally next to the footprint: the one way to be in its melee distance.
+	static final int IN_MELEE = 1;
+	// Next to it on a diagonal: a tile away, out of its melee distance.
+	static final int DIAGONAL = -1;
+	private final Map<Integer, MeleeSeen> meleeSeen = new HashMap<>();
+
+	private static final class MeleeSeen
+	{
+		final int npcIndex;
+		final String npcName;
+		final int distance;
+		final CombatCalc.Style style;
+		final List<BossRules.ModifierRule> mods;
+
+		MeleeSeen(int npcIndex, String npcName, int distance, CombatCalc.Style style, List<BossRules.ModifierRule> mods)
+		{
+			this.npcIndex = npcIndex;
+			this.npcName = npcName;
+			this.distance = distance;
+			this.style = style;
+			this.mods = mods;
+		}
+	}
+
+	private static boolean hasMeleeRule(BossRules.DamageModifierRules rules)
+	{
+		if (rules == null || rules.modifiers == null)
+		{
+			return false;
+		}
+		for (BossRules.ModifierRule m : rules.modifiers)
+		{
+			if (m.outOfMelee != null)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The MOD line for the player's ranged attack at this npc thrown on {@code tick}
+	 * (T-120), from the figures worked out that tick; null for any other attack, or
+	 * a boss without an outOfMelee rule.
+	 */
+	String meleeDistanceLine(int npcIndex, int tick)
+	{
+		final MeleeSeen seen = meleeSeen.get(tick);
+		if (seen == null || seen.npcIndex != npcIndex || seen.style != CombatCalc.Style.RANGED)
+		{
+			return null;
+		}
+		final StringBuilder boosts = new StringBuilder();
+		for (BossRules.ModifierRule m : seen.mods)
+		{
+			if (m.attackRoll != null && m.attackRoll.length == 2
+				&& (m.attackTypes == null || m.attackTypes.contains("RANGED")))
+			{
+				boosts.append(boosts.length() == 0 ? "" : ", ").append(m.name).append(" x")
+					.append(m.attackRoll[0] / Math.max(1, m.attackRoll[1]));
+			}
+		}
+		return String.format("MOD %s: ranged attack thrown on tick %d, the player %s: %s", seen.npcName, tick,
+			describeDistance(seen.distance), boosts.length() == 0 ? "no accuracy boost" : "ranged accuracy " + boosts);
+	}
+
+	static String describeDistance(int distance)
+	{
+		if (distance == IN_MELEE)
+		{
+			return "next to its footprint (in melee distance)";
+		}
+		if (distance == DIAGONAL)
+		{
+			return "diagonal to its footprint (out of melee distance)";
+		}
+		if (distance == 0)
+		{
+			return "under it (out of melee distance)";
+		}
+		return distance + " tiles from its footprint (out of melee distance)";
+	}
+
+	// The player's distance from the npc's footprint, as meleeDistance(...) has it; NO_DISTANCE when either isn't known.
+	private int meleeDistance(NPC npc)
+	{
+		final Player me = client.getLocalPlayer();
+		final WorldPoint at = me == null ? null : me.getWorldLocation();
+		final WorldArea area = npc.getWorldArea();
+		if (at == null || area == null || at.getPlane() != area.getPlane())
+		{
+			return NO_DISTANCE;
+		}
+		return meleeDistance(area.getX(), area.getY(), area.getWidth(), area.getHeight(), at.getX(), at.getY());
+	}
+
+	/**
+	 * How far a tile is from a footprint (T-120), in tiles on the larger axis:
+	 * {@link #IN_MELEE} on a tile cardinally next to it, {@link #DIAGONAL} on one
+	 * diagonally next to it, 0 under it, else the distance (2 and up). The Royal
+	 * Titans' boost holds "whenever she is out of melee distance" (OSRS Wiki,
+	 * Branda the Fire Queen): read here as the player not on a tile from which the
+	 * titan could melee them, cardinally next to its footprint, as an NPC's melee
+	 * reaches. That is a reading, not a source.
+	 */
+	static int meleeDistance(int x, int y, int width, int height, int px, int py)
+	{
+		final int dx = px < x ? x - px : px > x + width - 1 ? px - (x + width - 1) : 0;
+		final int dy = py < y ? y - py : py > y + height - 1 ? py - (y + height - 1) : 0;
+		if (dx == 0 && dy == 0)
+		{
+			return 0;
+		}
+		if (dx + dy == 1)
+		{
+			return IN_MELEE;
+		}
+		if (dx == 1 && dy == 1)
+		{
+			return DIAGONAL;
+		}
+		return Math.max(dx, dy);
 	}
 
 	/**
