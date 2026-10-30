@@ -52,6 +52,11 @@ public final class SidePanelPictures
 			dpsCards(out);
 			return;
 		}
+		if (args.length > 1 && "bosses".equals(args[1]))
+		{
+			bossesAndMonsters(out);
+			return;
+		}
 		if (args.length > 1 && "targets".equals(args[1]))
 		{
 			targets(out);
@@ -275,6 +280,77 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-102: History's Bosses and Monsters: Eric's mix (bosses, a demon run, the Deranged archaeologist, the old araxyte
+	 * rooms under Araxxor), opened on its last kill and with none picked; bosses only (no Monsters); a search matching
+	 * only a monster; the export's choice off and on; and a died room, on the Fight tab and in the Trip tab's rows.
+	 * Normal and Smooth text, 1× and 2×, a folder each.
+	 */
+	private static void bossesAndMonsters(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = false;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-mix-opened", scale, renderHistory(source(SidePanelBossesExamples.mix()), t ->
+				{
+				}, scale));
+				write(dir, "b-mix-none-picked", scale, renderHistory(source(SidePanelBossesExamples.mix()),
+					SidePanelHistoryTab::putAway, scale));
+				write(dir, "c-bosses-only", scale, renderHistory(source(SidePanelBossesExamples.bossesOnly()),
+					SidePanelHistoryTab::putAway, scale));
+				write(dir, "d-search-a-monster", scale, renderHistory(source(SidePanelBossesExamples.mix()),
+					t -> t.search().setText("reanimated"), scale));
+				write(dir, "e-search-neither", scale, renderHistory(source(SidePanelBossesExamples.mix()),
+					t -> t.search().setText("zulrah"), scale));
+				write(dir, "f-export-all", scale, renderHistory(source(SidePanelBossesExamples.mix()),
+					SidePanelHistoryTab::putAway, scale));
+				write(dir, "g-export-bosses-only", scale, renderHistory(source(SidePanelBossesExamples.mix()), t ->
+				{
+					t.putAway();
+					t.exportChoice().setSelected(true);
+				}, scale));
+				write(dir, "h-died-fight-tab", scale, render(diedInput(), scale));
+				write(dir, "i-died-trip-rows", scale, renderTrip(diedTrip(), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-102: the Araxxor attempt the player died in, on the Fight tab once it's over. */
+	private static SidePanelModel.Input diedInput()
+	{
+		final SidePanelModel.Input in = new SidePanelModel.Input();
+		in.zone = SidePanelExamples.ZONE;
+		in.kind = SidePanelModel.Kind.ROOM;
+		SidePanelModel.fillRoom(in, SidePanelBossesExamples.diedRoom());
+		in.ended = true;
+		in.killed = false;
+		in.endMillis = SidePanelExamples.at(15, 1);
+		return in;
+	}
+
+	/** T-102: the trip's rows with the died attempt, a room left alive, and a kill. */
+	private static SidePanelModel.Input diedTrip()
+	{
+		final SidePanelModel.Input in = SidePanelExamples.trip();
+		final java.util.List<PanelSnapshot.TripRow> rows = new java.util.ArrayList<>();
+		rows.add(SidePanelModel.tripRow(SidePanelHistory.row(SidePanelBossesExamples.leftRoom(),
+			SidePanelHistoryExamples.NOW, SidePanelExamples.ZONE)));
+		rows.add(SidePanelModel.tripRow(SidePanelHistory.row(SidePanelBossesExamples.diedRoom(),
+			SidePanelHistoryExamples.NOW, SidePanelExamples.ZONE)));
+		rows.addAll(in.tripRows.subList(0, 3));
+		in.tripRows = rows;
+		return in;
 	}
 
 	/**

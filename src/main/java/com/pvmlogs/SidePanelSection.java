@@ -52,6 +52,8 @@ final class SidePanelSection extends JPanel
 	static final String FOLDED_MARK = "+";
 
 	private final String id;
+	/** T-102: its title, for tests. */
+	private final String title;
 	private final Folds folds;
 	private final SidePanelParts.Line header;
 	private final JComponent body;
@@ -61,6 +63,7 @@ final class SidePanelSection extends JPanel
 	{
 		super(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
 		this.id = id;
+		this.title = title;
 		this.folds = folds;
 		this.body = body;
 		setOpaque(false);
@@ -85,6 +88,11 @@ final class SidePanelSection extends JPanel
 	String id()
 	{
 		return id;
+	}
+
+	String title()
+	{
+		return title;
 	}
 
 	boolean isFolded()

@@ -90,6 +90,15 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		void exportNpc(String name);
 
 		/**
+		 * T-102: the boss rules, for which rooms are bosses' ({@link SidePanelHistory#isMonster}); null before they've
+		 * loaded, and in tests and renders, which leaves {@code boss-rules.json} out as the history budget does then.
+		 */
+		default BossRules rules()
+		{
+			return null;
+		}
+
+		/**
 		 * A saved room's timeline view, for its damage rows, chart and strip
 		 * (T-036): built where the store lives and handed back on Swing's thread.
 		 * Empty when the room's fights have none.
@@ -144,7 +153,16 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	private final SidePanelSection.Folds folds;
 
 	private final IconTextField search = new IconTextField();
-	private final JCheckBox bossesOnly = new JCheckBox("Bosses only");
+	/**
+	 * T-102: the export's choice, beside the Export button: bosses only, or every saved fight. In memory for the
+	 * session; the lists no longer ask it (Bosses and Monsters are sections of their own).
+	 */
+	private final JCheckBox bossesOnly = new JCheckBox(EXPORT_BOSSES_ONLY);
+	static final String EXPORT_BOSSES_ONLY = "Bosses only";
+	static final String EXPORT_BOSSES_ONLY_TIP = "Export only bosses";
+	static final String NO_BOSS_MATCH = "No boss matches that name.";
+	static final String NO_MONSTER_MATCH = "No monster matches that name.";
+	static final String NO_MATCH = "No boss or monster matches that name.";
 	private final SidePanelText status = new SidePanelText(Text.small("", SidePanelStyle.SECONDARY), false);
 	private final JPanel searchBox = SidePanelParts.stack(4);
 	private final JPanel content = SidePanelParts.stack(SidePanelStyle.BLOCK_GAP);
@@ -183,7 +201,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		search.setPreferredSize(new Dimension(SidePanelStyle.CONTENT_WIDTH, 30));
 		search.setBackground(SidePanelStyle.CARD);
 		search.setHoverBackgroundColor(SidePanelStyle.SELECTED);
-		search.setToolTipText("Search bosses. Escape clears it");
+		search.setToolTipText("Search bosses and monsters by name. Escape clears it");
 		// T-082: Escape clears the search, and so brings back what it hid.
 		search.addKeyListener(new java.awt.event.KeyAdapter()
 		{
@@ -213,23 +231,29 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 				refresh();
 			}
 		});
-		searchBox.add(new SidePanelText(Text.small("Search bosses", SidePanelStyle.SECONDARY), false));
+		searchBox.add(new SidePanelText(Text.small("Search bosses and monsters", SidePanelStyle.SECONDARY), false));
 		searchBox.add(search);
 
 		bossesOnly.setOpaque(false);
 		bossesOnly.setForeground(SidePanelStyle.SECONDARY);
 		bossesOnly.setFont(SidePanelStyle.Type.SMALL.font());
-		bossesOnly.setToolTipText("List and export only bosses (the hiscores' list)");
-		bossesOnly.addActionListener(e -> refresh());
+		bossesOnly.setToolTipText(EXPORT_BOSSES_ONLY_TIP);
 
 		add(searchBox);
 		add(content);
 		refresh();
 	}
 
+	/** T-102: the export's choice, read by the Export button's action: bosses only, or every saved fight. */
 	boolean bossesOnly()
 	{
 		return bossesOnly.isSelected();
+	}
+
+	/** T-102: the export's checkbox, for tests and renders. */
+	JCheckBox exportChoice()
+	{
+		return bossesOnly;
 	}
 
 	void setStatus(String text)
@@ -277,7 +301,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		}
 		searchBox.setVisible(true);
 		final boolean searching = searching();
-		final List<SidePanelHistory.BossEntry> all = SidePanelHistory.bosses(history, false, "");
+		final List<SidePanelHistory.BossEntry> all = SidePanelHistory.bosses(history, "", source.rules());
 		if (all.isEmpty())
 		{
 			final JPanel card = SidePanelParts.card(0);
@@ -548,24 +572,52 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 
 	// ---- all bosses ----
 
+	/**
+	 * T-102: the Bosses section, then the Monsters section below it (left out when the history has no monster), by
+	 * the history budget's rule ({@link SidePanelHistory#isMonster}). The search filters both; a section with no match
+	 * says so, and when neither has one a single line does.
+	 */
 	private void allBosses(List<Fight> history)
 	{
-		final List<SidePanelHistory.BossEntry> entries = SidePanelHistory.bosses(history, bossesOnly.isSelected(),
-			search.getText());
+		final List<SidePanelHistory.BossEntry> everything = SidePanelHistory.bosses(history, "", source.rules());
+		final boolean anyMonster = everything.stream().anyMatch(b -> !b.boss);
+		final List<SidePanelHistory.BossEntry> bosses = new ArrayList<>();
+		final List<SidePanelHistory.BossEntry> monsters = new ArrayList<>();
+		for (SidePanelHistory.BossEntry b : SidePanelHistory.bosses(history, search.getText(), source.rules()))
+		{
+			(b.boss ? bosses : monsters).add(b);
+		}
+		if (bosses.isEmpty() && monsters.isEmpty())
+		{
+			final JPanel card = SidePanelParts.card(0);
+			card.add(new SidePanelText(Text.small(NO_MATCH, SidePanelStyle.SECONDARY), false));
+			content.add(card);
+			return;
+		}
+		content.add(new SidePanelSection("historyBosses", "Bosses", Text.small("kills · average",
+			SidePanelStyle.SECONDARY), entries(bosses, NO_BOSS_MATCH), folds));
+		if (anyMonster)
+		{
+			content.add(new SidePanelSection("historyMonsters", "Monsters", Text.small("runs · kills",
+				SidePanelStyle.SECONDARY), entries(monsters, NO_MONSTER_MATCH), folds));
+		}
+	}
+
+	/** A section's rows, or its line saying the search matched none. */
+	private JPanel entries(List<SidePanelHistory.BossEntry> entries, String none)
+	{
 		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
 		if (entries.isEmpty())
 		{
 			final JPanel card = SidePanelParts.card(0);
-			card.add(new SidePanelText(Text.small("No boss matches that name.", SidePanelStyle.SECONDARY), false));
+			card.add(new SidePanelText(Text.small(none, SidePanelStyle.SECONDARY), false));
 			list.add(card);
 		}
 		for (SidePanelHistory.BossEntry b : entries)
 		{
 			list.add(bossRow(b));
 		}
-		list.add(bossesOnly);
-		content.add(new SidePanelSection("historyBosses", "All bosses",
-			Text.small("kills · average", SidePanelStyle.SECONDARY), list, folds));
+		return list;
 	}
 
 	/** A line with the boss's icon before it (T-054). */
@@ -673,6 +725,9 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		tools = new SidePanelFightTab.ToolButtons(actions, this);
 		tools.setHistory(anyHistory);
 		box.add(tools);
+		// T-102: the export's choice, under the Export button it's for.
+		bossesOnly.setEnabled(anyHistory);
+		box.add(bossesOnly);
 		box.add(status);
 		content.add(new SidePanelSection("historyTools", "Tools", Text.NONE, box, folds));
 	}

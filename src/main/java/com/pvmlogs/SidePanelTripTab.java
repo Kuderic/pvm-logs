@@ -274,7 +274,8 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		{
 			final java.awt.Color c = r.ended ? SidePanelStyle.SECONDARY : SidePanelStyle.VALUE;
 			// T-095: a run's kills follow its name as the suffix does, so a short name keeps them.
-			name.set(Text.body(r.name, c), r.ended ? Text.small(" (ended)", SidePanelStyle.SECONDARY)
+			name.set(Text.body(r.name, c), r.ended ? Text.small(r.died ? SidePanelModel.DIED : SidePanelModel.ENDED,
+				SidePanelStyle.SECONDARY)
 				: r.suffix.isEmpty() ? null : Text.body(r.suffix, c));
 			clock.set(Text.title(r.clock, c));
 			chip.set(r.chip, r.chipFill);

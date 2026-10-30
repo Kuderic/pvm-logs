@@ -183,32 +183,120 @@ final class SidePanelHistory
 		}
 
 		/**
-		 * The sub-line: {@code with Respiratory system, Scion}, {@code not a boss}, or empty; T-095: a kind fought in runs
-		 * has its best kills/hr in the average's place, {@code best 227/hr}.
+		 * The sub-line: a boss's adds, {@code with Respiratory system, Scion}, or empty; T-095: a kind fought in runs
+		 * has its best kills/hr in the average's place, {@code best 227/hr}. T-102: no "not a boss": the Monsters section
+		 * says so.
 		 */
 		String sub()
 		{
 			if (runs > 0)
 			{
-				return bestPerHour == null ? "not a boss" : "best " + bestPerHour + "/hr";
+				return bestPerHour == null ? "" : "best " + bestPerHour + "/hr";
 			}
-			if (!boss)
-			{
-				return "not a boss";
-			}
-			return adds.isEmpty() ? "" : "with " + String.join(", ", adds);
+			return !boss || adds.isEmpty() ? "" : "with " + String.join(", ", adds);
 		}
 	}
 
+	// ---- T-102: Bosses and Monsters ----
+
 	/**
-	 * Every room name in the history, most recently fought first, grouped so a
-	 * boss's adds sit under it (spec 3.2 "All bosses"). {@code query} filters by
-	 * name, case aside; {@code bossesOnly} drops what isn't a boss.
+	 * T-102: whether a rebuilt room is a monster's, by the history budget's own rule (T-093, {@link
+	 * HistoryBudget#isMonster}): every fight in it a monster's, flagged as a run when fought (T-089), else by T-089's
+	 * test on its name and id ({@link MonsterRooms#isMonster}: not grouped, not in {@code boss-rules.json}, not on the
+	 * hiscores' list nor {@link EncounterGroup#isBossByName}, not in a raid). A room with any boss fight is a boss's.
+	 * {@code rules} null leaves {@code boss-rules.json} out, as the budget does before the data has loaded.
 	 */
+	static boolean isMonster(Encounter room, BossRules rules)
+	{
+		boolean any = false;
+		for (Fight f : room.getFights())
+		{
+			if (f.getAttempts() <= 0)
+			{
+				continue;
+			}
+			any = true;
+			if (!HistoryBudget.isMonster(f, rules))
+			{
+				return false;
+			}
+		}
+		return any || room.isMonsterRoom();
+	}
+
+	/**
+	 * T-102: the boss a room of nothing but its adds belongs to, or null: the araxyte rooms saved on their own before
+	 * T-091 grouped them with Araxxor (some as runs of monsters, T-089). Their ids are an add of the group now ({@link
+	 * EncounterGroup#lootIsTheKill} false), so they're listed under the group's boss, as its adds, not as a boss or a
+	 * monster of their own. Never their kills: an add's death was never the boss's.
+	 */
+	static String addsOf(Encounter room)
+	{
+		String group = null;
+		for (Fight f : room.getFights())
+		{
+			if (f.getAttempts() <= 0)
+			{
+				continue;
+			}
+			final String g = EncounterGroup.of(f.getTargetId());
+			if (g == null || EncounterGroup.lootIsTheKill(f.getTargetId()) || (group != null && !group.equals(g)))
+			{
+				return null;
+			}
+			group = g;
+		}
+		return group == null || group.equals(room.getName()) ? null : group;
+	}
+
+	/**
+	 * T-102: the room ended because the player died (T-100's {@code roomEnd = "died"} on its last fight), so it reads
+	 * {@code (died)} where a room that isn't a kill reads {@code (ended)}. A room left ({@code "left"}) keeps {@code
+	 * (ended)}.
+	 */
+	static boolean died(Encounter room)
+	{
+		if (room == null)
+		{
+			return false;
+		}
+		for (Fight f : room.getFights())
+		{
+			if (DIED.equals(f.getRoomEnd()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** T-100's word for a room the player died in. */
+	static final String DIED = "died";
+
+	/** Before T-102, for the tests that ask it so: every name, bosses only, or matching {@code query}. */
 	static List<BossEntry> bosses(List<Fight> history, boolean bossesOnly, String query)
+	{
+		final List<BossEntry> out = new ArrayList<>();
+		for (BossEntry e : bosses(history, query, null))
+		{
+			if (!bossesOnly || e.boss)
+			{
+				out.add(e);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Every room name in the history, most recently fought first, grouped so a boss's adds sit under it (spec 3.2).
+	 * T-102: {@link BossEntry#boss} by {@link #isMonster}, for the Bosses and Monsters sections; the rooms of a boss's
+	 * adds alone ({@link #addsOf}) under that boss when it's in the history. {@code query} filters by name, case aside.
+	 */
+	static List<BossEntry> bosses(List<Fight> history, String query, BossRules rules)
 	{
 		final String q = query == null ? "" : query.trim().toLowerCase(Locale.ENGLISH);
 		final Map<String, List<Encounter>> byName = new LinkedHashMap<>();
+		final Map<String, Set<String>> addRooms = new LinkedHashMap<>();
 		for (Encounter room : allRooms(history))
 		{
 			if (fought(room))
@@ -216,13 +304,33 @@ final class SidePanelHistory
 				byName.computeIfAbsent(room.getName(), k -> new ArrayList<>()).add(room);
 			}
 		}
+		// The adds' own rooms go under their boss when it has rooms of its own; without them they stay as they are.
+		for (Map.Entry<String, List<Encounter>> e : new ArrayList<>(byName.entrySet()))
+		{
+			String group = null;
+			for (Encounter room : e.getValue())
+			{
+				final String g = addsOf(room);
+				if (g == null || (group != null && !group.equals(g)))
+				{
+					group = null;
+					break;
+				}
+				group = g;
+			}
+			if (group != null && byName.containsKey(group))
+			{
+				addRooms.computeIfAbsent(group, k -> new LinkedHashSet<>()).add(e.getKey());
+				byName.remove(e.getKey());
+			}
+		}
 		final List<BossEntry> out = new ArrayList<>();
 		for (Map.Entry<String, List<Encounter>> e : byName.entrySet())
 		{
 			final String name = e.getKey();
 			final List<Encounter> rooms = e.getValue();
-			final boolean boss = rooms.stream().anyMatch(SidePanelHistory::isBoss);
-			if ((bossesOnly && !boss) || (!q.isEmpty() && !name.toLowerCase(Locale.ENGLISH).contains(q)))
+			final boolean boss = rooms.stream().anyMatch(r -> !isMonster(r, rules));
+			if (!q.isEmpty() && !name.toLowerCase(Locale.ENGLISH).contains(q))
 			{
 				continue;
 			}
@@ -264,6 +372,7 @@ final class SidePanelHistory
 					}
 				}
 			}
+			adds.addAll(addRooms.getOrDefault(name, Collections.emptySet()));
 			final LedgerHistory.Average a = latestKill == null ? null
 				: LedgerHistory.of(history, LedgerHistory.Like.of(latestKill), null);
 			out.add(new BossEntry(name, kills + runKills, a == null ? null : LedgerRows.duration(a.actual.median),

@@ -137,8 +137,8 @@ public class SidePanelHistorySearchTest
 			final SidePanelHistoryTab tab = tab();
 			tab.search().setText("abyss");
 			assertTrue(tab.searching());
-			// No card, no kills, no tools: the matches alone.
-			assertEquals(java.util.Collections.singletonList("historyBosses"), sections(tab));
+			// No card, no kills, no tools: the matches alone, in Bosses (the Sire) and Monsters (the demons, T-102).
+			assertEquals(java.util.Arrays.asList("historyBosses", "historyMonsters"), sections(tab));
 			assertTrue(all(tab, SidePanelHistoryTab.Close.class).isEmpty());
 			assertEquals(java.util.Arrays.asList("Abyssal Sire", "Abyssal demon"), bossNames(tab));
 			// The pick is unchanged, and comes back with the cleared search.
@@ -175,7 +175,7 @@ public class SidePanelHistorySearchTest
 			assertTrue(all(tab, SidePanelHistoryTab.Close.class).isEmpty());
 			assertFalse(sections(tab).contains("historyKills"));
 			// Put away: the list and the tools.
-			assertEquals(java.util.Arrays.asList("historyBosses", "historyTools"), sections(tab));
+			assertEquals(java.util.Arrays.asList("historyBosses", "historyMonsters", "historyTools"), sections(tab));
 			// Its row again picks it.
 			click(row(tab, "Vardorvis"));
 			assertEquals("Vardorvis", tab.boss());
@@ -194,7 +194,7 @@ public class SidePanelHistorySearchTest
 			assertTrue(close.hovered());
 			click(close);
 			assertNull(tab.boss());
-			assertEquals(java.util.Arrays.asList("historyBosses", "historyTools"), sections(tab));
+			assertEquals(java.util.Arrays.asList("historyBosses", "historyMonsters", "historyTools"), sections(tab));
 		});
 	}
 
@@ -251,8 +251,9 @@ public class SidePanelHistorySearchTest
 			{
 				texts.add(t.getText());
 			}
-			assertTrue(texts.toString(), texts.contains("No boss matches that name."));
-			assertEquals(java.util.Collections.singletonList("historyBosses"), sections(tab));
+			// T-102: neither section has a match, so one line says so.
+			assertTrue(texts.toString(), texts.contains(SidePanelHistoryTab.NO_MATCH));
+			assertTrue(sections(tab).isEmpty());
 		});
 	}
 
