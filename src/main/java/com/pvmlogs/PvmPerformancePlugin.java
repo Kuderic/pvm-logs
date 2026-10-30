@@ -395,6 +395,8 @@ public class PvmPerformancePlugin extends Plugin
 	// (a teleport); and, after a trip, whether the overhead bar is still to be checked for a fresh one, with the tick the
 	// target was last seen before it.
 	private BossAway away;
+	// T-097: the run back to a boss come back into view after a burrow, until the next attack.
+	private BossAway.Chase chase;
 	private int lastLoadingTick = Integer.MIN_VALUE;
 	private boolean barCheckOnReturn;
 	private long returnLastSeenMillis;
@@ -3837,7 +3839,26 @@ public class PvmPerformancePlugin extends Plugin
 		targetNpc = npc;
 		targetLiveId = npc.getId();
 		combatCalc.setTarget(npc);
+		// Back from a burrow (T-097): the run to her, from where the player stands now, is the mechanic.
+		final BossRules.ChaseRule rule = away.playerLeft ? null : chaseRuleFor(npc.getId());
+		final Player me = client.getLocalPlayer();
+		if (rule != null && me != null && npc.getWorldArea() != null && me.getWorldLocation() != null)
+		{
+			final int distance = Math.max(0, npc.getWorldArea().distanceTo(me.getWorldLocation()));
+			final int reach = combatCalc.attackReach();
+			chase = new BossAway.Chase(tick, distance, reach, BossAway.chaseAllowance(distance, reach, rule.margin));
+			debug.log("CHASE %s: back %d tiles off, the weapon reaches %d: %d idle ticks allowed (the run at 2 tiles a "
+				+ "tick, plus %d)", away.name, distance, reach, chase.allowance, rule.margin);
+		}
 		away = null;
+	}
+
+	/** The chase rule of this npc's boss (T-097: the Giant Mole), or null. */
+	private BossRules.ChaseRule chaseRuleFor(int npcId)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final BossRules.Boss boss = rules == null ? null : rules.forNpc(npcId);
+		return boss == null ? null : boss.chaseByDistance;
 	}
 
 	/** Whether this npc is an add of the open fight's boss that leaves its fight open (T-084: Zulrah's snakelings). */
@@ -4065,6 +4086,13 @@ public class PvmPerformancePlugin extends Plugin
 			foodDelay.reset();
 			return;
 		}
+		if (attacked && chase != null)
+		{
+			debug.log("CHASE done: hit again %d ticks after she came back, %d tiles off at reach %d: %d idle ticks excused of "
+				+ "%d allowed, %d lost", client.getTickCount() - chase.tick, chase.distance, chase.reach, chase.excused,
+				chase.allowance, chase.lost);
+			chase = null;
+		}
 		if (attacked)
 		{
 			// Before anything reads the style: which event proved this attack decides whether a queued cast can be what went
@@ -4224,20 +4252,15 @@ public class PvmPerformancePlugin extends Plugin
 			combatCalc.noteAttackKind(true);
 			return;
 		}
-		// The target out of view (T-088). On a trip, nothing: the time away is no part of the fight. Gone from a player who
-		// stayed (a burrow), only inside a boss's allowance window, where it counts as the mechanic it is, up to its cap;
-		// anywhere else nothing, since no attack was possible.
+		// The target out of view (T-088): no attack is possible, so nothing counts. On a trip the time away is no part of the
+		// fight; gone from a player who stayed (a burrow), the run to her once she is back is what counts (T-097).
 		if (away != null)
 		{
-			final int idleTick = client.getTickCount() - pendingBookingLag(lastAttackFromProjectile, combatCalc.isMeleeEquipped());
-			if (away.playerLeft || !mechanics.covers(idleTick))
+			if (!away.playerLeft)
 			{
-				if (!away.playerLeft)
-				{
-					debug.log("tick UNCOUNTED: target out of view since %d, no allowance window open", away.tick);
-				}
-				return;
+				debug.log("tick UNCOUNTED: target out of view since %d", away.tick);
 			}
+			return;
 		}
 		// The trip totals take the same ticks as they happen, so the share shown in whole-trip mode moves during a fight
 		// rather than only at its end.
@@ -4288,9 +4311,20 @@ public class PvmPerformancePlugin extends Plugin
 				? "nothing thrown at this one yet" : "aimed at index " + aimedNpc.getIndex());
 			return;
 		}
+		// The run back to her after a burrow (T-097): excused for as long as running into reach takes, plus a margin; beyond
+		// that, lost.
+		final boolean chasing = chase != null && !eating && counts;
+		if (chasing && chase.excuse())
+		{
+			current.recordTickMechanic(roomEngaged);
+			session.recordTickMechanic(current.isScored());
+			debug.log("tick MECHANIC: overdue since %d + lag %d, the run back to her (%d of %d)", attackDueTick, lag,
+				chase.excused, chase.allowance);
+			return;
+		}
 		// Downtime a boss's mechanic forced, inside its allowance (T-074): neutral, not lost. Judged on the tick the idle
 		// attack would have gone out, a booking lag before this one, as the windows are.
-		final MechanicAllowances.Run excused = eating || !counts ? null
+		final MechanicAllowances.Run excused = eating || !counts || chasing ? null
 			: mechanics.excuse(client.getTickCount() - lag);
 		if (excused != null)
 		{
@@ -5849,8 +5883,9 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void finalizeFight(boolean died, long now, String reason, boolean keepCounts)
 	{
-		// Whatever ends a fight ends its hold (T-088).
+		// Whatever ends a fight ends its hold (T-088), and its chase (T-097).
 		away = null;
+		chase = null;
 		barCheckOnReturn = false;
 		mechanics.finish();
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
