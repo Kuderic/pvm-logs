@@ -201,6 +201,13 @@ final class SidePanelModel
 		boolean noneScored;
 		/** T-102: the room ended because the player died in it (T-100): {@code (died)} where {@code (ended)} goes. */
 		boolean died;
+		/**
+		 * T-109: damage the boss took from its own room (T-106's {@code Fight.roomDamage}: Araxxor's Ruptura explosions,
+		 * his own cleave), summed over the scope's fights; and its sources by name from the boss rules, empty when
+		 * they're not to hand. Shown after the fight only: it's the boss's room's doing.
+		 */
+		int roomDamage;
+		List<String> roomDamageSources = Collections.emptyList();
 		/** The room's name, the target's before the first attack, or the raid's. */
 		String name;
 		/** The raid the room or scope is in, or null: a raid's rooms show its icon (T-054). */
@@ -300,6 +307,7 @@ final class SidePanelModel
 		in.run = room.isMonsterRoom();
 		in.kills = room.getKills();
 		in.died = SidePanelHistory.died(room);
+		in.roomDamage = roomDamage(room.getFights());
 		final List<Fight> fights = room.getFights();
 		in.maxHp = maxHp(fights);
 		in.solo = fights.isEmpty() ? null : solo(fights);
@@ -314,6 +322,98 @@ final class SidePanelModel
 		fillOther(in, fights);
 		in.targets = targets(fights);
 		split(in, room);
+	}
+
+	// ---- T-109: the damage the boss took from its own room ----
+
+	static final String ROOM_DMG = "room dmg";
+
+	/**
+	 * T-109: the Trip tab's room damage, over its rooms: the sum, their sources, and whose ({@code Araxxor}, or {@code
+	 * the bosses} when it came from more than one).
+	 */
+	static void fillTripRoomDamage(Input in, List<Encounter> rooms, BossRules rules)
+	{
+		int total = 0;
+		final Set<String> bosses = new LinkedHashSet<>();
+		for (Encounter room : rooms)
+		{
+			final int d = roomDamage(room.getFights());
+			if (d > 0)
+			{
+				total += d;
+				bosses.add(room.getName());
+			}
+		}
+		in.roomDamage = total;
+		in.roomDamageSources = roomDamageSources(rooms, rules);
+		in.name = bosses.size() == 1 ? bosses.iterator().next() : "the bosses";
+	}
+
+	/** T-109: T-106's room damage over these fights. */
+	static int roomDamage(List<Fight> fights)
+	{
+		int total = 0;
+		for (Fight f : fights)
+		{
+			total += Math.max(0, f.getRoomDamage());
+		}
+		return total;
+	}
+
+	/**
+	 * T-109: the room damage's sources, by the names the boss rules give them (T-106's {@code roomDamage} rules:
+	 * {@code a Ruptura araxyte's explosion}, {@code his own cleave}), for the targets in these rooms, each once; empty
+	 * without rules or with none.
+	 */
+	static List<String> roomDamageSources(List<Encounter> rooms, BossRules rules)
+	{
+		if (rules == null)
+		{
+			return Collections.emptyList();
+		}
+		final Set<String> names = new LinkedHashSet<>();
+		final Set<Integer> seen = new java.util.HashSet<>();
+		for (Encounter room : rooms)
+		{
+			for (Fight f : room.getFights())
+			{
+				if (f.getRoomDamage() <= 0 || !seen.add(f.getTargetId()))
+				{
+					continue;
+				}
+				final BossRules.Boss boss = rules.forNpc(f.getTargetId());
+				if (boss != null && boss.roomDamage != null)
+				{
+					for (BossRules.RoomDamageRule r : boss.roomDamage)
+					{
+						if (r.name != null)
+						{
+							names.add(r.name);
+						}
+					}
+				}
+			}
+		}
+		return new ArrayList<>(names);
+	}
+
+	/**
+	 * T-109: the row's tooltip: {@code Damage Araxxor took from the room: a Ruptura araxyte's explosion and his own
+	 * cleave. Not yours, and not part of your luck.}, or without the sources when the rules aren't to hand.
+	 */
+	static String roomDamageTip(String boss, List<String> sources)
+	{
+		final String who = boss == null || boss.isEmpty() ? "the boss" : boss;
+		final String what = sources.isEmpty() ? "" : ": " + (sources.size() == 1 ? sources.get(0)
+			: String.join(", ", sources.subList(0, sources.size() - 1)) + " and " + sources.get(sources.size() - 1));
+		return "Damage " + who + " took from the room" + what + ". Not yours, and not part of your luck.";
+	}
+
+	private static Row roomDamageRow(int damage, String boss, List<String> sources)
+	{
+		return new Row(Text.small(ROOM_DMG, SidePanelStyle.BODY), Text.NONE, Text.small(LedgerRows.number(damage),
+			SidePanelStyle.BODY), roomDamageTip(boss, sources));
 	}
 
 	// ---- T-102: a room the player died in ----
@@ -832,7 +932,8 @@ final class SidePanelModel
 		}
 		if (after)
 		{
-			b.details = details(s, avoidable, run);
+			b.details = details(s, avoidable, run, in.kind == Kind.ROOM ? in.roomDamage : 0, in.name,
+				in.roomDamageSources);
 			if (!raid && !run && in.drain != null)
 			{
 				b.defence = defence(in.drain);
@@ -1073,6 +1174,11 @@ final class SidePanelModel
 		if (in.reflect > 0)
 		{
 			other.add(row("recoil/veng dmg", LedgerRows.number(in.reflect)));
+		}
+		// T-109: the bosses' rooms' damage over the trip's saved kills, while no fight runs (the own-output guardrail).
+		if (in.ended && in.roomDamage > 0)
+		{
+			other.add(roomDamageRow(in.roomDamage, in.name, in.roomDamageSources));
 		}
 		return new PanelSnapshot.TripTab(header, tiles, execution, Text.small(hint, SidePanelStyle.SECONDARY), in.tripRows,
 			taken, other.isEmpty() ? null : new PanelSnapshot.Rows(null, other), tripDrains(in.drain));
@@ -2245,6 +2351,16 @@ final class SidePanelModel
 	 */
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run)
 	{
+		return details(s, avoidable, run, 0, null, Collections.emptyList());
+	}
+
+	/**
+	 * T-109: with the room's damage on {@code boss} ({@code roomDamage}, its {@code sources} by name): a {@code room dmg}
+	 * row after {@code boss healed}, with a tooltip saying what it is. Only above 0 and never for a run.
+	 */
+	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run, int roomDamage, String boss,
+		List<String> sources)
+	{
 		final List<Row> rows = new ArrayList<>();
 		if (s.expectedHits() > 0 && !run)
 		{
@@ -2264,6 +2380,11 @@ final class SidePanelModel
 		if (s.healed() > 0)
 		{
 			rows.add(row("boss healed", LedgerRows.number(s.healed())));
+		}
+		// T-109: the boss's room's doing too (Araxxor's Ruptura explosions, his own cleave), so after the fight only.
+		if (roomDamage > 0 && !run)
+		{
+			rows.add(roomDamageRow(roomDamage, boss, sources));
 		}
 		final double eating = s.ticksLostEating() * LedgerRows.SECONDS_PER_TICK
 			- (avoidable ? avoidableEating(new LedgerRows.Numbers(s)) : 0);

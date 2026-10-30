@@ -52,6 +52,11 @@ public final class SidePanelPictures
 			dpsCards(out);
 			return;
 		}
+		if (args.length > 1 && "room".equals(args[1]))
+		{
+			roomDamage(out);
+			return;
+		}
 		if (args.length > 1 && "switch".equals(args[1]))
 		{
 			switchInHeader(out);
@@ -866,6 +871,94 @@ public final class SidePanelPictures
 		}
 		final javax.swing.JToolTip tip = words.createToolTip();
 		tip.setTipText(words.getToolTipText());
+		tip.setSize(tip.getPreferredSize());
+		layout(tip);
+		final int w = Math.max(card.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
+		final BufferedImage img = new BufferedImage(w, card.getHeight() + (int) Math.ceil((tip.getHeight() + 8) * scale),
+			BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		g.drawImage(card, 0, 0, null);
+		g.translate(0, card.getHeight() + 4 * scale);
+		g.scale(scale, scale);
+		tip.printAll(g);
+		g.dispose();
+		return img;
+	}
+
+	/**
+	 * T-109: the room's damage in Details: an Araxxor kill with 160 (the card, and its row's tooltip), a kill with none,
+	 * and the Trip tab with two Araxxor kills. Normal and Smooth, 1× and 2×, a folder each.
+	 */
+	private static void roomDamage(Path out) throws IOException
+	{
+		final BossRules rules = BossRules.load(new com.google.gson.Gson(), null);
+		final String[] modes = {"normal", "smooth"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = false;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				final SidePanelModel.Input kill = roomInput(SidePanelRoomDamageExamples.araxxor(160,
+					SidePanelExamples.at(15, 0)), rules);
+				write(dir, "a-araxxor-160", scale, card(kill, scale, "details"));
+				write(dir, "b-tooltip", scale, rowTooltip(kill, scale, "details", SidePanelModel.ROOM_DMG));
+				write(dir, "c-no-room-damage", scale, card(roomInput(SidePanelRoomDamageExamples.araxxor(0,
+					SidePanelExamples.at(15, 0)), rules), scale, "details"));
+				write(dir, "d-whole-tab", scale, render(kill, scale));
+				final SidePanelModel.Input trip = SidePanelExamples.trip();
+				SidePanelModel.fillTripRoomDamage(trip, java.util.Arrays.asList(SidePanelRoomDamageExamples.araxxor(160,
+					SidePanelExamples.at(15, 0)), SidePanelRoomDamageExamples.araxxor(120, SidePanelExamples.at(15, 5))),
+					rules);
+				write(dir, "e-trip-two-kills", scale, renderTrip(trip, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	private static SidePanelModel.Input roomInput(Encounter room, BossRules rules)
+	{
+		final SidePanelModel.Input in = new SidePanelModel.Input();
+		in.zone = SidePanelExamples.ZONE;
+		in.kind = SidePanelModel.Kind.ROOM;
+		SidePanelModel.fillRoom(in, room);
+		in.roomDamageSources = SidePanelModel.roomDamageSources(java.util.Collections.singletonList(room), rules);
+		in.ended = true;
+		in.killed = true;
+		in.endMillis = SidePanelExamples.at(15, 3);
+		return in;
+	}
+
+	/** T-109: section {@code id}'s card with the tooltip of its row labelled {@code label} under it. */
+	static BufferedImage rowTooltip(SidePanelModel.Input in, double scale, String id, String label)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection section = sectionOf(panel.fightTab(), id);
+		SidePanelParts.Line line = null;
+		for (Component k : all(section))
+		{
+			if (k instanceof SidePanelParts.Line && label.equals(((SidePanelParts.Line) k).left.getText()))
+			{
+				line = (SidePanelParts.Line) k;
+			}
+		}
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height) * scale));
+		final BufferedImage card = whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+		final javax.swing.JToolTip tip = line.createToolTip();
+		tip.setTipText(line.getToolTipText());
 		tip.setSize(tip.getPreferredSize());
 		layout(tip);
 		final int w = Math.max(card.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
