@@ -29,4 +29,4 @@ Luck vs Skill is its own Plugin Hub entry. It began as a fork of Arodab's PvM Pe
 **Under the hood**
 - Data lives in `~/.runelite/plugin-data/luck-vs-skill/`, through RuneLite's file API, as Plugin Hub rules require.
 - Builds against current RuneLite (1.13.4).
-- Save debug log on the side panel, for reporting a figure that looks wrong.
+- Save debug log on the side panel, for reporting a figure that looks wrong. Every debug log names the release, or the commit it was built from.
