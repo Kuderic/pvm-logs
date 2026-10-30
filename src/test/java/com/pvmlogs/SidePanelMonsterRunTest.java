@@ -164,6 +164,17 @@ public class SidePanelMonsterRunTest
 		assertFalse(SidePanelHistory.isKill(empty));
 		final List<Fight> some = reversed(SidePanelRunExamples.runFights(SidePanelExamples.at(15, 0), 3, 1, 5));
 		assertTrue(SidePanelHistory.isKill(SidePanelHistory.allRooms(some).get(0)));
+		// Not until it has closed, as the overlay has it (T-094): a run still going, its fights saved as it switched.
+		final List<Fight> going = reversed(SidePanelRunExamples.runFights(SidePanelExamples.at(15, 0), 3, 1, 5)
+			.subList(0, 2));
+		final Encounter open = SidePanelHistory.allRooms(going).get(0);
+		assertEquals(1, open.getKills());
+		assertFalse(SidePanelHistory.isKill(open));
+		// The panel's test is the overlay's.
+		for (Encounter r : new Encounter[]{empty, SidePanelHistory.allRooms(some).get(0), open})
+		{
+			assertEquals(LedgerHistory.isKill(r), SidePanelHistory.isKill(r));
+		}
 	}
 
 	@Test

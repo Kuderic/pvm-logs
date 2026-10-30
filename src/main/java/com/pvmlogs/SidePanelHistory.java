@@ -84,19 +84,9 @@ final class SidePanelHistory
 	 */
 	static boolean isKill(Encounter room)
 	{
-		// T-095: a run of monsters (T-089) is one only with kills: its last fight closes the room either way.
-		if (room.isMonsterRoom())
-		{
-			return room.getKills() > 0;
-		}
-		for (Fight f : room.getFights())
-		{
-			if (f.isClosedRoom() || (f.getGroupName() == null && f.isTargetDied()))
-			{
-				return true;
-			}
-		}
-		return false;
+		// T-095: the overlay's own test (T-094), so the two agree: a run of monsters (T-089) is a kill once it has
+		// closed with a kill in it.
+		return LedgerHistory.isKill(room);
 	}
 
 	/** The room was fought at all: a look that opened a fight and nothing more isn't a room to list. */
