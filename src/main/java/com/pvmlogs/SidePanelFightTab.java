@@ -115,6 +115,13 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private final SidePanelIcons icons;
 	/** Swing's copy of the chart's series, extended a tick at a time (spec 5.1); kept across rebuilds. */
 	private final SidePanelChartData chartData = new SidePanelChartData();
+	/**
+	 * T-099: the Damage card's switch, Boss, Adds or All ({@link FightTab#byTarget}), for the session: in memory, as
+	 * the room/raid switch is, and the same in the live tab and a kill opened from History.
+	 */
+	private static volatile int target = SidePanelModel.DEFAULT_TARGET;
+	/** T-099: the last snapshot, shown again with the other view when the switch is clicked. */
+	private FightTab last;
 	private final SidePanelSection.Folds folds;
 	private final List<Consumer<FightTab>> updaters = new ArrayList<>();
 	private String structure;
@@ -152,8 +159,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	}
 
 	/** Shows the snapshot: new components only when its structure differs from the last one's. */
-	void apply(FightTab tab)
+	void apply(FightTab snapshot)
 	{
+		last = snapshot;
+		// T-099: the Damage card and chart of the view the switch is on; the switch's choice is in the structure.
+		final FightTab tab = snapshot.showing(target);
 		// The chart's tail goes into the copy every snapshot, whatever else changes, so no tick is skipped.
 		chartData.apply(tab.chart);
 		final String s = tab.structure();
@@ -719,7 +729,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		card.add(ends);
 		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(legend);
-		add(new SidePanelSection("chart", "Damage over time", Text.small("weapon", SidePanelStyle.SECONDARY), card, folds));
+		// T-099: the switch's view, when it isn't All.
+		final String on = tab.byTarget == null || SidePanelModel.ALL.equals(tab.byTarget.get(tab.target).label) ? ""
+			: " · " + tab.byTarget.get(tab.target).label.toLowerCase(java.util.Locale.ENGLISH);
+		add(new SidePanelSection("chart", "Damage over time", Text.small("weapon" + on, SidePanelStyle.SECONDARY), card,
+			folds));
 		updaters.add(t ->
 		{
 			ends.set(new PanelSnapshot.Row(Text.small("0:00", SidePanelStyle.MUTED), Text.small(t.chart.end,
@@ -816,30 +830,89 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 
 	private void damage(FightTab tab)
 	{
-		if (tab.damage == null)
+		if (tab.damage == null && tab.byTarget == null)
 		{
 			return;
 		}
 		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
+		// T-099: the switch on top, and its line: the time on that target set, and what the card leaves to the room.
+		final SidePanelParts.Paragraph note = tab.byTarget == null ? null : targetSwitch(tab, list);
 		final List<SidePanelParts.SourceRowView> rows = new ArrayList<>();
 		// T-085: the weapon rows' sub-lines in one form, the longest that fits them all.
 		final SidePanelText.FormGroup forms = new SidePanelText.FormGroup();
-		for (PanelSnapshot.Source s : tab.damage.rows)
+		for (PanelSnapshot.Source s : tab.damage == null ? java.util.Collections.<PanelSnapshot.Source>emptyList()
+			: tab.damage.rows)
 		{
 			final SidePanelParts.SourceRowView v = new SidePanelParts.SourceRowView(s, icons, forms);
 			rows.add(v);
 			list.add(v);
 		}
-		final SidePanelSection section = new SidePanelSection("damage", "Damage", tab.damage.hint, list, folds);
+		final SidePanelSection section = new SidePanelSection("damage", "Damage", hint(tab), list, folds);
 		add(section);
 		updaters.add(t ->
 		{
-			section.setHint(t.damage.hint);
+			section.setHint(hint(t));
+			if (note != null)
+			{
+				note.set(t.byTarget.get(t.target).note, SidePanelStyle.MUTED);
+			}
 			for (int i = 0; i < rows.size(); i++)
 			{
 				rows.get(i).set(t.damage.rows.get(i));
 			}
 		});
+	}
+
+	private static Text hint(FightTab t)
+	{
+		return t.damage == null ? Text.small("nothing scored", SidePanelStyle.MUTED) : t.damage.hint;
+	}
+
+	/** T-099: Boss · Adds · All, a click shows the last snapshot again in that view; the line under it. */
+	private SidePanelParts.Paragraph targetSwitch(FightTab tab, JPanel list)
+	{
+		final JPanel row = new JPanel(new GridLayout(1, tab.byTarget.size(), 0, 0));
+		row.setOpaque(false);
+		for (int i = 0; i < tab.byTarget.size(); i++)
+		{
+			final int pick = i;
+			final Segment s = new Segment(tab.byTarget.get(i).label, () -> pick(pick));
+			s.select(i == tab.target);
+			row.add(s);
+		}
+		list.add(row);
+		final SidePanelParts.Paragraph note = new SidePanelParts.Paragraph(tab.byTarget.get(tab.target).note,
+			SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH);
+		list.add(note);
+		return note;
+	}
+
+	/** T-099: the switch clicked: every tab shows that view from now on, this one at once. */
+	void pick(int view)
+	{
+		target = view;
+		if (last != null)
+		{
+			apply(last);
+		}
+	}
+
+	/** T-099: the switch's view, for tests: {@link SidePanelModel#DEFAULT_TARGET} until one is clicked. */
+	static int target()
+	{
+		return target;
+	}
+
+	/** T-099: back to the default, for tests. */
+	static void resetTarget()
+	{
+		useTarget(SidePanelModel.DEFAULT_TARGET);
+	}
+
+	/** T-099: the switch on this view before any tab is shown, for the renders. */
+	static void useTarget(int view)
+	{
+		target = view;
 	}
 
 	/**

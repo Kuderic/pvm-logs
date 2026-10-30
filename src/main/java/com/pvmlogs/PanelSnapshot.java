@@ -700,6 +700,13 @@ final class PanelSnapshot
 		final Loadout loadout;
 		final ListRow lastFight;
 		final Empty empty;
+		/**
+		 * T-099: the Damage card's Boss, Adds and All views, in that order, in a room with a boss and adds that took
+		 * damage; null for no switch. {@link #damage} and {@link #chart} are All's until {@link #showing} picks one.
+		 */
+		final List<TargetView> byTarget;
+		/** T-099: which of {@link #byTarget} {@link #damage} and {@link #chart} are; -1 before one is picked. */
+		final int target;
 
 		FightTab(Builder b)
 		{
@@ -725,6 +732,43 @@ final class PanelSnapshot
 			loadout = b.loadout;
 			lastFight = b.lastFight;
 			empty = b.empty;
+			byTarget = b.byTarget == null ? null : list(b.byTarget);
+			target = -1;
+		}
+
+		/** T-099: this tab with the Damage card and chart of {@code byTarget}'s view {@code i}. */
+		private FightTab(FightTab t, int i)
+		{
+			state = t.state;
+			wholeRaid = t.wholeRaid;
+			header = t.header;
+			banner = t.banner;
+			unscoredNote = t.unscoredNote;
+			targets = t.targets;
+			rooms = t.rooms;
+			budget = t.budget;
+			tiles = t.tiles;
+			curve = t.curve;
+			noCurve = t.noCurve;
+			noCurveHint = t.noCurveHint;
+			execution = t.execution;
+			damage = t.byTarget.get(i).damage;
+			chart = t.byTarget.get(i).chart;
+			later = t.later;
+			details = t.details;
+			taken = t.taken;
+			defence = t.defence;
+			loadout = t.loadout;
+			lastFight = t.lastFight;
+			empty = t.empty;
+			byTarget = t.byTarget;
+			target = i;
+		}
+
+		/** T-099: the tab as it shows with view {@code i} of the switch picked; itself without a switch. */
+		FightTab showing(int i)
+		{
+			return byTarget == null ? this : new FightTab(this, Math.max(0, Math.min(i, byTarget.size() - 1)));
 		}
 
 		/**
@@ -755,6 +799,8 @@ final class PanelSnapshot
 			s.append(curve == null ? "" : "|c");
 			s.append(noCurve == null ? "" : "|nc");
 			s.append(execution == null ? "" : "|e" + execution.parts.size());
+			// T-099: the switch, and which view it shows: a click on it is a structure change, nothing else is.
+			s.append(byTarget == null ? "" : "|sw" + target);
 			s.append(damage == null ? "" : "|d" + damage.rows.size());
 			s.append(later == null ? "" : "|lt");
 			s.append(chart == null ? "" : chart.expectedShown ? "|ch" : "|chx");
@@ -770,6 +816,27 @@ final class PanelSnapshot
 			s.append(lastFight == null ? "" : "|L");
 			s.append(empty == null ? "" : "|E");
 			return s.toString();
+		}
+	}
+
+	/**
+	 * T-099: one view of the Damage card's switch: its label, its rows (null with nothing scored in it, as the
+	 * Zulrah's snakelings), its chart (null likewise, or with charts off), and the line under the switch: the time on
+	 * that target set, and that Luck and Execution cover the whole kill.
+	 */
+	static final class TargetView
+	{
+		final String label;
+		final Sources damage;
+		final Chart chart;
+		final String note;
+
+		TargetView(String label, Sources damage, Chart chart, String note)
+		{
+			this.label = label;
+			this.damage = damage;
+			this.chart = chart;
+			this.note = note;
 		}
 	}
 
@@ -885,6 +952,7 @@ final class PanelSnapshot
 		Loadout loadout;
 		ListRow lastFight;
 		Empty empty;
+		List<TargetView> byTarget;
 
 		FightTab build()
 		{

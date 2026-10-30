@@ -787,6 +787,16 @@ final class SidePanelHistory
 	static SidePanelModel.Input savedKill(List<Fight> history, Encounter room, long sessionStart, long now, ZoneId zone,
 		Versions names, FightTimeline.View view)
 	{
+		return savedKill(history, room, sessionStart, now, zone, names, view, null);
+	}
+
+	/**
+	 * T-099: {@code partViews}, the timelines of the room's boss parts and adds ({@link SidePanelModel#parts}), in that
+	 * order, for the Damage card's switch; null while they're fetched, or for a room without one.
+	 */
+	static SidePanelModel.Input savedKill(List<Fight> history, Encounter room, long sessionStart, long now, ZoneId zone,
+		Versions names, FightTimeline.View view, FightTimeline.View[] partViews)
+	{
 		final SidePanelModel.Input in = new SidePanelModel.Input();
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
@@ -821,6 +831,11 @@ final class SidePanelHistory
 		else if (view != null)
 		{
 			in.view = view;
+			if (in.bossOnly != null && partViews != null)
+			{
+				in.bossOnly.view = partViews[0];
+				in.addsOnly.view = partViews[1];
+			}
 		}
 		return in;
 	}

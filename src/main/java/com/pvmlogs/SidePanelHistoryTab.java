@@ -164,6 +164,8 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	private Fight openKill;
 	/** The open kill's timeline view once the client thread has sent it (T-036), and whose it is. */
 	private FightTimeline.View openView;
+	/** T-099: the open kill's boss parts' and adds' timelines, for the Damage card's switch; null for none. */
+	private FightTimeline.View[] openPartViews;
 	private Fight openViewFor;
 
 	private int builds;
@@ -511,21 +513,36 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		final Fight first = room.getFights().get(0);
 		final boolean known = openViewFor == first;
 		view.apply(SidePanelModel.fight(SidePanelHistory.savedKill(history, room, source.sessionStart(), source.now(),
-			source.zone(), source.versions(), known ? openView : null)));
+			source.zone(), source.versions(), known ? openView : null, known ? openPartViews : null)));
 		content.add(view);
 		if (!known && SidePanelHistory.fromThisSession(room, source.sessionStart()))
 		{
 			// This session's kill: ask for its charts, and show them when they come. Last, so a source that answers at
-			// once (tests) rebuilds the view rather than having it added twice.
+			// once (tests) rebuilds the view rather than having it added twice. T-099: with its boss parts' and adds'
+			// too, for the Damage card's switch, each asked of the same source as one room.
+			final Encounter[] parts = SidePanelModel.parts(room);
 			source.charts(room, v ->
 			{
-				openView = v;
-				openViewFor = first;
-				if (openKill == first)
+				if (parts == null)
 				{
-					refresh();
+					shown(first, v, null);
+					return;
 				}
+				source.charts(parts[0], boss -> source.charts(parts[1], adds ->
+					shown(first, v, new FightTimeline.View[]{boss, adds})));
 			});
+		}
+	}
+
+	/** A kill's charts have come: kept for it, and shown if it's still open. */
+	private void shown(Fight first, FightTimeline.View v, FightTimeline.View[] parts)
+	{
+		openView = v;
+		openPartViews = parts;
+		openViewFor = first;
+		if (openKill == first)
+		{
+			refresh();
 		}
 	}
 

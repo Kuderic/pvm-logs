@@ -521,6 +521,12 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.version = version(room.getFights(), in.maxHp);
 		charts(in, room, FightTimeline.room(room, plugin.getTimelines()));
+		if (in.view != null && in.bossOnly != null)
+		{
+			// T-099: each side of the Damage card's switch over its own fights' timelines.
+			in.bossOnly.view = FightTimeline.room(in.bossOnly.part, plugin.getTimelines());
+			in.addsOnly.view = FightTimeline.room(in.addsOnly.part, plugin.getTimelines());
+		}
 		final boolean current = contains(room, fight);
 		in.ended = roomEnded(room, fight);
 		in.killed = in.ended && room.isKilled();
