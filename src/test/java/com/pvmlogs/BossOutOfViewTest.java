@@ -157,26 +157,4 @@ public class BossOutOfViewTest
 		tracker.tick(11747);
 		assertEquals(141 - 141 * 3 / 10, tracker.tracked(57647).state.defence);
 	}
-
-	@Test
-	public void aBurrowsIdleTicksCountOnlyInsideItsWindow()
-	{
-		// The burrow at [11829]: the window opens on her 3314 and stays open while she is gone; the chase to the next hit at
-		// [11863] is idle ticks the allowance takes up to its cap, and an idle tick outside any window is not counted at all.
-		final MechanicAllowances mechanics = new MechanicAllowances(null);
-		final java.util.List<BossRules.UptimeAllowance> allowances = RULES.forNpc(MOLE).uptimeAllowances;
-		for (int t = 11826; t <= 11863; t++)
-		{
-			final int tick = t;
-			mechanics.observe(tick, allowances, state -> tick >= 11826 ? new int[]{11826, 11926} : null);
-		}
-		assertFalse(mechanics.covers(11820));
-		assertTrue(mechanics.covers(11840));
-		int excused = 0;
-		for (int t = 11829; t < 11863; t++)
-		{
-			excused += mechanics.excuse(t) != null ? 1 : 0;
-		}
-		assertEquals(34, excused);
-	}
 }

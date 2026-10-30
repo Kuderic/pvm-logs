@@ -162,19 +162,6 @@ final class MechanicAllowances
 		return null;
 	}
 
-	/** Whether any allowance's window covers this tick (T-088: the Mole's burrow, while she is out of view). */
-	boolean covers(int idleTick)
-	{
-		for (Run run : runs)
-		{
-			if (run.covers(idleTick))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
 	/** The fight is over: every run still open is logged, then the totals. */
 	void finish()
 	{

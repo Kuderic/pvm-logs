@@ -312,13 +312,14 @@
       "name": "Giant Mole",
       "npcIds": [5779],
       "onePerWorld": true,
+      "chaseByDistance": {"margin": 3, "source": "T-097, PROPOSED, for Eric to approve. After a burrow, once she is back in view, the run to her is excused for the ticks running takes to bring her within the weapon's reach, at 2 tiles a tick (Eric, 2026-10-29: she 'can burrow very far away or very close randomly'), plus this margin: a tick to see her and click, one for the path to start, one for the swing. A guess until measured: the next kill's CHASE lines give each chase's distance, reach and ticks taken, and the margin becomes the 75th percentile of the ticks beyond the run, as T-074 set its caps."},
       "damageModifiers": {
         "states": [
           {"name": "burrowed", "startOnBossAnim": [3314], "endOnBossAnim": [3315], "maxTicks": 100, "source": "T-088: the Giant Mole burrowing (MOLE_BURROW_DOWN 3314) to come up elsewhere in the lair (MOLE_BURROW_UP 3315), gamevals. OSRS Wiki, Giant Mole: 'While between 50% and 5% of her health, every attack from the player has a 25% chance of causing her to burrow into the ground' and move to 'another area in the lair'. The 100-tick limit is a backstop for a surfacing never seen."}
         ]
       },
       "uptimeAllowances": [
-        {"state": "burrowed", "from": "open", "maxTicks": 50, "afterTicks": 10, "source": "T-088, PROPOSED, for Eric to approve. Finding her after a burrow and hitting her again. Measured on only two chases in Eric's log of 2026-10-29: 34 and 52 idle ticks from her going out of view to his next attack ([11829]-[11863], [11866]-[11918]); the burrow animation was not logged then, so the window's own length is not measured yet. The cap is the longer chase, rounded; the 10 ticks after she surfaces are for reaching her. Re-measure from the next kill's BOSS ANIM and OUT OF VIEW lines."}
+        {"state": "burrowed", "from": "open", "maxTicks": 5, "afterTicks": 0, "source": "T-088, T-097, PROPOSED, for Eric to approve. The dig: idle ticks while she is still in view burrowing, before she is gone (out of view nothing counts, and the run back to her is chaseByDistance's). 5 is a guess at the dig's length: the burrow animation has not been logged yet. Re-measure from the next kill's BOSS ANIM and OUT OF VIEW lines."}
       ]
     },
     {

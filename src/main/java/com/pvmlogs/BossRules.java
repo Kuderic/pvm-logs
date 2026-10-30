@@ -222,6 +222,8 @@ class BossRules
 		 * world is the same boss, whatever its index.
 		 */
 		boolean onePerWorld;
+		/** T-097: after it comes back into view (the Mole after a burrow), the run to it is excused by its length; null for none. */
+		ChaseRule chaseByDistance;
 		/** T-086: an attack on the tick of one of its animations that ignores the weapon's attack delay; null for none. */
 		MeleePunish meleePunish;
 	}
@@ -234,6 +236,19 @@ class BossRules
 	 * next attack is still due when it was. Booking only; what the punish does to
 	 * the attack's accuracy and damage is the calc's.
 	 */
+	/**
+	 * T-097: the run back to a boss that came back into view somewhere else
+	 * (the Giant Mole after a burrow). The idle ticks it excuses are the ticks
+	 * running takes to bring it within the weapon's reach, at 2 tiles a tick,
+	 * plus {@link #margin}.
+	 */
+	static final class ChaseRule
+	{
+		/** Ticks allowed beyond the run itself: seeing her, clicking, the swing going out. */
+		int margin;
+		String source;
+	}
+
 	static final class MeleePunish
 	{
 		/** The boss animation the punish answers. */

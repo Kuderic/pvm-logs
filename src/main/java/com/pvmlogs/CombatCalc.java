@@ -547,6 +547,41 @@ class CombatCalc
 		}
 	}
 
+	/**
+	 * How far the attack going out now reaches, in tiles (T-097: the Giant
+	 * Mole's chase). From the wiki's Attack range: "almost all melee weapons
+	 * have an attack range of 1", halberds 2; "all combat offensive and curse
+	 * spells have an attack range of 10", powered staves mostly 7 (6 to 8);
+	 * shortbows and crossbows 7, longbows 10, thrown weapons 4 (darts 3,
+	 * blowpipes 5), chinchompas 9; long-range "usually gives 2 tiles greater
+	 * range ... up to a 10 tile limit".
+	 */
+	int attackReach()
+	{
+		final AttackStyle style = attackStyle();
+		return reachOf(style.getAttackType(), weaponCategory(), style.getCombatStyle(),
+			poweredStaffMaxHit() > 0 && activeManualCast() == null);
+	}
+
+	/** The reach of an attack of this type, weapon and style (T-097); see {@link #attackReach}. */
+	static int reachOf(AttackType type, WeaponCategory category, CombatStyle style, boolean poweredStaff)
+	{
+		final int base;
+		if (type == AttackType.MAGIC)
+		{
+			base = poweredStaff ? 7 : 10;
+		}
+		else if (type == AttackType.RANGED)
+		{
+			base = category == WeaponCategory.CHINCHOMPAS ? 9 : category == WeaponCategory.THROWN ? 4 : 7;
+		}
+		else
+		{
+			return category == WeaponCategory.POLEARM ? 2 : 1;
+		}
+		return style == CombatStyle.LONGRANGE ? Math.min(10, base + 2) : base;
+	}
+
 	private AttackStyle attackStyle()
 	{
 		expireMemo();

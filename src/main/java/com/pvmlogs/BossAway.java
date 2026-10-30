@@ -14,8 +14,9 @@ import net.runelite.api.GameState;
  * or was not logged in. The fight pauses: the time away is neither combat time
  * nor part of the kill's time.</li>
  * <li><b>The target left</b> (a burrow): the player stayed where they were.
- * The fight goes on; idle ticks while it is gone count only inside a boss's
- * uptime allowance window (the Mole's {@code burrowed}).</li>
+ * The fight goes on. Nothing counts while it is gone, since no attack is
+ * possible; once it is back, the run to it is excused by its length (T-097,
+ * {@link Chase}).</li>
  * </ul>
  *
  * <p>Pure: the plugin hands it what the client shows.
@@ -102,6 +103,49 @@ final class BossAway
 			return false;
 		}
 		return (double) ratio / scale > (double) remaining / maxHp + 1.0 / scale + 0.1;
+	}
+
+	/**
+	 * The idle ticks the run back to a boss is allowed (T-097): running covers
+	 * 2 tiles a tick, so ⌈max(0, distance − reach) / 2⌉, plus the margin.
+	 *
+	 * @param distance tiles from the player to the nearest tile of the boss
+	 * @param reach    the attack's reach in tiles
+	 */
+	static int chaseAllowance(int distance, int reach, int margin)
+	{
+		return (Math.max(0, distance - reach) + 1) / 2 + Math.max(0, margin);
+	}
+
+	/** One run back to a boss come back into view (T-097): its allowance, and the idle ticks it has excused and lost. */
+	static final class Chase
+	{
+		final int tick;
+		final int distance;
+		final int reach;
+		final int allowance;
+		int excused;
+		int lost;
+
+		Chase(int tick, int distance, int reach, int allowance)
+		{
+			this.tick = tick;
+			this.distance = distance;
+			this.reach = reach;
+			this.allowance = allowance;
+		}
+
+		/** An idle tick on the way: excused while the allowance lasts. */
+		boolean excuse()
+		{
+			if (excused < allowance)
+			{
+				excused++;
+				return true;
+			}
+			lost++;
+			return false;
+		}
 	}
 
 	/** What the OUT OF VIEW line says about why. */
