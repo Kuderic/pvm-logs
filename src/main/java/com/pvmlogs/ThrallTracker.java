@@ -138,6 +138,11 @@ class ThrallTracker
 	private int lastProjectileTick = Integer.MIN_VALUE;
 	// Thrall projectiles seen while no thrall was ours yet: {thrall index, target index, tick}.
 	private final List<int[]> unownedProjectiles = new ArrayList<>();
+	// T-101: projectiles our thrall set off before it went, still in the air: {target index, earliest, latest, max hit}.
+	// Each still brings its splat, which lands with no thrall of ours out.
+	private final List<int[]> lastProjectiles = new ArrayList<>();
+	// The thrall released last and when, for a projectile of its seen on the tick it went: {index, max hit, tick}.
+	private int[] released;
 	private final List<String> notes = new ArrayList<>();
 
 	/** One attack of the thrall's, and the ticks its splat may land on. */
@@ -194,6 +199,10 @@ class ThrallTracker
 		varbitActive = active;
 		if (!active)
 		{
+			if (ownedIndex >= 0)
+			{
+				lastReleaseTick = tick;
+			}
 			release("resurrection varbit went down");
 			return;
 		}
@@ -265,6 +274,7 @@ class ThrallTracker
 		recentSpawns.removeIf(s -> s[0] == index);
 		if (index == ownedIndex)
 		{
+			lastReleaseTick = tick;
 			release("despawned");
 			// A recast's new thrall can be seen before the old one goes.
 			if (tick - summonTick <= SUMMON_WINDOW_TICKS)
@@ -317,6 +327,16 @@ class ThrallTracker
 		if (ownedIndex >= 0)
 		{
 			notes.add(String.format("THRALL released npc %d (index %d): %s", ownedId, ownedIndex, why));
+			// Its projectiles already in the air still land as its own (T-101): in Eric's 21:40 log a projectile seen on 2227,
+			// landing 2228, outlived the thrall's despawn on 2227, and its 0 on Araxxor was booked as a crossbow shot.
+			for (Due d : due)
+			{
+				if (d.fromProjectile)
+				{
+					lastProjectiles.add(new int[]{d.targetIndex, d.earliest, d.latest, maxHit});
+				}
+			}
+			released = new int[]{ownedIndex, maxHit, lastReleaseTick};
 		}
 		ownedIndex = -1;
 		ownedId = -1;
@@ -363,6 +383,12 @@ class ThrallTracker
 	{
 		if (targetIndex < 0 || fromThrallIndex < 0)
 		{
+			return;
+		}
+		if (released != null && fromThrallIndex == released[0] && tick - released[2] <= PROJECTILE_LATE)
+		{
+			// Ours, seen as it went (T-101): its splat still lands as its own.
+			lastProjectiles.add(new int[]{targetIndex, tick, tick + PROJECTILE_LATE, released[1]});
 			return;
 		}
 		if (fromThrallIndex != ownedIndex)
@@ -609,6 +635,31 @@ class ThrallTracker
 		return tick <= attackDueTick + 1 ? PlayerSplat.ON_CADENCE : PlayerSplat.LATE;
 	}
 
+	// The tick of the last despawn of ours, for released.
+	private int lastReleaseTick = Integer.MIN_VALUE;
+
+	/**
+	 * Whether this splat is the landing of a projectile our thrall set off
+	 * before it went (T-101): on the npc it was aimed at, inside its window, no
+	 * more than that thrall could deal. Taken once: the projectile is spent.
+	 * The plugin asks it before its thrall gate, which a thrall gone no longer
+	 * opens.
+	 */
+	boolean lastProjectileLands(int targetIndex, int amount, int tick)
+	{
+		lastProjectiles.removeIf(p -> tick > p[2]);
+		for (java.util.Iterator<int[]> it = lastProjectiles.iterator(); it.hasNext(); )
+		{
+			final int[] p = it.next();
+			if ((p[0] == targetIndex || p[0] < 0) && tick >= p[1] && tick <= p[2] && amount >= 0 && amount <= p[3])
+			{
+				it.remove();
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** Lines for the debug log since the last call. */
 	List<String> drainNotes()
 	{
@@ -627,6 +678,8 @@ class ThrallTracker
 		release("reset");
 		recentSpawns.clear();
 		unownedProjectiles.clear();
+		lastProjectiles.clear();
+		released = null;
 		summonTick = Integer.MIN_VALUE;
 		varbitActive = false;
 		notes.clear();

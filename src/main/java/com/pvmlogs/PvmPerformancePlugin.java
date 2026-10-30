@@ -421,6 +421,8 @@ public class PvmPerformancePlugin extends Plugin
 	// its throw, by when the weapon that threw it may be gone.
 	private int attackObservedNpcId = -1;
 	private int attackObservedNpcIndex = -1;
+	// The npc itself (T-101): a shot is booked into the fight on the npc its projectile was aimed at, opened on it if need be.
+	private NPC attackObservedNpc;
 	private int attackObservedMaxHit;
 	private double attackObservedAccuracy = -1;
 	private double attackObservedAverageHit = -1;
@@ -865,6 +867,16 @@ public class PvmPerformancePlugin extends Plugin
 			// out each small one is weighed before anything else hears of it. A thrall's splat opens no fight, books no
 			// attack and counts no hit; it still takes the target's health down.
 			splatInFlight = null;
+			// A projectile our thrall set off before it went still lands as its own (T-101), and no thrall of ours is out to
+			// weigh it: in Eric's 21:40 log its 0 on Araxxor was taken as the player's, opened a fight there and took the
+			// crossbow shot aimed at a Mirrorback with it.
+			if (thralls.lastProjectileLands(npc.getIndex(), hitsplat.getAmount(), client.getTickCount()))
+			{
+				debug.log("hitsplat %d on %s (index %d): THRALL, the landing of a projectile our thrall set off before it went",
+					hitsplat.getAmount(), npc.getName(), npc.getIndex());
+				creditThrall(npc, hitsplat.getAmount(), client.getTickCount());
+				return;
+			}
 			if (thralls.hasThrall() && hitsplat.getAmount() <= thralls.maxHit())
 			{
 				final double p = judgedThralls(npc, hitsplat.getAmount(), now);
@@ -1474,9 +1486,15 @@ public class PvmPerformancePlugin extends Plugin
 			return p;
 		}
 		thralls.noteThrallSplat(npc.getIndex(), tick);
+		creditThrall(npc, amount, tick);
+		return p;
+	}
+
+	// A thrall's splat: real damage, so it counts towards what the target has left - but none of it is the player's.
+	private void creditThrall(NPC npc, int amount, int tick)
+	{
 		if (current != null && !current.isEnded())
 		{
-			// Real damage, so it counts towards what the target has left - but none of it is the player's.
 			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
 			health.damage(npc.getIndex(), npc.getId(), amount, tick);
 			current.recordThrallDamage(amount);
@@ -1485,7 +1503,6 @@ public class PvmPerformancePlugin extends Plugin
 				session.recordThrallDamage(amount);
 			}
 		}
-		return p;
 	}
 
 	/**
@@ -4234,7 +4251,25 @@ public class PvmPerformancePlugin extends Plugin
 			final boolean onAdd = attackObservedNpcIndex >= 0 && attackObservedNpcId >= 0 && current != null
 				&& !current.isEnded() && current.getTargetIndex() != attackObservedNpcIndex
 				&& EncounterGroup.addKeepsBossFight(attackObservedNpcId, current.getTargetId());
-			final Fight attacker = onAdd ? null : attackerFor(attackObservedNpcIndex, attackTick, current, lastFinished);
+			Fight attacker = onAdd ? null : attackerFor(attackObservedNpcIndex, attackTick, current, lastFinished);
+			// A shot lands only on the npc its projectile was aimed at (T-101), unless what threw it hits several. A splat of
+			// mine on another npc in between opened a fight there - a thrall's last 0 on Araxxor, in Eric's 21:40 log - and the
+			// crossbow shot at a Mirrorback was booked to Araxxor, its 31 left unmatched. Booked on the npc it was aimed at,
+			// opening its fight again if that one was dropped.
+			if (belongsToAimedNpc(attackObservedFromProjectile, lastAttackSplashes, attackObservedNpcIndex, attacker))
+			{
+				final NPC aimed = attackObservedNpc;
+				final boolean reopen = aimed != null && aimed.getIndex() == attackObservedNpcIndex && !aimed.isDead()
+					&& isFightable(aimed);
+				debug.log("ATTACK thrown tick %d: its projectile was aimed at npc %d (index %d), not at %s: %s", attackTick,
+					attackObservedNpcId, attackObservedNpcIndex, attacker.getTargetName(), reopen ? "booked on it"
+						: "it is gone, so counted nowhere");
+				if (reopen)
+				{
+					startFight(aimed, System.currentTimeMillis());
+				}
+				attacker = reopen && current != null && current.getTargetIndex() == attackObservedNpcIndex ? current : null;
+			}
 			if (attacker == null)
 			{
 				// Thrown during a fight that has since been discarded. The cooldown still has to advance or every tick after
@@ -4611,6 +4646,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int npcId = npc.getId();
 		// The npc it was aimed at: the attack is booked into that npc's fight, whatever is open by the booking (T-021).
 		attackObservedNpcIndex = npc.getIndex();
+		attackObservedNpc = npc;
 		attackObservedLag = bookingLag;
 		// Recorded here rather than at the booking, which is a tick or two later: this is what says a weapon is on cooldown,
 		// and it has to be true from the moment the attack goes out.
@@ -5436,6 +5472,17 @@ public class PvmPerformancePlugin extends Plugin
 	 * finished on it (its last swing, booked after the next fight opened); failing
 	 * both, the fight open on the attack's tick, as before.
 	 */
+	/**
+	 * Whether a shot chosen to be booked into {@code chosen} belongs to the npc
+	 * its projectile was aimed at instead (T-101): proved by a projectile, aimed
+	 * at another npc than the chosen fight's, and thrown with something that hits
+	 * one target. A splat on another npc is never its landing.
+	 */
+	static boolean belongsToAimedNpc(boolean fromProjectile, boolean splashes, int aimedIndex, Fight chosen)
+	{
+		return fromProjectile && !splashes && aimedIndex >= 0 && chosen != null && chosen.getTargetIndex() != aimedIndex;
+	}
+
 	static Fight attackerFor(int npcIndex, int attackTick, Fight current, Fight lastFinished)
 	{
 		if (npcIndex >= 0)
@@ -5610,24 +5657,29 @@ public class PvmPerformancePlugin extends Plugin
 
 	/**
 	 * Another npc caught by the throw already booked. Its damage joins the
-	 * attack that dealt it, and it brings its OWN expectation - rolled against
-	 * its own defence, since the adds beside a target are rarely the same
-	 * monster - so what one throw is expected to deal is the sum over
-	 * everything it reached.
+	 * attack that dealt it. With a weapon that hits several targets it brings
+	 * its OWN expectation - rolled against its own defence, since the adds
+	 * beside a target are rarely the same monster - so what one throw is
+	 * expected to deal is the sum over everything it reached. With any other
+	 * weapon it is a share of the one roll (T-101: a Mirrorback araxyte takes 20%
+	 * of the damage dealt to Araxxor): its damage joins, with no expectation,
+	 * target or hit of its own.
 	 */
 	private void recordExtraTarget(NPC npc, int damage, long now)
 	{
 		final int tick = client.getTickCount();
+		final boolean ownRoll = shareHasOwnRoll(withinTicks(tick, lastAttackSeenTick, AOE_WINDOW_TICKS) && lastAttackSplashes,
+			combatCalc.equippedWeaponId(), combatCalc.isMeleeEquipped() ? null : combatCalc.activeSpellName());
 		// A burst on one npc is one target, for the same reason it is one landed attack: a scythe lands three splats on the
 		// same enemy and they are one blow.
 		final Integer seen = lastHitsplatTick.put(npc.getIndex(), tick);
-		final boolean newTarget = seen == null || tick - seen > 1;
+		final boolean newTarget = ownRoll && (seen == null || tick - seen > 1);
 		if (newTarget)
 		{
 			burstLanded.remove(npc.getIndex());
 			burstBooked.remove(npc.getIndex());
 		}
-		final boolean landed = damage > 0 && burstLanded.add(npc.getIndex());
+		final boolean landed = ownRoll && damage > 0 && burstLanded.add(npc.getIndex());
 		damageByIndex.merge(npc.getIndex(), damage, Integer::sum);
 		health.damage(npc.getIndex(), npc.getId(), damage, tick);
 		current.recordExtraTarget(damage, now, newTarget, landed);
@@ -5659,8 +5711,26 @@ public class PvmPerformancePlugin extends Plugin
 				session.recordExpected(chances, average, variance);
 			}
 		}
-		debug.log("AoE %d on %s (npc %d, index %d) joins the attack on %s: newTarget=%b landed=%b",
-			damage, npc.getName(), npc.getId(), npc.getIndex(), current.getTargetName(), newTarget, landed);
+		debug.log("AoE %d on %s (npc %d, index %d) joins the attack on %s: newTarget=%b landed=%b%s",
+			damage, npc.getName(), npc.getId(), npc.getIndex(), current.getTargetName(), newTarget, landed,
+			ownRoll ? "" : ", a share of its one roll: no expectation of its own");
+	}
+
+	/**
+	 * Whether another npc's splat beside the attack brings a roll of its own
+	 * (T-101): only when what dealt it hits several targets (T-092's
+	 * {@link #hitsSeveralTargets}). Asked of the attack booked in the window
+	 * ({@code bookedSplashes}) and of the weapon and spell held now, for an attack
+	 * not seen going out: a barrage cast while being hit plays the BLOCK
+	 * animation and is booked by nothing, and its splats on the others still
+	 * bring their own. Otherwise it is a share of the one roll: Araxxor's
+	 * Mirrorbacks "redirect 20% of the damage dealt to Araxxor towards
+	 * themselves" (wiki), and each share booked a whole expected hit, about 30
+	 * for about 5, in Eric's 21:40 log.
+	 */
+	static boolean shareHasOwnRoll(boolean bookedSplashes, int weaponNow, String spellNow)
+	{
+		return bookedSplashes || hitsSeveralTargets(weaponNow, spellNow);
 	}
 
 	// Files a fight under the room it belongs to, continuing the room already open when it is the same one.
