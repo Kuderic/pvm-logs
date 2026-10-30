@@ -87,12 +87,13 @@ class PvmPerformanceOverlay extends OverlayPanel
 			return null;
 		}
 		final Fight fight = plugin.getDisplayFight();
-		if (!onShow(fight, config, System.currentTimeMillis()))
+		final Encounter room = plugin.getDisplayEncounter();
+		if (!onShow(fight, config, System.currentTimeMillis())
+			&& !holdsRun(fight, room, config.overlayBossesOnly()))
 		{
 			return null;
 		}
 
-		final Encounter room = plugin.getDisplayEncounter();
 		final Font font = graphics.getFont();
 		// Everything that can change what's on show. The tick covers the warning and the clock; the fight's
 		// own totals cover a projectile booked or a splat landed between ticks; the rest are the player's choices. The
@@ -187,7 +188,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 			else if (room != null)
 			{
 				scope = LedgerRows.of(room);
-				state = roomState(fight, room, warning, this::average).withDrain(drain);
+				state = shownRoomState(fight, room, warning, this::average, drain, System.currentTimeMillis());
 			}
 			else
 			{
@@ -352,7 +353,7 @@ class PvmPerformanceOverlay extends OverlayPanel
 		{
 			return row.withLeft(row.shortLeft);
 		}
-		return row.withLeft(LedgerRows.cut(row.shortLeft, leftWidth, room));
+		return row.withLeft(LedgerRows.cutKeepingCount(row.shortLeft, leftWidth, room));
 	}
 
 	/** The widest row's two sides plus the padding, held to the standard width and the cap. */
@@ -413,6 +414,45 @@ class PvmPerformanceOverlay extends OverlayPanel
 			.withAverage(killed && room.getRaid() == null ? average.apply(room) : null)
 			// A raid's room takes the raid's colour (Eric, 2026-10-28).
 			.withTitleRgb(BossColours.of(room.getRaid()));
+	}
+
+	/**
+	 * The state for the room on show: a run of monsters' light view (T-094), or
+	 * the room view with its drains. A run leaves the drains out: its drain specs
+	 * are rare.
+	 */
+	static LedgerRows.State shownRoomState(Fight fight, Encounter room, boolean warning,
+		java.util.function.Function<Encounter, LedgerHistory.Average> average, LedgerRows.LiveDrain drain, long now)
+	{
+		return room.isMonsterRoom() ? runState(room, warning, now)
+			: roomState(fight, room, warning, average).withDrain(drain);
+	}
+
+	/**
+	 * A run of monsters' state (T-094): running through its respawn waits and
+	 * its fights' ends, over only once the run is ({@link Encounter#isOver()},
+	 * which for a run is T-089's {@code endMonsterRoom} having run). Its clock is
+	 * the run's own, from its start: it goes on through the waits between kills,
+	 * so kills/hr is the rate you're getting them at, and stops at the last
+	 * attack once the run has ended (T-089 ends it there, not when the pause ran
+	 * out). {@code now} is the wall clock.
+	 */
+	static LedgerRows.State runState(Encounter room, boolean warning, long now)
+	{
+		final boolean over = room.isOver();
+		final long millis = over ? room.durationMillis() : Math.max(0, now - room.getStartMillis());
+		return LedgerRows.State.run(room.getName(), room.getKills(), millis / 1000.0, over, warning);
+	}
+
+	/**
+	 * Whether a run of monsters keeps the overlay up past "Keep last fight up"
+	 * (T-094): while the run on show is running, a fight in it that has ended is
+	 * a kill or a switch, and the next one is coming. "Bosses only" still hides it.
+	 */
+	static boolean holdsRun(Fight fight, Encounter room, boolean bossesOnly)
+	{
+		return !bossesOnly && fight != null && room != null && room.isMonsterRoom() && !room.isOver()
+			&& containsSame(room, fight);
 	}
 
 	/**

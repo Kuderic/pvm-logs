@@ -81,6 +81,12 @@ final class LedgerRows
 	 * "Bow of Faerdhinen vs The Leviathan"): {@code  vs Dusk}.
 	 */
 	static final String VERSUS = " vs ";
+	/** T-094: after a run's kind, its kills: {@code Abyssal demon ×12}. U+00D7 is in all three fonts (Font.canDisplay). */
+	static final String TIMES = " \u00d7";
+	/** T-094: a run's kill rate, shown once {@link #KILLS_PER_HOUR_FROM_SECONDS} have passed. */
+	static final String KILLS_PER_HOUR = "Kills/hr";
+	/** So one fast kill doesn't read as 600/hr (T-094). */
+	static final double KILLS_PER_HOUR_FROM_SECONDS = 60;
 	/** The middle half's edges, for Luck's band and colour (T-029). */
 	static final double LOW_QUARTILE = 0.25;
 	static final double HIGH_QUARTILE = 0.75;
@@ -1026,7 +1032,12 @@ final class LedgerRows
 		/** "Overlay: whole trip". */
 		TRIP,
 		/** Raid scope set to the whole raid. */
-		RAID
+		RAID,
+		/**
+		 * T-094: a run of monsters of one kind (T-089), the light view: its kills,
+		 * clock, kills/hr and DPS against expected; no Luck, no Execution.
+		 */
+		RUN
 	}
 
 	/** The loadout's figures against the target, as the plugin works them out. Unknown values are 0 or negative. */
@@ -1081,17 +1092,20 @@ final class LedgerRows
 		 * its raid's (Eric, 2026-10-28). -1: from the name ({@link BossColours#of(String)}).
 		 */
 		final int titleRgb;
+		/** T-094: a run's clock in seconds, from its start to now, or to its last attack once it has ended; else NaN. */
+		final double runSeconds;
 
 		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
 			LedgerHistory.Average average)
 		{
-			this(view, name, count, ended, killed, warning, average, null, -1);
+			this(view, name, count, ended, killed, warning, average, null, -1, Double.NaN);
 		}
 
 		private State(View view, String name, int count, boolean ended, boolean killed, boolean warning,
-			LedgerHistory.Average average, LiveDrain drain, int titleRgb)
+			LedgerHistory.Average average, LiveDrain drain, int titleRgb, double runSeconds)
 		{
 			this.titleRgb = titleRgb;
+			this.runSeconds = runSeconds;
 			this.view = view;
 			this.name = name == null ? "" : name;
 			this.count = count;
@@ -1122,16 +1136,27 @@ final class LedgerRows
 			return new State(View.RAID, raidName, rooms, !fightRunning, false, warning, null);
 		}
 
+		/**
+		 * T-094: a run of monsters of one kind, {@code kills} of them dead, over
+		 * {@code seconds}; {@code ended} once the run has (T-089's
+		 * {@code endMonsterRoom}), not when one fight in it does.
+		 */
+		static State run(String kind, int kills, double seconds, boolean ended, boolean warning)
+		{
+			return new State(View.RUN, kind, Math.max(0, kills), ended, false, warning, null, null, -1,
+				Math.max(0, seconds));
+		}
+
 		/** The same state with your usual time on the boss, for the details after a kill. */
 		State withAverage(LedgerHistory.Average average)
 		{
-			return new State(view, name, count, ended, killed, warning, average, drain, titleRgb);
+			return new State(view, name, count, ended, killed, warning, average, drain, titleRgb, runSeconds);
 		}
 
 		/** The same state with the title in this colour, or -1 for the name's own; a raid's room takes the raid's. */
 		State withTitleRgb(int rgb)
 		{
-			return new State(view, name, count, ended, killed, warning, average, drain, rgb);
+			return new State(view, name, count, ended, killed, warning, average, drain, rgb, runSeconds);
 		}
 
 		/** The colour the title's name is drawn in: the given one, else the name's, else -1 for none. */
@@ -1143,7 +1168,7 @@ final class LedgerRows
 		/** The same state with the running fight's tracked Defence and Magic (T-051). */
 		State withDrain(LiveDrain drain)
 		{
-			return new State(view, name, count, ended, killed, warning, average, drain, titleRgb);
+			return new State(view, name, count, ended, killed, warning, average, drain, titleRgb, runSeconds);
 		}
 	}
 
@@ -1357,6 +1382,11 @@ final class LedgerRows
 			return Collections.emptyList();
 		}
 		final Numbers n = new Numbers(scope);
+		if (state.view == View.RUN)
+		{
+			run(rows, n, state);
+			return rows;
+		}
 		rows.add(title(state, scope.combatTicks()));
 		top(rows, n, scope, state, settings);
 		// No loadout here: it's an overlay of its own (Eric, 2026-10-27; T-022).
@@ -1525,6 +1555,26 @@ final class LedgerRows
 		return width.applyAsInt(CUT) <= room ? CUT : "";
 	}
 
+	/** A name's count at its end, as a run's title has it (T-094): {@code Abyssal demon ×12}. */
+	private static final Pattern COUNT_TAIL = Pattern.compile("(.+?)( \u00d7\\d+)");
+
+	/**
+	 * {@link #cut}, but a name ending in a count ({@link #TIMES}) keeps it and
+	 * cuts the name before it (T-094): {@code Abyssal d… ×12}. Anything else is
+	 * cut as before.
+	 */
+	static String cutKeepingCount(String text, ToIntFunction<String> width, int room)
+	{
+		final java.util.regex.Matcher m = COUNT_TAIL.matcher(text);
+		if (!m.matches() || width.applyAsInt(text) <= room)
+		{
+			return cut(text, width, room);
+		}
+		final String tail = m.group(2);
+		final String head = cut(m.group(1), width, room - width.applyAsInt(tail));
+		return head.isEmpty() ? cut(text, width, room) : head + tail;
+	}
+
 	private static Row title(State state, int ticks)
 	{
 		switch (state.view)
@@ -1540,6 +1590,70 @@ final class LedgerRows
 					: state.name + (state.killed ? DEAD_SUFFIX : " (ended)");
 				return titleRow(name, clock(ticks), state, state.killed ? Colour.DEAD : Colour.NEUTRAL);
 		}
+	}
+
+	/**
+	 * T-094: a run of monsters' rows, the light view (Eric, 2026-10-29, "Light
+	 * run view"):
+	 * <pre>
+	 * Abyssal demon ×12          3:10
+	 * Kills/hr                    227
+	 * DPS             6.2 (expected 6.5)
+	 * </pre>
+	 * No Luck (over a run it converges to average), no Execution (it would mix
+	 * in walking, looting and respawn waits), no Summary and no defence rows.
+	 * The DPS pair is both sides over the scored combat time, so it says what
+	 * Damage/expected says, per second, and it's neutral: it isn't luck's verdict.
+	 * Ended, the same rows with the clock stopped.
+	 */
+	private static void run(List<Row> rows, Numbers n, State state)
+	{
+		// No × before the first kill.
+		final String name = state.count > 0 ? state.name + TIMES + state.count : state.name;
+		// Its own short form, so a box saved narrow cuts the kind rather than wrap the title; the kills stay
+		// (cutKeepingCount).
+		final Row title = titleRow(name, duration(state.runSeconds), state, Colour.NEUTRAL);
+		rows.add(new Row(title.left, title.right, title.leftFont, title.rightFont, title.leftColour, title.rightColour,
+			name, null, title.leftRgb));
+		final String rate = killsPerHour(state.count, state.runSeconds);
+		if (rate != null)
+		{
+			rows.add(main(KILLS_PER_HOUR, rate));
+		}
+		final boolean noData = n.expected <= 0;
+		if (Double.isNaN(n.dps))
+		{
+			rows.add(main("DPS", UNKNOWN));
+		}
+		else if (state.warning || noData)
+		{
+			rows.add(main("DPS", oneDecimal(n.dps)));
+		}
+		else
+		{
+			// Too wide for a box saved narrow: the pair alone, as Damage/expected reads.
+			final String expected = oneDecimal(n.expected / n.scoredClock);
+			rows.add(new Row("DPS", oneDecimal(n.dps) + " (expected " + expected + ")", FontRole.EMPHASIS,
+				FontRole.VALUE, Colour.NEUTRAL, Colour.NEUTRAL, null, oneDecimal(n.dps) + "/" + expected));
+		}
+		if (state.warning)
+		{
+			rows.add(row(WARNING_TEXT, "", FontRole.BODY, FontRole.BODY, Colour.WARNING, Colour.NEUTRAL));
+		}
+		else if (noData)
+		{
+			rows.add(detail(" no monster data yet", "", Colour.NEUTRAL));
+		}
+	}
+
+	/** T-094: kills over the run's clock, per hour, or null before a minute has passed. */
+	static String killsPerHour(int kills, double seconds)
+	{
+		if (Double.isNaN(seconds) || seconds < KILLS_PER_HOUR_FROM_SECONDS)
+		{
+			return null;
+		}
+		return number(Math.round(kills * 3600.0 / seconds));
 	}
 
 	/**
