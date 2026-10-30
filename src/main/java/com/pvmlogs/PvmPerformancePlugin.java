@@ -100,7 +100,6 @@ import net.runelite.client.util.Text;
 )
 public class PvmPerformancePlugin extends Plugin
 {
-	private static final int MAX_HISTORY = 500;
 	// No damage either way for this long, with the player not targeting it, and the fight is over (T-040: fixed, was
 	// Arodab's "Fight timeout (ticks)" setting). Fights end on kill, loot, despawn, target changes and logout; this is
 	// for one walked away from, so it stays long: a safespot or a phase walk mustn't end one.
@@ -5937,11 +5936,9 @@ public class PvmPerformancePlugin extends Plugin
 			return;
 		}
 		session.recordFightEnded(died, current, now);
-		history.add(0, current);
-		while (history.size() > MAX_HISTORY)
-		{
-			history.remove(history.size() - 1);
-		}
+		// Each kind within its own budget (T-093): a slayer trip's fights never push a boss kill out.
+		HistoryBudget.add(history, current, monsterStats == null ? null : monsterStats.rules(), HistoryBudget.BOSS_FIGHTS,
+			HistoryBudget.MONSTER_FIGHTS);
 		lastFinished = current;
 		current = null;
 		if (panel != null)
@@ -5974,13 +5971,9 @@ public class PvmPerformancePlugin extends Plugin
 			final Fight[] loaded = gson.fromJson(json, Fight[].class);
 			if (loaded != null)
 			{
-				for (Fight fight : loaded)
-				{
-					if (history.size() < MAX_HISTORY)
-					{
-						history.add(fight);
-					}
-				}
+				// Everything the file holds, even past the budgets (T-093): an older file lost nothing by loading. The budgets trim
+				// a kind only when a fight of it is next added.
+				history.addAll(java.util.Arrays.asList(loaded));
 			}
 		}
 		catch (Exception e)
