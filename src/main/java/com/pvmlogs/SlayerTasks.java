@@ -49,7 +49,7 @@ final class SlayerTasks
 		}
 	}
 
-	// RuneLite's table, with T-090's additions from the wiki (each page read 2026-10-29), marked where they are.
+	// RuneLite's table, with T-090's additions from the wiki, marked where they are.
 	private static final Map<String, String[]> TARGETS;
 
 	static
@@ -79,7 +79,7 @@ final class SlayerTasks
 		put(t, "Bloodveld");
 		put(t, "Blue dragons", "Vorkath");
 		put(t, "Brine rats");
-		// "Artio can be killed instead" (wiki, Boss Slayer, read 2026-10-29), as the Bears task already has it.
+		// "Artio can be killed instead" (wiki, Boss Slayer), as the Bears task already has it.
 		put(t, "Callisto", "Artio");
 		put(t, "Catablepon");
 		put(t, "Cave bugs");
@@ -97,9 +97,8 @@ final class SlayerTasks
 		put(t, "Crawling hands", "Crushing hand");
 		// The Deranged archaeologist "may be killed as an alternative on a crazy archaeologist boss Slayer task", "unless
 		// the Wilderness is specified as the task location when given by Krystilia or Konar quo Maten" (wiki, Deranged
-		// archaeologist, read 2026-10-29; Boss Slayer: "Deranged archaeologist can be killed instead"). T-090: a debug
-		// log of 2026-10-29 has the task's count falling with each of fourteen Deranged archaeologist kills. That exception
-		// is NOT_IN_WILDERNESS below.
+		// archaeologist; Boss Slayer: "Deranged archaeologist can be killed instead").
+		// The Wilderness exception is NOT_IN_WILDERNESS below.
 		put(t, "Crazy Archaeologists", "Deranged archaeologist");
 		put(t, "Crocodiles");
 		put(t, "Custodian Stalkers", "Ancient Custodian");
@@ -216,9 +215,9 @@ final class SlayerTasks
 		put(t, "Vampyres", "Vyrewatch", "Venator");
 		put(t, "Vardorvis");
 		put(t, "Venators");
-		// "Spindel may be killed instead" (wiki, Boss Slayer, read 2026-10-29), as the Spiders task already has it.
+		// "Spindel may be killed instead" (wiki, Boss Slayer), as the Spiders task already has it.
 		put(t, "Venenatis", "Spindel");
-		// "Calvar'ion may be killed instead" (wiki, Boss Slayer, read 2026-10-29), as the Skeletons task already has it.
+		// "Calvar'ion may be killed instead" (wiki, Boss Slayer), as the Skeletons task already has it.
 		put(t, "Vet'ion", "Calvar'ion");
 		put(t, "Vorkath");
 		put(t, "Wall beasts");
@@ -263,7 +262,7 @@ final class SlayerTasks
 	/**
 	 * Alternatives the game does not take when the task is in the Wilderness: the Deranged archaeologist, who lives on
 	 * Fossil Island, for a crazy archaeologist task "when given by Krystilia or Konar quo Maten" with the Wilderness as
-	 * its location (wiki, Deranged archaeologist, read 2026-10-29). Boss Slayer says the substitution "does not apply"
+	 * its location (wiki, Deranged archaeologist). Boss Slayer says the substitution "does not apply"
 	 * to Konar's tasks at all, so any task of hers is taken as one in the Wilderness here.
 	 */
 	private static final Map<String, String[]> NOT_IN_WILDERNESS = Collections.singletonMap(
@@ -304,6 +303,19 @@ final class SlayerTasks
 			return false;
 		}
 		final String name = npcName.replace(' ', ' ');
+		final String task = key(taskName);
+		// OSRS Wiki, Bestiary/Slayer assignments: revenants belong to Revenants and
+		// Ghosts, not their living namesakes (also Slayer task/Ghosts).
+		if (name.regionMatches(true, 0, "Revenant ", 0, 9) && !task.equals("revenants") && !task.equals("ghosts"))
+		{
+			return false;
+		}
+		// T-090 follow-up: the Zombies Champion is not a Zombies task target.
+		if (task.equals("zombies") && name.equalsIgnoreCase("Zombies Champion"))
+		{
+			return false;
+		}
+
 		// The name as it is as well as made singular: a boss task's name is the boss's, and "Vardorvis" made singular is
 		// "Vardorvi", which RuneLite's rule alone would miss. And without a leading "The": the task "The Giant Mole" is
 		// the NPC "Giant Mole", which RuneLite's rule misses too.
@@ -322,7 +334,10 @@ final class SlayerTasks
 		final String[] notHere = inWilderness ? NOT_IN_WILDERNESS.get(key(taskName)) : null;
 		for (String target : targets)
 		{
-			if (pattern(target).matcher(name).find() && !named(notHere, name))
+			// Rock is the troll's whole name (OSRS Wiki, Slayer task/Trolls).
+			// Matching it inside Rock Crab also granted the Trolls task bonus there.
+			final boolean matches = target.equals("Rock") ? name.equalsIgnoreCase(target) : pattern(target).matcher(name).find();
+			if (matches && !named(notHere, name))
 			{
 				return true;
 			}
