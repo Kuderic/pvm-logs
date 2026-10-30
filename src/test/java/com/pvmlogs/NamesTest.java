@@ -164,7 +164,7 @@ public class NamesTest
 
 		final Pattern replayLine = Pattern.compile("^\\[(\\d+)\\] (.*)$");
 		final String oldHeader = "=== PvM Logs, the last 120 lines before this was saved. Plugin dev ===";
-		final String newHeader = DebugLog.headerStart() + "120 lines before this was saved. Plugin dev ===";
+		final String newHeader = DebugLog.headerStart() + "120 lines before this was saved. release 1.0 ===";
 		assertTrue(!replayLine.matcher(oldHeader).matches() && !replayLine.matcher(newHeader).matches());
 
 		int fixtures = 0;
