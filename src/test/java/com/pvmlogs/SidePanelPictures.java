@@ -52,6 +52,11 @@ public final class SidePanelPictures
 			dpsCards(out);
 			return;
 		}
+		if (args.length > 1 && "targets".equals(args[1]))
+		{
+			targets(out);
+			return;
+		}
 		if (args.length > 1 && "runs".equals(args[1]))
 		{
 			runs(out);
@@ -269,6 +274,51 @@ public final class SidePanelPictures
 		}
 		smooth = false;
 		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-099: the Damage card's Boss · Adds · All switch: an Araxxor kill in each view (the whole tab, for the chart and
+	 * strip following); the Sire's card in Boss and Adds; Zulrah's in Adds (the snakelings' time only) and Boss; and an
+	 * ungrouped boss's card with no switch. Normal and Smooth text, 1× and 2×, a folder each.
+	 */
+	private static void targets(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth"};
+		final String[] views = {"boss", "adds", "all"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = false;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				for (int v = 0; v < views.length; v++)
+				{
+					SidePanelFightTab.useTarget(v);
+					write(dir, "a" + v + "-araxxor-" + views[v], scale,
+						render(SidePanelTargetExamples.input(SidePanelTargetExamples.araxxor()), scale));
+					write(dir, "b" + v + "-araxxor-card-" + views[v], scale,
+						card(SidePanelTargetExamples.input(SidePanelTargetExamples.araxxor()), scale, "damage"));
+				}
+				SidePanelFightTab.useTarget(0);
+				write(dir, "c0-sire-boss", scale, card(SidePanelTargetExamples.input(SidePanelTargetExamples.sire()), scale,
+					"damage"));
+				write(dir, "d1-zulrah-boss", scale, card(SidePanelTargetExamples.input(SidePanelTargetExamples.zulrah()),
+					scale, "damage"));
+				SidePanelFightTab.useTarget(1);
+				write(dir, "c1-sire-adds", scale, card(SidePanelTargetExamples.input(SidePanelTargetExamples.sire()), scale,
+					"damage"));
+				write(dir, "d0-zulrah-adds", scale, card(SidePanelTargetExamples.input(SidePanelTargetExamples.zulrah()),
+					scale, "damage"));
+				SidePanelFightTab.useTarget(0);
+				write(dir, "e-ungrouped-no-switch", scale, card(SidePanelTargetExamples.ungrouped(), scale, "damage"));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelFightTab.resetTarget();
 		SidePanelStyle.setText(false, false);
 	}
 
