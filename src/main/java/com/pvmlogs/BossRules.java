@@ -226,6 +226,23 @@ class BossRules
 		ChaseRule chaseByDistance;
 		/** T-086: an attack on the tick of one of its animations that ignores the weapon's attack delay; null for none. */
 		MeleePunish meleePunish;
+		/**
+		 * T-106: damage the room deals the boss that isn't any player's (Araxxor's Ruptura araxytes exploding under him,
+		 * his own cleave once enraged), by what it looks like: for naming it in the log. Whether a splat is the room's at
+		 * all is decided by whether another player is there; see {@link RoomDamage}.
+		 */
+		List<RoomDamageRule> roomDamage;
+	}
+
+	/** T-106: one source of the room's damage on a boss, as its splats show it. */
+	static final class RoomDamageRule
+	{
+		String name;
+		/** The splat's amount, {lowest, highest}. A killing splat less than the lowest, capped at what was left, fits too. */
+		int[] amounts;
+		/** A damage-modifier state that must be open on the boss (T-087's states: Araxxor's "enraged"); any when left out. */
+		String state;
+		String source;
 	}
 
 	/**

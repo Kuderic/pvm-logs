@@ -1422,7 +1422,10 @@ public class PvmPerformancePlugin extends Plugin
 		final int amount = hitsplat.getAmount();
 		final int type = hitsplat.getHitsplatType();
 		final int tick = client.getTickCount();
-		final HitsplatKind kind = HitsplatKind.of(false, hitsplat.isOthers(), type);
+		// T-106: another's splat with no other player there is the room's (Araxxor's Ruptura explosions, his own cleave).
+		final int others = hitsplat.isOthers() ? otherPlayersNear() : 0;
+		final HitsplatKind kind = RoomDamage.kindOf(HitsplatKind.of(false, hitsplat.isOthers(), type), others);
+		final int leftBefore = health.remaining(index, tick);
 		switch (kind)
 		{
 			case DAMAGE_OVER_TIME:
@@ -1448,6 +1451,9 @@ public class PvmPerformancePlugin extends Plugin
 			case OTHER_PLAYER:
 				current.recordOthersDamage(amount);
 				break;
+			case ROOM:
+				current.recordRoomDamage(amount);
+				break;
 			case UNCLASSIFIED:
 				current.recordUnclassifiedDamage(amount);
 				break;
@@ -1459,10 +1465,39 @@ public class PvmPerformancePlugin extends Plugin
 			health.damage(index, npc.getId(), amount, tick);
 			damageByIndex.merge(index, Math.max(0, amount), Integer::sum);
 		}
+		if (kind == HitsplatKind.ROOM || kind == HitsplatKind.OTHER_PLAYER)
+		{
+			final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+			final BossRules.Boss boss = rules == null ? null : rules.forNpc(npc.getId());
+			final String source = boss == null ? null
+				: RoomDamage.sourceOf(boss.roomDamage, amount, leftBefore, state -> damageModifiers.isOpen(npc, state));
+			// "(type 17, others')" stays as before, for the replay tests' parsers; the kind leads.
+			debug.log("splat %d %s (type %d, others') on %s (npc %d, index %d): %s%s, %d other players here, target has %d "
+					+ "left (%s)",
+				amount, kind == HitsplatKind.ROOM ? "room's" : "another player's", type, current.getTargetName(), npc.getId(),
+				index, kind, source == null ? "" : ", " + source, others, health.remaining(index, tick),
+				health.source(index, tick));
+			return;
+		}
 		debug.log("splat %d %s (type %d, %s) on %s (npc %d, index %d): %s, target has %d left (%s)",
 			amount, HitsplatKind.typeName(type), type, hitsplat.isOthers() ? "others'" : "no owner",
 			current.getTargetName(), npc.getId(), index, kind, health.remaining(index, tick),
 			health.source(index, tick));
+	}
+
+	/** The players in the scene besides the local player (T-106): whether another's splat can be another player's. */
+	private int otherPlayersNear()
+	{
+		final Player me = client.getLocalPlayer();
+		int n = 0;
+		for (Player p : client.getTopLevelWorldView().players())
+		{
+			if (p != null && p != me)
+			{
+				n++;
+			}
+		}
+		return n;
 	}
 
 	/**
@@ -6091,12 +6126,12 @@ public class PvmPerformancePlugin extends Plugin
 		final int counted = health.damageCounted(index);
 		final int healed = health.healed(index);
 		final int net = counted - healed;
-		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + others "
-				+ "%d + unclassified %d, healed %d; on the target %d - %d = %d against %d full hp (%s)%s; bar last read %d, "
-				+ "now %d left (%s)",
+		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + room %d "
+				+ "+ others %d + unclassified %d, healed %d; on the target %d - %d = %d against %d full hp (%s)%s; bar last read "
+				+ "%d, now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
 			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),
-			current.getDotDamage(), current.getOthersDamage(),
+			current.getDotDamage(), current.getRoomDamage(), current.getOthersDamage(),
 			current.getUnclassifiedDamage(), current.getHealed(), counted, healed, net, full, fullFrom,
 			died && full > 0 ? String.format(", diff %+d (%.1f%%)", net - full, 100.0 * (net - full) / full) : "",
 			health.lastHudHp(index), health.remaining(index, tick), health.source(index, tick));
