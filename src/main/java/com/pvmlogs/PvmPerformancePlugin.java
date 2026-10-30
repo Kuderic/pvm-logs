@@ -68,6 +68,7 @@ import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
@@ -397,6 +398,13 @@ public class PvmPerformancePlugin extends Plugin
 	private int lastLoadingTick = Integer.MIN_VALUE;
 	private boolean barCheckOnReturn;
 	private long returnLastSeenMillis;
+	// T-092: whether the last attack seen was thrown with a weapon or spell that hits more than one target, so another
+	// npc's splat in its window can be that attack's splash. Anything else hits one target, and a splat on another npc is
+	// an attack of its own.
+	private boolean lastAttackSplashes;
+	// The Hallowfell (wiki, Hallowfell: "up to two additional unique enemies"), newer than the gamevals this build has: its
+	// id from Eric's Hallowfell trip of 2026-10-29 (the GEAR worn lines).
+	static final int HALLOWFELL = 34027;
 	// The boss modifiers each tick's figures were worked out with (T-078), for the ATTACK line: read at the booking they
 	// were the ones left after the attack's own splat had closed its window.
 	private final Map<Integer, String> modifiersByTick = new HashMap<>();
@@ -858,14 +866,14 @@ public class PvmPerformancePlugin extends Plugin
 				{
 					return;
 				}
-				xpLedger.spend(hitsplat.getAmount(), client.getTickCount(), false);
+				xpLedger.spend(hitsplat.getAmount(), client.getTickCount(), false, npc.getId());
 				splatInFlight = new PlayerSplatRecord(npc.getIndex(), hitsplat.getAmount(), true, p,
 					lastHitsplatTick.get(npc.getIndex()), lastAttackSeenTick);
 			}
 			else
 			{
 				// Too big for a thrall, or none out: certainly the player's, so it is what the ledger checks itself on.
-				xpLedger.spend(hitsplat.getAmount(), client.getTickCount(), true);
+				xpLedger.spend(hitsplat.getAmount(), client.getTickCount(), true, npc.getId());
 				splatInFlight = new PlayerSplatRecord(npc.getIndex(), hitsplat.getAmount(), false, 0,
 					lastHitsplatTick.get(npc.getIndex()), lastAttackSeenTick);
 			}
@@ -1621,10 +1629,10 @@ public class PvmPerformancePlugin extends Plugin
 		// the fight, and read against no target its bonus would be missing.
 		int targetId = current != null && !current.isEnded() ? targetLiveId : -1;
 		final Player me = client.getLocalPlayer();
-		// Or an add of the boss's the player is aimed at (T-086): a shot at a Maggot King larva pays at the larva's bonus,
-		// and read at the King's x2.45 it was undecodable.
-		if (me != null && me.getInteracting() instanceof NPC
-			&& (targetId < 0 || isAddOfOpenBoss((NPC) me.getInteracting())))
+		// Or rather what the player is aimed at, when that is an npc (T-086, T-092): the drop is on the attack's tick, so it
+		// pays at the bonus of the npc that attack was on. A shot at a Maggot King larva read at the King's x2.45 was
+		// undecodable, and Eric's axe on Araxxor between shots at an araxyte was read at the araxyte's bonus.
+		if (me != null && me.getInteracting() instanceof NPC)
 		{
 			targetId = ((NPC) me.getInteracting()).getId();
 		}
@@ -4476,6 +4484,9 @@ public class PvmPerformancePlugin extends Plugin
 		// faerdhinen shot fired just before swapping to a blowpipe was scored as the blowpipe.
 		attackThrownTick = client.getTickCount() - bookingLag;
 		attackSwitchTick = switchSinceThrow(attackThrownTick, client.getTickCount(), gearChangeTicks);
+		// What it was thrown with decides whether another npc's splat in its window is its splash (T-092).
+		lastAttackSplashes = hitsSeveralTargets(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackThrownTick),
+			combatCalc.equippedWeaponId()), combatCalc.isMeleeEquipped() ? null : combatCalc.activeSpellName());
 		// A melee blow thrown on the tick a slam is punished on (T-086). The booking also asks that no cast or projectile
 		// proved it.
 		final BossRules.MeleePunish punish = fromProjectile || !combatCalc.isMeleeEquipped() ? null : punishRuleFor(npcId);
@@ -5388,17 +5399,52 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return false;
 		}
-		// Close behind an attack we booked, which is the ordinary case...
-		if (withinTicks(client.getTickCount(), lastAttackSeenTick, AOE_WINDOW_TICKS))
+		// Landing in the same tick as another of my hitsplats, which does not need an attack to have been booked at all.
+		// Nobody throws two attacks in one tick, so two of my hitsplats on two npcs in one tick are one attack whatever the
+		// plugin did or did not see going out. A barrage cast while being hit plays the BLOCK animation instead of the cast
+		// one - the log named it, 403, and the animation route is right to refuse it - so the cast is invisible and five
+		// hitsplats arrived on one tick as five fights of no attacks each, all discarded. Whatever the weapon (T-092): one
+		// attack's damage shared on its tick is one attack. Araxxor's Mirrorbacks "redirect 20% of the damage dealt to
+		// Araxxor towards themselves" (wiki, Mirrorback araxyte): Eric's axe dealt 41 to Araxxor and 10 to a Mirrorback on one
+		// tick ([7550] of his 17:11 log, 51 paid), and 44 and 10, 26 and 6, 5 and 1.
+		if (previousMineHitsplatTick == client.getTickCount())
 		{
 			return true;
 		}
-		// ...or simply landing in the same tick as another of my hitsplats, which is the case that does not need an attack
-		// to have been booked at all. Nobody throws two attacks in one tick, so two of my hitsplats on two npcs in one tick
-		// are one attack whatever the plugin did or did not see going out. A barrage cast while being hit plays the BLOCK
-		// animation instead of the cast one - the log named it, 403, and the animation route is right to refuse it - so the
-		// cast is invisible and five hitsplats arrived on one tick as five fights of no attacks each, all discarded.
-		return previousMineHitsplatTick == client.getTickCount();
+		// Or close behind an attack we booked - if what threw it hits several targets (T-092). With any other weapon a splat
+		// on another npc later on is an attack on it: Eric's axe on Araxxor between crossbow shots at an araxyte was read as
+		// the shot's splash, twice ([7530], [7538] of his 17:11 log).
+		return withinTicks(client.getTickCount(), lastAttackSeenTick, AOE_WINDOW_TICKS) && lastAttackSplashes;
+	}
+
+	/**
+	 * Whether an attack with this weapon, or this spell, hits more than one
+	 * target (T-092), so a splat of the player's on another npc beside it is its
+	 * splash rather than an attack of its own. From the wiki:
+	 * <ul>
+	 * <li>burst and barrage spells: "up to nine targets in a 3x3 square area";</li>
+	 * <li>chinchompas: "hitting any targets in a 3x3 area";</li>
+	 * <li>the venator bow: the arrow "bouncing up to two other nearby monsters", in multicombat;</li>
+	 * <li>the Hallowfell: "up to two additional unique enemies";</li>
+	 * <li>the scythe of vitur: it "can also hit additional 1x1 targets in front of the wielder in a 1x3 arc"
+	 * (Multi-hit weapons). Its several splats on one big target are one attack either way.</li>
+	 * </ul>
+	 * The other multi-hit weapons (the dual macuahuitl, the twinflame staff's second cast, a dark bow) hit their one
+	 * target several times and are not here.
+	 */
+	static boolean hitsSeveralTargets(int weaponId, String spellName)
+	{
+		if (spellName != null)
+		{
+			final String spell = spellName.toLowerCase();
+			if (spell.contains("burst") || spell.contains("barrage"))
+			{
+				return true;
+			}
+		}
+		return weaponId == ItemID.CHINCHOMPA_CAPTURED || weaponId == ItemID.CHINCHOMPA_BIG_CAPTURED
+			|| weaponId == ItemID.CHINCHOMPA_BLACK || weaponId == ItemID.VENATOR_BOW || weaponId == HALLOWFELL
+			|| AttackSplats.isScythe(weaponId);
 	}
 
 	/**

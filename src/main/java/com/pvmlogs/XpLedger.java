@@ -68,6 +68,16 @@ class XpLedger
 	private static final int TRUST_MIN_SAMPLES = 2;
 	// An attack is used for calibrating once it dealt this much: below it, a point of rounding is a large share.
 	static final int CALIBRATION_MIN_DAMAGE = 10;
+	/**
+	 * Clean attacks a target's multiplier is re-fitted from, at the least
+	 * (T-092): two, as it has always been. The thrall attribution needs the
+	 * ledger trusted early: Vardorvis replays require it within five clean hits
+	 * and before the thrall's first splat, and three or five attacks push it
+	 * past both (VardorvisReplayTest, MoreVardorvisReplayTest). What went wrong
+	 * at Araxxor was not the count but what was counted: one of the araxyte's two
+	 * attacks was paid at Araxxor's bonus. That is {@link Award#mixed}'s to stop.
+	 */
+	static final int CALIBRATION_MIN_ATTACKS = 2;
 	// A drop reads up to 1.1 under or 1 over its exact value. Pooled, that error over the damage must stay under half the
 	// game's fortieth step, or the snap could land on the neighbouring one.
 	private static final double DROP_ERROR = 1.1;
@@ -101,6 +111,9 @@ class XpLedger
 		int landed;
 		int splats;
 		boolean allCertain = true;
+		// Whether a splat on another npc than the one it was decoded for was spent against it (T-092): its experience
+		// could be another npc's, so it checks and teaches nothing.
+		boolean mixed;
 		// The cleanest single constraint, kept for calibrating the multiplier.
 		final int calibrationGain;
 		final double calibrationRate;
@@ -344,7 +357,7 @@ class XpLedger
 	{
 		// Nothing landed (a splash, a target that died first), or something that landed could have been the thrall's:
 		// either way this attack proves nothing about the experience.
-		if (a.splats == 0 || !a.allCertain)
+		if (a.splats == 0 || !a.allCertain || a.mixed)
 		{
 			return;
 		}
@@ -382,7 +395,7 @@ class XpLedger
 		s[1] += a.landed;
 		s[2] += DROP_ERROR / a.calibrationRate;
 		s[3] += 1;
-		if (s[3] < 2 || s[2] / s[1] >= HALF_STEP)
+		if (s[3] < CALIBRATION_MIN_ATTACKS || s[2] / s[1] >= HALF_STEP)
 		{
 			return null;
 		}
@@ -489,6 +502,40 @@ class XpLedger
 	 */
 	void spend(int amount, int tick, boolean certain)
 	{
+		spend(amount, tick, certain, -1);
+	}
+
+	/**
+	 * As above, for a splat on npc {@code npcId} (T-092): an attack decoded for
+	 * another npc that takes any of it is marked mixed, and neither checks nor
+	 * calibrates. -1 for an npc not known.
+	 */
+	void spend(int amount, int tick, boolean certain, int npcId)
+	{
+		spendingNpcId = npcId;
+		try
+		{
+			spendOn(amount, tick, certain);
+		}
+		finally
+		{
+			spendingNpcId = -1;
+		}
+	}
+
+	// The npc the splat being spent landed on (T-092), -1 for none known.
+	private int spendingNpcId = -1;
+
+	private void markIfMixed(Award a)
+	{
+		if (spendingNpcId >= 0 && a.targetId >= 0 && a.targetId != spendingNpcId)
+		{
+			a.mixed = true;
+		}
+	}
+
+	private void spendOn(int amount, int tick, boolean certain)
+	{
 		if (amount <= 0)
 		{
 			return;
@@ -547,6 +594,7 @@ class XpLedger
 		}
 		if (home != null)
 		{
+			markIfMixed(home);
 			home.landed += left;
 			home.splats += home == taker ? 0 : 1;
 			home.allCertain &= certain;
@@ -561,13 +609,14 @@ class XpLedger
 		}
 	}
 
-	private static int take(Award a, int amount, boolean certain)
+	private int take(Award a, int amount, boolean certain)
 	{
 		final int taken = Math.min(amount, a.remainingHigh);
 		if (taken <= 0)
 		{
 			return amount;
 		}
+		markIfMixed(a);
 		a.remainingHigh -= taken;
 		a.remainingLow = Math.max(0, a.remainingLow - taken);
 		a.landed += taken;

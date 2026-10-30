@@ -183,6 +183,12 @@ final class AttackSplats
 	}
 
 	/** The dual macuahuitl: two hits a tick apart, the max split, the second only if the first landed (T-032). */
+	/** Whether this is a scythe of vitur, in any of its forms (T-092: it hits other targets in its arc too). */
+	static boolean isScythe(int weaponId)
+	{
+		return SCYTHES.contains(weaponId);
+	}
+
 	static boolean isMacuahuitl(int weaponId)
 	{
 		return MACUAHUITLS.contains(weaponId);
