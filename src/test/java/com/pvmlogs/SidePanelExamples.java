@@ -147,7 +147,7 @@ final class SidePanelExamples
 		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(109, 104, 116), 8);
 		final SidePanelModel.Target sire = new SidePanelModel.Target();
 		sire.name = "Abyssal Sire";
-		sire.fights = 3;
+		sire.npcs = 1;
 		sire.damage = 544;
 		sire.expected = 612;
 		sire.attacks = 33;
@@ -156,7 +156,7 @@ final class SidePanelExamples
 		sire.scored = true;
 		final SidePanelModel.Target lungs = new SidePanelModel.Target();
 		lungs.name = "Respiratory system";
-		lungs.fights = 4;
+		lungs.npcs = 4;
 		lungs.damage = 197;
 		lungs.attacks = 5;
 		lungs.combatTicks = 52;
