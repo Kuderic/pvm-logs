@@ -14,8 +14,10 @@ Luck vs Skill is its own Plugin Hub entry. It began as a fork of Arodab's PvM Pe
 - Your thrall's hits, recoil, vengeance, and burn, poison, venom and bleed are kept apart from your weapon's damage; the boss healing comes off.
 - Damage taken, after the fight broken down by kind.
 - Boss stats from the OSRS Wiki's DPS calculator, with the right version picked from the health bar (Awakened or not), stats that move with the boss's hitpoints (Vardorvis), the Leviathan's and the Sire's damage modifiers, and Chambers of Xeric and Tombs of Amascut scaling.
-- Bosses with parts or phases (the Sire, the Guardians, the Royal Titans, the Kraken, Hespori and others) are one kill each.
-- A shot thrown just before a gear switch is scored with what you held when you threw it.
+- Bosses with parts or phases (the Sire, the Guardians, the Royal Titans, the Kraken, Hespori, the Maggot King, Araxxor with his araxytes, and others) are one kill each. A boss that leaves view alive isn't a finished fight.
+- A run of monsters of one kind is one room, not a fight per monster.
+- The slayer helmet's bonus on task, with the game's own task table: alternatives such as the Deranged archaeologist, Artio, Spindel and Calvar'ion count, and a kill the game counts that the table missed is learned for the session.
+- A shot thrown just before a gear switch is scored with what you held when you threw it, and a single-target weapon's hit on another monster is its own attack.
 
 **What it shows**
 - The fight overlay ("Ledger"): live, then the full breakdown and your usual time after the kill. Execution's parts show only the ones that cost time, unless you choose all of them.
