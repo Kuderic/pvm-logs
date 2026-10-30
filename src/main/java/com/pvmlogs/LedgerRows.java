@@ -39,9 +39,12 @@ final class LedgerRows
 	static final String DEFENCE = " defence";
 	static final String MAGIC = " magic";
 	static final String DEFENCE_DRAINS = " defence drains";
-	/** T-075: under a kill's Defence and Magic rows, what the drains were worth: {@code  drains  8 ticks faster}. */
+	/** T-075: under a kill's Defence and Magic rows, what the drains were worth: {@code  drains  5 s faster}. */
 	static final String DRAINS = " drains";
 	static final String SPECS = " specs";
+	/** T-117 (Eric, 2026-10-30 09:11, as T-119 on the side panel): the Summary's damage-taken rows. */
+	static final String LARGEST_HIT_TAKEN = " largest hit taken";
+	static final String OFF_PRAYER_DAMAGE = " off-prayer damage";
 	/** T-077: the DPS overlay's spec section: its head, and its expected damage's label and unit. */
 	static final String SPEC = "Spec";
 	static final String EXPECTED = " expected";
@@ -345,6 +348,16 @@ final class LedgerRows
 
 		double switchCostShare();
 
+		/**
+		 * T-117: the expected damage the scored fights' attacks would have dealt
+		 * with the best setup on hand: T-010's {@code sumIdealSetup}, the same sum
+		 * {@link #efficiency()} and the cost shares divide by. -1 where unknown.
+		 */
+		default double idealSetupDamage()
+		{
+			return -1;
+		}
+
 		int attacksMade();
 
 		int attacksPrayed();
@@ -447,6 +460,20 @@ final class LedgerRows
 		}
 	}
 
+	/** T-117: the scored fights' ideal setup damage (T-010's {@code sumIdealSetup}), or -1 with none. */
+	static double idealSetup(List<Fight> fights)
+	{
+		double total = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				total += fight.getSumIdealSetup();
+			}
+		}
+		return total > 0 ? total : -1;
+	}
+
 	static Scope of(Encounter room)
 	{
 		return new Scope()
@@ -520,6 +547,11 @@ final class LedgerRows
 			public double efficiency()
 			{
 				return room.efficiency();
+			}
+
+			public double idealSetupDamage()
+			{
+				return idealSetup(room.getFights());
 			}
 
 			public double boostShare()
@@ -726,6 +758,16 @@ final class LedgerRows
 				return raid.efficiency();
 			}
 
+			public double idealSetupDamage()
+			{
+				final List<Fight> fights = new ArrayList<>();
+				for (Encounter room : raid.getEncounters())
+				{
+					fights.addAll(room.getFights());
+				}
+				return idealSetup(fights);
+			}
+
 			public double boostShare()
 			{
 				return raid.boostShare();
@@ -913,6 +955,11 @@ final class LedgerRows
 			public double efficiency()
 			{
 				return trip.efficiency();
+			}
+
+			public double idealSetupDamage()
+			{
+				return trip.getSumIdealSetup() > 0 ? trip.getSumIdealSetup() : -1;
 			}
 
 			public double boostShare()
@@ -1269,6 +1316,16 @@ final class LedgerRows
 		final double execution;
 		/** What the setup (boost, prayer, gear) cost in seconds. */
 		final double setupCost;
+		/**
+		 * T-117: what the setup cost in expected damage, ideal − actual over T-010's
+		 * setup sums ({@link Scope#idealSetupDamage()} × (1 − efficiency)); NaN when
+		 * unknown. The boost, gear and prayer damage below add up to it.
+		 */
+		final double setupDamage;
+		/** T-117: its parts in expected damage, split as their seconds are; NaN without T-010's split. */
+		final double boostDamage;
+		final double gearDamage;
+		final double prayerDamage;
 		/** Whether T-010's split exists for this scope; without it the setup shows as one row. */
 		final boolean split;
 		/** More than half the attacks were made below base (T-016): the stat boost row says so in words. */
@@ -1328,6 +1385,8 @@ final class LedgerRows
 			// (T-080). The same number as before T-038, when uptime's seconds held the eating too.
 			setupCost = setupKnown ? Math.max(0, clock - uptimeCost - eatingCost - mechanicsCost)
 				* Math.max(0, 1 - efficiency) : Double.NaN;
+			final double ideal = s.idealSetupDamage();
+			setupDamage = setupKnown && ideal > 0 ? ideal * Math.max(0, 1 - efficiency) : Double.NaN;
 
 			final int made = s.attacksMade();
 			split = setupKnown && s.boostShare() >= 0 && made > 0;
@@ -1350,6 +1409,13 @@ final class LedgerRows
 				boostCost = boost * perShare;
 				gearCost = gear * perShare;
 				prayerCost = prayer * perShare;
+				// T-117: the same split in damage. The shares are of the ideal setup's damage, so share × ideal is the
+				// expected damage each cost: T-010's sumBoostCost and sumSwitchCost (scaled to fit as above), and the prayer
+				// the rest of ideal − actual.
+				final boolean inDamage = !Double.isNaN(setupDamage);
+				boostDamage = inDamage ? boost * ideal : Double.NaN;
+				gearDamage = inDamage ? gear * ideal : Double.NaN;
+				prayerDamage = inDamage ? prayer * ideal : Double.NaN;
 				boostShare = Math.min(1, s.boostShare());
 				// Like gear, the damage the setup kept against what the best prayer you can use would have dealt (Eric,
 				// 2026-10-26), not the share of attacks with it up: a weaker prayer (Chivalry with Piety unlocked) counted
@@ -1364,6 +1430,7 @@ final class LedgerRows
 			else
 			{
 				boostCost = gearCost = prayerCost = Double.NaN;
+				boostDamage = gearDamage = prayerDamage = Double.NaN;
 				boostShare = prayerShare = gearShare = Double.NaN;
 				drained = false;
 			}
@@ -1703,10 +1770,8 @@ final class LedgerRows
 		// Luck under Damage/expected and its defence rows (Eric, 2026-10-28), where the warning stands in for it.
 		if (settings.luck && !state.warning)
 		{
-			// A short form for a panel saved too narrow: the band without its ticks (T-029), or "23t slower" for a fight with
-			// no percentile (T-117).
-			final String band = Double.isNaN(n.luck) ? null
-				: Double.isNaN(n.percentile) ? fasterOrSlowerShort(n.luck) : band(n.percentile);
+			// A short form for a panel saved too narrow: the band without its seconds (T-029).
+			final String band = Double.isNaN(n.luck) || Double.isNaN(n.percentile) ? null : band(n.percentile);
 			rows.add(new Row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, luckColour, null,
 				band));
 			specs(rows, n, scope, state);
@@ -1733,9 +1798,8 @@ final class LedgerRows
 	}
 
 	/**
-	 * T-051: under Luck after the fight, {@code  specs  8 ticks faster}: the
-	 * specials' share of luck (T-050), coloured as luck is. Hidden when it rounds
-	 * to no tick,
+	 * T-051: under Luck after the fight, {@code  specs  +5 s}: the specials'
+	 * share of luck (T-050), coloured as luck is. Hidden when it rounds to none,
 	 * which it does with no draining specials of the player's own (the party's
 	 * drains are no one's luck).
 	 */
@@ -1746,13 +1810,12 @@ final class LedgerRows
 			return;
 		}
 		final double seconds = scope.luckSeconds(scope.specLuckDamage());
-		if (Double.isNaN(seconds) || ticks(seconds) == 0)
+		if (Double.isNaN(seconds) || roundHalfAway(seconds) == 0)
 		{
 			return;
 		}
-		// In words, as Luck is (T-075, Eric 2026-10-29: "+1 s" read as time added to the kill), in ticks (T-117).
-		rows.add(new Row(SPECS, fasterOrSlower(seconds), FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL,
-			luckColour(seconds, n.clock), null, fasterOrSlowerShort(seconds)));
+		// In words, as Luck is (T-075, Eric 2026-10-29: "+1 s" read as time added to the kill).
+		rows.add(detail(SPECS, fasterOrSlower(seconds), luckColour(seconds, n.clock)));
 	}
 
 	/**
@@ -1760,10 +1823,10 @@ final class LedgerRows
 	 * moves the expected. Live, once a drain has been tracked on it: {@code
 	 * defence  145 / 215}, or {@code 145 (floor)}, and Magic the same way when it
 	 * was drained. After the fight: {@code defence  215 → 145}, then what the
-	 * drains were worth (T-050) in words, as Luck is (T-075), in ticks (T-117):
-	 * {@code drains  23 ticks faster}, a row of its own so the panel keeps its
-	 * width. A raid or a trip, which has many targets, shows the worth alone:
-	 * {@code defence drains  67 ticks faster}. Nothing for an immune or untracked target, or a kill saved before
+	 * drains were worth (T-050) in words, as Luck is (T-075): {@code drains  14 s
+	 * faster}, a row of its own so the panel keeps its width. A raid or a trip,
+	 * which has many targets, shows the worth alone: {@code defence drains  40 s
+	 * faster}. Nothing for an immune or untracked target, or a kill saved before
 	 * T-049.
 	 */
 	private static void drain(List<Row> rows, Numbers n, Scope scope, State state)
@@ -1782,9 +1845,7 @@ final class LedgerRows
 			return;
 		}
 		final double seconds = scope.luckSeconds(scope.drainValueDamage());
-		final boolean none = Double.isNaN(seconds) || ticks(seconds) == 0;
-		final String worth = none ? "" : fasterOrSlower(seconds);
-		final String worthShort = none ? null : fasterOrSlowerShort(seconds);
+		final String worth = Double.isNaN(seconds) || roundHalfAway(seconds) == 0 ? "" : fasterOrSlower(seconds);
 		final int start = scope.defenceStart();
 		final int end = scope.defenceEnd();
 		final boolean defenceMoved = start >= 0 && end >= 0 && start != end;
@@ -1795,8 +1856,7 @@ final class LedgerRows
 			// A raid or a trip: the drains' worth over its fights.
 			if (!worth.isEmpty())
 			{
-				rows.add(new Row(DEFENCE_DRAINS, worth, FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL,
-					null, worthShort));
+				rows.add(detail(DEFENCE_DRAINS, worth, Colour.NEUTRAL));
 			}
 			return;
 		}
@@ -1808,11 +1868,10 @@ final class LedgerRows
 		{
 			rows.add(detail(MAGIC, scope.magicStart() + ARROW + scope.magicEnd(), Colour.NEUTRAL));
 		}
-		// On a row of its own (T-075): "215 → 145 · 23 ticks faster" would widen the box in the Small font.
+		// On a row of its own (T-075): "215 → 145 · 14 s faster" would widen the box in the Small font.
 		if (!worth.isEmpty())
 		{
-			rows.add(new Row(DRAINS, worth, FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL, null,
-				worthShort));
+			rows.add(detail(DRAINS, worth, Colour.NEUTRAL));
 		}
 	}
 
@@ -1897,23 +1956,49 @@ final class LedgerRows
 			if (n.split)
 			{
 				// In Eric's order (2026-10-26): uptime, prayer, gear, stat boost.
-				part(rows, " prayer", partPercent(n.prayerShare), n.prayerCost, n.clock, costingOnly);
-				part(rows, " gear", partPercent(n.gearShare), n.gearCost, n.clock, costingOnly);
+				part(rows, " prayer", partPercent(n.prayerShare), n.prayerCost, n.prayerDamage, n.clock, costingOnly);
+				part(rows, " gear", partPercent(n.gearShare), n.gearCost, n.gearDamage, n.clock, costingOnly);
 				// Option A (Eric): the boost's share stays 0-100% of a full boost held, the seconds carry the whole cost,
 				// drains included. Mostly below base reads as the word, so it isn't taken for a plain 0%.
-				part(rows, " stat boost", n.drained ? DRAINED : partPercent(n.boostShare), n.boostCost, n.clock,
-					costingOnly);
+				part(rows, " stat boost", n.drained ? DRAINED : partPercent(n.boostShare), n.boostCost, n.boostDamage,
+					n.clock, costingOnly);
 			}
 			else
 			{
 				// A scope with no boost share read: fights from before T-010. One row stands in for the three.
-				part(rows, " setup", partPercent(n.efficiency), n.setupCost, n.clock, costingOnly);
+				part(rows, " setup", partPercent(n.efficiency), n.setupCost, n.setupDamage, n.clock, costingOnly);
 			}
 		}
 		if (costingOnly && rows.size() == before)
 		{
 			rows.add(detail(" no time lost", "", Colour.NEUTRAL));
 		}
+	}
+
+	/**
+	 * A setup part (T-117, Eric 2026-10-30 09:01): its figure, then the expected
+	 * damage it cost, {@code 97% (-45 dmg)}. Whether it costs, and so its colour
+	 * and Costing only, still go by its seconds. Without the damage (a scope that
+	 * doesn't keep the setup sums), its ticks as uptime has.
+	 */
+	private static void part(List<Row> rows, String label, String figure, double cost, double damage, double clock,
+		boolean costingOnly)
+	{
+		if (Double.isNaN(damage))
+		{
+			part(rows, label, figure, cost, clock, costingOnly);
+			return;
+		}
+		final boolean costing = isCosting(cost, clock);
+		if (costingOnly && !costing)
+		{
+			return;
+		}
+		final String full = withDamage(figure, damage);
+		// "97% (-45)" for a box saved too narrow.
+		final String shorter = full.equals(figure) ? null : figure + " (-" + number(roundHalfAway(damage)) + ")";
+		rows.add(new Row(label, full, FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL,
+			costing ? Colour.COST : Colour.NEUTRAL, null, shorter));
 	}
 
 	private static void part(List<Row> rows, String label, String figure, double cost, double clock, boolean costingOnly)
@@ -1961,11 +2046,11 @@ final class LedgerRows
 		dot(details, s.dotTakenByKind(), s.dotTaken(), " taken");
 		if (s.biggestHitTaken() > 0)
 		{
-			details.add(detail(" biggest hit taken", number(s.biggestHitTaken()), Colour.NEUTRAL));
+			details.add(detail(LARGEST_HIT_TAKEN, number(s.biggestHitTaken()), Colour.NEUTRAL));
 		}
 		if (s.damageTakenUnprotected() > 0)
 		{
-			details.add(detail(" without protection", number(s.damageTakenUnprotected()), Colour.NEUTRAL));
+			details.add(detail(OFF_PRAYER_DAMAGE, number(s.damageTakenUnprotected()), Colour.NEUTRAL));
 		}
 		// No eating time here any more: it has its own row, live and after (T-038).
 		if (!details.isEmpty())
@@ -2064,6 +2149,16 @@ final class LedgerRows
 	}
 
 	/**
+	 * T-117: a setup part's figure, then {@code (-N dmg)}, the expected damage
+	 * it cost, once that rounds to at least 1: {@code 97% (-45 dmg)}.
+	 */
+	static String withDamage(String figure, double damage)
+	{
+		final long d = Double.isNaN(damage) ? 0 : roundHalfAway(damage);
+		return d >= 1 ? figure + " (-" + number(d) + DMG + ")" : figure;
+	}
+
+	/**
 	 * {@link #withTicks}, under its name from before T-117, for the side panel's
 	 * callers until T-118 moves them. It says ticks too.
 	 */
@@ -2073,12 +2168,12 @@ final class LedgerRows
 	}
 
 	/**
-	 * {@code bottom 20% (23 ticks slower)}, {@code top 10% (15 ticks faster)},
-	 * {@code average (3 ticks slower)} (T-029; Eric, 2026-10-27: a damage ratio
-	 * read like "76% lucky"): where this fight's damage sits among fights with the
-	 * same attacks, then what the rolls cost or saved, in ticks (T-117). No
-	 * bracket when that rounds to no tick. Without T-028's variance (fights saved
-	 * before it), the ticks alone; a dash when there's nothing to compare.
+	 * {@code bottom 20% (14 s slower)}, {@code top 10% (9 s faster)},
+	 * {@code average (2 s slower)} (T-029; Eric, 2026-10-27: a damage ratio read
+	 * like "76% lucky"): where this fight's damage sits among fights with the same
+	 * attacks, then what the rolls cost or saved on the clock. No bracket when the
+	 * seconds round to none. Without T-028's variance (fights saved before it),
+	 * the seconds alone; a dash when there's nothing to compare.
 	 */
 	static String luckFigure(Numbers n)
 	{
@@ -2086,13 +2181,13 @@ final class LedgerRows
 		{
 			return UNKNOWN;
 		}
-		final String ticks = fasterOrSlower(n.luck);
+		final String seconds = fasterOrSlower(n.luck);
 		if (Double.isNaN(n.percentile))
 		{
-			return ticks;
+			return seconds;
 		}
 		final String band = band(n.percentile);
-		return ticks.equals(EVEN) ? band : band + " (" + ticks + ")";
+		return seconds.equals(EVEN) ? band : band + " (" + seconds + ")";
 	}
 
 	/**
@@ -2124,31 +2219,21 @@ final class LedgerRows
 	}
 
 	/**
-	 * Time saved or lost, given in seconds, in words and whole ticks (T-117,
-	 * Eric 2026-10-30: ticks are the game's own unit): {@code 23 ticks faster},
-	 * {@code 1 tick slower}, {@code even}. A sign on a time was ambiguous (Eric,
-	 * 2026-10-26): "+10 s" read as ten seconds added to the kill, when it meant
-	 * the rolls saved ten. Positive is time saved.
+	 * Seconds saved or lost, in words: {@code 10 s faster}, {@code 14 s slower},
+	 * {@code even}. A sign on a time was ambiguous (Eric, 2026-10-26): "+10 s"
+	 * read as ten seconds added to the kill, when it meant the rolls saved ten.
+	 * Positive is time saved. Rounded half away from zero. Luck and comparisons
+	 * with a kill's time stay in seconds (T-117's update, Eric 2026-10-30 10:04);
+	 * time spent not attacking is in ticks ({@link #withTicks}).
 	 */
 	static String fasterOrSlower(double secondsSaved)
 	{
-		final long r = ticks(secondsSaved);
+		final long r = roundHalfAway(secondsSaved);
 		if (r == 0)
 		{
 			return EVEN;
 		}
-		return ticksWord(Math.abs(r)) + (r > 0 ? " faster" : " slower");
-	}
-
-	/** {@link #fasterOrSlower}'s short form, for a box saved too narrow: {@code 23t slower}; {@code even} stays. */
-	static String fasterOrSlowerShort(double secondsSaved)
-	{
-		final long r = ticks(secondsSaved);
-		if (r == 0)
-		{
-			return EVEN;
-		}
-		return number(Math.abs(r)) + TICKS_SHORT + (r > 0 ? " faster" : " slower");
+		return Math.abs(r) + " s " + (r > 0 ? "faster" : "slower");
 	}
 
 	/**

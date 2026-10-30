@@ -188,7 +188,7 @@ public class SidePanelTimeBudgetTest
 		final PanelSnapshot.BudgetRow luck = rows.get(4);
 		assertEquals("luck", luck.label.text);
 		assertEquals("past 1:16", luck.hint.text);
-		assertEquals("25 ticks faster", luck.value.text);
+		assertEquals("15 s faster", luck.value.text);
 		assertEquals(SidePanelStyle.BETTER, luck.value.colour);
 		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, luck.swatch);
 		assertEquals(SidePanelStyle.BETTER, b.luckSavedColour);
@@ -203,7 +203,7 @@ public class SidePanelTimeBudgetTest
 
 		// Luck that cost time: no "past" hint, the bar as before.
 		final PanelSnapshot.BudgetRow slower = budget(SidePanelExamples.luckSaved(-7)).rows.get(4);
-		assertEquals("12 ticks slower", slower.value.text);
+		assertEquals("7 s slower", slower.value.text);
 		assertTrue(slower.hint.text.isEmpty());
 	}
 

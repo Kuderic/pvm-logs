@@ -285,7 +285,7 @@ public class SidePanelHistoryTest
 		// Before T-028: the seconds stand in for the curve, in the header too.
 		assertNull(before.curve);
 		assertNotNull(before.noCurve);
-		assertEquals("10 ticks faster", before.noCurveHint.text);
+		assertEquals("6 s faster", before.noCurveHint.text);
 
 		final Encounter today = SidePanelHistory.kills(h, "Vardorvis", SidePanelHistoryExamples.NOW, SidePanelExamples.ZONE)
 			.get(0).room;

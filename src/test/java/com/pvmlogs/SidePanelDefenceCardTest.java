@@ -37,8 +37,8 @@ public class SidePanelDefenceCardTest
 		final PanelSnapshot.Defence d = SidePanelModel.fight(SidePanelExamples.sireEmberlight()).defence;
 		assertEquals("250 → 174", d.hint.text);
 		// No row repeats the drop, no floor where the boss has none, no sentences.
-		assertEquals(Arrays.asList("Emberlight | 2 of 2 landed", "Damage added | +42 · 9 ticks faster",
-			"Specials' luck | +12 · 3 ticks faster"), rows(SidePanelFightTab.defenceRows(d)));
+		assertEquals(Arrays.asList("Emberlight | 2 of 2 landed", "Damage added | +42 · 5 s faster",
+			"Specials' luck | +12 · 2 s faster"), rows(SidePanelFightTab.defenceRows(d)));
 		assertEquals(SidePanelStyle.BETTER, d.specLuck.colour);
 		for (String r : rows(SidePanelFightTab.defenceRows(d)))
 		{
@@ -70,8 +70,8 @@ public class SidePanelDefenceCardTest
 		final int drained = texts.indexOf("Drained");
 		assertTrue(texts.toString(), drained >= 0);
 		assertEquals("76 (30%)", texts.get(drained + 1));
-		assertEquals(Arrays.asList("Emberlight", "2 of 2 landed", "Damage added", "+42 · 9 ticks faster", "Specials' luck",
-			"+12 · 3 ticks faster"), texts.subList(drained + 2, drained + 8));
+		assertEquals(Arrays.asList("Emberlight", "2 of 2 landed", "Damage added", "+42 · 5 s faster", "Specials' luck",
+			"+12 · 2 s faster"), texts.subList(drained + 2, drained + 8));
 		assertFalse(texts.toString(), texts.contains("floor"));
 		// Levels unknown: the rows alone.
 		final SidePanelModel.Input unknown = SidePanelExamples.sireEmberlight();
@@ -248,7 +248,7 @@ public class SidePanelDefenceCardTest
 	{
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.sireShortAverage());
 		assertNotNull(tab.budget);
-		assertEquals("[your average 0:35 | 82 ticks slower]", tab.budget.average.toString());
+		assertEquals("[your average 0:35 | 49 s slower]", tab.budget.average.toString());
 		assertEquals(35, tab.budget.marker, 1e-9);
 	}
 

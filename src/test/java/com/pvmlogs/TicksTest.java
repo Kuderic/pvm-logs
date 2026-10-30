@@ -15,11 +15,11 @@ import net.runelite.client.ui.FontManager;
 import org.junit.Test;
 
 /**
- * T-117 (Eric, 2026-10-30): time won or lost reads in whole ticks, not
- * seconds: Luck and the specs and drains in {@code N ticks faster/slower},
- * Execution's parts in {@code (-N ticks)}, eating and mechanics in
- * {@code N ticks}. Clocks stay clocks. {@code 23t} is the short form, only
- * for a box saved too narrow.
+ * T-117 (Eric, 2026-10-30, with the 10:04 update): time spent not attacking
+ * reads in whole ticks (uptime's cost, eating, mechanics), luck and comparisons
+ * with a kill's time stay in seconds ({@code 14 s slower}), the setup parts read
+ * the damage they cost ({@link SetupDamageTest}), and clocks stay clocks.
+ * {@code 25t} is the ticks' short form, only for a box saved too narrow.
  */
 public class TicksTest
 {
@@ -48,22 +48,14 @@ public class TicksTest
 	}
 
 	@Test
-	public void fasterOrSlowerSaysTicks()
+	public void luckStaysInSeconds()
 	{
+		// The 10:04 update: fasterOrSlower is master's, in seconds.
 		assertEquals("even", LedgerRows.fasterOrSlower(0));
-		assertEquals("even", LedgerRows.fasterOrSlower(0.29));
-		assertEquals("1 tick faster", LedgerRows.fasterOrSlower(0.6));
-		assertEquals("1 tick slower", LedgerRows.fasterOrSlower(-0.6));
-		assertEquals("1 tick faster", LedgerRows.fasterOrSlower(0.3));
-		assertEquals("1 tick slower", LedgerRows.fasterOrSlower(-0.3));
-		assertEquals("2 ticks faster", LedgerRows.fasterOrSlower(1.2));
-		assertEquals("23 ticks slower", LedgerRows.fasterOrSlower(-13.8));
-		assertEquals("6,000 ticks faster", LedgerRows.fasterOrSlower(3600));
-		assertEquals("1,500t slower", LedgerRows.fasterOrSlowerShort(-900));
-		// The short form.
-		assertEquals("23t slower", LedgerRows.fasterOrSlowerShort(-13.8));
-		assertEquals("1t faster", LedgerRows.fasterOrSlowerShort(0.6));
-		assertEquals("even", LedgerRows.fasterOrSlowerShort(0.1));
+		assertEquals("even", LedgerRows.fasterOrSlower(0.49));
+		assertEquals("1 s faster", LedgerRows.fasterOrSlower(0.6));
+		assertEquals("1 s slower", LedgerRows.fasterOrSlower(-0.6));
+		assertEquals("14 s slower", LedgerRows.fasterOrSlower(-13.8));
 	}
 
 	@Test
@@ -110,30 +102,36 @@ public class TicksTest
 	public void theFightOverlaySaysTicksAndItsClocksStayClocks()
 	{
 		final List<LedgerRows.Row> rows = kill();
-		// Eric's kill: luck 14.35 s slower, uptime 15 s, eating 4.2 s.
-		assertEquals("24 ticks slower", row(rows, "Luck").right);
+		// Eric's kill: luck 14.35 s slower (seconds), uptime 15 s and eating 4.2 s (ticks), the boost in damage.
+		assertEquals("14 s slower", row(rows, "Luck").right);
 		assertEquals("89% (-25 ticks)", row(rows, " uptime").right);
-		assertEquals("85% (-4 ticks)", row(rows, " stat boost").right);
+		assertEquals("85% (-16 dmg)", row(rows, " stat boost").right);
 		assertEquals("7 ticks", row(rows, LedgerRows.EATING).right);
 		assertEquals("10 ticks", row(rows, LedgerRows.MECHANICS).right);
 		// Clocks.
 		assertEquals("2:16", rows.get(0).right);
-		for (LedgerRows.Row r : rows)
-		{
-			assertFalse(r.toString(), r.right.matches(".*\\d s\\b.*"));
-		}
 		// Execution's own figure stays a share; its ticks are in its parts.
 		assertEquals("87%", row(rows, "Execution").right);
 	}
 
 	@Test
-	public void noOverlayRowSaysSeconds()
+	public void secondsOnlyForLuckAndItsComparisons()
 	{
 		for (List<LedgerRows.Row> rows : LedgerPictures.states().values())
 		{
 			for (LedgerRows.Row r : rows)
 			{
-				assertFalse(r.toString(), r.right.matches(".*\\d s\\b.*") || r.right.matches(".*\\(-\\d+ s\\).*"));
+				// No cost in seconds, and no eating or mechanics in seconds.
+				assertFalse(r.toString(), r.right.matches(".*\\(-\\d+ s\\).*"));
+				if (r.left.equals(LedgerRows.EATING) || r.left.equals(LedgerRows.MECHANICS))
+				{
+					assertTrue(r.toString(), r.right.matches("[\\d,]+ ticks?"));
+				}
+				// What reads in seconds is luck's: faster or slower.
+				if (r.right.matches(".*\\d s\\b.*"))
+				{
+					assertTrue(r.toString(), r.right.matches(".*\\d s (faster|slower)\\)?"));
+				}
 			}
 		}
 	}
@@ -162,7 +160,7 @@ public class TicksTest
 					assertFalse(font.getName() + " " + r, r.right.matches(".*\\d+t\\b.*"));
 				}
 			}
-			// Saved at the narrowest width: a part, eating and Luck fall back to their short forms rather than wrap.
+			// Saved at the narrowest width: uptime falls back to its short form rather than wrap, where it must.
 			final List<LedgerRows.Row> narrow = PvmPerformanceOverlay.lines(g, kill(),
 				new Dimension(PvmPerformanceOverlay.MIN_WIDTH, 0)).rows;
 			final LedgerRows.Row uptime = row(narrow, " uptime");
@@ -178,8 +176,8 @@ public class TicksTest
 		assertEquals("89% (-25t)", row(rows, " uptime").shortRight);
 		assertEquals("7t", row(rows, LedgerRows.EATING).shortRight);
 		assertEquals("10t", row(rows, LedgerRows.MECHANICS).shortRight);
-		// Luck's band is its short form; with no percentile, "24t slower".
-		assertEquals("24t slower", row(rows, "Luck").shortRight);
+		// Luck in seconds keeps master's short forms: none here, with no percentile.
+		assertNull(row(rows, "Luck").shortRight);
 		// A part that costs nothing has none.
 		assertNull(row(rows, " prayer").shortRight);
 	}
