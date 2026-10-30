@@ -158,6 +158,11 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	 * session; the lists no longer ask it (Bosses and Monsters are sections of their own).
 	 */
 	private final JCheckBox bossesOnly = new JCheckBox(EXPORT_BOSSES_ONLY);
+	/** T-111: the calibration report (T-110), saved as a file; kept across refreshes so its listener stays. */
+	private final javax.swing.JButton calibration;
+	static final String CALIBRATION = "Calibration report";
+	static final String CALIBRATION_TIP = "How the plugin's expected damage compares with what really landed, per boss and"
+		+ " weapon. Nothing is sent anywhere.";
 	static final String EXPORT_BOSSES_ONLY = "Bosses only";
 	static final String EXPORT_BOSSES_ONLY_TIP = "Export only bosses";
 	static final String NO_BOSS_MATCH = "No boss matches that name.";
@@ -238,6 +243,9 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		bossesOnly.setForeground(SidePanelStyle.SECONDARY);
 		bossesOnly.setFont(SidePanelStyle.Type.SMALL.font());
 		bossesOnly.setToolTipText(EXPORT_BOSSES_ONLY_TIP);
+		calibration = SidePanelFightTab.button(CALIBRATION, SidePanelStyle.VALUE);
+		calibration.setToolTipText(CALIBRATION_TIP);
+		calibration.addActionListener(e -> this.actions.calibrationReport());
 
 		add(searchBox);
 		add(content);
@@ -248,6 +256,12 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	boolean bossesOnly()
 	{
 		return bossesOnly.isSelected();
+	}
+
+	/** T-111: the Calibration report button, for tests and renders. */
+	javax.swing.JButton calibrationButton()
+	{
+		return calibration;
 	}
 
 	/** T-102: the export's checkbox, for tests and renders. */
@@ -275,6 +289,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	{
 		buffer.drop();
 		bossesOnly.setFont(SidePanelStyle.Type.SMALL.font());
+		calibration.setFont(SidePanelStyle.Type.SMALL.font());
 		status.restyle();
 		SidePanelParts.restyle(searchBox);
 		refresh();
@@ -729,6 +744,9 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		tools = new SidePanelFightTab.ToolButtons(actions, this);
 		tools.setHistory(anyHistory);
 		box.add(tools);
+		// T-111: the calibration report, under the grid; greyed with nothing saved, like Export.
+		calibration.setEnabled(anyHistory);
+		box.add(calibration);
 		// T-102: the export's choice, under the Export button it's for.
 		bossesOnly.setEnabled(anyHistory);
 		box.add(bossesOnly);

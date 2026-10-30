@@ -959,9 +959,104 @@ class PvmPerformancePanel extends PluginPanel
 		}
 	}
 
+	// ---- T-111: the calibration report ----
+
+	private static final java.time.format.DateTimeFormatter CALIBRATION_STAMP =
+		java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+
+	/** T-111: the report's file name, {@code calibration-20261030-011500.txt}. */
+	static String calibrationFile(java.time.LocalDateTime when)
+	{
+		return "calibration-" + CALIBRATION_STAMP.format(when) + ".txt";
+	}
+
+	/** T-111: how many groups the report flagged: the lines under its {@code FLAGGED:} heading. */
+	static int calibrationFlags(String report)
+	{
+		int flags = 0;
+		boolean in = false;
+		for (String line : report.split("\n"))
+		{
+			if (line.startsWith("FLAGGED"))
+			{
+				in = line.equals("FLAGGED:");
+				continue;
+			}
+			if (in && line.startsWith("  "))
+			{
+				flags++;
+			}
+			else if (in)
+			{
+				break;
+			}
+		}
+		return flags;
+	}
+
+	/**
+	 * T-111: the status line once it's saved: {@code Saved calibration report (3 flags)}. The file's dated name ({@link
+	 * #calibrationFile}) is too long for the line at 1×, so it isn't repeated there.
+	 */
+	static String calibrationStatus(int flags)
+	{
+		return "Saved calibration report (" + (flags == 0 ? "nothing flagged" : flags == 1 ? "1 flag" : flags + " flags")
+			+ ")";
+	}
+
+	/**
+	 * T-111: the report built and saved on RuneLite's executor, never Swing's thread or the client thread: {@code
+	 * report} reads a copy of the history, and the file goes to the plugin's data folder through {@code Filepath}.
+	 * Nothing is sent anywhere. The status line says what came of it.
+	 */
+	static void saveCalibration(java.util.concurrent.Executor executor, java.util.function.Supplier<String> report,
+		java.util.function.Supplier<net.runelite.client.util.Filepath> folder,
+		java.util.function.Consumer<String> status)
+	{
+		status.accept("Building the calibration report…");
+		executor.execute(() ->
+		{
+			try
+			{
+				final net.runelite.client.util.Filepath dir = folder.get();
+				if (dir == null)
+				{
+					status.accept("Calibration report failed: no data folder.");
+					return;
+				}
+				final String text = report.get();
+				dir.createDirectories();
+				final String name = calibrationFile(java.time.LocalDateTime.now());
+				try (java.io.Writer w = dir.joinSegment(name).openBufferedWriter())
+				{
+					w.write(text);
+					w.write("\n");
+				}
+				status.accept(calibrationStatus(calibrationFlags(text)));
+			}
+			catch (java.io.IOException | RuntimeException e)
+			{
+				status.accept("Calibration report failed: " + e.getMessage());
+			}
+		});
+	}
+
 	/** The buttons' actions, passed on to the plugin. */
 	private final class Actions implements SidePanelFightTab.Actions
 	{
+		@Override
+		public void calibrationReport()
+		{
+			final java.util.concurrent.ScheduledExecutorService executor = instance(plugin,
+				java.util.concurrent.ScheduledExecutorService.class);
+			if (plugin == null || executor == null)
+			{
+				return;
+			}
+			saveCalibration(executor, plugin::calibrationReport, plugin::getDataDirectory,
+				PvmPerformancePanel.this::setStatus);
+		}
+
 		@Override
 		public void exportAll()
 		{
