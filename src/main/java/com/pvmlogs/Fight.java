@@ -127,6 +127,9 @@ class Fight
 	// T-100: the player died while this fight was open, or it was the room's last when they did. False in an older
 	// history file.
 	private boolean playerDied;
+	// T-110, R1: the build, weapons, setup, context and mechanic windows, as one nested object an upload could copy. Null
+	// in an older history file, and on a fight that never got to its first attack.
+	private FightContext context;
 	private long endMillis;
 	// T-088: trips away from this target the player came back from, and their time, which the kill's time leaves out.
 	// Saved, so History can say a kill was resumed; 0 in an older history file, which is right for those.
@@ -506,6 +509,16 @@ class Fight
 	boolean isClosedRoomOnKill()
 	{
 		return closedRoom && roomEnd == null;
+	}
+
+	/** This fight's R1 record (T-110), made on first use. */
+	FightContext context()
+	{
+		if (context == null)
+		{
+			context = new FightContext();
+		}
+		return context;
 	}
 
 	/** The player died during this fight, or it was the room's last when they did (T-100). */

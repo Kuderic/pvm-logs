@@ -244,6 +244,11 @@ public class PvmPerformancePlugin extends Plugin
 
 	// From getPluginDirectory() at startUp; read by the executor's writes. Null if RuneLite couldn't give one.
 	private volatile Filepath dataDirectory;
+	// T-110: this install's random id (never sent anywhere), and the rules and monster data the fights are scored with, as
+	// short names. Read once at start-up, off the client thread.
+	private volatile String installId;
+	private volatile String rulesRecord;
+	private volatile String monstersRecord;
 
 	@Inject
 	private ClientThread clientThread;
@@ -714,6 +719,7 @@ public class PvmPerformancePlugin extends Plugin
 		debug.setDirectory(dataDirectory);
 		executor.execute(this::loadHistory);
 		monsterStats.startUp(dataDirectory);
+		executor.execute(this::loadRecordIds);
 		if (config.debugLogging())
 		{
 			debug.start();
@@ -1488,9 +1494,20 @@ public class PvmPerformancePlugin extends Plugin
 	/** The players in the scene besides the local player (T-106): whether another's splat can be another player's. */
 	private int otherPlayersNear()
 	{
-		final Player me = client.getLocalPlayer();
+		final int n = othersIn(client.getTopLevelWorldView().players(), client.getLocalPlayer());
+		// The most the fight's record has seen (T-110): counted only where it already is, never on a tick of its own.
+		if (current != null && !current.isEnded() && current.getContext() != null)
+		{
+			current.getContext().seePlayers(n);
+		}
+		return n;
+	}
+
+	/** The players in a scene besides {@code me} (T-106, T-110). */
+	static int othersIn(Iterable<? extends Player> players, Player me)
+	{
 		int n = 0;
-		for (Player p : client.getTopLevelWorldView().players())
+		for (Player p : players)
 		{
 			if (p != null && p != me)
 			{
@@ -2996,6 +3013,9 @@ public class PvmPerformancePlugin extends Plugin
 			combatCalc.attackLandChance(accuracy, targetId);
 		if (special)
 		{
+			// The special's weapon, for the fight's record (T-110).
+			fight.context().specWeapons = FightContext.addOnce(fight.context().specWeapons, combatCalc.itemLabel(
+				weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick), combatCalc.equippedWeaponId())));
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
 			specFiredTick = Integer.MIN_VALUE;
 			expectDelayedSplat(fight, attackTick);
@@ -3380,6 +3400,44 @@ public class PvmPerformancePlugin extends Plugin
 
 	// What the attack just booked into this fight was (T-035): named as the loadout names it, from the weapon held on the
 	// tick it was thrown.
+	/**
+	 * T-110: the setup the fight's record keeps from its attacks - what was
+	 * worn at the first, and each ammunition or autocast used. From state the
+	 * booking already read; nothing per tick.
+	 */
+	private void recordAttackSetup(Fight fight, boolean mechanic)
+	{
+		final FightContext c = fight.context();
+		final ItemContainer worn = client.getItemContainer(InventoryID.WORN);
+		if (c.armour == null && worn != null)
+		{
+			final Item[] items = worn.getItems();
+			final int[] ids = new int[items.length];
+			for (int i = 0; i < items.length; i++)
+			{
+				ids[i] = items[i] == null ? -1 : items[i].getId();
+			}
+			c.armour = FightContext.sortedIds(ids);
+		}
+		if (mechanic)
+		{
+			return;
+		}
+		final Spell spell = combatCalc.timelineSpell();
+		if (spell != null)
+		{
+			c.ammoOrSpell = FightContext.addOnce(c.ammoOrSpell, spell.getDisplayName());
+		}
+		else if (!combatCalc.isMeleeEquipped() && worn != null)
+		{
+			final Item ammo = worn.getItem(EquipmentInventorySlot.AMMO.getSlotIdx());
+			if (ammo != null && ammo.getId() > 0)
+			{
+				c.ammoOrSpell = FightContext.addOnce(c.ammoOrSpell, combatCalc.itemLabel(ammo.getId()));
+			}
+		}
+	}
+
 	private void describeForTimeline(Fight fight, int thrownTick, int heldTick)
 	{
 		final FightTimeline line = timelines.of(fight);
@@ -3390,8 +3448,9 @@ public class PvmPerformancePlugin extends Plugin
 		final Integer held = weaponByTick.get(heldTick);
 		final int weapon = held != null ? held : combatCalc.equippedWeaponId();
 		final Spell spell = combatCalc.timelineSpell();
+		final Integer speed = speedByTick.get(heldTick);
 		line.describeLatest(CombatCalc.attackName(combatCalc.itemLabel(weapon), spell == null ? null : spell.getDisplayName()),
-			weapon, spell, combatCalc.timelineStyle(), thrownTick);
+			weapon, spell, combatCalc.timelineStyle(), thrownTick, speed != null ? speed : combatCalc.attackSpeedTicks());
 	}
 
 	// Whose the splat just counted is (T-035): the attack of its burst, which countSplat has just opened or continued.
@@ -4417,6 +4476,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		if (attacked && chase != null)
 		{
+			current.context().addWindow("chase", chase.excused, chase.lost);
 			debug.log("CHASE done: hit again %d ticks after she came back, %d tiles off at reach %d: %d idle ticks excused of "
 				+ "%d allowed, %d lost", client.getTickCount() - chase.tick, chase.distance, chase.reach, chase.excused,
 				chase.allowance, chase.lost);
@@ -4543,6 +4603,7 @@ public class PvmPerformancePlugin extends Plugin
 			logEats(foodDelay.attackThrown(attackTick, attackDueTick));
 			attacker.recordAttackMade(potted, boostShare, drained);
 			describeForTimeline(attacker, attackTick, heldTick(attackSwitchTick, attackTick));
+			recordAttackSetup(attacker, mechanic);
 			// The room remembers it too. From here every fight under it counts its ticks from the first one, rather than each
 			// waiting to be attacked in its own right.
 			if (currentEncounter != null && !currentEncounter.isEnded())
@@ -5038,6 +5099,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final String message = Text.removeTags(event.getMessage());
 		noteBlowpipeCheck(message);
+		recordKillMessage(message);
 		final String buff = gearBonuses.onGameMessage(message, client.getTickCount());
 		if (buff != null)
 		{
@@ -5457,6 +5519,150 @@ public class PvmPerformancePlugin extends Plugin
 		debug.log("  %s", combatCalc.describeWorkedOut(npc.getId()));
 		// What is worn, by item id (T-056): which variant of a piece a bonus missed.
 		debug.log("  %s", combatCalc.describeWorn());
+		recordFightStart(current, npc);
+	}
+
+	/**
+	 * T-110, R1: what the fight's record knows as it opens - the build and data
+	 * it is scored with, the player's base levels, the players around, the
+	 * world's types, and the main weapon's ideal DPS at the target's full
+	 * hitpoints. Once per fight; the ideal comes from the room's earlier fight on
+	 * the same npc where there is one, since by then the target is neither full
+	 * nor at its base Defence.
+	 */
+	private void recordFightStart(Fight fight, NPC npc)
+	{
+		final FightContext c = fight.context();
+		c.build = BuildInfo.describe();
+		c.rules = rulesRecord;
+		c.monsters = monstersRecord;
+		final Skill[] skills = {Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC, Skill.HITPOINTS,
+			Skill.PRAYER};
+		c.baseLevels = new int[skills.length];
+		for (int i = 0; i < skills.length; i++)
+		{
+			c.baseLevels[i] = client.getRealSkillLevel(skills[i]);
+		}
+		c.teamSizeStart = otherPlayersNear();
+		c.seePlayers(c.teamSizeStart);
+		c.worldTypes = new ArrayList<>();
+		for (net.runelite.api.WorldType type : client.getWorldType())
+		{
+			c.worldTypes.add(type.name());
+		}
+		c.idealDpsFullHp = FightContext.round2(idealDpsFullHp(fight, npc));
+	}
+
+	// The main weapon's ideal expected DPS at the target's full hitpoints and base Defence (T-110): the room's earlier
+	// fight's on this npc if it has one, else worked out now, the fight opening on a fresh target. 0 when unknown.
+	private double idealDpsFullHp(Fight fight, NPC npc)
+	{
+		final Encounter room = currentEncounter;
+		if (room != null && room.getFights().contains(fight))
+		{
+			for (Fight earlier : room.getFights())
+			{
+				if (earlier != fight && earlier.getTargetId() == npc.getId() && earlier.getContext() != null
+					&& earlier.getContext().idealDpsFullHp > 0)
+				{
+					return earlier.getContext().idealDpsFullHp;
+				}
+			}
+		}
+		final double ideal = combatCalc.idealAverageHit(npc.getId());
+		return ideal > 0 ? CombatCalc.dpsFrom(ideal, combatCalc.attackSpeedTicks()) : 0;
+	}
+
+	/**
+	 * T-110: the install id, and short names for the rules and the monster data
+	 * the fights are scored with. On the executor, once.
+	 */
+	private void loadRecordIds()
+	{
+		final Filepath dir = dataDirectory;
+		if (dir != null)
+		{
+			final Filepath file = dir.joinSegment(InstallId.FILE);
+			installId = InstallId.load(() -> readText(file), id ->
+			{
+				try
+				{
+					file.getParent().createDirectories();
+					file.write(id.getBytes(StandardCharsets.UTF_8));
+				}
+				catch (IOException | RuntimeException e)
+				{
+					log.warn("PvM Logs: could not save the install id", e);
+				}
+			});
+		}
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		String bundled = null;
+		try (InputStream in = BossRules.class.getResourceAsStream("boss-rules.json"))
+		{
+			bundled = in == null ? null : new String(in.readAllBytes(), StandardCharsets.UTF_8);
+		}
+		catch (IOException e)
+		{
+			log.debug("PvM Logs: could not read the bundled rules", e);
+		}
+		final String override = dir == null ? null : readText(dir.joinSegment("boss-rules.json"));
+		rulesRecord = portedCommit(rules == null ? null : rules.provenance()) + " rules " + FightContext.shortHash(bundled)
+			+ (override == null ? "" : " override " + FightContext.shortHash(override));
+		final String monsters = dir == null ? null : readText(dir.joinSegment("monsters.json"));
+		monstersRecord = monsters == null ? null : "cache " + FightContext.shortHash(monsters);
+		// The calibration report, once, after the history has loaded (this runs after loadHistory on the same executor).
+		for (String line : calibrationReport().split("\n"))
+		{
+			debug.log("%s", line);
+		}
+	}
+
+	/**
+	 * The local calibration report (T-110): per boss, target, weapon and build,
+	 * A/E, the mean luck z with its standard error, and the deciles, flagged
+	 * groups first. For the side panel's Tools button (T-111): it reads a copy
+	 * of the history, so call it off the client thread.
+	 */
+	String calibrationReport()
+	{
+		// A copy-on-write list: the copy is safe from any thread.
+		return Calibration.report(new ArrayList<>(history), monsterStats == null ? null : monsterStats.rules());
+	}
+
+	// The commit in BossRules.provenance's "repo@commit (date)", or "unknown".
+	static String portedCommit(String provenance)
+	{
+		final int at = provenance == null ? -1 : provenance.indexOf('@');
+		if (at < 0)
+		{
+			return "unknown";
+		}
+		final int end = provenance.indexOf(' ', at);
+		return provenance.substring(at + 1, end < 0 ? provenance.length() : end);
+	}
+
+	// A small file's text, or null when it doesn't exist or can't be read.
+	private static String readText(Filepath file)
+	{
+		if (file == null || !file.exists())
+		{
+			return null;
+		}
+		try (InputStream in = file.openInputStream())
+		{
+			return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+		}
+		catch (IOException | RuntimeException e)
+		{
+			return null;
+		}
+	}
+
+	/** This install's random id (T-110), or null until it has been read. Kept for later; nothing is sent. */
+	String getInstallId()
+	{
+		return installId;
 	}
 
 	// Opens a fight as soon as the player targets something attackable, so the overlay is up while the first attack is
@@ -6302,7 +6508,12 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void finalizeFight(boolean died, long now, String reason, boolean keepCounts)
 	{
-		// Whatever ends a fight ends its hold (T-088), and its chase (T-097), and a death's uncounted ticks (T-100).
+		// Whatever ends a fight ends its hold (T-088), and its chase (T-097), and a death's uncounted ticks (T-100). A chase still
+		// running is one of the fight's mechanic windows (T-110).
+		if (chase != null && current.getAttempts() > 0)
+		{
+			current.context().addWindow("chase", chase.excused, chase.lost);
+		}
 		away = null;
 		chase = null;
 		deadInRaid = false;
@@ -6344,6 +6555,7 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("%s", dot);
 		}
 		settleAvoidable(current);
+		recordFightEnd(current, ended);
 		// The target's drains over the fight (T-049).
 		current.recordDrain(drain.recordFor(targetNpc, current.getTargetIndex(), current.getStartTick()));
 		current.end(died, now);
@@ -6403,6 +6615,81 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		saveHistory();
 	}
+
+	/**
+	 * T-110, R1: what the fight's record keeps as the fight ends - its weapons'
+	 * sums from the timeline, its mechanic windows and the most players seen. A
+	 * chase still open was added as the fight began to end. Only for a fight
+	 * something was thrown in.
+	 */
+	private void recordFightEnd(Fight fight, FightTimeline line)
+	{
+		if (fight.getAttempts() <= 0)
+		{
+			return;
+		}
+		final FightContext c = fight.context();
+		if (line != null)
+		{
+			c.weapons = FightContext.weaponsOf(line.attacks());
+		}
+		for (FightContext.Window w : mechanics.closedWindows())
+		{
+			c.addWindow(w.mechanic, w.excused, w.lost);
+		}
+		otherPlayersNear();
+	}
+
+	/**
+	 * The game's kill count or fight duration (T-110), onto the fight a kill
+	 * just closed: the room's closing fight, ended a moment ago. Saved again,
+	 * since it was already.
+	 */
+	private void recordKillMessage(String message)
+	{
+		final int kc = GameMessages.killCount(message);
+		final int ticks = kc >= 0 ? -1 : GameMessages.durationTicks(message);
+		if (kc < 0 && ticks < 0)
+		{
+			return;
+		}
+		final Fight onto = killMessageFight(lastFinished, current, System.currentTimeMillis());
+		if (onto == null)
+		{
+			return;
+		}
+		if (kc >= 0)
+		{
+			onto.context().kc = kc;
+		}
+		else
+		{
+			onto.context().gameDurationTicks = ticks;
+		}
+		debug.log("KILL MESSAGE on %s: %s", onto.getTargetName(), kc >= 0 ? "kill count " + kc : "duration " + ticks + " ticks");
+		if (onto.isEnded())
+		{
+			saveHistory();
+		}
+	}
+
+	/**
+	 * Which fight the game's kill message belongs to (T-110): the last fight to
+	 * end, if it ended in the last {@link #KILL_MESSAGE_MILLIS} and on a death
+	 * or a closed room; else the one still open (a message ahead of the death).
+	 */
+	static Fight killMessageFight(Fight lastFinished, Fight current, long now)
+	{
+		if (lastFinished != null && lastFinished.isEnded() && now - lastFinished.getEndMillis() <= KILL_MESSAGE_MILLIS
+			&& (lastFinished.isTargetDied() || lastFinished.isClosedRoom()))
+		{
+			return lastFinished;
+		}
+		return current != null && !current.isEnded() && current.getAttempts() > 0 ? current : null;
+	}
+
+	/** How long after a kill its messages may still come (T-110): the loot and the messages follow within a few ticks. */
+	static final long KILL_MESSAGE_MILLIS = 15_000;
 
 	private Filepath historyFile()
 	{

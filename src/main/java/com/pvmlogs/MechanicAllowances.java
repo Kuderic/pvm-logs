@@ -73,6 +73,8 @@ final class MechanicAllowances
 
 	private final Consumer<String> log;
 	private final List<Run> runs = new ArrayList<>();
+	// T-110: every window this fight has closed, with the idle ticks inside it, for R1. Cleared with the fight.
+	private final List<FightContext.Window> closed = new ArrayList<>();
 	private int excusedTotal;
 	private int stillLostTotal;
 	private int castTick = Integer.MIN_VALUE;
@@ -86,6 +88,7 @@ final class MechanicAllowances
 	void reset()
 	{
 		runs.clear();
+		closed.clear();
 		excusedTotal = 0;
 		stillLostTotal = 0;
 		castTick = Integer.MIN_VALUE;
@@ -173,6 +176,12 @@ final class MechanicAllowances
 		}
 	}
 
+	/** The windows this fight has closed (T-110), idle ticks and all; after {@link #finish} every one. */
+	List<FightContext.Window> closedWindows()
+	{
+		return new ArrayList<>(closed);
+	}
+
 	int excusedTotal()
 	{
 		return excusedTotal;
@@ -206,6 +215,10 @@ final class MechanicAllowances
 				if (run.excused > 0 || run.stillLost > 0)
 				{
 					log.accept(run.line());
+				}
+				if (closed.size() < FightContext.WINDOW_CAP)
+				{
+					closed.add(new FightContext.Window(run.allowance.state, run.excused, run.stillLost));
 				}
 				it.remove();
 			}
