@@ -150,10 +150,21 @@ final class DamageMoments
 		return Double.isNaN(z) ? -1 : phi(z);
 	}
 
-	/** (actual − expected) / √variance, or NaN when the variance is unknown or nothing. */
+	/**
+	 * Below this a variance is none (T-103). A fight of guaranteed max hits
+	 * (T-098) has none at all, but the sums leave a floating-point remainder: in
+	 * Eric's 22:32 log one read about 2e-12, and A 55 against E 58 came out at
+	 * z −1,989,533. Remainders like that sit around 1e-12; the smallest real
+	 * variance of an attack that can roll anything is far above the floor (a max
+	 * hit of 1 that lands 99% of the time has 0.25 per landed roll), so 1e-6
+	 * keeps six orders of magnitude from each.
+	 */
+	static final double VARIANCE_FLOOR = 1e-6;
+
+	/** (actual − expected) / √variance, or NaN when the variance is unknown or under {@link #VARIANCE_FLOOR}. */
 	static double z(double actual, double expected, double variance)
 	{
-		if (!(variance > 0) || expected < 0)
+		if (!(variance > VARIANCE_FLOOR) || expected < 0)
 		{
 			return Double.NaN;
 		}

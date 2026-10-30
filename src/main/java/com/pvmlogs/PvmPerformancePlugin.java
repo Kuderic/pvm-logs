@@ -443,7 +443,12 @@ public class PvmPerformancePlugin extends Plugin
 	private static final int EXP_SPEC_AVERAGE = 6;
 	private static final int EXP_VARIANCE = 7;
 	private static final int EXP_SPEC_VARIANCE = 8;
-	static final int EXP_WIDTH = 9;
+	// The hitpoints the row's figures were capped at (T-103), so an attack landing on fewer is re-capped then; -1 unknown.
+	static final int EXP_CAP = 9;
+	static final int EXP_WIDTH = 10;
+	// The hitpoints each npc had just before the first of my splats on it this tick (T-103): {tick, left}. A melee blow is
+	// booked after its splat has been counted, and a shot resolved at the tick's end too.
+	private final Map<Integer, int[]> capBeforeLanding = new HashMap<>();
 	private final Map<Integer, double[]> expectedByTick = new HashMap<>();
 	// The tick the special attack energy last fell, which is the tick a special went out on. Read back at the booking
 	// rather than at the sample: the varp can arrive after the tick's onGameTick has already run. How long after the
@@ -989,6 +994,8 @@ public class PvmPerformancePlugin extends Plugin
 			// accurate, and where that missed, the expectation was never counted at all. Magic did not show it because a cast
 			// has a SECOND route through recordSplash, which is what proved the cause. Trading a total that is right by luck for
 			// one that is silently short is the worse bargain; the real fix is to match a held sample to its own landing tick.
+			// What it had just before this splat (T-103), for the attack landing now: its own damage is counted further down.
+			noteCapBeforeLanding(npc.getIndex());
 			resolvePendingSample(npc.getIndex());
 			// A cast waiting on an answer has it the moment one of my hitsplats DEALS DAMAGE to the NPC it was aimed at; nothing
 			// later can unsay that. A zero is deliberately taken as a splash rather than a hit that rolled nothing - not
@@ -2659,6 +2666,7 @@ public class PvmPerformancePlugin extends Plugin
 			row[EXP_SPEC_AVERAGE] = expectedSpecAverageHit;
 			row[EXP_VARIANCE] = expectedVariance;
 			row[EXP_SPEC_VARIANCE] = expectedSpecVariance;
+			row[EXP_CAP] = capLeft(shown.getTargetIndex());
 			expectedByTick.put(client.getTickCount(), row);
 			modifiersByTick.put(client.getTickCount(), combatCalc.describeBossModifiers(shownId));
 			// T-087: the row above scores the attack going out now with every modifier it lands with. What is shown live
@@ -2859,6 +2867,8 @@ public class PvmPerformancePlugin extends Plugin
 		double specAverageHit = expectedSpecAverageHit;
 		double variance = expectedVariance;
 		double specVariance = expectedSpecVariance;
+		// The hitpoints the figures below are capped at (T-103): the row's where they come from one, else now's.
+		int capThen = capLeft(fight.getTargetIndex());
 		// Prefer the figures from the tick the attack left on. A slow projectile surfaces a tick late, and scoring it with
 		// the loadout held by then credited a shadow's attack to the whip switched to mid-flight.
 		final double[] atOrigin = expectedByTick.get(figuresTick);
@@ -2879,6 +2889,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (originIsAuthoritative)
 		{
 			maxHit = (int) atOrigin[EXP_MAX];
+			capThen = (int) atOrigin[EXP_CAP];
 			accuracy = atOrigin[EXP_ACCURACY];
 			averageHit = atOrigin[EXP_AVERAGE];
 			specMaxHit = (int) atOrigin[EXP_SPEC_MAX];
@@ -2901,6 +2912,7 @@ public class PvmPerformancePlugin extends Plugin
 		else if (atOrigin != null && (int) atOrigin[EXP_NPC_ID] == targetId)
 		{
 			maxHit = (int) atOrigin[EXP_MAX];
+			capThen = (int) atOrigin[EXP_CAP];
 			accuracy = atOrigin[EXP_ACCURACY];
 			averageHit = atOrigin[EXP_AVERAGE];
 			specMaxHit = (int) atOrigin[EXP_SPEC_MAX];
@@ -2969,9 +2981,12 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			maxHits.scored(fight, fight.getTargetIndex(), client.getTickCount(), maxHit, checkable,
 				combatCalc.wornNow());
-			fight.recordExpected(maxHit, expectedChances, averageHit, variance);
-			session.recordExpected(expectedChances, averageHit, variance);
-			drainLuck.booked(fight, figuresTick, client.getTickCount(), special, specWeapon, averageHit, variance);
+			// Already landed: capped at what was left just before its splat (T-103), a thrall's in the tick between included.
+			final double[] at = cappedAtLanding(maxHit, expectedChances, averageHit, variance, capThen,
+				fight.getTargetIndex());
+			fight.recordExpected(maxHit, expectedChances, at[0], at[1]);
+			session.recordExpected(expectedChances, at[0], at[1]);
+			drainLuck.booked(fight, figuresTick, client.getTickCount(), special, specWeapon, at[0], at[1]);
 		}
 		else
 		{
@@ -2979,13 +2994,55 @@ public class PvmPerformancePlugin extends Plugin
 			pendingSamples.add(new PendingSample(fight,
 				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance,
 				line == null ? null : line.latest(), checkable, checkable ? combatCalc.wornNow() : null,
-				figuresTick, special, specWeapon));
+				figuresTick, special, specWeapon, capThen));
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
 		attackObservedAccuracy = -1;
 		attackObservedAverageHit = -1;
 		attackObservedVariance = -1;
+	}
+
+	/** What this npc has left, for capping an attack (T-103): as the calculator's overkill cap reads it; -1 unknown. */
+	private int capLeft(int npcIndex)
+	{
+		final int left = npcIndex < 0 ? -1 : health.capRemaining(npcIndex, client.getTickCount());
+		return left > 0 ? left : -1;
+	}
+
+	/** Notes what this npc had just before the first of my splats on it this tick (T-103). */
+	private void noteCapBeforeLanding(int npcIndex)
+	{
+		final int tick = client.getTickCount();
+		final int[] seen = capBeforeLanding.get(npcIndex);
+		if (seen == null || seen[0] != tick)
+		{
+			capBeforeLanding.put(npcIndex, new int[]{tick, capLeft(npcIndex)});
+		}
+		if (capBeforeLanding.size() > 64)
+		{
+			capBeforeLanding.values().removeIf(e -> tick - e[0] > 2);
+		}
+	}
+
+	/**
+	 * An attack's expected mean and variance, capped at what its npc had just
+	 * before it landed this tick rather than at {@code capThen}, what it had
+	 * when the figures were read (T-103). Unchanged where either is unknown or
+	 * nothing less is left.
+	 */
+	private double[] cappedAtLanding(int maxHit, double chances, double mean, double variance, int capThen, int npcIndex)
+	{
+		final int[] seen = capBeforeLanding.get(npcIndex);
+		final int capNow = seen != null && seen[0] == client.getTickCount() ? seen[1] : capLeft(npcIndex);
+		final double[] recapped = LandingCap.recap(maxHit, chances, mean, variance, capThen, capNow);
+		if (recapped == null)
+		{
+			return new double[]{mean, variance};
+		}
+		debug.log("  capped at landing: %d left as it landed, %d when its figures were read: avg %.2f -> %.2f, var %.1f -> %.1f",
+			capNow, capThen, mean, recapped[0], variance, recapped[1]);
+		return recapped;
 	}
 
 	/** The {@code scored as} line's note for figures from before a switch (T-065). */
@@ -3021,11 +3078,14 @@ public class PvmPerformancePlugin extends Plugin
 		private final int madeTick;
 		private final boolean special;
 		private final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon;
+		// The hitpoints its figures were capped at (T-103); -1 unknown.
+		private final int capThen;
 
 		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit,
 			double variance, FightTimeline.Attack attack, boolean checkable, java.util.function.Supplier<String> worn,
-			int madeTick, boolean special, net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon)
+			int madeTick, boolean special, net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon, int capThen)
 		{
+			this.capThen = capThen;
 			this.checkable = checkable;
 			this.worn = worn;
 			this.madeTick = madeTick;
@@ -3056,6 +3116,11 @@ public class PvmPerformancePlugin extends Plugin
 			pendingSamples.remove(i);
 			maxHits.scored(sample.fight, sample.npcIndex, client.getTickCount(), sample.maxHit, sample.checkable,
 				sample.worn);
+			// Capped at what was left as it landed, not as it was thrown (T-103).
+			final double[] at = cappedAtLanding(sample.maxHit, sample.accuracy, sample.averageHit, sample.variance,
+				sample.capThen, npcIndex);
+			final double averageHit = at[0];
+			final double variance = at[1];
 			if (sample.fight != null)
 			{
 				final FightTimeline line = timelines.of(sample.fight);
@@ -3064,11 +3129,11 @@ public class PvmPerformancePlugin extends Plugin
 					// Other attacks may have gone out while it flew: the expectation is this one's.
 					line.expectNextFor(sample.attack);
 				}
-				sample.fight.recordExpected(sample.maxHit, sample.accuracy, sample.averageHit, sample.variance);
+				sample.fight.recordExpected(sample.maxHit, sample.accuracy, averageHit, variance);
 				drainLuck.booked(sample.fight, sample.madeTick, client.getTickCount(), sample.special, sample.specWeapon,
-					sample.averageHit, sample.variance);
+					averageHit, variance);
 			}
-			session.recordExpected(sample.accuracy, sample.averageHit, sample.variance);
+			session.recordExpected(sample.accuracy, averageHit, variance);
 			return;
 		}
 	}
@@ -4317,11 +4382,9 @@ public class PvmPerformancePlugin extends Plugin
 			final double bestSetup = mechanic ? -1 : combatCalc.idealAverageHit(targetId);
 			final double actualSetup = mechanic ? 0 : prayed ? ifPrayed : ifNot;
 			final double idealSetup = Math.max(bestSetup, actualSetup);
-			if (bestSetup >= 0 && actualSetup > bestSetup)
+			if (idealBelowActual(bestSetup, actualSetup))
 			{
-				debug.log("IDEAL BELOW ACTUAL on npc %d: ideal %.2f, actual %.2f (prayed=%b) - clamped to the actual, so "
-						+ "something the ideal is built from is under-reading",
-					targetId, bestSetup, actualSetup);
+				debug.log(IDEAL_BELOW_ACTUAL, targetId, bestSetup, actualSetup, prayed);
 			}
 			// What the missing boost cost this attack: the same attack at full boost, prayer and gear as they were (T-010).
 			final double boosted = mechanic ? -1 : combatCalc.boostedAverageHit(targetId, prayed);
@@ -5154,6 +5217,7 @@ public class PvmPerformancePlugin extends Plugin
 			monsterRooms.clear();
 			lastPlayerPoint = null;
 			countedProjectiles.clear();
+			capBeforeLanding.clear();
 			taken.clear();
 			targetSeen.clear();
 			recentTiles.clear();
@@ -5472,6 +5536,23 @@ public class PvmPerformancePlugin extends Plugin
 	 * finished on it (its last swing, booked after the next fight opened); failing
 	 * both, the fight open on the attack's tick, as before.
 	 */
+	/**
+	 * Whether the ideal setup's figure is below the actual's by more than the
+	 * last bits of a double (T-103). The clamp to the actual stays either way;
+	 * this is whether to log it. In Eric's 22:32 log [515] it fired on a
+	 * guaranteed max with 26 left: the actual with the 29 worn and the ideal with
+	 * the Book of the Dead's 31 are both the 26 left, walked over 30 and 32
+	 * rolls, and come out 26.00000000000001 and 26.0.
+	 */
+	/** The line {@link #idealBelowActual} logs: npc, ideal, actual, prayed (T-103: the prayer was missing, so it never formatted). */
+	static final String IDEAL_BELOW_ACTUAL = "IDEAL BELOW ACTUAL on npc %d: ideal %.2f, actual %.2f (prayed=%b) - clamped to "
+		+ "the actual, so something the ideal is built from is under-reading";
+
+	static boolean idealBelowActual(double ideal, double actual)
+	{
+		return ideal >= 0 && actual - ideal > 1e-9 * Math.max(1, Math.abs(actual));
+	}
+
 	/**
 	 * Whether a shot chosen to be booked into {@code chosen} belongs to the npc
 	 * its projectile was aimed at instead (T-101): proved by a projectile, aimed
