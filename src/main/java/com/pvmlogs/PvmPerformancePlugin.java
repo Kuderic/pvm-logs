@@ -6304,7 +6304,7 @@ public class PvmPerformancePlugin extends Plugin
 				}
 				catch (IOException | RuntimeException e)
 				{
-					log.warn("PvM Logs: could not save the install id", e);
+					log.warn("Luck vs Skill: could not save the install id", e);
 				}
 			});
 		}
@@ -6316,7 +6316,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		catch (IOException e)
 		{
-			log.debug("PvM Logs: could not read the bundled rules", e);
+			log.debug("Luck vs Skill: could not read the bundled rules", e);
 		}
 		final String override = dir == null ? null : readText(dir.joinSegment("boss-rules.json"));
 		rulesRecord = portedCommit(rules == null ? null : rules.provenance()) + " rules " + FightContext.shortHash(bundled)
