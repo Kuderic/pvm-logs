@@ -187,6 +187,16 @@ final class SidePanelModel
 		 * now while it runs or its last attack once it has ended. NaN for anything else.
 		 */
 		double runSeconds = Double.NaN;
+		/**
+		 * T-099: the room's boss parts and its adds, each as an input of its own for the Damage card's switch (its
+		 * scope, other damage and view); null for no switch: an ungrouped boss, a run, or adds that took no damage.
+		 */
+		Input bossOnly;
+		Input addsOnly;
+		/** T-099: in {@link #bossOnly} and {@link #addsOnly}, the fights they stand for, as one room. */
+		Encounter part;
+		/** T-099: in {@link #bossOnly} and {@link #addsOnly}, none of its fights scored (Zulrah's snakelings). */
+		boolean noneScored;
 		/** The room's name, the target's before the first attack, or the raid's. */
 		String name;
 		/** The raid the room or scope is in, or null: a raid's rooms show its icon (T-054). */
@@ -298,6 +308,107 @@ final class SidePanelModel
 		in.drain = drain(room);
 		fillOther(in, fights);
 		in.targets = targets(fights);
+		split(in, room);
+	}
+
+	// ---- T-099: the Damage card's Boss · Adds · All ----
+
+	static final String BOSS = "Boss";
+	static final String ADDS = "Adds";
+	static final String ALL = "All";
+	/** T-099: the switch's default, the boss: what players compare weapons by. */
+	static final int DEFAULT_TARGET = 0;
+	static final String WHOLE_KILL = "Luck and Execution cover the whole kill.";
+
+	/**
+	 * T-099: a room's fights on its boss's parts and on its adds, as two rooms, or null when it has no switch: no adds
+	 * (an ungrouped boss), no boss part, a run of monsters, or adds that took none of the player's damage. An add is
+	 * what {@link EncounterGroup} doesn't take a drop from as the kill (the Sire's respiratory systems, spawns and
+	 * scions, Zulrah's snakelings, Araxxor's araxytes); every other target is a part of the boss (all of Zulrah's forms,
+	 * the Sire's, Araxxor).
+	 */
+	static Encounter[] parts(Encounter room)
+	{
+		if (room == null || room.isMonsterRoom())
+		{
+			return null;
+		}
+		final Encounter boss = new Encounter(room.getName(), room.getRaid(), room.getStartMillis());
+		final Encounter adds = new Encounter(room.getName(), room.getRaid(), room.getStartMillis());
+		int addDamage = 0;
+		for (Fight f : room.getFights())
+		{
+			if (EncounterGroup.lootIsTheKill(f.getTargetId()))
+			{
+				boss.add(f);
+			}
+			else
+			{
+				adds.add(f);
+				addDamage += Math.max(0, f.getDamageDealt());
+			}
+		}
+		return boss.getFights().isEmpty() || addDamage <= 0 ? null : new Encounter[]{boss, adds};
+	}
+
+	private static void split(Input in, Encounter room)
+	{
+		final Encounter[] parts = parts(room);
+		in.bossOnly = parts == null ? null : part(parts[0], "boss");
+		in.addsOnly = parts == null ? null : part(parts[1], "adds");
+	}
+
+	/** One side of the switch: its scope, its other damage, and the damage card's "on the boss". */
+	private static Input part(Encounter fights, String who)
+	{
+		final Input p = new Input();
+		p.kind = Kind.ROOM;
+		p.part = fights;
+		p.scope = LedgerRows.of(fights);
+		p.name = fights.getName();
+		// The card's hint: "1,240 on the boss", "312 on the adds".
+		p.scoredName = who;
+		p.unscored = true;
+		boolean scored = false;
+		for (Fight f : fights.getFights())
+		{
+			scored |= f.isScored();
+		}
+		p.noneScored = !scored;
+		fillOther(p, fights.getFights());
+		return p;
+	}
+
+	/**
+	 * T-099: the switch's three views, Boss, Adds and All, each with its own rows, chart and line. Its weapon rows'
+	 * DPS is over the time spent attacking that target set ({@link SidePanelWeaponRows#ticks} over its own view). The
+	 * room's Luck, Damage/expected, Execution and time budget stay the whole room's, and the line says so.
+	 */
+	static List<PanelSnapshot.TargetView> byTarget(Input in, PanelSnapshot.Sources all, PanelSnapshot.Chart allChart,
+		boolean warning)
+	{
+		final List<PanelSnapshot.TargetView> views = new ArrayList<>(3);
+		views.add(targetView(BOSS, in.bossOnly, in.charts, warning));
+		views.add(targetView(ADDS, in.addsOnly, in.charts, warning));
+		views.add(new PanelSnapshot.TargetView(ALL, all, allChart, LedgerRows.clock(in.scope.combatTicks())
+			+ " on the boss and adds. " + WHOLE_KILL));
+		return views;
+	}
+
+	private static PanelSnapshot.TargetView targetView(String label, Input p, boolean charts, boolean warning)
+	{
+		final String time = LedgerRows.clock(p.scope.combatTicks()) + " on the " + p.scoredName;
+		if (p.noneScored)
+		{
+			// Their time counts (it's in the room's clock), nothing else does.
+			return new PanelSnapshot.TargetView(label, null, null, time + ", not scored. " + WHOLE_KILL);
+		}
+		final PanelSnapshot.Sources rows = damage(new LedgerRows.Numbers(p.scope), p, warning);
+		p.charts = charts;
+		p.chartFrom = 0;
+		// Neutral: luck is the room's, not one side's.
+		final PanelSnapshot.Chart chart = charts ? chart(p, p.scope, LedgerRows.Colour.NEUTRAL, warning) : null;
+		return new PanelSnapshot.TargetView(label, rows, chart, time + ". " + WHOLE_KILL);
 	}
 
 	/**
@@ -669,10 +780,20 @@ final class SidePanelModel
 		}
 		else
 		{
+			// T-099: with the switch, every view's chart is sent whole, so a click shows one from its start.
+			final boolean split = in.bossOnly != null && in.addsOnly != null && in.kind == Kind.ROOM && !run;
+			if (split)
+			{
+				in.chartFrom = 0;
+			}
 			b.damage = damage(n, in, warning);
 			if (in.charts)
 			{
 				b.chart = chart(in, s, luckColour, warning);
+			}
+			if (split)
+			{
+				b.byTarget = byTarget(in, b.damage, b.chart, warning);
 			}
 		}
 		if (after)
@@ -2047,7 +2168,9 @@ final class SidePanelModel
 		final float last = v.damage[length - 1];
 		final float lastExpected = v.expected[length - 1];
 		final boolean rangeKnown = s.damageVariance() > 0 && v.variance[length - 1] > 0;
-		final int ticks = s.combatTicks();
+		// T-099: one side of the switch spans from its first fight to its last, the other side's time between, so its
+		// axis ends at that span, not at its own fighting time.
+		final int ticks = in.part != null ? length : s.combatTicks();
 		return new PanelSnapshot.Chart(from, length, Arrays.copyOfRange(v.damage, from, length),
 			Arrays.copyOfRange(v.expected, from, length), Arrays.copyOfRange(v.variance, from, length),
 			states, styles,
