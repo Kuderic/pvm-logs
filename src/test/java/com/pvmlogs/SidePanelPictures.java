@@ -62,6 +62,11 @@ public final class SidePanelPictures
 			switchInHeader(out);
 			return;
 		}
+		if (args.length > 1 && "findings".equals(args[1]))
+		{
+			calibrationFindings(out);
+			return;
+		}
 		if (args.length > 1 && "calibration".equals(args[1]))
 		{
 			calibration(out);
@@ -995,10 +1000,15 @@ public final class SidePanelPictures
 			Files.createDirectories(dir);
 			for (double scale : new double[]{1, 2})
 			{
-				write(dir, "a-tools", scale, renderHistory(source(), SidePanelHistoryTab::putAway, scale));
+				write(dir, "a-tools", scale, renderHistory(source(), t ->
+				{
+					t.putAway();
+					t.setDebug(true);
+				}, scale));
 				write(dir, "b-after-a-click", scale, renderHistory(source(), t ->
 				{
 					t.putAway();
+					t.setDebug(true);
 					t.setStatus(PvmPerformancePanel.calibrationStatus(3));
 				}, scale));
 				write(dir, "c-nothing-saved", scale, renderHistory(source(java.util.Collections.emptyList()), t ->
@@ -1012,6 +1022,75 @@ public final class SidePanelPictures
 		SidePanelStyle.setText(false, false);
 	}
 
+	/** T-114: Eric's kind of findings, in T-113's sentences (his four old groups, as if they were on a current build). */
+	static final java.util.List<String> FINDINGS = java.util.Arrays.asList(
+		"The Leviathan: you dealt 8% more than the plugin expected over 54 kills. More than luck explains, so likely a"
+			+ " scoring error. (build abc1234)",
+		"The Deranged archaeologist: you dealt 11% more than the plugin expected over 12 kills. More than luck explains,"
+			+ " so likely a scoring error. (build abc1234)",
+		"Araxxor's Acidic araxytes: you dealt 38% more than the plugin expected over 31 kills. More than luck explains,"
+			+ " so likely a scoring error. (build abc1234)",
+		"Araxxor's Mirrorback araxytes: you dealt 37% more than the plugin expected over 30 kills. More than luck"
+			+ " explains, so likely a scoring error. (build abc1234)");
+	/** T-114: what T-113's summary said on Eric's history on 2026-10-30 (read from it, not committed). */
+	static final java.util.List<String> NOTHING_OFF = java.util.Collections.singletonList("Nothing looks off: over 15"
+		+ " kills on current builds, your damage matches what the plugin expected.");
+
+	/**
+	 * T-114: History's Tools with Debug logging off (no button) and on; the findings card with Eric's kind of findings,
+	 * and with nothing flagged. Normal and Smooth, 1× and 2×, cut to the Tools section.
+	 */
+	private static void calibrationFindings(Path out) throws IOException
+	{
+		final String file = "calibration-20261030-063906.txt";
+		final String[] modes = {"normal", "smooth"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = false;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-debug-off", scale, tools(t -> t.setDebug(false), scale));
+				write(dir, "b-debug-on", scale, tools(t -> t.setDebug(true), scale));
+				write(dir, "c-findings", scale, tools(t ->
+				{
+					t.setDebug(true);
+					t.showCalibration(file, FINDINGS);
+				}, scale));
+				write(dir, "d-nothing-off", scale, tools(t ->
+				{
+					t.setDebug(true);
+					t.showCalibration(file, NOTHING_OFF);
+				}, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-114: History's Tools section after {@code state}, cut out of the tab's render. */
+	private static BufferedImage tools(java.util.function.Consumer<SidePanelHistoryTab> state, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source());
+		panel.tabs().select(panel.tabs().getTab(1));
+		final SidePanelHistoryTab tab = panel.historyTab();
+		tab.refresh();
+		tab.putAway();
+		state.accept(tab);
+		styled(panel);
+		final BufferedImage whole = draw(panel.tabs(), tab, scale);
+		final SidePanelSection section = sectionOf(tab, "historyTools");
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			tab);
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height) * scale));
+		return whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+	}
+
 	/** T-111: the Calibration report button's tooltip under History's Tools. */
 	private static BufferedImage buttonTooltip(double scale)
 	{
@@ -1020,6 +1099,7 @@ public final class SidePanelPictures
 		final SidePanelHistoryTab tab = panel.historyTab();
 		tab.refresh();
 		tab.putAway();
+		tab.setDebug(true);
 		styled(panel);
 		final BufferedImage whole = draw(panel.tabs(), tab, scale);
 		final javax.swing.JButton b = tab.calibrationButton();

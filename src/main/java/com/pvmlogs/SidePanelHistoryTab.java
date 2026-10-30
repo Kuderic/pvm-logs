@@ -163,6 +163,17 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	static final String CALIBRATION = "Calibration report";
 	static final String CALIBRATION_TIP = "How the plugin's expected damage compares with what really landed, per boss and"
 		+ " weapon. Nothing is sent anywhere.";
+	/**
+	 * T-114: the button shows only while the Debug logging setting is on: the report checks the plugin's maths, for its
+	 * developers and testers, not a player feature (Eric, 2026-10-30). Read when the panel opens, as the text settings are.
+	 */
+	private boolean debug;
+	/** T-114: the last report's findings (T-113's plain sentences) and its file; null until a report is saved, or closed. */
+	private java.util.List<String> findings;
+	private String findingsFile;
+	/** T-114: how many findings the card shows before "+N more in the file". */
+	static final int FINDINGS_SHOWN = 3;
+	static final String FINDINGS_TITLE = "Calibration report";
 	static final String EXPORT_BOSSES_ONLY = "Bosses only";
 	static final String EXPORT_BOSSES_ONLY_TIP = "Export only bosses";
 	static final String NO_BOSS_MATCH = "No boss matches that name.";
@@ -256,6 +267,91 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 	boolean bossesOnly()
 	{
 		return bossesOnly.isSelected();
+	}
+
+	/** T-114: the Debug logging setting, read when the panel opens; a change shows or hides the button (a refresh). */
+	void setDebug(boolean on)
+	{
+		if (on != debug)
+		{
+			debug = on;
+			refresh();
+		}
+	}
+
+	boolean debug()
+	{
+		return debug;
+	}
+
+	/**
+	 * T-114: a report was saved as {@code file}: the status line names it, and a card shows its findings (T-113's plain
+	 * sentences, or the "Nothing looks off" one). One refresh: the structure changes once. Swing's thread.
+	 */
+	void showCalibration(String file, java.util.List<String> lines)
+	{
+		findings = lines == null ? java.util.Collections.<String>emptyList() : new java.util.ArrayList<>(lines);
+		findingsFile = file;
+		status.set(Text.small(calibrationSaved(file), SidePanelStyle.SECONDARY));
+		status.setShort(java.util.Arrays.asList("Saved " + file, "Saved the calibration report"));
+		refresh();
+	}
+
+	/** T-114: the card's ✕: the findings go. */
+	void closeCalibration()
+	{
+		findings = null;
+		findingsFile = null;
+		refresh();
+	}
+
+	/** T-114: {@code Saved calibration-20261030-063906.txt in the plugin folder}. */
+	static String calibrationSaved(String file)
+	{
+		return "Saved " + file + " in the plugin folder";
+	}
+
+	/** T-114: what the card shows: the first {@link #FINDINGS_SHOWN} findings, then {@code +N more in the file}. */
+	static java.util.List<String> shownFindings(java.util.List<String> lines)
+	{
+		if (lines.size() <= FINDINGS_SHOWN)
+		{
+			return lines;
+		}
+		final java.util.List<String> out = new java.util.ArrayList<>(lines.subList(0, FINDINGS_SHOWN));
+		out.add("+" + (lines.size() - FINDINGS_SHOWN) + " more in the file");
+		return out;
+	}
+
+	/** T-114: the findings card: its title and ✕, then each finding as a paragraph. */
+	private JComponent findingsCard()
+	{
+		final JPanel card = new JPanel(new SidePanelStack(6));
+		card.setBackground(SidePanelStyle.CARD);
+		card.setBorder(new javax.swing.border.EmptyBorder(SidePanelStyle.CARD_PAD_V, SidePanelStyle.CARD_PAD_H,
+			SidePanelStyle.CARD_PAD_V, SidePanelStyle.CARD_PAD_H));
+		final JPanel head = new JPanel(new BorderLayout(6, 0));
+		head.setOpaque(false);
+		head.add(new SidePanelText(Text.body(FINDINGS_TITLE, SidePanelStyle.VALUE), false), BorderLayout.CENTER);
+		// The boss card's painted close control (T-082), not a glyph the RuneScape fonts may lack.
+		final Close close = new Close("Close the calibration findings", this::closeCalibration);
+		head.add(close, BorderLayout.EAST);
+		card.add(head);
+		final int width = SidePanelStyle.CONTENT_WIDTH - 2 * SidePanelStyle.CARD_PAD_H;
+		final java.util.List<String> shown = shownFindings(findings);
+		for (int i = 0; i < shown.size(); i++)
+		{
+			final boolean more = i == FINDINGS_SHOWN;
+			card.add(new SidePanelParts.Paragraph(shown.get(i), more ? SidePanelStyle.MUTED : SidePanelStyle.BODY,
+				SidePanelStyle.Type.SMALL, width));
+		}
+		return card;
+	}
+
+	/** T-114: the findings on show, or null; for tests. */
+	java.util.List<String> findings()
+	{
+		return findings;
 	}
 
 	/** T-111: the Calibration report button, for tests and renders. */
@@ -744,13 +840,22 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		tools = new SidePanelFightTab.ToolButtons(actions, this);
 		tools.setHistory(anyHistory);
 		box.add(tools);
-		// T-111: the calibration report, under the grid; greyed with nothing saved, like Export.
-		calibration.setEnabled(anyHistory);
-		box.add(calibration);
+		// T-111: the calibration report, under the grid; greyed with nothing saved, like Export. T-114: only with Debug
+		// logging on.
+		if (debug)
+		{
+			calibration.setEnabled(anyHistory);
+			box.add(calibration);
+		}
 		// T-102: the export's choice, under the Export button it's for.
 		bossesOnly.setEnabled(anyHistory);
 		box.add(bossesOnly);
 		box.add(status);
+		// T-114: the last report's findings, under the status line, until closed.
+		if (findings != null)
+		{
+			box.add(findingsCard());
+		}
 		content.add(new SidePanelSection("historyTools", "Tools", Text.NONE, box, folds));
 	}
 

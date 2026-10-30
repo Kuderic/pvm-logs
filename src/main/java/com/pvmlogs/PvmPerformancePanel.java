@@ -169,6 +169,8 @@ class PvmPerformancePanel extends PluginPanel
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
 			: new HistorySource(), actions, folds);
 		tripTab = new SidePanelTripTab(actions, folds);
+		// T-114: the Calibration report button only with Debug logging on.
+		historyTab.setDebug(config != null && config.debugLogging());
 		fightTab.setPerf(perf);
 		historyTab.setPerf(perf);
 		tripTab.setPerf(perf);
@@ -286,6 +288,8 @@ class PvmPerformancePanel extends PluginPanel
 		if (config != null)
 		{
 			setText(config.panelLargerText(), config.panelSmoothFont());
+			// T-114: Debug logging shows the Calibration report button; a change refreshes History once.
+			historyTab.setDebug(config.debugLogging());
 		}
 		active = true;
 		dirty = true;
@@ -1013,6 +1017,19 @@ class PvmPerformancePanel extends PluginPanel
 		java.util.function.Supplier<net.runelite.client.util.Filepath> folder,
 		java.util.function.Consumer<String> status)
 	{
+		saveCalibration(executor, report, () -> null, folder, status, null);
+	}
+
+	/**
+	 * T-114: as T-111's, and then the findings: {@code summary} (T-113's plain sentences) is read on the executor too,
+	 * and {@code saved} is given the file's name and the sentences, to show on Swing's thread. Without {@code saved},
+	 * T-111's status line.
+	 */
+	static void saveCalibration(java.util.concurrent.Executor executor, java.util.function.Supplier<String> report,
+		java.util.function.Supplier<java.util.List<String>> summary,
+		java.util.function.Supplier<net.runelite.client.util.Filepath> folder,
+		java.util.function.Consumer<String> status, java.util.function.BiConsumer<String, java.util.List<String>> saved)
+	{
 		status.accept("Building the calibration report…");
 		executor.execute(() ->
 		{
@@ -1032,7 +1049,13 @@ class PvmPerformancePanel extends PluginPanel
 					w.write(text);
 					w.write("\n");
 				}
-				status.accept(calibrationStatus(calibrationFlags(text)));
+				if (saved == null)
+				{
+					status.accept(calibrationStatus(calibrationFlags(text)));
+					return;
+				}
+				final java.util.List<String> lines = summary.get();
+				saved.accept(name, lines == null ? java.util.Collections.<String>emptyList() : lines);
 			}
 			catch (java.io.IOException | RuntimeException e)
 			{
@@ -1053,8 +1076,10 @@ class PvmPerformancePanel extends PluginPanel
 			{
 				return;
 			}
-			saveCalibration(executor, plugin::calibrationReport, plugin::getDataDirectory,
-				PvmPerformancePanel.this::setStatus);
+			// T-114: the findings in plain words in the panel, and the file named.
+			saveCalibration(executor, plugin::calibrationReport, plugin::calibrationSummary, plugin::getDataDirectory,
+				PvmPerformancePanel.this::setStatus, (file, lines) -> SwingUtilities.invokeLater(() ->
+					historyTab.showCalibration(file, lines)));
 		}
 
 		@Override
