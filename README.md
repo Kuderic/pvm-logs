@@ -8,7 +8,7 @@ It works out what each of your attacks should have done, from your gear, levels,
 
 ### Luck and Execution
 - **Luck** says how lucky the kill was: where your damage falls among all the ways the same attacks could have rolled (bottom 20%, the middle half, top 15%), and what that cost or saved in seconds.
-- **Execution** says how much of the fight you spent attacking, and with the right setup: uptime, prayer, gear and stat boost, each with the seconds it cost.
+- **Execution** says how much of the fight you spent attacking, and with the right setup: uptime, with the ticks you lost, and prayer, gear and stat boost, with the expected damage each cost.
 - **Defence drain:** when your special attacks (or your party's) lower the boss's Defence, it tracks the Defence left, counts a missed special as bad luck, and says how much time the drain saved.
 - **After a kill at a boss with attack rules** (Vardorvis so far), it also counts the food you ate because of damage you could have avoided, and how much of the damage you took was avoidable.
 

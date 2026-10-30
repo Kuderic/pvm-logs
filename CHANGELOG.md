@@ -5,10 +5,10 @@ Luck vs Skill is its own Plugin Hub entry. It began as a fork of Arodab's PvM Pe
 
 **Luck and Execution**
 - Luck as a percentile of how the same attacks could have rolled (bottom 20%, the middle half, top 15%), and the seconds it cost or saved.
-- Execution split into uptime, prayer, gear (armour only: your weapon and ammo are never judged) and stat boost, each in seconds.
+- Execution split into uptime (the ticks you lost), and prayer, gear (armour only: your weapon and ammo are never judged) and stat boost (the expected damage each cost).
 - Downtime the boss forces on you (where a mechanic stops you attacking) isn't lost uptime: it shows as a neutral "mechanics" line.
 - Eating is neutral: its own line, not a cost. At Vardorvis, eating for avoidable damage counts against Execution after the kill, and damage taken says how much was avoidable.
-- Defence drain: the Defence your and your party's specials took, live and after the kill, with each boss's floor, immunity and regeneration; a missed special counts as bad luck, and the drain's worth is shown in seconds.
+- Defence drain: the Defence your and your party's specials took, live and after the kill, with each boss's floor, immunity and regeneration; a missed special counts as bad luck, and the drain's worth is shown in damage and seconds.
 
 **What's counted**
 - Your thrall's hits, recoil, vengeance, and burn, poison, venom and bleed are kept apart from your weapon's damage; the boss healing comes off.
