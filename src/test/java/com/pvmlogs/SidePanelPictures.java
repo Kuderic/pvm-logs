@@ -1127,9 +1127,9 @@ public final class SidePanelPictures
 	}
 
 	/**
-	 * T-112 item 5: Details and Damage taken in each of the three layouts, on real kills read from a {@code history.json}
-	 * outside the repo (Eric's: an Araxxor, a Leviathan and a Vardorvis kill, each the one with the most rows). Normal
-	 * and Smooth text, at 1× and 2×, and Larger at 1×, a folder each.
+	 * T-112 item 5: Details and Damage taken in Eric's pick (layout A), on real kills read
+	 * from a {@code history.json} outside the repo (Eric's: an Araxxor, a Leviathan and a Vardorvis kill, each the one
+	 * with the most rows). Normal and Smooth text, at 1× and 2×, and Larger at 1×, a folder each.
 	 */
 	private static void detailsGroups(Path out, Path history) throws IOException
 	{
@@ -1164,7 +1164,6 @@ public final class SidePanelPictures
 						}
 					});
 				in.roomDamageSources = SidePanelModel.roomDamageSources(java.util.Collections.singletonList(room), rules);
-				SidePanelModel.grouping = SidePanelModel.Grouping.HEADINGS;
 				final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
 				final int n = (tab.details == null ? 0 : tab.details.rows.size()) + (tab.taken == null ? 0
 					: tab.taken.rows.size());
@@ -1181,7 +1180,6 @@ public final class SidePanelPictures
 			}
 		}
 		final String[] modes = {"normal", "smooth", "larger"};
-		final String[] layouts = {"a-set-in", "b-flush", "c-cards"};
 		for (int m = 0; m < modes.length; m++)
 		{
 			smooth = m == 1;
@@ -1192,63 +1190,14 @@ public final class SidePanelPictures
 			{
 				for (java.util.Map.Entry<String, SidePanelModel.Input> k : kills.entrySet())
 				{
-					SidePanelModel.grouping = SidePanelModel.Grouping.HEADINGS;
-					write(dir, k.getKey() + "-0-before", scale, before(k.getValue(), scale));
-					for (int g = 0; g < layouts.length; g++)
-					{
-						SidePanelModel.grouping = SidePanelModel.Grouping.values()[g];
-						write(dir, k.getKey() + "-" + layouts[g], scale, sections(k.getValue(), scale, "details", "taken"));
-					}
+					// Eric's pick: layout A. Eating and mechanics are Where the time went's alone now.
+					write(dir, k.getKey(), scale, sections(k.getValue(), scale, "details", "taken"));
 				}
 			}
 		}
-		SidePanelModel.grouping = SidePanelModel.Grouping.HEADINGS;
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
-	}
-
-	/** T-112: the cards as they were before the groups: every row in one flat card, as on master. */
-	private static BufferedImage before(SidePanelModel.Input in, double scale)
-	{
-		final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
-		final PanelSnapshot.FightTab flat = flat(tab);
-		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
-		panel.apply(new PanelSnapshot(flat));
-		styled(panel);
-		return crop(panel, scale, "details", "taken");
-	}
-
-	/** The tab with the subheadings taken out and nothing set in. */
-	private static PanelSnapshot.FightTab flat(PanelSnapshot.FightTab tab)
-	{
-		for (PanelSnapshot.Rows card : java.util.Arrays.asList(tab.details, tab.taken))
-		{
-			if (card == null)
-			{
-				continue;
-			}
-			final java.util.List<PanelSnapshot.Row> rows = new java.util.ArrayList<>();
-			for (PanelSnapshot.Row r : card.rows)
-			{
-				if (!r.heading)
-				{
-					rows.add(new PanelSnapshot.Row(r.left, r.hint, r.right, r.tooltip));
-				}
-			}
-			try
-			{
-				// The snapshot's lists can't be changed; a render can set the field.
-				final java.lang.reflect.Field f = PanelSnapshot.Rows.class.getDeclaredField("rows");
-				f.setAccessible(true);
-				f.set(card, java.util.Collections.unmodifiableList(rows));
-			}
-			catch (ReflectiveOperationException e)
-			{
-				throw new IllegalStateException(e);
-			}
-		}
-		return tab;
 	}
 
 	/** T-112: the Fight tab cut from section {@code from}'s top to section {@code to}'s bottom. */

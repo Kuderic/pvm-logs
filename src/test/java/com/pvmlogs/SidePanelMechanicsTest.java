@@ -55,13 +55,12 @@ public class SidePanelMechanicsTest
 	}
 
 	@Test
-	public void theLeviathanKillsDetailsSayMechanics()
+	public void theLeviathanKillsDetailsLeaveMechanicsToTheTimeBudget()
 	{
+		// T-112 (Eric's pick, 07:45): Where the time went has the mechanics (below), so Details doesn't repeat them.
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.leviathanKill());
 		final List<String> details = rows(tab.details);
-		// 29 ticks, 17.4 s: beside eating, neutral.
-		assertTrue(details.toString(), details.contains("mechanics | 17 s"));
-		assertEquals(details.indexOf("eating | 2 s") + 1, details.indexOf("mechanics | 17 s"));
+		assertFalse(details.toString(), details.stream().anyMatch(r -> r.startsWith("mechanics") || r.startsWith("eating")));
 	}
 
 	@Test

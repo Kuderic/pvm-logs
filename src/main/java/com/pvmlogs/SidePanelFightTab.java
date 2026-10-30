@@ -1082,15 +1082,14 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			return;
 		}
-		// T-112: one card, or a small card a group (Grouping.CARDS).
-		final JComponent card = SidePanelParts.rowsView(rows.rows, 5);
+		final SidePanelParts.RowsCard card = new SidePanelParts.RowsCard(rows.rows, 5);
 		final SidePanelSection section = new SidePanelSection(id, title, rows.hint, card, folds);
 		add(section);
 		updaters.add(t ->
 		{
 			final PanelSnapshot.Rows now = get.apply(t);
 			section.setHint(now.hint);
-			((SidePanelParts.RowsView) card).set(now.rows);
+			card.set(now.rows);
 		});
 	}
 

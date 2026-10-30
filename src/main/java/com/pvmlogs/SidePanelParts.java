@@ -134,119 +134,23 @@ final class SidePanelParts
 		}
 	}
 
-	/** T-112: a row under a subheading is set in by this much (Grouping.HEADINGS). */
+	/** T-112: a row under a subheading is set in by this much (Eric's pick, layout A). */
 	static final int INDENT = 8;
 
 	/** T-112: the gap above a subheading that isn't the card's first row. */
 	static final int GROUP_GAP = 5;
 
-	/** T-112: rows shown and updated in place: one card, or a small card a group. */
-	interface RowsView
-	{
-		void set(List<PanelSnapshot.Row> rows);
-	}
-
-	/**
-	 * T-112: the view for these rows: in {@link SidePanelModel.Grouping#CARDS} with groups, a small card a group under
-	 * its subheading; otherwise one card, its subheadings and set-in rows in it.
-	 */
-	static JComponent rowsView(List<PanelSnapshot.Row> rows, int gap)
-	{
-		final boolean groups = rows.stream().anyMatch(r -> r.heading);
-		return groups && SidePanelModel.grouping == SidePanelModel.Grouping.CARDS ? new GroupCards(rows, gap)
-			: new RowsCard(rows, gap);
-	}
-
-	/**
-	 * T-112: a card a group, each under its subheading in the muted small style, outside the card. A group starts at a
-	 * subheading; rows that stand alone (a group of one) after a group start a card of their own, with no subheading.
-	 */
-	static final class GroupCards extends JPanel implements RowsView
-	{
-		private final List<SidePanelText> titles = new ArrayList<>();
-		private final List<RowsCard> cards = new ArrayList<>();
-
-		GroupCards(List<PanelSnapshot.Row> rows, int gap)
-		{
-			super(new SidePanelStack(4));
-			setOpaque(false);
-			for (Chunk c : chunks(rows))
-			{
-				if (c.title != null)
-				{
-					final SidePanelText t = new SidePanelText(c.title.left, false);
-					titles.add(t);
-					add(t);
-				}
-				final RowsCard card = new RowsCard(c.rows, gap, false);
-				cards.add(card);
-				add(card);
-			}
-		}
-
-		@Override
-		public void set(List<PanelSnapshot.Row> rows)
-		{
-			final List<Chunk> chunks = chunks(rows);
-			int t = 0;
-			for (int i = 0; i < chunks.size() && i < cards.size(); i++)
-			{
-				if (chunks.get(i).title != null && t < titles.size())
-				{
-					titles.get(t++).set(chunks.get(i).title.left);
-				}
-				cards.get(i).set(chunks.get(i).rows);
-			}
-		}
-
-		private static final class Chunk
-		{
-			PanelSnapshot.Row title;
-			final List<PanelSnapshot.Row> rows = new ArrayList<>();
-		}
-
-		private static List<Chunk> chunks(List<PanelSnapshot.Row> rows)
-		{
-			final List<Chunk> out = new ArrayList<>();
-			Chunk c = null;
-			for (PanelSnapshot.Row r : rows)
-			{
-				if (r.heading || c == null || (c.title != null && !r.indent))
-				{
-					c = new Chunk();
-					out.add(c);
-					if (r.heading)
-					{
-						c.title = r;
-						continue;
-					}
-				}
-				c.rows.add(r);
-			}
-			return out;
-		}
-	}
-
 	/** Rows of {@link Line}s in a card, updated in place while their count holds. */
-	static final class RowsCard extends JPanel implements RowsView
+	static final class RowsCard extends JPanel
 	{
 		private final List<Line> lines = new ArrayList<>();
 
-		/** T-112: whether it's one card with its groups in it (rows set in under HEADINGS, a gap before a subheading). */
-		private final boolean indents;
+		/** T-112: while placing rows, whether the row before was in a group. */
+		private boolean previousIndented;
 
 		RowsCard(List<PanelSnapshot.Row> rows, int gap)
 		{
-			this(rows, gap, true);
-		}
-
-		/** While placing rows: whether the row before was in a group. */
-		private boolean previousIndented;
-
-		RowsCard(List<PanelSnapshot.Row> rows, int gap, boolean indents)
-		{
 			super(new SidePanelStack(gap));
-			this.indents = indents;
 			setBackground(SidePanelStyle.CARD);
 			setBorder(new EmptyBorder(SidePanelStyle.CARD_PAD_V, SidePanelStyle.CARD_PAD_H, SidePanelStyle.CARD_PAD_V,
 				SidePanelStyle.CARD_PAD_H));
@@ -259,8 +163,7 @@ final class SidePanelParts
 			}
 		}
 
-		@Override
-		public void set(List<PanelSnapshot.Row> rows)
+		void set(List<PanelSnapshot.Row> rows)
 		{
 			for (int i = 0; i < lines.size() && i < rows.size(); i++)
 			{
@@ -268,13 +171,15 @@ final class SidePanelParts
 			}
 		}
 
+		/**
+		 * T-112: a row under a subheading set in; a gap above a subheading that isn't the first row, and above a row
+		 * standing alone after a group, so it doesn't read as the group's last.
+		 */
 		private void place(Line l, PanelSnapshot.Row r, int i)
 		{
-			final boolean setIn = indents && r.indent && SidePanelModel.grouping == SidePanelModel.Grouping.HEADINGS;
-			// A row standing alone after a group: the gap too, so it doesn't read as the group's last.
-			final boolean gap = indents && i > 0 && (r.heading || (!r.indent && previousIndented));
+			final boolean gap = i > 0 && (r.heading || (!r.indent && previousIndented));
 			previousIndented = r.indent;
-			l.set(r, setIn ? INDENT : 0, gap ? GROUP_GAP : 0);
+			l.set(r, r.indent ? INDENT : 0, gap ? GROUP_GAP : 0);
 		}
 	}
 

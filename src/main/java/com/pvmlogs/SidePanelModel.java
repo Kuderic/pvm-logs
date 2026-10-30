@@ -2339,15 +2339,17 @@ final class SidePanelModel
 		return details(s, false);
 	}
 
-	/** With {@code avoidable} (T-044), the eating row is what's left once the avoidable eating is Execution's, as on the overlay. */
+	/**
+	 * {@code avoidable} (T-044) once set the eating row, which T-112 moved out of Details (Where the time went has it);
+	 * kept for the callers.
+	 */
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable)
 	{
 		return details(s, avoidable, false);
 	}
 
 	/**
-	 * With {@code run} (T-095), a run of monsters: no hits against expected, which is luck's, and no eating, which is
-	 * Execution's; the other damage stays.
+	 * With {@code run} (T-095), a run of monsters: no hits against expected, which is luck's; the other damage stays.
 	 */
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run)
 	{
@@ -2361,10 +2363,9 @@ final class SidePanelModel
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run, int roomDamage, String boss,
 		List<String> sources)
 	{
-		// T-112: in three groups, your damage, the boss's own, and time; see grouped().
+		// T-112: in two groups, your damage and the boss's own; see grouped().
 		final List<Row> yours = new ArrayList<>();
 		final List<Row> theBoss = new ArrayList<>();
-		final List<Row> time = new ArrayList<>();
 		if (s.expectedHits() > 0 && !run)
 		{
 			yours.add(row("hits/expected", s.hits() + "/" + LedgerRows.oneDecimal(s.expectedHits())));
@@ -2389,20 +2390,8 @@ final class SidePanelModel
 		{
 			theBoss.add(roomDamageRow(roomDamage, boss, sources));
 		}
-		final double eating = s.ticksLostEating() * LedgerRows.SECONDS_PER_TICK
-			- (avoidable ? avoidableEating(new LedgerRows.Numbers(s)) : 0);
-		if (s.ticksLostEating() > 0 && LedgerRows.roundHalfAway(eating) >= 1 && !run)
-		{
-			time.add(row("eating", LedgerRows.roundHalfAway(eating) + " s"));
-		}
-		// T-081: the idle time a boss's mechanic forced (T-074), beside eating and neutral like it, as the overlay's
-		// T-080 line. Nothing for a boss with no allowances, or an old kill.
-		final long mechanics = LedgerRows.roundHalfAway(Math.max(0, s.ticksMechanics()) * LedgerRows.SECONDS_PER_TICK);
-		if (mechanics >= 1)
-		{
-			time.add(row("mechanics", mechanics + " s"));
-		}
-		final List<Row> rows = grouped(new String[]{YOUR_DAMAGE, THE_BOSS, TIME_GROUP}, yours, theBoss, time);
+		// T-112 (Eric's pick, 07:45): no eating or mechanics here: Where the time went has them.
+		final List<Row> rows = grouped(new String[]{YOUR_DAMAGE, THE_BOSS}, yours, theBoss);
 		return rows.isEmpty() ? null : new PanelSnapshot.Rows(null, rows);
 	}
 
@@ -2410,30 +2399,15 @@ final class SidePanelModel
 
 	static final String YOUR_DAMAGE = "Your damage";
 	static final String THE_BOSS = "The boss";
-	static final String TIME_GROUP = "Time";
 	static final String TOTAL = "Total";
 	static final String BY_ATTACK = "By attack";
 	static final String OVER_TIME = "Over time";
 
 	/**
-	 * T-112: how Details and Damage taken show their groups, for Eric to pick from the renders (Eric, 2026-10-30:
-	 * "need overhaul/more subcategories to be more easily readable"). HEADINGS: a muted subheading over each group's
-	 * rows, set in under it; FLUSH: the same subheadings, the rows not set in; CARDS: a small card a group under its
-	 * subheading. A gap goes before each subheading but the first. Nothing changes but how they're laid out. (A first
-	 * try, COMPACT, put a group on one row, and didn't fit the panel's width.)
-	 */
-	enum Grouping
-	{
-		HEADINGS,
-		FLUSH,
-		CARDS
-	}
-
-	static volatile Grouping grouping = Grouping.HEADINGS;
-
-	/**
-	 * T-112: the groups' rows in {@link #grouping}'s layout. An empty group is left out; a group of one row is that row
-	 * alone, with no subheading over it; a card with one group only is its rows as before, with no subheading.
+	 * T-112 (Eric, 2026-10-30: "need overhaul/more subcategories to be more easily readable"; his pick at 07:45, layout
+	 * A): each group under a muted subheading, its rows set in under it, a gap before each subheading but the first. An
+	 * empty group is left out; a group of one row is that row alone, with no subheading over it; a card with one group
+	 * only is its rows as before, with no subheading.
 	 */
 	@SafeVarargs
 	static List<Row> grouped(String[] titles, List<Row>... groups)
@@ -2459,7 +2433,6 @@ final class SidePanelModel
 			out.add(Row.heading(titles[i]));
 			for (Row r : g)
 			{
-				// Set in under the subheading in HEADINGS; in FLUSH and CARDS the mark only says which group a row is in.
 				out.add(r.indented());
 			}
 		}
