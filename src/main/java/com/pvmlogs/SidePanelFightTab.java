@@ -766,10 +766,16 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			items.add(new SidePanelParts.Legend.Item(t.chart.attackColour, false, "attack", SidePanelStyle.SECONDARY));
 			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.towardWhite(t.chart.attackColour, 0.7), false, "spec",
 				SidePanelStyle.SECONDARY));
-			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, false, "lost " + t.chart.lost,
-				SidePanelStyle.SECONDARY));
-			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.EATING, false, "eating " + t.chart.eating,
-				SidePanelStyle.SECONDARY));
+			if (t.chart.lost >= 0)
+			{
+				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, false, "lost " + t.chart.lost,
+					SidePanelStyle.SECONDARY));
+			}
+			if (t.chart.eating >= 0)
+			{
+				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.EATING, false, "eating " + t.chart.eating,
+					SidePanelStyle.SECONDARY));
+			}
 			// T-081: only where a boss's mechanic forced some, so nothing changes for the rest.
 			if (t.chart.mechanics > 0)
 			{

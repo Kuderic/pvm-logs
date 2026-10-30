@@ -68,6 +68,9 @@ class PvmPerformancePanel extends PluginPanel
 	private int chartSent;
 	/** The Damage rows' sums, kept between snapshots so a long fight's build costs what a short one's does (T-046). */
 	private final SidePanelWeaponRows weaponRows = new SidePanelWeaponRows();
+	/** T-095: the trip's rooms less its runs, as one room, and what it was built from. */
+	private Encounter tripLuck;
+	private List<Object> tripLuckKey;
 
 	// Swing's thread only.
 	private PanelSnapshot shown;
@@ -451,7 +454,7 @@ class PvmPerformancePanel extends PluginPanel
 			{
 				key.addAll(Arrays.asList(s.combatTicks(), s.damage(), s.expectedDamage(), s.thrallDamage(), s.dotDamage(),
 					s.reflectDamage(), s.damageTaken(), s.dotTaken(), s.attacksMade(), s.ticksLost(), s.healed(),
-					room == null ? 0 : room.getFights().size()));
+					room == null ? 0 : room.getFights().size(), room == null || whole ? 0 : room.getKills()));
 			}
 		}
 		final SessionTotals t = plugin.getSession();
@@ -511,6 +514,11 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
+		if (in.run)
+		{
+			// T-095: the run's own clock, the overlay's title's.
+			in.runSeconds = SidePanelModel.runSeconds(room, System.currentTimeMillis());
+		}
 		in.version = version(room.getFights(), in.maxHp);
 		charts(in, room, FightTimeline.room(room, plugin.getTimelines()));
 		final boolean current = contains(room, fight);
@@ -532,7 +540,8 @@ class PvmPerformancePanel extends PluginPanel
 			end = Math.max(end, f.getEndMillis());
 		}
 		in.endMillis = end;
-		if (in.killed && room.getRaid() == null && in.warning == null)
+		// T-095: a run has no "your average": comparing runs' clocks says nothing.
+		if (in.killed && room.getRaid() == null && in.warning == null && !in.run)
 		{
 			averages(history, room);
 			in.average = average;
@@ -656,12 +665,51 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.avoidableAttacks = tripAvoidable;
 		final List<PanelSnapshot.TripRow> rows = new ArrayList<>();
-		for (SidePanelHistory.KillRow r : SidePanelHistory.tripRooms(tripSaved, running))
+		final List<SidePanelHistory.KillRow> rooms = SidePanelHistory.tripRooms(tripSaved, running);
+		for (SidePanelHistory.KillRow r : rooms)
 		{
 			rows.add(SidePanelModel.tripRow(r));
 		}
 		in.tripRows = rows;
+		in.luckScope = tripLuckScope(rooms);
 		return in;
+	}
+
+	/**
+	 * T-095: the scope the Trip tab's Luck and Execution are over when the trip has runs in it: its rooms less the runs,
+	 * one room of their fights; null when it has no run, so they're the trip's own figures, as before. Rebuilt when the
+	 * trip's rooms change (a fight saved, a room started), which isn't every tick; while a boss is fought, its room is
+	 * in it as it stands.
+	 */
+	private LedgerRows.Scope tripLuckScope(List<SidePanelHistory.KillRow> rooms)
+	{
+		boolean runs = false;
+		for (SidePanelHistory.KillRow r : rooms)
+		{
+			runs |= r.room != null && r.room.isMonsterRoom();
+		}
+		if (!runs)
+		{
+			tripLuckKey = null;
+			tripLuck = null;
+			return null;
+		}
+		// Only the rooms that aren't runs: a run being fought changes nothing here.
+		final List<Object> key = new ArrayList<>();
+		for (SidePanelHistory.KillRow r : rooms)
+		{
+			if (r.room != null && !r.room.isMonsterRoom())
+			{
+				key.add(r.room);
+				key.add(r.room.getFights().size());
+			}
+		}
+		if (!key.equals(tripLuckKey))
+		{
+			tripLuckKey = key;
+			tripLuck = SidePanelModel.withoutRuns(rooms);
+		}
+		return LedgerRows.of(tripLuck);
 	}
 
 	/** Your average and luck removed on this room, worked out again only when the room or the history changes. */

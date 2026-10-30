@@ -337,8 +337,11 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel box = SidePanelParts.card(6);
+		// T-095: a kind fought in runs, "5 runs · 312 kills".
+		final String count = card.kills + (card.kills == 1 ? " kill" : " kills");
 		final SidePanelParts.Line line = new SidePanelParts.Line(Text.title(card.name, SidePanelStyle.VALUE),
-			Text.small(card.kills + (card.kills == 1 ? " kill" : " kills"), SidePanelStyle.SECONDARY));
+			Text.small(card.runs > 0 ? card.runs + (card.runs == 1 ? " run · " : " runs · ") + count : count,
+				SidePanelStyle.SECONDARY));
 		// T-082: a close control after the kill count puts the boss away.
 		final JPanel title = new JPanel(new BorderLayout(6, 0));
 		title.setOpaque(false);
@@ -433,7 +436,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			final Fight key = row.room.getFights().get(0);
 			final SidePanelKillRow view = SidePanelKillRow.history(row, () -> open(key));
 			view.setSelected(key == selectedKill);
-			view.setToolTipText("Open this kill");
+			view.setToolTipText(row.kills >= 0 ? "Open this run" : "Open this kill");
 			list.add(view);
 		}
 		final String more = SidePanelHistory.showMore(rows.size(), shown);
@@ -447,8 +450,10 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			});
 			list.add(button);
 		}
-		content.add(new SidePanelSection("historyKills", "Kills",
-			Text.small("time · luck · execution", SidePanelStyle.SECONDARY), list, folds));
+		// T-095: a kind fought in runs lists its runs: their time and kills/hr, no luck or execution.
+		final boolean runs = rows.stream().anyMatch(r -> r.kills >= 0);
+		content.add(new SidePanelSection("historyKills", runs ? "Runs" : "Kills",
+			Text.small(runs ? "time · kills/hr" : "time · luck · execution", SidePanelStyle.SECONDARY), list, folds));
 	}
 
 	/** Opens a kill's own view (state 11). */

@@ -191,8 +191,9 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 			bars.add(bar);
 			card.add(bar);
 		}
-		final SidePanelSection section = new SidePanelSection("tripExecution", "Execution", tab.execution.hint, card,
-			folds);
+		// T-095: over the boss kills alone when the trip has runs, as its tile says.
+		final SidePanelSection section = new SidePanelSection("tripExecution", tab.bossesOnly()
+			? SidePanelModel.EXECUTION_NO_RUNS : "Execution", tab.execution.hint, card, folds);
 		add(section);
 		updaters.add(t ->
 		{
@@ -272,7 +273,9 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		void set(PanelSnapshot.TripRow r)
 		{
 			final java.awt.Color c = r.ended ? SidePanelStyle.SECONDARY : SidePanelStyle.VALUE;
-			name.set(Text.body(r.name, c), r.ended ? Text.small(" (ended)", SidePanelStyle.SECONDARY) : null);
+			// T-095: a run's kills follow its name as the suffix does, so a short name keeps them.
+			name.set(Text.body(r.name, c), r.ended ? Text.small(" (ended)", SidePanelStyle.SECONDARY)
+				: r.suffix.isEmpty() ? null : Text.body(r.suffix, c));
 			clock.set(Text.title(r.clock, c));
 			chip.set(r.chip, r.chipFill);
 			icon.set(r.icon);

@@ -43,6 +43,13 @@ final class PanelSnapshot
 		final Color chipFill;
 		/** The boss's icon, a hiscores sprite, or {@link SidePanelBossIcons#NONE} (T-054). */
 		final int icon;
+		/** T-095: the kills it counts for in the trip's hint: a run's (T-089), else 1 for a kill. */
+		final int kills;
+		/**
+		 * T-095: a run's {@code  ×12} after its name, kept when the name is cut short ({@code Abyssal de… ×12}); empty
+		 * for a boss's room, or a run with no kill yet.
+		 */
+		final String suffix;
 
 		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill)
 		{
@@ -51,6 +58,18 @@ final class PanelSnapshot
 
 		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill, int icon)
 		{
+			this(name, ended, clock, chip, chipFill, icon, ended ? 0 : 1);
+		}
+
+		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill, int icon, int kills)
+		{
+			this(name, ended, clock, chip, chipFill, icon, kills, "");
+		}
+
+		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill, int icon, int kills, String suffix)
+		{
+			this.kills = kills;
+			this.suffix = suffix == null ? "" : suffix;
 			this.name = name;
 			this.ended = ended;
 			this.clock = clock;
@@ -93,9 +112,16 @@ final class PanelSnapshot
 		}
 
 		/** As {@link FightTab#structure()}: which sections there are and how many rows each has. */
+		/** T-095: whether its Luck and Execution leave its runs out, so the Execution card is the bosses' too. */
+		boolean bossesOnly()
+		{
+			return tiles != null && !tiles.isEmpty() && SidePanelModel.LUCK_NO_RUNS.equals(tiles.get(0).label.text);
+		}
+
 		String structure()
 		{
-			return (tiles == null ? "" : "T") + (execution == null ? "" : "|e" + execution.parts.size()) + "|r" + rooms.size()
+			return (tiles == null ? "" : bossesOnly() ? "Tb" : "T") + (execution == null ? "" : "|e" + execution.parts.size())
+				+ "|r" + rooms.size()
 				+ (taken == null ? "" : "|k" + taken.rows.size()) + (other == null ? "" : "|o" + other.rows.size())
 				+ (drains == null ? "" : "|dr" + drains.rows.size());
 		}
@@ -520,7 +546,7 @@ final class PanelSnapshot
 		final String end;
 		final String youLegend;
 		final String expectedLegend;
-		/** The strip's legend counts. */
+		/** The strip's legend counts; -1 for no entry (T-095: a run's idle ticks aren't lost or eating). */
 		final int lost;
 		final int eating;
 		/** T-081: the ticks a boss's mechanic forced (T-074); 0 for a boss without allowances, or an old kill. */

@@ -31,8 +31,20 @@ final class SidePanelKillRow extends JPanel
 	{
 		final SidePanelKillRow r = new SidePanelKillRow(onClick);
 		r.add(new SidePanelText(Text.title(row.clock, SidePanelStyle.VALUE), false), BorderLayout.WEST);
-		final SidePanelText date = new SidePanelText(Text.small(row.date, SidePanelStyle.SECONDARY), true);
-		date.setShort(dateShort(row.date));
+		// T-095: a run's kills before its date, "×12 · 9:41 pm": the card above names the kind.
+		final String kills = row.kills >= 0 ? "×" + row.kills : null;
+		final String dateText = kills == null ? row.date : row.date.isEmpty() ? kills : kills + " · " + row.date;
+		final SidePanelText date = new SidePanelText(Text.small(dateText, SidePanelStyle.SECONDARY), true);
+		final String shortDate = dateShort(row.date);
+		if (kills == null)
+		{
+			date.setShort(shortDate);
+		}
+		else
+		{
+			date.setShort(shortDate == null ? java.util.Collections.singletonList(kills)
+				: java.util.Arrays.asList(kills + " · " + shortDate, kills));
+		}
 		r.add(date, BorderLayout.CENTER);
 		r.add(chipAndExecution(row), BorderLayout.EAST);
 		return r;

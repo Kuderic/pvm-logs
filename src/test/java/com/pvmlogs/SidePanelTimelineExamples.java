@@ -187,10 +187,16 @@ final class SidePanelTimelineExamples
 	/** T-085: a fight played stretch by stretch, through the plugin's own calls, as {@link #fight} plays one weapon. */
 	static Built plan(String boss, Stretch... stretches)
 	{
+		return plan(boss, 0L, stretches);
+	}
+
+	/** T-095: the same, the fight and its room started at {@code startMillis}. */
+	static Built plan(String boss, long startMillis, Stretch... stretches)
+	{
 		final int[] clock = {0};
 		final FightTimeline.Store store = new FightTimeline.Store();
 		store.setClock(() -> clock[0]);
-		final Fight f = new Fight(boss, NpcIds.GOBLIN, 1, 900, 0L, null, 0);
+		final Fight f = new Fight(boss, NpcIds.GOBLIN, 1, 900, startMillis, null, 0);
 		store.attach(f);
 		final FightTimeline line = store.of(f);
 		int t = 0;
@@ -225,7 +231,7 @@ final class SidePanelTimelineExamples
 				f.recordTickLost(false);
 			}
 		}
-		final Encounter room = new Encounter(boss, null, 0L);
+		final Encounter room = new Encounter(boss, null, startMillis);
 		room.add(f);
 		return new Built(f, store, room);
 	}
