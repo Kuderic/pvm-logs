@@ -105,6 +105,10 @@ final class SidePanelParts
 		{
 			left.set(row.left, row.hint.isEmpty() ? null : row.hint);
 			right.set(row.right);
+			// T-109: a row's tooltip on the whole line, both its texts.
+			setToolTipText(row.tooltip);
+			left.setToolTipText(row.tooltip);
+			right.setToolTipText(row.tooltip);
 		}
 
 		void set(PanelSnapshot.Text l, PanelSnapshot.Text lAfter, PanelSnapshot.Text r)

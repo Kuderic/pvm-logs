@@ -514,6 +514,8 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
+		// T-109: what the room's damage was, named by the boss rules.
+		in.roomDamageSources = SidePanelModel.roomDamageSources(java.util.Collections.singletonList(room), rules());
 		if (in.run)
 		{
 			// T-095: the run's own clock, the overlay's title's.
@@ -678,7 +680,21 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.tripRows = rows;
 		in.luckScope = tripLuckScope(rooms);
+		// T-109: the bosses' rooms' damage over the trip's saved rooms; shown while no fight runs.
+		final List<Encounter> saved = new ArrayList<>();
+		for (SidePanelHistory.KillRow r : tripSaved)
+		{
+			saved.add(r.room);
+		}
+		SidePanelModel.fillTripRoomDamage(in, saved, rules());
 		return in;
+	}
+
+	/** T-109: the boss rules, from the plugin's own MonsterStatsProvider; null without a plugin or before they load. */
+	private BossRules rules()
+	{
+		final MonsterStatsProvider stats = instance(plugin, MonsterStatsProvider.class);
+		return stats == null ? null : stats.rules();
 	}
 
 	/**
@@ -917,8 +933,7 @@ class PvmPerformancePanel extends PluginPanel
 		public BossRules rules()
 		{
 			// T-102: the rules the history budget classes fights by, from the plugin's own MonsterStatsProvider.
-			final MonsterStatsProvider stats = instance(plugin, MonsterStatsProvider.class);
-			return stats == null ? null : stats.rules();
+			return PvmPerformancePanel.this.rules();
 		}
 
 		@Override

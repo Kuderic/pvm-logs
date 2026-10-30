@@ -218,6 +218,8 @@ final class PanelSnapshot
 		/** A word after the label in its own colour (T-044's {@code avoidable}); empty for none. */
 		final Text hint;
 		final Text right;
+		/** T-109: what the row is, on hover (the room's damage and its sources); null for none. */
+		final String tooltip;
 
 		Row(Text left, Text right)
 		{
@@ -226,9 +228,15 @@ final class PanelSnapshot
 
 		Row(Text left, Text hint, Text right)
 		{
+			this(left, hint, right, null);
+		}
+
+		Row(Text left, Text hint, Text right, String tooltip)
+		{
 			this.left = left;
 			this.hint = hint == null ? Text.NONE : hint;
 			this.right = right;
+			this.tooltip = tooltip;
 		}
 
 		@Override
