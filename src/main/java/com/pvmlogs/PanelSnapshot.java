@@ -497,12 +497,20 @@ final class PanelSnapshot
 		final double z;
 		final Text headerValue;
 		final String caption;
+		/** T-112: what the shaded tail means, on hover; null for none. */
+		final String tooltip;
 
 		Curve(double z, Text headerValue, String caption)
+		{
+			this(z, headerValue, caption, null);
+		}
+
+		Curve(double z, Text headerValue, String caption, String tooltip)
 		{
 			this.z = z;
 			this.headerValue = headerValue;
 			this.caption = caption;
+			this.tooltip = tooltip;
 		}
 	}
 

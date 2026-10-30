@@ -100,6 +100,69 @@ final class SidePanelDamageChart extends JComponent
 			draw();
 		}
 		g2.drawImage(image, unscale, null);
+		hoverLine(g2);
+	}
+
+	/**
+	 * T-112: the tick at {@code x} across the chart, as the points are spread ({@code i × width ÷ (n − 1)}); -1 with
+	 * nothing drawn.
+	 */
+	int tickAt(int x)
+	{
+		final int n = data.length();
+		if (n == 0 || getWidth() <= 0)
+		{
+			return -1;
+		}
+		return n == 1 ? 0 : Math.max(0, Math.min(n - 1, (int) Math.round((double) x * (n - 1) / getWidth())));
+	}
+
+	/** T-112: where tick {@code i} is across the chart, in its own pixels. */
+	double xOf(int i)
+	{
+		final int n = data.length();
+		return n <= 1 ? 0 : (double) i * getWidth() / (n - 1);
+	}
+
+	/**
+	 * T-112: the hovered moment, shared with the strip: a thin line, and a readout beside it, {@code 1:23 · 640 / 610}
+	 * (the clock at that tick, your damage so far against expected; your damage alone when expected is hidden).
+	 * Painted over the cached image: the image isn't drawn again.
+	 */
+	private void hoverLine(Graphics2D g)
+	{
+		final int i = data.hover();
+		final PanelSnapshot.Chart meta = data.meta();
+		if (i < 0 || meta == null)
+		{
+			return;
+		}
+		final Graphics2D g2 = (Graphics2D) g.create();
+		final float x = (float) xOf(i);
+		g2.setColor(SidePanelStyle.alpha(SidePanelStyle.VALUE, 0.7));
+		g2.setStroke(new BasicStroke(1f));
+		g2.draw(new java.awt.geom.Line2D.Float(x, 0, x, getHeight()));
+		final String text = readout(i, meta.expectedShown);
+		g2.setFont(SidePanelStyle.Type.SMALL.font());
+		SidePanelStyle.textHints(g2);
+		final java.awt.FontMetrics fm = g2.getFontMetrics();
+		final int w = fm.stringWidth(text);
+		// Beside the line, on whichever side it fits.
+		final float tx = x + 4 + w <= getWidth() ? x + 4 : Math.max(0, x - 4 - w);
+		g2.setColor(SidePanelStyle.alpha(SidePanelStyle.CARD, 0.85));
+		g2.fill(new java.awt.geom.Rectangle2D.Float(tx - 2, 1, w + 4, fm.getHeight()));
+		g2.setColor(SidePanelStyle.VALUE);
+		g2.drawString(text, tx, fm.getAscent() + 1);
+		g2.dispose();
+	}
+
+	/** T-112: the readout at tick {@code i}: {@code 1:23 · 640 / 610}. */
+	String readout(int i, boolean expected)
+	{
+		final String clock = LedgerRows.duration(i * LedgerRows.SECONDS_PER_TICK);
+		final String you = LedgerRows.number(Math.round(data.damage(i)));
+		return expected ? clock + " · " + you + " / " + LedgerRows.number(Math.round(data.expected(i)))
+			: clock + " · " + you;
 	}
 
 	private boolean fits(double s)

@@ -1,5 +1,7 @@
 package com.pvmlogs;
 
+import net.runelite.client.plugins.specialcounter.SpecialWeapon;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -134,7 +136,8 @@ public class SidePanelWeaponDpsTest
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.sireWeapons());
 		final PanelSnapshot.Source spec = row(tab, "Emberlight", true);
 		assertNull(spec.dps);
-		assertEquals("2 specs · expected 44", spec.sub);
+		// T-112 item 6: Emberlight drains on landing, so it reads its landing.
+		assertEquals("2 specs (100% landed, expected 78%)", spec.sub);
 		assertTrue(spec.tooltip, spec.tooltip.contains("no DPS: a special is spent by energy, not time"));
 		// The 2:17 kill has a thrall row.
 		final PanelSnapshot.Source thrall = row(SidePanelModel.fight(SidePanelExamples.dead()), "Thrall", false);
@@ -232,6 +235,16 @@ public class SidePanelWeaponDpsTest
 	/** The card's weapon rows' sub-lines as drawn, after a render at {@code scale} with Smooth on or off. */
 	private static List<String> drawn(SidePanelModel.Input in, boolean smooth, double scale, boolean larger)
 	{
+		return drawn(in, smooth, scale, larger, true);
+	}
+
+	/**
+	 * {@code everyText}: every text in the rows must fit; else only the sub-lines (T-112 item 6: CI's Smooth font cuts a
+	 * long weapon name like "Dragon warhammer" on its name line, which this task doesn't change).
+	 */
+	private static List<String> drawn(SidePanelModel.Input in, boolean smooth, double scale, boolean larger,
+		boolean everyText)
+	{
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.apply(new PanelSnapshot(SidePanelModel.fight(in)));
 		p.setText(larger, smooth);
@@ -243,12 +256,13 @@ public class SidePanelWeaponDpsTest
 			final List<String> out = new ArrayList<>();
 			for (SidePanelParts.SourceRowView row : all(p.fightTab(), SidePanelParts.SourceRowView.class))
 			{
-				for (SidePanelText t : all(row, SidePanelText.class))
+				final List<SidePanelText> texts = all(row, SidePanelText.class);
+				for (SidePanelText t : everyText ? texts : texts.subList(2, 3))
 				{
 					assertFalse(smooth + " " + scale + ": " + t.getText() + " => " + t.lastShown(),
 						t.lastShown() != null && t.lastShown().contains(LedgerRows.CUT));
 				}
-				out.add(all(row, SidePanelText.class).get(2).lastShown());
+				out.add(texts.get(2).lastShown());
 			}
 			return out;
 		}
@@ -268,6 +282,135 @@ public class SidePanelWeaponDpsTest
 				drawn(SidePanelExamples.sireWeapons(), smooth, scale, false);
 				drawn(SidePanelExamples.leviathanWeapons(), smooth, scale, false);
 			}
+		}
+	}
+
+	/**
+	 * T-112 item 6: a spec row's sub-line reads "1 spec (expected 36 dmg)", the DPS rows' form with the unit, not "1 spec ·
+	 * expected 36" (read as 1 × 36). It fits beside the damage and share at 1× in every text setting, or takes its shorter
+	 * form, "(exp 36)". The unmatched row reads "weapon damage (expected N)", or "(exp N)" where that doesn't fit.
+	 */
+	@Test
+	public void aSpecRowsExpectedIsInBracketsWithItsUnit()
+	{
+		// The fixture's special as a Bandos godsword: it drains by the damage dealt, so it keeps the damage form.
+		final SidePanelModel.Input in = withSpecial(SidePanelExamples.sireWeapons(), "Bandos godsword",
+			net.runelite.api.gameval.ItemID.BGS, 2, 2);
+		final PanelSnapshot.Source spec = row(SidePanelModel.fight(in), "Bandos godsword", true);
+		assertEquals("2 specs (expected 44 dmg)", spec.sub);
+		assertEquals(Arrays.asList("2 specs (exp 44)", "2 specs"), spec.subShort);
+		// One spec: the same row, its damage and expected as they were (so no unmatched row), as one special.
+		final SidePanelModel.Input one = withSpecial(SidePanelExamples.sireWeapons(), "Voidwaker", -1, 1, 1);
+		final PanelSnapshot.FightTab tab = SidePanelModel.fight(one);
+		final PanelSnapshot.Source v = row(tab, "Voidwaker", true);
+		assertEquals("1 spec (expected 44 dmg)", v.sub);
+		fitsInEverySetting(one, tab, v);
+	}
+
+	/**
+	 * T-112 item 6 (Eric, 06:52): a special that drains on landing (the Dragon warhammer, elder maul, Arclight family,
+	 * accursed sceptre, Tonalztics) reads what landed against its chance; the damage stays on the right.
+	 */
+	@Test
+	public void aSpecialThatDrainsOnLandingReadsItsLanding()
+	{
+		// The fixture's Emberlight specials: both landed, at 78% each.
+		final PanelSnapshot.Source ember = row(SidePanelModel.fight(SidePanelExamples.sireWeapons()), "Emberlight", true);
+		assertEquals("2 specs (100% landed, expected 78%)", ember.sub);
+		assertEquals(Arrays.asList("2 specs (100% landed, exp 78%)", "100% landed (exp 78%)", "2 specs (100% landed)",
+			"2 specs"), ember.subShort);
+		// A warhammer: two specs, one landed.
+		final SidePanelModel.Input dwh = withSpecial(SidePanelExamples.sireWeapons(), "Dragon warhammer",
+			net.runelite.api.gameval.ItemID.DRAGON_WARHAMMER, 2, 1);
+		final PanelSnapshot.FightTab tab = SidePanelModel.fight(dwh);
+		final PanelSnapshot.Source two = row(tab, "Dragon warhammer", true);
+		assertEquals("2 specs (50% landed, expected 78%)", two.sub);
+		assertEquals("47", two.damage);
+		fitsInEverySetting(dwh, tab, two);
+		// One spec, landed and missed.
+		assertEquals("1 spec (landed, expected 78%)", row(SidePanelModel.fight(withSpecial(SidePanelExamples
+			.sireWeapons(), "Elder maul", net.runelite.api.gameval.ItemID.ELDER_MAUL, 1, 1)), "Elder maul", true).sub);
+		final SidePanelModel.Input missed = withSpecial(SidePanelExamples.sireWeapons(), "Elder maul",
+			net.runelite.api.gameval.ItemID.ELDER_MAUL, 1, 0);
+		final PanelSnapshot.FightTab missedTab = SidePanelModel.fight(missed);
+		final PanelSnapshot.Source m = row(missedTab, "Elder maul", true);
+		assertEquals("1 spec (missed, expected 78%)", m.sub);
+		fitsInEverySetting(missed, missedTab, m);
+		// Under the stats warning, no chance: only what landed.
+		dwh.warning = "two versions share this HP";
+		assertEquals("2 specs (50% landed)", row(SidePanelModel.fight(dwh), "Dragon warhammer", true).sub);
+	}
+
+	@Test
+	public void theSplitComesFromDrainRule()
+	{
+		assertTrue(DrainRule.drainsOnLanding(SpecialWeapon.DRAGON_WARHAMMER));
+		assertTrue(DrainRule.drainsOnLanding(SpecialWeapon.ELDER_MAUL));
+		assertTrue(DrainRule.drainsOnLanding(SpecialWeapon.ARCLIGHT));
+		assertTrue(DrainRule.drainsOnLanding(SpecialWeapon.DARKLIGHT));
+		assertTrue(DrainRule.drainsOnLanding(SpecialWeapon.EMBERLIGHT));
+		assertTrue(DrainRule.drainsOnLanding(SpecialWeapon.ACCURSED_SCEPTRE));
+		assertTrue(DrainRule.drainsOnLanding(SpecialWeapon.TONALZTICS_OF_RALOS));
+		for (SpecialWeapon w : new SpecialWeapon[]{SpecialWeapon.BANDOS_GODSWORD, SpecialWeapon.BONE_DAGGER,
+			SpecialWeapon.DORGESHUUN_CROSSBOW, SpecialWeapon.BARRELCHEST_ANCHOR, SpecialWeapon.SEERCULL,
+			SpecialWeapon.EYE_OF_AYAK, null})
+		{
+			assertFalse(String.valueOf(w), DrainRule.drainsOnLanding(w));
+		}
+		// Every landing one drains; and RuneLite's item ids find them.
+		for (SpecialWeapon w : SpecialWeapon.values())
+		{
+			assertTrue(w.name(), !DrainRule.drainsOnLanding(w) || DrainRule.drains(w));
+			assertEquals(w, SidePanelModel.specialWeapon(w.getItemID()[0]));
+		}
+		assertNull(SidePanelModel.specialWeapon(-1));
+	}
+
+	/** The fixture with its special row as this weapon: {@code attacks} specials, {@code landed} of them landing. */
+	private static SidePanelModel.Input withSpecial(SidePanelModel.Input in, String name, int itemId, int attacks,
+		int landed)
+	{
+		in.weaponRows = new ArrayList<>(in.weaponRows != null ? in.weaponRows : SidePanelModel.weaponRows(in.view));
+		final SidePanelModel.WeaponRow w = in.weaponRows.stream().filter(r -> r.special).findFirst().orElse(null);
+		assertNotNull(w);
+		final double chance = w.landedKnown == 0 ? 0 : w.landedExpected / w.landedKnown;
+		w.name = name;
+		w.itemId = itemId;
+		w.attacks = attacks;
+		w.landed = landed;
+		w.landedKnown = attacks;
+		w.landedExpected = chance * attacks;
+		return in;
+	}
+
+	/** At 1× in every text setting the row is never cut, and shows one of its forms. */
+	private static void fitsInEverySetting(SidePanelModel.Input in, PanelSnapshot.FightTab tab, PanelSnapshot.Source v)
+	{
+		final int at = tab.damage.rows.indexOf(v);
+		for (boolean larger : new boolean[]{false, true})
+		{
+			for (boolean smooth : new boolean[]{false, true})
+			{
+				// drawn() fails on a cut text; what's shown is one of the row's forms.
+				final String shown = drawn(in, smooth, 1, larger, false).get(at);
+				assertTrue(larger + " " + smooth + ": " + shown, shown.equals(v.sub) || v.subShort.contains(shown));
+				System.out.println("T-112 " + v.name + ", larger " + larger + ", smooth " + smooth + ": " + shown);
+			}
+		}
+	}
+
+	@Test
+	public void theUnmatchedRowsExpectedIsInBrackets()
+	{
+		for (PanelSnapshot.Source s : SidePanelModel.fight(SidePanelExamples.sireWeapons()).damage.rows)
+		{
+			assertFalse(s.sub, s.sub.contains(" · expected"));
+		}
+		final PanelSnapshot.Source unmatched = SidePanelModel.fight(SidePanelExamples.sireWeapons()).damage.rows.stream()
+			.filter(r -> r.name.equals("Not matched to an attack")).findFirst().orElse(null);
+		if (unmatched != null)
+		{
+			assertTrue(unmatched.sub, unmatched.sub.matches("weapon damage \\(expected -?[0-9,]+\\)"));
 		}
 	}
 

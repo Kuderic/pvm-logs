@@ -58,6 +58,26 @@ final class SidePanelChartData
 		return length;
 	}
 
+	/** T-112: the tick hovered on the chart or the strip, -1 for none; shared, so both draw the same moment. */
+	private int hover = -1;
+
+	int hover()
+	{
+		return hover < length ? hover : -1;
+	}
+
+	/** T-112: sets the tick hovered; whether it changed. */
+	boolean setHover(int tick)
+	{
+		final int h = tick < 0 || tick >= length ? -1 : tick;
+		if (h == hover)
+		{
+			return false;
+		}
+		hover = h;
+		return true;
+	}
+
 	/** Changes with every snapshot applied: the chart's and strip's images are behind when theirs differs (T-046). */
 	int version()
 	{

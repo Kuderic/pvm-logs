@@ -1873,13 +1873,39 @@ final class SidePanelModel
 		final String caption;
 		if (p < 0.5)
 		{
-			caption = Math.round(100 * (1 - p)) + "% of fights with these attacks dealt more";
+			caption = curveShare(1 - p) + "% of fights with these attacks dealt more";
 		}
 		else
 		{
-			caption = Math.round(100 * p) + "% of fights with these attacks dealt less";
+			caption = curveShare(p) + "% of fights with these attacks dealt less";
 		}
-		return new PanelSnapshot.Curve(z, Text.title(LedgerRows.band(p), SidePanelStyle.of(luckColour)), caption);
+		return new PanelSnapshot.Curve(z, Text.title(LedgerRows.band(p), SidePanelStyle.of(luckColour)), caption,
+			curveTip(z, p));
+	}
+
+	/**
+	 * T-112 (Eric's pick, 07:45): a share of fights in whole percent, 1 to 99: at the top 1% the caption reads "99% ...
+	 * dealt less", never 100% (which would say no fight could do better), and a tail is never 0%.
+	 */
+	static long curveShare(double fraction)
+	{
+		return Math.max(1, Math.min(99, Math.round(100 * fraction)));
+	}
+
+	/**
+	 * T-112: the curve's tooltip, for the tail it shades (Eric, 2026-10-30: "top 1% is not at the 1% of the graph"):
+	 * the curve runs over z, so a top 1% sits most of the way across, with a thin sliver of area past it.
+	 */
+	static String curveTip(double z, double p)
+	{
+		final String band = LedgerRows.band(p);
+		final boolean right = z >= 0;
+		final long share = curveShare(right ? 1 - p : p);
+		final String head = Character.toUpperCase(band.charAt(0)) + band.substring(1) + ": " + share
+			+ "% of fights with these attacks would have dealt " + (right ? "more" : "less") + ", the shaded "
+			+ (right ? "right" : "left") + " side.";
+		return head + " The curve is spread by damage, not by share of fights, so a small share is a thin sliver at its"
+			+ " edge.";
 	}
 
 	// ---- lists ----
@@ -2035,8 +2061,11 @@ final class SidePanelModel
 				final double share = whole <= 0 ? 0 : (double) Math.max(0, w.damage) / whole;
 				final String count = w.attacks + (w.special ? (w.attacks == 1 ? " spec" : " specs")
 					: (w.attacks == 1 ? " attack" : " attacks"));
-				final String sub = warning || !w.expectedKnown ? count
-					: count + DOT + "expected " + LedgerRows.number(Math.round(w.expected));
+				// T-112 item 6: in brackets with its unit, as the DPS rows have it: "1 spec · expected 36" read as 1 × 36. A
+				// special that drains on landing (a warhammer) says what landed against its chance instead.
+				final boolean landing = w.special && DrainRule.drainsOnLanding(specialWeapon(w.itemId));
+				final String sub = landing ? landingForms(w, count, warning).get(0) : warning || !w.expectedKnown ? count
+					: count + " (expected " + LedgerRows.number(Math.round(w.expected)) + " dmg)";
 				final int sprite = SidePanelIcons.spellSprite(w.spell);
 				rows.add(weaponSource(w, count, sub, share, warning, sprite));
 			}
@@ -2055,9 +2084,12 @@ final class SidePanelModel
 			if (unmatched != 0 || Math.abs(unmatchedExpected) >= 0.5)
 			{
 				final double share = whole <= 0 ? 0 : (double) Math.max(0, unmatched) / whole;
+				// T-112 item 6: "(expected N)" as the DPS rows have it; where it doesn't fit, "(exp N)", then the words alone.
+				final String expected = LedgerRows.number(Math.round(unmatchedExpected));
 				rows.add(new PanelSnapshot.Source("Not matched to an attack", warning ? "weapon damage"
-					: "weapon damage" + DOT + "expected " + LedgerRows.number(Math.round(unmatchedExpected)),
-					LedgerRows.number(unmatched), Math.round(100 * share) + "%", share, SidePanelStyle.UNSCORED));
+					: "weapon damage (expected " + expected + ")", warning ? null : Arrays.asList("weapon damage (exp "
+					+ expected + ")", "weapon damage"), LedgerRows.number(unmatched), Math.round(100 * share) + "%", share,
+					SidePanelStyle.UNSCORED, -1, -1, null, null, null));
 			}
 		}
 		source(rows, "Thrall", in.scoredThrall, whole, SidePanelStyle.THRALL, -1, SidePanelIcons.THRALL_SPRITE);
@@ -2107,8 +2139,15 @@ final class SidePanelModel
 		final String damage = LedgerRows.number(w.damage);
 		if (dps == null)
 		{
-			return new PanelSnapshot.Source(w.name, sub, null, damage, shareText, share, colour, item, sprite, tooltip, null,
-				null);
+			// T-112 item 6: where "1 spec (expected 36 dmg)" doesn't fit beside the damage and share, "1 spec (exp 36)";
+			// a landing special's shorter forms likewise.
+			final boolean landing = w.special && DrainRule.drainsOnLanding(specialWeapon(w.itemId));
+			final List<String> landingForms = landing ? landingForms(w, count, warning) : null;
+			final List<String> shorter = landing ? landingForms.subList(1, landingForms.size())
+				: sub.endsWith(" dmg)") ? Arrays.asList(count + " (exp " + LedgerRows.number(Math.round(w.expected)) + ")",
+				count) : null;
+			return new PanelSnapshot.Source(w.name, sub, shorter, damage, shareText, share, colour, item, sprite, tooltip,
+				null, null);
 		}
 		// T-085, Eric's pick (layout A): the DPS on the sub-line. Where the longest doesn't fit, the shorter forms in turn;
 		// the card draws every weapon row in the same one (SidePanelText.FormGroup), so the rows don't go ragged.
@@ -2119,6 +2158,47 @@ final class SidePanelModel
 				rate + " (exp " + exp + ")", rate);
 		return new PanelSnapshot.Source(w.name, forms.get(0), forms.subList(1, forms.size()), damage, shareText, share,
 			colour, item, sprite, tooltip, dps, exp);
+	}
+
+	/**
+	 * T-112 item 6 (Eric, 2026-10-30 06:52): a special that drains on landing ({@link DrainRule#drainsOnLanding}) reads
+	 * what landed against the chance it had, longest first: {@code 2 specs (50% landed, expected 70%)}, then {@code (50%
+	 * landed, exp 70%)}, {@code 50% landed (exp 70%)}, {@code 2 specs (50% landed)}; one spec reads {@code 1 spec (landed, expected 70%)} or {@code (missed,
+	 * ...)}. Without a chance (under the stats warning, or none recorded), only what landed.
+	 */
+	static List<String> landingForms(WeaponRow w, String count, boolean warning)
+	{
+		final String what = w.attacks == 1 ? (w.landed > 0 ? "landed" : "missed")
+			: Math.round(100.0 * w.landed / Math.max(1, w.attacks)) + "% landed";
+		if (warning || w.landedKnown <= 0)
+		{
+			return Arrays.asList(count + " (" + what + ")", count);
+		}
+		final long chance = Math.round(100.0 * w.landedExpected / w.landedKnown);
+		// As the DPS rows drop "30 attacks" before their expected, the count goes before the chance does.
+		return Arrays.asList(count + " (" + what + ", expected " + chance + "%)", count + " (" + what + ", exp " + chance
+			+ "%)", what + " (exp " + chance + "%)", count + " (" + what + ")", count);
+	}
+
+	/** T-112 item 6: RuneLite's special weapon with this item id, or null. */
+	static net.runelite.client.plugins.specialcounter.SpecialWeapon specialWeapon(int itemId)
+	{
+		if (itemId < 0)
+		{
+			return null;
+		}
+		for (net.runelite.client.plugins.specialcounter.SpecialWeapon w
+			: net.runelite.client.plugins.specialcounter.SpecialWeapon.values())
+		{
+			for (int id : w.getItemID())
+			{
+				if (id == itemId)
+				{
+					return w;
+				}
+			}
+		}
+		return null;
 	}
 
 	/**

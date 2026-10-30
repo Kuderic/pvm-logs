@@ -68,11 +68,36 @@ final class SidePanelLuckCurve extends JComponent
 		band(g2, -Z_RANGE, -QUARTILE_Z, w, SidePanelStyle.alpha(SidePanelStyle.COST, 0.35));
 		band(g2, -QUARTILE_Z, QUARTILE_Z, w, SidePanelStyle.alpha(SidePanelStyle.MUTED, 0.45));
 		band(g2, QUARTILE_Z, Z_RANGE, w, SidePanelStyle.alpha(SidePanelStyle.BETTER, 0.30));
+		// T-112: the tail the label counts, from the marker to the edge, in a brighter tone of each band it covers.
+		final double[] tail = tail(z);
+		tailBand(g2, tail, -Z_RANGE, -QUARTILE_Z, w, SidePanelStyle.alpha(SidePanelStyle.COST, 0.75));
+		tailBand(g2, tail, -QUARTILE_Z, QUARTILE_Z, w, SidePanelStyle.alpha(SidePanelStyle.SECONDARY, 0.55));
+		tailBand(g2, tail, QUARTILE_Z, Z_RANGE, w, SidePanelStyle.alpha(SidePanelStyle.BETTER, 0.70));
 		final double mx = x(Math.max(-SidePanelModel.CURVE_Z_LIMIT, Math.min(SidePanelModel.CURVE_Z_LIMIT, z)), w);
 		g2.setColor(SidePanelStyle.VALUE);
 		g2.setStroke(new BasicStroke(2f));
 		g2.draw(new Line2D.Double(mx, 2, mx, BASE));
 		g2.dispose();
+	}
+
+	/**
+	 * T-112: the tail the label counts, {from, to} in z: right of the marker for a fight at or above the middle (the
+	 * share that would have dealt more), left of it below (the share that would have dealt less).
+	 */
+	static double[] tail(double z)
+	{
+		final double m = Math.max(-SidePanelModel.CURVE_Z_LIMIT, Math.min(SidePanelModel.CURVE_Z_LIMIT, z));
+		return m >= 0 ? new double[]{m, Z_RANGE} : new double[]{-Z_RANGE, m};
+	}
+
+	private static void tailBand(Graphics2D g, double[] tail, double from, double to, int width, java.awt.Color fill)
+	{
+		final double a = Math.max(from, tail[0]);
+		final double b = Math.min(to, tail[1]);
+		if (b > a)
+		{
+			band(g, a, b, width, fill);
+		}
 	}
 
 	private static void band(Graphics2D g, double from, double to, int width, java.awt.Color fill)
