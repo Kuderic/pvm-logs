@@ -87,6 +87,8 @@ final class FightTimeline
 		double landedChance = -1;
 		int maxHit = -1;
 		int biggest;
+		/** T-110: its weapon's attack speed in ticks as thrown, or 0 when not told. */
+		int speed;
 
 		Attack(int tick)
 		{
@@ -306,18 +308,25 @@ final class FightTimeline
 	/** What the attack just booked was: called right after {@link Fight#recordAttackMade}. */
 	void describeLatest(String key, int itemId, Spell spell, Style style, int thrownTick)
 	{
+		describeLatest(key, itemId, spell, style, thrownTick, 0);
+	}
+
+	/** As above, with the weapon's attack speed as thrown (T-110). */
+	void describeLatest(String key, int itemId, Spell spell, Style style, int thrownTick, int speed)
+	{
 		final long t0 = PerfProbe.start(probe);
-		describeLatestTimed(key, itemId, spell, style, thrownTick);
+		describeLatestTimed(key, itemId, spell, style, thrownTick, speed);
 		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
 	}
 
-	private void describeLatestTimed(String key, int itemId, Spell spell, Style style, int thrownTick)
+	private void describeLatestTimed(String key, int itemId, Spell spell, Style style, int thrownTick, int speed)
 	{
 		final Attack attack = latest();
 		if (attack == null)
 		{
 			return;
 		}
+		attack.speed = Math.max(0, speed);
 		attack.key = key == null ? "Unknown" : key;
 		attack.itemId = itemId;
 		attack.spell = spell;
