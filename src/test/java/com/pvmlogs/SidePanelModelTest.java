@@ -135,7 +135,7 @@ public class SidePanelModelTest
 		assertEquals("700 HP · solo · 3:31 pm", t.header.sub.text);
 		assertEquals("2:16", t.header.clock.text);
 		assertEquals("bottom 20%", tile(t, "Luck").value.text);
-		assertEquals("14 s slower", tile(t, "Luck").sub.text);
+		assertEquals("24 ticks slower", tile(t, "Luck").sub.text);
 		assertEquals("+80 thrall", tile(t, "Damage/expected").sub.text);
 		assertEquals("weapon only", tile(t, "DPS").sub.text);
 		// Uptime's 15 idle seconds and stat boost 2.4 s: 17.4 s, rounded, and costing because uptime is. Eating's 4.2 s
@@ -239,11 +239,11 @@ public class SidePanelModelTest
 		assertEquals(2, dead.average.size());
 		assertEquals("your average 1:54", dead.average.get(0).left.text);
 		// 136.8 s against 114: 23 s slower. Never coloured (Orchestrator, T-034): the raw clock carries luck.
-		assertEquals("23 s slower", dead.average.get(0).right.text);
+		assertEquals("38 ticks slower", dead.average.get(0).right.text);
 		assertEquals(SidePanelStyle.BODY, dead.average.get(0).right.colour);
 		assertEquals("luck removed 2:02", dead.average.get(1).left.text);
 		// 122.5 s against 117, above the upper quartile 120: luck removed is the one that's coloured.
-		assertEquals("5 s slower than 1:57", dead.average.get(1).right.text);
+		assertEquals("9 ticks slower than 1:57", dead.average.get(1).right.text);
 		assertEquals(SidePanelStyle.COST, dead.average.get(1).right.colour);
 		assertEquals(114, dead.marker, 0);
 
@@ -260,13 +260,13 @@ public class SidePanelModelTest
 		final PanelSnapshot.TimeBudget dead = tab(SidePanelExamples.dead()).budget;
 		final PanelSnapshot.BudgetRow slower = luckRow(dead);
 		assertEquals("luck", slower.label.text);
-		assertEquals("14 s slower", slower.value.text);
+		assertEquals("24 ticks slower", slower.value.text);
 		assertEquals(SidePanelStyle.COST, slower.value.colour);
 
 		// The raid's luck saved 13 s, in the top 15%.
 		final PanelSnapshot.BudgetRow faster = luckRow(tab(SidePanelExamples.raid()).budget);
 		assertEquals("luck", faster.label.text);
-		assertEquals("13 s faster", faster.value.text);
+		assertEquals("22 ticks faster", faster.value.text);
 		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, faster.swatch);
 
 		// In the middle half: "luck average".
@@ -361,7 +361,7 @@ public class SidePanelModelTest
 		final SidePanelModel.Input in = SidePanelExamples.dead();
 		((LedgerExamples.FakeScope) in.scope).damageVariance = -1;
 		final PanelSnapshot.FightTab t = tab(in);
-		assertEquals("14 s slower", tile(t, "Luck").value.text);
+		assertEquals("24 ticks slower", tile(t, "Luck").value.text);
 		assertEquals("no percentile", tile(t, "Luck").sub.text);
 		assertNull(t.curve);
 		assertEquals(SidePanelModel.NO_CURVE_TEXT, t.noCurve);

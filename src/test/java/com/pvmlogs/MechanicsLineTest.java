@@ -18,7 +18,7 @@ public class MechanicsLineTest
 	private static LedgerRows.Row d(String left, String right)
 	{
 		return new LedgerRows.Row(left, right, LedgerRows.FontRole.DETAIL, LedgerRows.FontRole.DETAIL,
-			LedgerRows.Colour.NEUTRAL, LedgerRows.Colour.NEUTRAL);
+			LedgerRows.Colour.NEUTRAL, LedgerRows.Colour.NEUTRAL, null, LedgerRowsTest.ticksShort(right));
 	}
 
 	private static List<LedgerRows.Row> rows(LedgerRows.Scope scope, ExecutionParts parts, boolean ended)
@@ -42,16 +42,16 @@ public class MechanicsLineTest
 		for (boolean ended : new boolean[]{false, true})
 		{
 			final List<LedgerRows.Row> rows = rows(leviathan(), ExecutionParts.ALL, ended);
-			final int eating = rows.indexOf(d(" eating", "4 s"));
+			final int eating = rows.indexOf(d(" eating", "7 ticks"));
 			assertTrue(rows.toString(), eating > 0);
-			assertEquals(d(" mechanics", "6 s"), rows.get(eating + 1));
+			assertEquals(d(" mechanics", "10 ticks"), rows.get(eating + 1));
 		}
 	}
 
 	@Test
 	public void costingOnlyStillShowsItAndOffHidesIt()
 	{
-		assertTrue(rows(leviathan(), ExecutionParts.COSTING, true).contains(d(" mechanics", "6 s")));
+		assertTrue(rows(leviathan(), ExecutionParts.COSTING, true).contains(d(" mechanics", "10 ticks")));
 		assertFalse(rows(leviathan(), ExecutionParts.OFF, true).stream()
 			.anyMatch(r -> r.left.equals(LedgerRows.MECHANICS)));
 	}
@@ -61,10 +61,10 @@ public class MechanicsLineTest
 	{
 		assertFalse(rows(LedgerExamples.kill(), ExecutionParts.ALL, true).stream()
 			.anyMatch(r -> r.left.equals(LedgerRows.MECHANICS)));
-		// One tick is 0.6 s, which rounds to a second: the line shows.
+		// One tick: the line shows (T-117: in ticks).
 		final FakeScope one = LedgerExamples.kill();
 		one.ticksMechanics = 1;
-		assertTrue(rows(one, ExecutionParts.ALL, true).contains(d(" mechanics", "1 s")));
+		assertTrue(rows(one, ExecutionParts.ALL, true).contains(d(" mechanics", "1 tick")));
 	}
 
 	@Test

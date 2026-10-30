@@ -25,15 +25,21 @@ import net.runelite.client.util.QuantityFormatter;
 final class LedgerRows
 {
 	static final double SECONDS_PER_TICK = 0.6;
+	/**
+	 * T-117: a tick count's short form for a box saved too narrow, {@code 23t},
+	 * only through the rows' short forms. A lone {@code t} after the digits reads
+	 * clearly in all three RuneScape fonts (see the renders).
+	 */
+	static final String TICKS_SHORT = "t";
 	/** The eating row's label (T-038). */
 	static final String EATING = " eating";
-	/** T-080: idle time a boss's mechanic forced (T-074), neutral like eating: {@code  mechanics  6 s}. */
+	/** T-080: idle time a boss's mechanic forced (T-074), neutral like eating: {@code  mechanics  10 ticks}. */
 	static final String MECHANICS = " mechanics";
 	/** T-051's rows: the target's Defence and Magic, the drains' worth over a raid or trip, and the specials' luck. */
 	static final String DEFENCE = " defence";
 	static final String MAGIC = " magic";
 	static final String DEFENCE_DRAINS = " defence drains";
-	/** T-075: under a kill's Defence and Magic rows, what the drains were worth: {@code  drains  5 s faster}. */
+	/** T-075: under a kill's Defence and Magic rows, what the drains were worth: {@code  drains  8 ticks faster}. */
 	static final String DRAINS = " drains";
 	static final String SPECS = " specs";
 	/** T-077: the DPS overlay's spec section: its head, and its expected damage's label and unit. */
@@ -1697,8 +1703,10 @@ final class LedgerRows
 		// Luck under Damage/expected and its defence rows (Eric, 2026-10-28), where the warning stands in for it.
 		if (settings.luck && !state.warning)
 		{
-			// A short form for a panel saved too narrow: the band without its seconds (T-029).
-			final String band = Double.isNaN(n.luck) || Double.isNaN(n.percentile) ? null : band(n.percentile);
+			// A short form for a panel saved too narrow: the band without its ticks (T-029), or "23t slower" for a fight with
+			// no percentile (T-117).
+			final String band = Double.isNaN(n.luck) ? null
+				: Double.isNaN(n.percentile) ? fasterOrSlowerShort(n.luck) : band(n.percentile);
 			rows.add(new Row("Luck", luckFigure(n), FontRole.EMPHASIS, FontRole.VALUE, Colour.NEUTRAL, luckColour, null,
 				band));
 			specs(rows, n, scope, state);
@@ -1725,8 +1733,9 @@ final class LedgerRows
 	}
 
 	/**
-	 * T-051: under Luck after the fight, {@code  specs  +5 s}: the specials'
-	 * share of luck (T-050), coloured as luck is. Hidden when it rounds to none,
+	 * T-051: under Luck after the fight, {@code  specs  8 ticks faster}: the
+	 * specials' share of luck (T-050), coloured as luck is. Hidden when it rounds
+	 * to no tick,
 	 * which it does with no draining specials of the player's own (the party's
 	 * drains are no one's luck).
 	 */
@@ -1737,12 +1746,13 @@ final class LedgerRows
 			return;
 		}
 		final double seconds = scope.luckSeconds(scope.specLuckDamage());
-		if (Double.isNaN(seconds) || roundHalfAway(seconds) == 0)
+		if (Double.isNaN(seconds) || ticks(seconds) == 0)
 		{
 			return;
 		}
-		// In words, as Luck is (T-075, Eric 2026-10-29: "+1 s" read as time added to the kill).
-		rows.add(detail(SPECS, fasterOrSlower(seconds), luckColour(seconds, n.clock)));
+		// In words, as Luck is (T-075, Eric 2026-10-29: "+1 s" read as time added to the kill), in ticks (T-117).
+		rows.add(new Row(SPECS, fasterOrSlower(seconds), FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL,
+			luckColour(seconds, n.clock), null, fasterOrSlowerShort(seconds)));
 	}
 
 	/**
@@ -1750,10 +1760,10 @@ final class LedgerRows
 	 * moves the expected. Live, once a drain has been tracked on it: {@code
 	 * defence  145 / 215}, or {@code 145 (floor)}, and Magic the same way when it
 	 * was drained. After the fight: {@code defence  215 → 145}, then what the
-	 * drains were worth (T-050) in words, as Luck is (T-075): {@code drains  14 s
-	 * faster}, a row of its own so the panel keeps its width. A raid or a trip,
-	 * which has many targets, shows the worth alone: {@code defence drains  40 s
-	 * faster}. Nothing for an immune or untracked target, or a kill saved before
+	 * drains were worth (T-050) in words, as Luck is (T-075), in ticks (T-117):
+	 * {@code drains  23 ticks faster}, a row of its own so the panel keeps its
+	 * width. A raid or a trip, which has many targets, shows the worth alone:
+	 * {@code defence drains  67 ticks faster}. Nothing for an immune or untracked target, or a kill saved before
 	 * T-049.
 	 */
 	private static void drain(List<Row> rows, Numbers n, Scope scope, State state)
@@ -1772,7 +1782,9 @@ final class LedgerRows
 			return;
 		}
 		final double seconds = scope.luckSeconds(scope.drainValueDamage());
-		final String worth = Double.isNaN(seconds) || roundHalfAway(seconds) == 0 ? "" : fasterOrSlower(seconds);
+		final boolean none = Double.isNaN(seconds) || ticks(seconds) == 0;
+		final String worth = none ? "" : fasterOrSlower(seconds);
+		final String worthShort = none ? null : fasterOrSlowerShort(seconds);
 		final int start = scope.defenceStart();
 		final int end = scope.defenceEnd();
 		final boolean defenceMoved = start >= 0 && end >= 0 && start != end;
@@ -1783,7 +1795,8 @@ final class LedgerRows
 			// A raid or a trip: the drains' worth over its fights.
 			if (!worth.isEmpty())
 			{
-				rows.add(detail(DEFENCE_DRAINS, worth, Colour.NEUTRAL));
+				rows.add(new Row(DEFENCE_DRAINS, worth, FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL,
+					null, worthShort));
 			}
 			return;
 		}
@@ -1795,10 +1808,11 @@ final class LedgerRows
 		{
 			rows.add(detail(MAGIC, scope.magicStart() + ARROW + scope.magicEnd(), Colour.NEUTRAL));
 		}
-		// On a row of its own (T-075): "215 → 145 · 14 s faster" would widen the box in the Small font.
+		// On a row of its own (T-075): "215 → 145 · 23 ticks faster" would widen the box in the Small font.
 		if (!worth.isEmpty())
 		{
-			rows.add(detail(DRAINS, worth, Colour.NEUTRAL));
+			rows.add(new Row(DRAINS, worth, FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL, null,
+				worthShort));
 		}
 	}
 
@@ -1826,8 +1840,8 @@ final class LedgerRows
 	}
 
 	/**
-	 * {@code  eating  4 s} (T-038): the time spent eating, live and after the
-	 * fight, once it rounds to a second. After {@code damage taken} (Eric,
+	 * {@code  eating  7 ticks} (T-038; in ticks since T-117): the time spent
+	 * eating, live and after the fight, once it rounds to a tick. After {@code damage taken} (Eric,
 	 * 2026-10-27, over a main row of its own), with which it shows and hides; like
 	 * it, not one of Execution's parts, and never coloured as a cost: the plugin
 	 * can't tell why you ate.
@@ -1835,27 +1849,34 @@ final class LedgerRows
 	private static void eating(List<Row> rows, Numbers n, boolean avoidable)
 	{
 		// After a ruled fight, the rest of the eating: the avoidable part is Execution's now (T-043).
-		final long seconds = roundHalfAway(avoidable ? Math.max(0, n.eatingCost - n.avoidableEatingCost) : n.eatingCost);
-		if (seconds >= 1)
+		final long ticks = ticks(avoidable ? Math.max(0, n.eatingCost - n.avoidableEatingCost) : n.eatingCost);
+		if (ticks >= 1)
 		{
-			rows.add(detail(EATING, seconds + " s", Colour.NEUTRAL));
+			rows.add(neutralTicks(EATING, ticks));
 		}
 	}
 
 	/**
-	 * T-080: {@code  mechanics  6 s}, the idle time a boss's mechanic forced on
-	 * you (T-074: the Leviathan's stun and specials), live and after the fight,
-	 * once it rounds to a second. Beside eating and neutral like it: neither
+	 * T-080: {@code  mechanics  10 ticks}, the idle time a boss's mechanic forced
+	 * on you (T-074: the Leviathan's stun and specials), live and after the fight,
+	 * once it rounds to a tick (T-117). Beside eating and neutral like it: neither
 	 * uptime lost nor attacking. Nothing for a boss with no allowances, or an old
 	 * kill.
 	 */
 	private static void mechanics(List<Row> rows, Numbers n)
 	{
-		final long seconds = roundHalfAway(n.mechanicsCost);
-		if (seconds >= 1)
+		final long ticks = ticks(n.mechanicsCost);
+		if (ticks >= 1)
 		{
-			rows.add(detail(MECHANICS, seconds + " s", Colour.NEUTRAL));
+			rows.add(neutralTicks(MECHANICS, ticks));
 		}
+	}
+
+	/** T-117: {@code  eating  7 ticks}, and {@code 7t} for a box saved too narrow. */
+	private static Row neutralTicks(String label, long ticks)
+	{
+		return new Row(label, ticksWord(ticks), FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL, null,
+			number(ticks) + TICKS_SHORT);
 	}
 
 	private static void parts(List<Row> rows, Numbers n, boolean costingOnly, boolean avoidable)
@@ -1902,7 +1923,11 @@ final class LedgerRows
 		{
 			return;
 		}
-		rows.add(detail(label, withSeconds(figure, cost), costing ? Colour.COST : Colour.NEUTRAL));
+		final String full = withTicks(figure, cost);
+		// T-117: "86% (-25t)" for a box saved too narrow.
+		final String shorter = full.equals(figure) ? null : figure + " (-" + number(ticks(cost)) + TICKS_SHORT + ")";
+		rows.add(new Row(label, full, FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL,
+			costing ? Colour.COST : Colour.NEUTRAL, null, shorter));
 	}
 
 	private static void details(List<Row> rows, Numbers n, Scope s, State state)
@@ -2021,26 +2046,39 @@ final class LedgerRows
 
 	// ---- formats ----
 
-	/** {@code NN%}, then {@code (-N s)} when the cost rounds to at least a second. */
+	/** {@code NN%}, then {@code (-N ticks)} when the cost rounds to at least a tick (T-117). */
 	static String partValue(double share, double costSeconds)
 	{
-		return withSeconds(partPercent(share), costSeconds);
-	}
-
-	/** A part's figure ({@code NN%} or {@code drained}), then {@code (-N s)} when the cost rounds to at least a second. */
-	static String withSeconds(String figure, double costSeconds)
-	{
-		final long secs = Double.isNaN(costSeconds) ? 0 : roundHalfAway(costSeconds);
-		return secs >= 1 ? figure + " (-" + secs + " s)" : figure;
+		return withTicks(partPercent(share), costSeconds);
 	}
 
 	/**
-	 * {@code bottom 20% (14 s slower)}, {@code top 10% (9 s faster)},
-	 * {@code average (2 s slower)} (T-029; Eric, 2026-10-27: a damage ratio read
-	 * like "76% lucky"): where this fight's damage sits among fights with the same
-	 * attacks, then what the rolls cost or saved on the clock. No bracket when the
-	 * seconds round to none. Without T-028's variance (fights saved before it),
-	 * the seconds alone; a dash when there's nothing to compare.
+	 * A part's figure ({@code NN%} or {@code drained}), then {@code (-N ticks)}
+	 * when its cost, given in seconds, rounds to at least a tick: {@code 86%
+	 * (-25 ticks)}, {@code 97% (-1 tick)} (T-117; it was {@code (-15 s)}).
+	 */
+	static String withTicks(String figure, double costSeconds)
+	{
+		final long ticks = Double.isNaN(costSeconds) ? 0 : ticks(costSeconds);
+		return ticks >= 1 ? figure + " (-" + ticksWord(ticks) + ")" : figure;
+	}
+
+	/**
+	 * {@link #withTicks}, under its name from before T-117, for the side panel's
+	 * callers until T-118 moves them. It says ticks too.
+	 */
+	static String withSeconds(String figure, double costSeconds)
+	{
+		return withTicks(figure, costSeconds);
+	}
+
+	/**
+	 * {@code bottom 20% (23 ticks slower)}, {@code top 10% (15 ticks faster)},
+	 * {@code average (3 ticks slower)} (T-029; Eric, 2026-10-27: a damage ratio
+	 * read like "76% lucky"): where this fight's damage sits among fights with the
+	 * same attacks, then what the rolls cost or saved, in ticks (T-117). No
+	 * bracket when that rounds to no tick. Without T-028's variance (fights saved
+	 * before it), the ticks alone; a dash when there's nothing to compare.
 	 */
 	static String luckFigure(Numbers n)
 	{
@@ -2048,13 +2086,13 @@ final class LedgerRows
 		{
 			return UNKNOWN;
 		}
-		final String seconds = fasterOrSlower(n.luck);
+		final String ticks = fasterOrSlower(n.luck);
 		if (Double.isNaN(n.percentile))
 		{
-			return seconds;
+			return ticks;
 		}
 		final String band = band(n.percentile);
-		return seconds.equals(EVEN) ? band : band + " (" + seconds + ")";
+		return ticks.equals(EVEN) ? band : band + " (" + ticks + ")";
 	}
 
 	/**
@@ -2086,19 +2124,52 @@ final class LedgerRows
 	}
 
 	/**
-	 * Seconds saved or lost, in words: {@code 10 s faster}, {@code 14 s slower},
-	 * {@code even}. A sign on a time was ambiguous (Eric, 2026-10-26): "+10 s"
-	 * read as ten seconds added to the kill, when it meant the rolls saved ten.
-	 * Positive is time saved. Rounded half away from zero.
+	 * Time saved or lost, given in seconds, in words and whole ticks (T-117,
+	 * Eric 2026-10-30: ticks are the game's own unit): {@code 23 ticks faster},
+	 * {@code 1 tick slower}, {@code even}. A sign on a time was ambiguous (Eric,
+	 * 2026-10-26): "+10 s" read as ten seconds added to the kill, when it meant
+	 * the rolls saved ten. Positive is time saved.
 	 */
 	static String fasterOrSlower(double secondsSaved)
 	{
-		final long r = roundHalfAway(secondsSaved);
+		final long r = ticks(secondsSaved);
 		if (r == 0)
 		{
 			return EVEN;
 		}
-		return Math.abs(r) + " s " + (r > 0 ? "faster" : "slower");
+		return ticksWord(Math.abs(r)) + (r > 0 ? " faster" : " slower");
+	}
+
+	/** {@link #fasterOrSlower}'s short form, for a box saved too narrow: {@code 23t slower}; {@code even} stays. */
+	static String fasterOrSlowerShort(double secondsSaved)
+	{
+		final long r = ticks(secondsSaved);
+		if (r == 0)
+		{
+			return EVEN;
+		}
+		return number(Math.abs(r)) + TICKS_SHORT + (r > 0 ? " faster" : " slower");
+	}
+
+	/**
+	 * T-117: seconds as whole ticks of {@link #SECONDS_PER_TICK}, rounded half
+	 * away from zero: 0.3 s is a tick, 0.29 s none. NaN is none.
+	 */
+	static long ticks(double seconds)
+	{
+		if (Double.isNaN(seconds))
+		{
+			return 0;
+		}
+		// The nearest of a millionth of a tick first, so 3.6 / 0.6 (5.999…) is 6 and 0.3 / 0.6 (0.4999…) is a half.
+		final double t = Math.round(seconds / SECONDS_PER_TICK * 1e6) / 1e6;
+		return roundHalfAway(t);
+	}
+
+	/** {@code 1 tick}, {@code 23 ticks}, {@code 1,500 ticks}. */
+	static String ticksWord(long ticks)
+	{
+		return number(ticks) + (Math.abs(ticks) == 1 ? " tick" : " ticks");
 	}
 
 	static long roundHalfAway(double v)

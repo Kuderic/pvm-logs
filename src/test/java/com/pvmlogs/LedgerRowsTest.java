@@ -32,7 +32,27 @@ public class LedgerRowsTest
 {
 	private static Row r(String left, String right, LedgerRows.FontRole lf, LedgerRows.FontRole rf, Colour lc, Colour rc)
 	{
-		return new Row(left, right, lf, rf, lc, rc);
+		return new Row(left, right, lf, rf, lc, rc, null, ticksShort(right));
+	}
+
+	/**
+	 * T-117: the short form a row with ticks in it carries for a box saved too narrow: {@code 86% (-25t)},
+	 * {@code 23t slower}, {@code 7t}; null for anything else.
+	 */
+	static String ticksShort(String right)
+	{
+		final java.util.regex.Matcher cost = java.util.regex.Pattern.compile("(.*) \\(-([\\d,]+) ticks?\\)").matcher(right);
+		if (cost.matches())
+		{
+			return cost.group(1) + " (-" + cost.group(2) + "t)";
+		}
+		final java.util.regex.Matcher words = java.util.regex.Pattern.compile("([\\d,]+) ticks? (faster|slower)").matcher(right);
+		if (words.matches())
+		{
+			return words.group(1) + "t " + words.group(2);
+		}
+		final java.util.regex.Matcher bare = java.util.regex.Pattern.compile("([\\d,]+) ticks?").matcher(right);
+		return bare.matches() ? bare.group(1) + "t" : null;
 	}
 
 	private static Row b(String left, String right)
@@ -154,14 +174,14 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
 			damage("370/418", COST),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "13 ticks slower", COST),
 			main("Execution", "92%"),
-			d(" uptime", "93% (-5 s)", COST),
+			d(" uptime", "93% (-8 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "84% (-1 s)"),
+			d(" stat boost", "84% (-2 ticks)"),
 			d(" damage taken", "112"),
-			d(" eating", "1 s")),
+			d(" eating", "2 ticks")),
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)));
 	}
 
@@ -172,14 +192,14 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis (dead)", "2:16"),
 			damage("688/778", COST),
-			emph("Luck", "14 s slower", COST),
+			emph("Luck", "24 ticks slower", COST),
 			main("Execution", "87%"),
-			d(" uptime", "89% (-15 s)", COST),
+			d(" uptime", "89% (-25 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "85% (-2 s)"),
+			d(" stat boost", "85% (-4 ticks)"),
 			d(" damage taken", "248"),
-			d(" eating", "4 s"),
+			d(" eating", "7 ticks"),
 			b("", ""),
 			main("Summary", ""),
 			d(" hits/expected", "32/30.2"),
@@ -194,12 +214,12 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis (ended)", "2:20"),
 			damage("721/812", COST),
-			emph("Luck", "15 s slower", COST),
+			emph("Luck", "25 ticks slower", COST),
 			main("Execution", "93%"),
-			d(" uptime", "94% (-8 s)", COST),
+			d(" uptime", "94% (-14 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "95% (-1 s)"),
+			d(" stat boost", "95% (-2 ticks)"),
 			d(" damage taken", "310"),
 			b("", ""),
 			main("Summary", ""),
@@ -217,14 +237,14 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Trip · 6 kills", "12:40"),
 			damage("4,120/4,201", NEUTRAL),
-			emph("Luck", "14 s slower", NEUTRAL),
+			emph("Luck", "23 ticks slower", NEUTRAL),
 			main("Execution", "93%"),
-			d(" uptime", "96% (-31 s)", COST),
-			d(" prayer", "99% (-3 s)"),
-			d(" gear", "99% (-2 s)"),
-			d(" stat boost", "88% (-17 s)", COST),
+			d(" uptime", "96% (-52 ticks)", COST),
+			d(" prayer", "99% (-4 ticks)"),
+			d(" gear", "99% (-3 ticks)"),
+			d(" stat boost", "88% (-28 ticks)", COST),
 			d(" damage taken", "1,404"),
-			d(" eating", "7 s"),
+			d(" eating", "11 ticks"),
 			b("", ""),
 			main("Summary", ""),
 			d(" hits/expected", "161/158.7"),
@@ -248,12 +268,12 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("ToA · 3 rooms", "9:12"),
 			damage("8,410/8,200", BETTER),
-			emph("Luck", "13 s faster", BETTER),
+			emph("Luck", "22 ticks faster", BETTER),
 			main("Execution", "86%"),
-			d(" uptime", "90% (-55 s)", COST),
-			d(" prayer", "98% (-12 s)", COST),
-			d(" gear", "99% (-2 s)"),
-			d(" stat boost", "97% (-6 s)"),
+			d(" uptime", "90% (-92 ticks)", COST),
+			d(" prayer", "98% (-20 ticks)", COST),
+			d(" gear", "99% (-3 ticks)"),
+			d(" stat boost", "97% (-10 ticks)"),
 			d(" damage taken", "980"),
 			b("", ""),
 			main("Summary", ""),
@@ -283,12 +303,12 @@ public class LedgerRowsTest
 			r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL),
 			d(" luck hidden until it's fixed", ""),
 			main("Execution", "92%"),
-			d(" uptime", "93% (-5 s)", COST),
+			d(" uptime", "93% (-8 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "84% (-1 s)"),
+			d(" stat boost", "84% (-2 ticks)"),
 			d(" damage taken", "112"),
-			d(" eating", "1 s")),
+			d(" eating", "2 ticks")),
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, true)));
 	}
 
@@ -344,7 +364,7 @@ public class LedgerRowsTest
 		final FakeScope s = LedgerExamples.kill();
 		s.attacksSwitched = 3;
 		s.setup(0.98, 0.85, 0.352, 2.0);
-		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" gear", "98% (-2 s)")));
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" gear", "98% (-3 ticks)")));
 	}
 
 	@Test
@@ -363,7 +383,7 @@ public class LedgerRowsTest
 		// 25 of 49 attacks below base: more than half. The seconds still carry the cost.
 		final FakeScope s = LedgerExamples.kill();
 		s.attacksDrained = 25;
-		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" stat boost", "drained (-2 s)")));
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" stat boost", "drained (-4 ticks)")));
 	}
 
 	@Test
@@ -374,7 +394,7 @@ public class LedgerRowsTest
 		s.attacksPrayed = 50;
 		s.attacksSwitched = 50;
 		s.attacksDrained = 25;
-		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" stat boost", "85% (-2 s)")));
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" stat boost", "85% (-4 ticks)")));
 	}
 
 	@Test
@@ -394,7 +414,7 @@ public class LedgerRowsTest
 		s.attacksDrained = 12;
 		s.setup(0.95, 0.0, 3.36, 0);
 		assertTrue(build(s, State.fight("Vardorvis", false, false, false))
-			.contains(d(" stat boost", "drained (-3 s)", COST)));
+			.contains(d(" stat boost", "drained (-6 ticks)", COST)));
 	}
 
 	@Test
@@ -402,7 +422,7 @@ public class LedgerRowsTest
 	{
 		final FakeScope s = LedgerExamples.midFightBeforeT010();
 		s.attacksDrained = 18;
-		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" setup", "98% (-1 s)")));
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" setup", "98% (-2 ticks)")));
 	}
 
 	/** Ten attacks, six of them below base, each set up for 90% of what it could have been and all of that the boost. */
@@ -436,8 +456,8 @@ public class LedgerRowsTest
 			trip.recordExpected(0.5, 10);
 		}
 		trip.recordAttempt(100, true, 1L);
-		// 10 ticks is 6 s; the boost cost 10% of the setup, 0.6 s, which shows as a second.
-		final Row drained = d(" stat boost", "drained (-1 s)");
+		// 10 ticks is 6 s; the boost cost 10% of the setup, 0.6 s, which shows as a tick.
+		final Row drained = d(" stat boost", "drained (-1 tick)");
 		assertEquals(6, LedgerRows.of(room).attacksDrained());
 		assertTrue(build(LedgerRows.of(room), State.fight("Vardorvis", false, false, false)).contains(drained));
 		assertEquals(6, LedgerRows.of(raid).attacksDrained());
@@ -492,7 +512,7 @@ public class LedgerRowsTest
 		final FakeScope s = LedgerExamples.noData();
 		final List<Row> rows = build(s, State.fight("New boss", true, true, false));
 		assertEquals(d(" damage taken", "36"), rows.get(rows.size() - 1));
-		assertEquals(d(" uptime", "95% (-2 s)", COST), rows.get(rows.size() - 2));
+		assertEquals(d(" uptime", "95% (-4 ticks)", COST), rows.get(rows.size() - 2));
 	}
 
 	@Test
@@ -505,7 +525,7 @@ public class LedgerRowsTest
 			d(" no monster data yet", ""),
 			emph("Luck", "—", NEUTRAL),
 			main("Execution", "—"),
-			d(" uptime", "95% (-2 s)", COST),
+			d(" uptime", "95% (-4 ticks)", COST),
 			d(" damage taken", "36")),
 			build(LedgerExamples.noData(), State.fight("New boss", false, false, false)));
 	}
@@ -516,12 +536,12 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
 			damage("370/418", COST),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "13 ticks slower", COST),
 			main("Execution", "92%"),
-			d(" uptime", "93% (-5 s)", COST),
-			d(" setup", "98% (-1 s)"),
+			d(" uptime", "93% (-8 ticks)", COST),
+			d(" setup", "98% (-2 ticks)"),
 			d(" damage taken", "112"),
-			d(" eating", "1 s")),
+			d(" eating", "2 ticks")),
 			build(LedgerExamples.midFightBeforeT010(), State.fight("Vardorvis", false, false, false)));
 	}
 
@@ -534,14 +554,14 @@ public class LedgerRowsTest
 		assertRows(Arrays.asList(
 			title("Vardorvis", "1:13"),
 			damage("370/418", COST),
-			emph("Luck", "8 s slower", COST),
+			emph("Luck", "13 ticks slower", COST),
 			main("Execution", "92%"),
-			d(" uptime", "93% (-5 s)", COST),
+			d(" uptime", "93% (-8 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "84% (-1 s)"),
+			d(" stat boost", "84% (-2 ticks)"),
 			d(" damage taken", "112"),
-			d(" eating", "1 s")),
+			d(" eating", "2 ticks")),
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)));
 	}
 
@@ -551,7 +571,7 @@ public class LedgerRowsTest
 		final List<Row> rows = build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, true));
 		assertEquals(r("! Boss data unsure", "", BODY, BODY, WARNING, NEUTRAL), rows.get(2));
 		assertEquals(d(" damage taken", "112"), rows.get(rows.size() - 2));
-		assertEquals(d(" eating", "1 s"), rows.get(rows.size() - 1));
+		assertEquals(d(" eating", "2 ticks"), rows.get(rows.size() - 1));
 	}
 
 	@Test
@@ -604,7 +624,7 @@ public class LedgerRowsTest
 		final FakeScope s = LedgerExamples.kill();
 		s.attacksPrayed = 0;
 		s.setup(0.98, 1.0, 0, 0);
-		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" prayer", "98% (-2 s)")));
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" prayer", "98% (-4 ticks)")));
 	}
 
 	@Test
@@ -612,7 +632,7 @@ public class LedgerRowsTest
 	{
 		// Eric, 2026-10-26: under Execution, the damage you took.
 		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false));
-		assertEquals(d(" stat boost", "85% (-2 s)"), rows.get(7));
+		assertEquals(d(" stat boost", "85% (-4 ticks)"), rows.get(7));
 		assertEquals(d(" damage taken", "248"), rows.get(8));
 		final Settings off = new Settings();
 		off.parts = ExecutionParts.OFF;
@@ -690,8 +710,8 @@ public class LedgerRowsTest
 		final Settings s = new Settings();
 		s.parts = ExecutionParts.COSTING;
 		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false), s);
-		assertEquals(Arrays.asList(main("Execution", "87%"), d(" uptime", "89% (-15 s)", COST), d(" damage taken", "248"),
-			d(" eating", "4 s")), rows.subList(3, rows.size()));
+		assertEquals(Arrays.asList(main("Execution", "87%"), d(" uptime", "89% (-25 ticks)", COST), d(" damage taken", "248"),
+			d(" eating", "7 ticks")), rows.subList(3, rows.size()));
 	}
 
 	@Test
@@ -724,9 +744,9 @@ public class LedgerRowsTest
 		s.details = false;
 		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false), s);
 		assertEquals(10, rows.size());
-		assertEquals(d(" stat boost", "85% (-2 s)"), rows.get(7));
+		assertEquals(d(" stat boost", "85% (-4 ticks)"), rows.get(7));
 		assertEquals(d(" damage taken", "248"), rows.get(8));
-		assertEquals(d(" eating", "4 s"), rows.get(9));
+		assertEquals(d(" eating", "7 ticks"), rows.get(9));
 	}
 
 	@Test
@@ -835,12 +855,13 @@ public class LedgerRowsTest
 	// ---- formats ----
 
 	@Test
-	public void partValueAddsSecondsOnlyFromOne()
+	public void partValueAddsTicksOnlyFromOne()
 	{
-		assertEquals("86% (-19 s)", LedgerRows.partValue(0.8596, 19.2));
-		assertEquals("85% (-2 s)", LedgerRows.partValue(0.85, 2.352));
-		assertEquals("86% (-1 s)", LedgerRows.partValue(0.86, 0.5));
-		assertEquals("86%", LedgerRows.partValue(0.86, 0.49));
+		assertEquals("86% (-32 ticks)", LedgerRows.partValue(0.8596, 19.2));
+		assertEquals("85% (-4 ticks)", LedgerRows.partValue(0.85, 2.352));
+		assertEquals("86% (-1 tick)", LedgerRows.partValue(0.86, 0.5));
+		// T-117: from half a tick, 0.3 s.
+		assertEquals("86%", LedgerRows.partValue(0.86, 0.29));
 		assertEquals("100%", LedgerRows.partValue(1, 0));
 	}
 
@@ -853,12 +874,12 @@ public class LedgerRowsTest
 		assertEquals("100%", LedgerRows.partPercent(1));
 		assertEquals("50%", LedgerRows.partPercent(0.5));
 		assertEquals("0%", LedgerRows.partPercent(0));
-		assertEquals("99% (-1 s)", LedgerRows.partValue(0.997, 0.6));
+		assertEquals("99% (-1 tick)", LedgerRows.partValue(0.997, 0.6));
 		// Prayed 279 of 280: 99.6%.
 		final FakeScope s = LedgerExamples.trip();
 		s.attacksMade = 280;
 		s.attacksPrayed = 279;
-		assertTrue(build(s, State.trip(6, true, false)).contains(d(" prayer", "99% (-3 s)")));
+		assertTrue(build(s, State.trip(6, true, false)).contains(d(" prayer", "99% (-4 ticks)")));
 	}
 
 	@Test
@@ -881,17 +902,17 @@ public class LedgerRowsTest
 	public void luckAndTheAverageReadInWordsNotSigns()
 	{
 		// Eric, 2026-10-26: "+10 s" read as ten seconds added to the kill. Positive is time saved.
-		assertEquals("14 s faster", LedgerRows.fasterOrSlower(14.4));
-		assertEquals("14 s slower", LedgerRows.fasterOrSlower(-14.35));
-		assertEquals("8 s slower", LedgerRows.fasterOrSlower(-7.54));
-		assertEquals("13 s faster", LedgerRows.fasterOrSlower(13.46));
+		assertEquals("24 ticks faster", LedgerRows.fasterOrSlower(14.4));
+		assertEquals("24 ticks slower", LedgerRows.fasterOrSlower(-14.35));
+		assertEquals("13 ticks slower", LedgerRows.fasterOrSlower(-7.54));
+		assertEquals("22 ticks faster", LedgerRows.fasterOrSlower(13.46));
 		// Half away from zero.
-		assertEquals("3 s faster", LedgerRows.fasterOrSlower(2.5));
-		assertEquals("3 s slower", LedgerRows.fasterOrSlower(-2.5));
-		assertEquals("1 s faster", LedgerRows.fasterOrSlower(0.5));
-		assertEquals("1 s slower", LedgerRows.fasterOrSlower(-0.5));
-		assertEquals("even", LedgerRows.fasterOrSlower(0.49));
-		assertEquals("even", LedgerRows.fasterOrSlower(-0.49));
+		assertEquals("4 ticks faster", LedgerRows.fasterOrSlower(2.5));
+		assertEquals("4 ticks slower", LedgerRows.fasterOrSlower(-2.5));
+		assertEquals("1 tick faster", LedgerRows.fasterOrSlower(0.5));
+		assertEquals("1 tick slower", LedgerRows.fasterOrSlower(-0.5));
+		assertEquals("even", LedgerRows.fasterOrSlower(0.29));
+		assertEquals("even", LedgerRows.fasterOrSlower(-0.29));
 		assertEquals("even", LedgerRows.fasterOrSlower(-0.0));
 	}
 
@@ -944,16 +965,16 @@ public class LedgerRowsTest
 	}
 
 	@Test
-	public void eatingTimeIsInSeconds()
+	public void eatingTimeIsInTicks()
 	{
 		// Eric, 2026-10-27: in seconds, like everything else. One tick is 0.6 s, rounded half away from zero, which is a
 		// second: the row shows from there (T-038).
 		final FakeScope s = LedgerExamples.kill();
 		s.ticksLostEating = 1;
-		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating", "1 s")));
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating", "1 tick")));
 		s.ticksLostEating = 7;
-		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating", "4 s")));
-		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" eating", "4 s")));
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" eating", "7 ticks")));
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" eating", "7 ticks")));
 		// Never in the Summary any more.
 		assertFalse(build(s, State.fight("Vardorvis", true, true, false)).stream()
 			.anyMatch(row -> row.left.startsWith(" eating time")));
@@ -1142,7 +1163,7 @@ public class LedgerRowsTest
 		final List<Row> rows = build(sire, State.fight("Abyssal Sire", true, true, false));
 		assertEquals(title("Abyssal Sire", "1:51").left + " (dead)", rows.get(0).left);
 		assertEquals("1:51", rows.get(0).right);
-		assertEquals("20 s slower", rows.get(2).right);
+		assertEquals("33 ticks slower", rows.get(2).right);
 		// T-073: no DPS row on the overlay; the side panel's tile reads Numbers.dps.
 		assertFalse(rows.stream().anyMatch(row -> row.left.equals("DPS")));
 	}
@@ -1334,7 +1355,7 @@ public class LedgerRowsTest
 		kill.damageVariance = 11436;
 		final List<Row> rows = build(kill, State.fight("Vardorvis", true, true, false));
 		// Luck sits under Damage/expected (Eric, 2026-10-28).
-		assertEquals("bottom 20% (14 s slower)", rows.get(2).right);
+		assertEquals("bottom 20% (24 ticks slower)", rows.get(2).right);
 		assertEquals(COST, rows.get(2).rightColour);
 		// Damage/expected takes the same colour.
 		assertEquals(COST, rows.get(1).rightColour);
@@ -1343,7 +1364,7 @@ public class LedgerRowsTest
 		// A middling fight: "average", neutral, even though its seconds would have coloured it.
 		kill.damageVariance = 200_000;
 		final List<Row> middling = build(kill, State.fight("Vardorvis", true, true, false));
-		assertEquals("average (14 s slower)", middling.get(2).right);
+		assertEquals("average (24 ticks slower)", middling.get(2).right);
 		assertEquals(NEUTRAL, middling.get(2).rightColour);
 	}
 
@@ -1357,12 +1378,12 @@ public class LedgerRowsTest
 	}
 
 	@Test
-	public void unknownVarianceFallsBackToTheSeconds()
+	public void unknownVarianceFallsBackToTheTicks()
 	{
 		final FakeScope kill = LedgerExamples.kill();
 		kill.damageVariance = -1;
 		final List<Row> rows = build(kill, State.fight("Vardorvis", true, true, false));
-		assertEquals(emph("Luck", "14 s slower", COST), rows.get(2));
+		assertEquals(emph("Luck", "24 ticks slower", COST), rows.get(2));
 		assertNull(rows.get(1).shortRight);
 	}
 
@@ -1379,7 +1400,7 @@ public class LedgerRowsTest
 		sire.thrallDamage = 0;
 		sire.dotDamage = 8;
 		sire.damageVariance = 11_200;
-		assertEquals("bottom 6% (20 s slower)", build(sire, State.fight("Abyssal Sire", true, true, false)).get(2).right);
+		assertEquals("bottom 6% (33 ticks slower)", build(sire, State.fight("Abyssal Sire", true, true, false)).get(2).right);
 	}
 
 	@Test
@@ -1420,7 +1441,7 @@ public class LedgerRowsTest
 		final List<Row> rows = build(s, State.fight("Vardorvis", false, false, false));
 		assertTrue(rows.contains(main("Execution", "98%")));
 		assertTrue(rows.contains(d(" uptime", "100%")));
-		assertTrue(rows.contains(d(" eating", "4 s")));
+		assertTrue(rows.contains(d(" eating", "7 ticks")));
 	}
 
 	@Test
@@ -1446,7 +1467,7 @@ public class LedgerRowsTest
 		final FakeScope s = LedgerExamples.kill();
 		s.ticksLost = 60;
 		s.ticksLostEating = 60;
-		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" eating", "36 s")));
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" eating", "60 ticks")));
 	}
 
 	@Test
@@ -1457,7 +1478,7 @@ public class LedgerRowsTest
 		costing.parts = ExecutionParts.COSTING;
 		final List<Row> rows = LedgerRows.build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false),
 			costing);
-		assertEquals(d(" eating", "1 s"), rows.get(rows.size() - 1));
+		assertEquals(d(" eating", "2 ticks"), rows.get(rows.size() - 1));
 	}
 
 	/** A fight of {@code attacks} attacks, {@code spent} cooldown ticks, then {@code idle} and {@code eating} lost ticks, fed to the trip too. */
@@ -1542,16 +1563,17 @@ public class LedgerRowsTest
 		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
 		final int execution = rows.indexOf(main("Execution", LedgerRows.partPercent(n.execution)));
 		assertTrue(rows.toString(), execution > 0);
-		// uptime, then the fifth part (Cost: 13 s is over 2% of 129.6 s), then prayer, gear, stat boost, damage taken, eating.
+		// uptime, then the fifth part (Cost: 13 s is over 2% of 129.6 s), then prayer, gear, stat boost, damage taken,
+		// eating.
 		assertEquals(Arrays.asList(
-			d(" uptime", LedgerRows.withSeconds(LedgerRows.partPercent(n.uptime), n.uptimeCost), COST),
-			d(" avoidable eating", "90% (-13 s)", COST),
+			d(" uptime", LedgerRows.withTicks(LedgerRows.partPercent(n.uptime), n.uptimeCost), COST),
+			d(" avoidable eating", "90% (-22 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "85% (-2 s)"),
+			d(" stat boost", "85% (-3 ticks)"),
 			taken("263 · 141 avoidable", "263"),
 			// 16.2 s of eating, 13.0 of it avoidable: the neutral row keeps the rest.
-			d(" eating", "3 s")), rows.subList(execution + 1, execution + 8));
+			d(" eating", "5 ticks")), rows.subList(execution + 1, execution + 8));
 	}
 
 	@Test
@@ -1565,7 +1587,7 @@ public class LedgerRowsTest
 		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING)));
 		assertTrue(rows.contains(d(" damage taken", "263")));
 		// All the eating, as T-038 left it: 16.2 s.
-		assertTrue(rows.contains(d(" eating", "16 s")));
+		assertTrue(rows.contains(d(" eating", "27 ticks")));
 		// The trip and the raid while a fight runs, too.
 		assertFalse(build(s, State.trip(3, true, false)).stream().anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING)));
 		assertFalse(build(s, State.raid("Tombs of Amascut", 2, true, false)).stream()
@@ -1586,7 +1608,7 @@ public class LedgerRowsTest
 		assertTrue(rows.contains(main("Execution", LedgerRows.partPercent(n.executionLive))));
 		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.AVOIDABLE_EATING)));
 		assertTrue(rows.contains(d(" damage taken", "263")));
-		assertTrue(rows.contains(d(" eating", "16 s")));
+		assertTrue(rows.contains(d(" eating", "27 ticks")));
 	}
 
 	@Test
@@ -1598,7 +1620,7 @@ public class LedgerRowsTest
 		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
 		assertTrue(rows.contains(d(" avoidable eating", "100%")));
 		assertTrue(rows.contains(taken("263 · 0 avoidable", "263")));
-		assertTrue(rows.contains(d(" eating", "16 s")));
+		assertTrue(rows.contains(d(" eating", "27 ticks")));
 		// And under Costing only, a part that cost nothing isn't listed.
 		final Settings costing = new Settings();
 		costing.parts = ExecutionParts.COSTING;
@@ -1612,7 +1634,7 @@ public class LedgerRowsTest
 		final Settings costing = new Settings();
 		costing.parts = ExecutionParts.COSTING;
 		assertTrue(LedgerRows.build(kill4(), State.fight("Vardorvis", true, true, false), costing)
-			.contains(d(" avoidable eating", "90% (-13 s)", COST)));
+			.contains(d(" avoidable eating", "90% (-22 ticks)", COST)));
 		final Settings off = new Settings();
 		off.parts = ExecutionParts.OFF;
 		final List<Row> rows = LedgerRows.build(kill4(), State.fight("Vardorvis", true, true, false), off);
@@ -1766,10 +1788,10 @@ public class LedgerRowsTest
 	{
 		final List<Row> rows = build(drained(), State.fight("Vardorvis", true, true, false));
 		// T-075: in words, as Luck is, the worth on a row of its own under the path.
-		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145"), d(" drains", "14 s faster")), afterDamage(rows, 2));
+		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145"), d(" drains", "23 ticks faster")), afterDamage(rows, 2));
 		// Under Luck: 5 s is over a second and 2% of the 136.8 s clock, so Better.
 		final int luck = rows.indexOf(rows.stream().filter(r -> r.left.equals("Luck")).findFirst().get());
-		assertEquals(d(" specs", "5 s faster", BETTER), rows.get(luck + 1));
+		assertEquals(d(" specs", "8 ticks faster", BETTER), rows.get(luck + 1));
 	}
 
 	@Test
@@ -1777,7 +1799,7 @@ public class LedgerRowsTest
 	{
 		final FakeScope s = drained();
 		s.specLuckDamage = -65;
-		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" specs", "5 s slower", COST)));
+		assertTrue(build(s, State.fight("Vardorvis", true, true, false)).contains(d(" specs", "8 ticks slower", COST)));
 	}
 
 	@Test
@@ -1788,9 +1810,9 @@ public class LedgerRowsTest
 		s.specLuckDamage = 0;
 		final List<Row> rows = build(s, State.fight("Vardorvis", true, true, false));
 		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
-		assertTrue(rows.contains(d(" drains", "14 s faster")));
-		// Under half a second: hidden too.
-		s.specLuckDamage = 6;
+		assertTrue(rows.contains(d(" drains", "23 ticks faster")));
+		// Under half a tick (T-117): hidden too. 3 damage is 0.23 s.
+		s.specLuckDamage = 3;
 		assertFalse(build(s, State.fight("Vardorvis", true, true, false)).stream()
 			.anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
 	}
@@ -1801,10 +1823,10 @@ public class LedgerRowsTest
 		final FakeScope s = drained();
 		s.magicEnd = 120;
 		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145"), d(" magic", "150 \u2192 120"),
-			d(" drains", "14 s faster")), afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 3));
+			d(" drains", "23 ticks faster")), afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 3));
 		// Magic alone drained: its path, then the worth.
 		s.defenceEnd = 215;
-		assertEquals(Arrays.asList(d(" magic", "150 \u2192 120"), d(" drains", "14 s faster")),
+		assertEquals(Arrays.asList(d(" magic", "150 \u2192 120"), d(" drains", "23 ticks faster")),
 			afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 2));
 	}
 
@@ -1861,7 +1883,7 @@ public class LedgerRowsTest
 		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
 		// The Defence rows aren't luck: they stay.
 		assertTrue(rows.contains(d(" defence", "215 \u2192 145")));
-		assertTrue(rows.contains(d(" drains", "14 s faster")));
+		assertTrue(rows.contains(d(" drains", "23 ticks faster")));
 	}
 
 	@Test
@@ -1889,7 +1911,7 @@ public class LedgerRowsTest
 			assertEquals(font.getName(), without, with);
 			final List<Row> narrow = PvmPerformanceOverlay.lines(g, build(drained(), State.fight("Vardorvis", true, true,
 				false)), new java.awt.Dimension(140, 0)).rows;
-			assertTrue(narrow.contains(d(" drains", "14 s faster")));
+			assertTrue(narrow.contains(d(" drains", "23 ticks faster")));
 			assertTrue(narrow.contains(d(" defence", "215 \u2192 145")));
 		}
 	}
@@ -1906,8 +1928,8 @@ public class LedgerRowsTest
 		for (State state : Arrays.asList(State.trip(3, false, false), State.raid("Tombs of Amascut", 3, false, false)))
 		{
 			final List<Row> rows = build(s, state);
-			assertTrue(rows.toString(), rows.contains(d(" defence drains", "40 s faster")));
-			assertTrue(rows.contains(d(" specs", "5 s faster", BETTER)));
+			assertTrue(rows.toString(), rows.contains(d(" defence drains", "67 ticks faster")));
+			assertTrue(rows.contains(d(" specs", "8 ticks faster", BETTER)));
 		}
 		// While a fight runs: only the live row, if any.
 		assertFalse(build(s, State.trip(3, true, false)).stream().anyMatch(r -> r.left.equals(LedgerRows.DEFENCE_DRAINS)));

@@ -302,13 +302,13 @@ public class PvmPerformanceOverlayTest
 	@Test
 	public void luckDropsItsSecondsWhenThePanelIsTooNarrow()
 	{
-		final LedgerRows.Row luck = new LedgerRows.Row("Luck", "bottom 20% (14 s slower)", LedgerRows.FontRole.EMPHASIS,
+		final LedgerRows.Row luck = new LedgerRows.Row("Luck", "bottom 20% (24 ticks slower)", LedgerRows.FontRole.EMPHASIS,
 			LedgerRows.FontRole.EMPHASIS, LedgerRows.Colour.NEUTRAL, LedgerRows.Colour.COST, null, "bottom 20%");
-		// 4 + 24 characters at 7 px, the 6 px gap and the 8 px border: 210.
+		// 4 + 28 characters at 7 px, the 6 px gap and the 8 px border: 238 (T-117: in ticks).
 		assertSame(luck, PvmPerformanceOverlay.fit(luck, PvmPerformanceOverlayTest::sevens, PvmPerformanceOverlayTest::sevens,
-			210));
+			238));
 		final LedgerRows.Row narrow = PvmPerformanceOverlay.fit(luck, PvmPerformanceOverlayTest::sevens,
-			PvmPerformanceOverlayTest::sevens, 209);
+			PvmPerformanceOverlayTest::sevens, 237);
 		assertEquals("bottom 20%", narrow.right);
 		assertEquals("Luck", narrow.left);
 		assertEquals(LedgerRows.Colour.COST, narrow.rightColour);
