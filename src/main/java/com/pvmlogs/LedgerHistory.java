@@ -225,7 +225,8 @@ final class LedgerHistory
 
 	/**
 	 * Whether a saved room is a kill. A grouped boss is killed when its room
-	 * closes on the loot; one of its parts dying is not the kill. A run of
+	 * closes on the loot; one of its parts dying is not the kill, nor the room
+	 * ending on the player's death or the boss leaving alive (T-100). A run of
 	 * monsters (T-089) closes on its last fight whatever happened in it, so it
 	 * is a kill only with a kill in it (T-094).
 	 */
@@ -234,7 +235,8 @@ final class LedgerHistory
 		boolean killed = false;
 		for (Fight fight : room.getFights())
 		{
-			killed |= fight.isClosedRoom() || (fight.getGroupName() == null && fight.isTargetDied());
+			// A room that ended without its kill (T-100: the player died, or the boss left alive) closes on a fight too.
+			killed |= fight.isClosedRoomOnKill() || (fight.getGroupName() == null && fight.isTargetDied());
 		}
 		return killed && (!room.isMonsterRoom() || room.getKills() > 0);
 	}
