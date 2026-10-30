@@ -830,8 +830,9 @@ final class PanelSnapshot
 
 	/**
 	 * T-099: one view of the Damage card's switch: its label, its rows (null with nothing scored in it, as the
-	 * Zulrah's snakelings), its chart (null likewise, or with charts off), and the line under the switch: the time on
-	 * that target set, and that Luck and Execution cover the whole kill.
+	 * Zulrah's snakelings), its chart (null likewise, or with charts off). T-105: {@code note}, the switch's tooltip:
+	 * the damage and time on that target set, and that Luck and Execution cover the whole kill; {@code empty}, the
+	 * card's one line when it has no rows, else null.
 	 */
 	static final class TargetView
 	{
@@ -839,13 +840,20 @@ final class PanelSnapshot
 		final Sources damage;
 		final Chart chart;
 		final String note;
+		final String empty;
 
 		TargetView(String label, Sources damage, Chart chart, String note)
+		{
+			this(label, damage, chart, note, null);
+		}
+
+		TargetView(String label, Sources damage, Chart chart, String note, String empty)
 		{
 			this.label = label;
 			this.damage = damage;
 			this.chart = chart;
 			this.note = note;
+			this.empty = empty;
 		}
 	}
 

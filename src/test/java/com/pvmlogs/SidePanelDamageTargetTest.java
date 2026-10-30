@@ -111,8 +111,10 @@ public class SidePanelDamageTargetTest
 			assertTrue(shown.byTarget.get(i).note, shown.byTarget.get(i).note.endsWith(SidePanelModel.WHOLE_KILL));
 			assertEquals(t.byTarget.get(i).damage, shown.damage);
 		}
-		assertTrue(t.byTarget.get(BOSS).note, t.byTarget.get(BOSS).note.contains(" on the boss."));
-		assertTrue(t.byTarget.get(ADDS).note, t.byTarget.get(ADDS).note.contains(" on the adds."));
+		// T-105: the switch's tooltip, the side's damage and time, then the note.
+		assertEquals("1,504 on the boss over 2:40. " + SidePanelModel.WHOLE_KILL, t.byTarget.get(BOSS).note);
+		assertTrue(t.byTarget.get(ADDS).note, t.byTarget.get(ADDS).note.startsWith("384 on the adds over "));
+		assertTrue(t.byTarget.get(ALL).note, t.byTarget.get(ALL).note.startsWith("1,888 on the boss and adds over 3:06."));
 		assertEquals("1,108 on the boss", hintText(t.byTarget.get(BOSS)).replaceAll("^[\\d,]+", "1,108"));
 	}
 

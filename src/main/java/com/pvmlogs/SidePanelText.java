@@ -54,6 +54,12 @@ final class SidePanelText extends JComponent
 	}
 
 	/** The text, its colour and its type; only what changed is repainted, and only a new width lays out again. */
+	/** Its colour now, for tests. */
+	Color colour()
+	{
+		return colour;
+	}
+
 	void set(PanelSnapshot.Text t)
 	{
 		set(t, null);

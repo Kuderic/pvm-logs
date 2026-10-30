@@ -296,6 +296,12 @@ final class SidePanelParts
 			return type == SidePanelStyle.Type.SMALL ? type.lineHeight() + 2 : type.lineHeight();
 		}
 
+		/** Its text, for tests. */
+		String text()
+		{
+			return text;
+		}
+
 		/** T-053: the role's new font and line height. */
 		void restyle()
 		{

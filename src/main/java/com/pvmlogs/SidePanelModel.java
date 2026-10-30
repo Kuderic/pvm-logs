@@ -409,25 +409,39 @@ final class SidePanelModel
 		final List<PanelSnapshot.TargetView> views = new ArrayList<>(3);
 		views.add(targetView(BOSS, in.bossOnly, in.charts, warning));
 		views.add(targetView(ADDS, in.addsOnly, in.charts, warning));
-		views.add(new PanelSnapshot.TargetView(ALL, all, allChart, LedgerRows.clock(in.scope.combatTicks())
-			+ " on the boss and adds. " + WHOLE_KILL));
+		views.add(new PanelSnapshot.TargetView(ALL, all, allChart, LedgerRows.number(whole(new LedgerRows.Numbers(
+			in.scope), in)) + " on the boss and adds over " + LedgerRows.clock(in.scope.combatTicks()) + ". "
+			+ WHOLE_KILL));
 		return views;
 	}
 
+	/**
+	 * T-105: one side of the switch. Its tooltip, {@code 1,504 on the boss over 2:40. Luck and Execution cover the whole
+	 * kill.}; for a side with nothing scored, the card's one line says so and the tooltip has its time.
+	 */
 	private static PanelSnapshot.TargetView targetView(String label, Input p, boolean charts, boolean warning)
 	{
-		final String time = LedgerRows.clock(p.scope.combatTicks()) + " on the " + p.scoredName;
+		final String time = LedgerRows.clock(p.scope.combatTicks());
 		if (p.noneScored)
 		{
 			// Their time counts (it's in the room's clock), nothing else does.
-			return new PanelSnapshot.TargetView(label, null, null, time + ", not scored. " + WHOLE_KILL);
+			return new PanelSnapshot.TargetView(label, null, null, time + " on the " + p.scoredName + ", not scored. "
+				+ WHOLE_KILL, "Nothing scored on the " + p.scoredName + ": their time counts in the kill's.");
 		}
-		final PanelSnapshot.Sources rows = damage(new LedgerRows.Numbers(p.scope), p, warning);
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(p.scope);
+		final PanelSnapshot.Sources rows = damage(n, p, warning);
 		p.charts = charts;
 		p.chartFrom = 0;
 		// Neutral: luck is the room's, not one side's.
 		final PanelSnapshot.Chart chart = charts ? chart(p, p.scope, LedgerRows.Colour.NEUTRAL, warning) : null;
-		return new PanelSnapshot.TargetView(label, rows, chart, time + ". " + WHOLE_KILL);
+		return new PanelSnapshot.TargetView(label, rows, chart, LedgerRows.number(whole(n, p)) + " on the "
+			+ p.scoredName + " over " + time + ". " + WHOLE_KILL);
+	}
+
+	/** The Damage card's whole: weapon damage and the other damage it lists (thrall, DoT, recoil), scored fights only. */
+	static int whole(LedgerRows.Numbers n, Input in)
+	{
+		return Math.max(0, n.damage) + in.scoredThrall + in.scoredDot + in.scoredReflect;
 	}
 
 	/**
@@ -1905,7 +1919,7 @@ final class SidePanelModel
 			attributed += w.damage;
 		}
 		final int weaponDamage = Math.max(0, n.damage);
-		final int whole = weaponDamage + in.scoredThrall + in.scoredDot + in.scoredReflect;
+		final int whole = whole(n, in);
 		final List<PanelSnapshot.Source> rows = new ArrayList<>(weapons.size() + 4);
 		if (!weapons.isEmpty())
 		{
