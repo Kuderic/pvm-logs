@@ -217,15 +217,85 @@ class CombatCalc
 		final int taskId = client.getVarpValue(VarPlayerID.SLAYER_TARGET);
 		final int bossId = client.getVarbitValue(VarbitID.SLAYER_TARGET_BOSSID);
 		final int area = client.getVarpValue(VarPlayerID.SLAYER_AREA);
-		final String key = count + "/" + taskId + "/" + bossId + "/" + area + "/" + npcId;
+		// Who gave the task: Krystilia's and Konar's crazy archaeologist tasks do not take the Deranged archaeologist
+		// (T-090).
+		final int master = client.getVarbitValue(VarbitID.SLAYER_MASTER);
+		final String key = count + "/" + taskId + "/" + bossId + "/" + area + "/" + master + "/" + npcId + "/"
+			+ slayerWatch.learned().size();
 		if (!key.equals(slayerKey) || slayerVerdictMemo == null)
 		{
 			slayerKey = key;
 			final NPCComposition npc = npcId < 0 ? null : client.getNpcDefinition(npcId);
-			slayerVerdictMemo = SlayerTasks.verdict(count, count > 0 ? slayerTaskName(taskId, bossId) : null,
-				npc == null ? null : npc.getName(), area);
+			final String taskName = count > 0 ? slayerTaskName(taskId, bossId) : null;
+			final String areaName = count > 0 && area > 0 ? slayerAreaName(area) : null;
+			slayerWatch.noteTask(taskName, SlayerTasks.inWilderness(master, areaName), count);
+			slayerVerdictMemo = SlayerTasks.verdict(count, taskName, npc == null ? null : npc.getName(), area, master,
+				areaName, slayerWatch.learned());
 		}
 		return slayerVerdictMemo;
+	}
+
+	// The game's check on the slayer table (T-090): what it learns lasts the session, which is this calc's life.
+	private final SlayerTasks.Watch slayerWatch = new SlayerTasks.Watch();
+
+	/**
+	 * Varp SLAYER_COUNT changed. The task is read first, so a count that falls to none on the task's last kill still has
+	 * the task's name to be matched against.
+	 *
+	 * @return a TASK MISMATCH line for the debug log, or null
+	 */
+	String onSlayerCountChanged(int tick)
+	{
+		final int count = client.getVarpValue(VarPlayerID.SLAYER_COUNT);
+		if (count > 0)
+		{
+			// Still on the task: read it now, in case nothing has asked for a verdict since it was given.
+			final int area = client.getVarpValue(VarPlayerID.SLAYER_AREA);
+			final String areaName = area > 0 ? slayerAreaName(area) : null;
+			final String taskName = slayerTaskName(client.getVarpValue(VarPlayerID.SLAYER_TARGET),
+				client.getVarbitValue(VarbitID.SLAYER_TARGET_BOSSID));
+			final boolean wilderness = SlayerTasks.inWilderness(client.getVarbitValue(VarbitID.SLAYER_MASTER), areaName);
+			final String line = slayerWatch.onCount(count, tick);
+			slayerWatch.noteTask(taskName, wilderness, count);
+			return line;
+		}
+		return slayerWatch.onCount(count, tick);
+	}
+
+	/**
+	 * An NPC despawned dead.
+	 *
+	 * @param mine whether it was the target of the player's fight
+	 * @return a TASK MISMATCH line for the debug log, or null
+	 */
+	String onNpcDiedForSlayer(NPC npc, boolean mine, int tick)
+	{
+		final NPCComposition def = npc.getTransformedComposition();
+		final String name = def != null ? def.getName() : npc.getName();
+		return slayerWatch.onDeath(npc.getId(), name, mine, tick);
+	}
+
+	/** @return a TASK MISMATCH line for the debug log, or null */
+	String onSlayerTick(int tick)
+	{
+		return slayerWatch.onTick(tick);
+	}
+
+	// The name of Konar's area from the game's tables, as RuneLite's Slayer plugin reads it. Null when they cannot be
+	// read.
+	private String slayerAreaName(int area)
+	{
+		try
+		{
+			final List<Integer> rows = client.getDBRowsByValue(DBTableID.SlayerArea.ID, DBTableID.SlayerArea.COL_AREA_ID,
+				0, area);
+			return rows.isEmpty() ? null
+				: (String) client.getDBTableField(rows.get(0), DBTableID.SlayerArea.COL_AREA_NAME_IN_HELPER, 0)[0];
+		}
+		catch (RuntimeException e)
+		{
+			return null;
+		}
 	}
 
 	// The task's name from the game's tables, as RuneLite's Slayer plugin reads it; task 98 is "bosses", whose boss comes
