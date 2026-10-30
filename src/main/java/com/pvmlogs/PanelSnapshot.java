@@ -220,6 +220,10 @@ final class PanelSnapshot
 		final Text right;
 		/** T-109: what the row is, on hover (the room's damage and its sources); null for none. */
 		final String tooltip;
+		/** T-112: a group's subheading in Details or Damage taken (muted, no value), not a fact. */
+		final boolean heading;
+		/** T-112: a row under a subheading, set in a little. */
+		final boolean indent;
 
 		Row(Text left, Text right)
 		{
@@ -233,10 +237,29 @@ final class PanelSnapshot
 
 		Row(Text left, Text hint, Text right, String tooltip)
 		{
+			this(left, hint, right, tooltip, false, false);
+		}
+
+		Row(Text left, Text hint, Text right, String tooltip, boolean heading, boolean indent)
+		{
 			this.left = left;
 			this.hint = hint == null ? Text.NONE : hint;
 			this.right = right;
 			this.tooltip = tooltip;
+			this.heading = heading;
+			this.indent = indent;
+		}
+
+		/** T-112: this row set in under a subheading. */
+		Row indented()
+		{
+			return new Row(left, hint, right, tooltip, heading, true);
+		}
+
+		/** T-112: a group's subheading. */
+		static Row heading(String title)
+		{
+			return new Row(Text.small(title, SidePanelStyle.MUTED), Text.NONE, Text.NONE, null, true, false);
 		}
 
 		@Override

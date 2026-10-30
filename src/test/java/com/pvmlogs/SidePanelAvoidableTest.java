@@ -124,8 +124,10 @@ public class SidePanelAvoidableTest
 	public void damageTakenIsByAttackBiggestFirstEachAvoidableOneMarked()
 	{
 		final PanelSnapshot.Rows taken = tab(SidePanelExamples.ruledKill(true)).taken;
+		// T-112: the rows under their subheadings, the subheadings left out.
+		final List<PanelSnapshot.Row> facts = facts(taken.rows);
 		final List<String> rows = new ArrayList<>();
-		for (PanelSnapshot.Row r : taken.rows)
+		for (PanelSnapshot.Row r : facts)
 		{
 			rows.add(r.toString());
 		}
@@ -139,9 +141,9 @@ public class SidePanelAvoidableTest
 		assertEquals("head [avoidable] | 6", rows.get(5));
 		// Then the avoidable part: 134 of 263.
 		assertEquals("avoidable | 134 (51%)", rows.get(6));
-		assertEquals(SidePanelStyle.COST, taken.rows.get(6).right.colour);
+		assertEquals(SidePanelStyle.COST, facts.get(6).right.colour);
 		// The words carry it, and Cost colours them.
-		assertEquals(SidePanelStyle.COST, taken.rows.get(1).hint.colour);
+		assertEquals(SidePanelStyle.COST, facts.get(1).hint.colour);
 		// The rows from before follow.
 		assertTrue(rows.get(7).startsWith("hits | 21"));
 	}
@@ -233,7 +235,7 @@ public class SidePanelAvoidableTest
 		in.avoidableAttacks = SidePanelModel.avoidableAttacks(AvoidableReplayTest.vardorvis());
 		final PanelSnapshot.TripTab t = SidePanelModel.trip(in);
 		final List<String> rows = new ArrayList<>();
-		for (PanelSnapshot.Row r : t.taken.rows)
+		for (PanelSnapshot.Row r : facts(t.taken.rows))
 		{
 			rows.add(r.toString());
 		}
@@ -248,6 +250,20 @@ public class SidePanelAvoidableTest
 		{
 			assertFalse(r.toString(), r.left.text.equals("avoidable"));
 		}
+	}
+
+	/** T-112: the rows without their subheadings. */
+	private static List<PanelSnapshot.Row> facts(List<PanelSnapshot.Row> rows)
+	{
+		final List<PanelSnapshot.Row> out = new ArrayList<>();
+		for (PanelSnapshot.Row r : rows)
+		{
+			if (!r.heading)
+			{
+				out.add(r);
+			}
+		}
+		return out;
 	}
 
 	/** An ended fight at Vardorvis with T-041's figures: melee, axe and bleed taken, the avoidable part and its eating. */

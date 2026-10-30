@@ -72,6 +72,11 @@ public final class SidePanelPictures
 			calibration(out);
 			return;
 		}
+		if (args.length > 2 && "details".equals(args[1]))
+		{
+			detailsGroups(out, Paths.get(args[2]));
+			return;
+		}
 		if (args.length > 1 && "bosses".equals(args[1]))
 		{
 			bossesAndMonsters(out);
@@ -1119,6 +1124,155 @@ public final class SidePanelPictures
 		tip.printAll(g);
 		g.dispose();
 		return img;
+	}
+
+	/**
+	 * T-112 item 5: Details and Damage taken in each of the three layouts, on real kills read from a {@code history.json}
+	 * outside the repo (Eric's: an Araxxor, a Leviathan and a Vardorvis kill, each the one with the most rows). Normal
+	 * and Smooth text, at 1× and 2×, and Larger at 1×, a folder each.
+	 */
+	private static void detailsGroups(Path out, Path history) throws IOException
+	{
+		final com.google.gson.Gson gson = new com.google.gson.Gson();
+		final java.util.List<Fight> fights = new java.util.ArrayList<>(java.util.Arrays.asList(gson.fromJson(
+			new String(Files.readAllBytes(history), java.nio.charset.StandardCharsets.UTF_8), Fight[].class)));
+		final BossRules rules = BossRules.load(gson, null);
+		final java.util.List<Encounter> rooms = SidePanelHistory.allRooms(fights);
+		final String[][] bosses = {{"araxxor", "Araxxor"}, {"leviathan", "The Leviathan"}, {"vardorvis", "Vardorvis"}};
+		final java.util.Map<String, SidePanelModel.Input> kills = new java.util.LinkedHashMap<>();
+		for (String[] b : bosses)
+		{
+			SidePanelModel.Input best = null;
+			int most = -1;
+			for (Encounter room : rooms)
+			{
+				if (!b[1].equals(room.getName()) || !SidePanelHistory.isKill(room))
+				{
+					continue;
+				}
+				final SidePanelModel.Input in = SidePanelHistory.savedKill(fights, room, 0L, SidePanelExamples.at(23, 0),
+					SidePanelExamples.ZONE, new SidePanelHistory.Versions()
+					{
+						public String name(Encounter r, int maxHp)
+						{
+							return null;
+						}
+
+						public java.util.Set<String> avoidable(Encounter r)
+						{
+							return SidePanelModel.avoidableAttacks(rules, r.getFights());
+						}
+					});
+				in.roomDamageSources = SidePanelModel.roomDamageSources(java.util.Collections.singletonList(room), rules);
+				SidePanelModel.grouping = SidePanelModel.Grouping.HEADINGS;
+				final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
+				final int n = (tab.details == null ? 0 : tab.details.rows.size()) + (tab.taken == null ? 0
+					: tab.taken.rows.size());
+				if (n > most)
+				{
+					most = n;
+					best = in;
+				}
+			}
+			if (best != null)
+			{
+				kills.put(b[0], best);
+				System.out.println(b[1] + ": " + most + " rows");
+			}
+		}
+		final String[] modes = {"normal", "smooth", "larger"};
+		final String[] layouts = {"a-set-in", "b-flush", "c-cards"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : larger ? new double[]{1} : new double[]{1, 2})
+			{
+				for (java.util.Map.Entry<String, SidePanelModel.Input> k : kills.entrySet())
+				{
+					SidePanelModel.grouping = SidePanelModel.Grouping.HEADINGS;
+					write(dir, k.getKey() + "-0-before", scale, before(k.getValue(), scale));
+					for (int g = 0; g < layouts.length; g++)
+					{
+						SidePanelModel.grouping = SidePanelModel.Grouping.values()[g];
+						write(dir, k.getKey() + "-" + layouts[g], scale, sections(k.getValue(), scale, "details", "taken"));
+					}
+				}
+			}
+		}
+		SidePanelModel.grouping = SidePanelModel.Grouping.HEADINGS;
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-112: the cards as they were before the groups: every row in one flat card, as on master. */
+	private static BufferedImage before(SidePanelModel.Input in, double scale)
+	{
+		final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
+		final PanelSnapshot.FightTab flat = flat(tab);
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(flat));
+		styled(panel);
+		return crop(panel, scale, "details", "taken");
+	}
+
+	/** The tab with the subheadings taken out and nothing set in. */
+	private static PanelSnapshot.FightTab flat(PanelSnapshot.FightTab tab)
+	{
+		for (PanelSnapshot.Rows card : java.util.Arrays.asList(tab.details, tab.taken))
+		{
+			if (card == null)
+			{
+				continue;
+			}
+			final java.util.List<PanelSnapshot.Row> rows = new java.util.ArrayList<>();
+			for (PanelSnapshot.Row r : card.rows)
+			{
+				if (!r.heading)
+				{
+					rows.add(new PanelSnapshot.Row(r.left, r.hint, r.right, r.tooltip));
+				}
+			}
+			try
+			{
+				// The snapshot's lists can't be changed; a render can set the field.
+				final java.lang.reflect.Field f = PanelSnapshot.Rows.class.getDeclaredField("rows");
+				f.setAccessible(true);
+				f.set(card, java.util.Collections.unmodifiableList(rows));
+			}
+			catch (ReflectiveOperationException e)
+			{
+				throw new IllegalStateException(e);
+			}
+		}
+		return tab;
+	}
+
+	/** T-112: the Fight tab cut from section {@code from}'s top to section {@code to}'s bottom. */
+	static BufferedImage sections(SidePanelModel.Input in, double scale, String from, String to)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		return crop(panel, scale, from, to);
+	}
+
+	private static BufferedImage crop(PvmPerformancePanel panel, double scale, String from, String to)
+	{
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection a = sectionOf(panel.fightTab(), from);
+		final SidePanelSection b = sectionOf(panel.fightTab(), to);
+		final java.awt.Rectangle ra = javax.swing.SwingUtilities.convertRectangle(a.getParent(), a.getBounds(),
+			panel.fightTab());
+		final java.awt.Rectangle rb = javax.swing.SwingUtilities.convertRectangle(b.getParent(), b.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + ra.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + rb.y + rb.height) * scale));
+		return whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
 	}
 
 	/** One section of the Fight tab, cut out of its render: its header and card. */
