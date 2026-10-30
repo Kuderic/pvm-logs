@@ -128,7 +128,8 @@ class DebugLog
 		dropped.set(0);
 		on = true;
 		flusher = executor.scheduleWithFixedDelay(this::flush, FLUSH_SECONDS, FLUSH_SECONDS, TimeUnit.SECONDS);
-		log("debug logging to file on, plugin %s", version());
+		// Which build is writing (T-096): a log read against a fix needs to have been written by a build with it.
+		log("debug logging to file on, %s", BuildInfo.describe());
 		log("send this file with a description of what you did and what you expected to see");
 	}
 
@@ -228,7 +229,7 @@ class DebugLog
 		final Filepath target = dir.joinSegment("pvm-debug-recent-" + LocalDateTime.now().format(STAMP) + ".log");
 		final StringBuilder buffer = new StringBuilder();
 		buffer.append("=== PvM Logs, the last ").append(lines.size())
-			.append(" lines before this was saved. Plugin ").append(version()).append(" ===")
+			.append(" lines before this was saved. ").append(BuildInfo.describe()).append(" ===")
 			.append(System.lineSeparator());
 		if (header != null)
 		{
@@ -266,13 +267,6 @@ class DebugLog
 		{
 			return -1;
 		}
-	}
-
-	private String version()
-	{
-		final Package pkg = getClass().getPackage();
-		final String implementation = pkg == null ? null : pkg.getImplementationVersion();
-		return implementation == null ? "dev" : implementation;
 	}
 
 	private void flush()
