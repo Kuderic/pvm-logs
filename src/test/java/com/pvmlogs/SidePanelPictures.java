@@ -52,6 +52,11 @@ public final class SidePanelPictures
 			dpsCards(out);
 			return;
 		}
+		if (args.length > 1 && "runs".equals(args[1]))
+		{
+			runs(out);
+			return;
+		}
 		if (args.length > 2 && "icons".equals(args[1]))
 		{
 			bossIcons(out, Paths.get(args[2]));
@@ -232,10 +237,115 @@ public final class SidePanelPictures
 		System.out.println(file + " " + img.getWidth() + "x" + img.getHeight());
 	}
 
+	/**
+	 * T-095: a run of monsters, live, under a minute, opened from History; History's runs (the kind's card and its
+	 * list, and the boss list); a trip with a run and a boss kill; old per-fight history; and a boss, unchanged. Normal
+	 * and Smooth text, at 1× and 2×, a folder each.
+	 */
+	private static void runs(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = false;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-run-live", scale, render(SidePanelRunExamples.live(), scale));
+				write(dir, "b-run-under-a-minute", scale, render(SidePanelRunExamples.liveUnderAMinute(), scale));
+				write(dir, "c-run-from-history", scale, renderSavedRun(scale));
+				write(dir, "d-history-runs", scale, renderHistory(source(SidePanelRunExamples.history()),
+					t -> t.pick(SidePanelRunExamples.DEMON), scale));
+				write(dir, "e-history-boss-list", scale, renderHistory(source(SidePanelRunExamples.history()),
+					SidePanelHistoryTab::putAway, scale));
+				write(dir, "f-trip-run-and-boss", scale, renderTrip(SidePanelRunExamples.trip(), scale));
+				write(dir, "g-trip-runs-only", scale, renderTrip(SidePanelRunExamples.tripOfRunsOnly(), scale));
+				write(dir, "h-old-per-fight-history", scale, renderHistory(source(),
+					t -> t.pick(SidePanelRunExamples.DEMON), scale));
+				write(dir, "i-boss-unchanged", scale, render(SidePanelExamples.dead(), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-095: a run from this session, opened from History, with its timeline. */
+	static BufferedImage renderSavedRun(double scale)
+	{
+		final SidePanelTimelineExamples.Built run = SidePanelRunExamples.demonRun(12);
+		run.fight.end(true, SidePanelRunExamples.START + SidePanelRunExamples.RUN_MILLIS);
+		run.fight.closeRoom();
+		final java.util.List<Fight> history = java.util.Collections.singletonList(run.fight);
+		final SidePanelHistoryTab.Source base = source(history);
+		final SidePanelHistoryTab.Source source = new SidePanelHistoryTab.Source()
+		{
+			public java.util.List<Fight> history()
+			{
+				return history;
+			}
+
+			public SidePanelHistory.Versions versions()
+			{
+				return base.versions();
+			}
+
+			public long sessionStart()
+			{
+				return -1;
+			}
+
+			public long now()
+			{
+				return base.now();
+			}
+
+			public java.time.ZoneId zone()
+			{
+				return base.zone();
+			}
+
+			public void exportNpc(String name)
+			{
+			}
+
+			@Override
+			public void charts(Encounter room, java.util.function.Consumer<FightTimeline.View> done)
+			{
+				done.accept(FightTimeline.room(room, run.store));
+			}
+		};
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source);
+		panel.tabs().select(panel.tabs().getTab(1));
+		panel.historyTab().open(run.fight);
+		styled(panel);
+		return draw(panel.tabs(), panel.historyTab(), scale);
+	}
+
+	/** T-082 and T-095: the History tab on these fights after {@code state}. */
+	static BufferedImage renderHistory(SidePanelHistoryTab.Source source,
+		java.util.function.Consumer<SidePanelHistoryTab> state, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null, source);
+		panel.tabs().select(panel.tabs().getTab(1));
+		final SidePanelHistoryTab tab = panel.historyTab();
+		tab.refresh();
+		state.accept(tab);
+		styled(panel);
+		return draw(panel.tabs(), tab, scale);
+	}
+
 	/** The fixtures' saved fights, as the History tab reads them. */
 	static SidePanelHistoryTab.Source source()
 	{
-		final java.util.List<Fight> history = SidePanelHistoryExamples.history();
+		return source(SidePanelHistoryExamples.history());
+	}
+
+	/** These saved fights, as the History tab reads them. */
+	static SidePanelHistoryTab.Source source(java.util.List<Fight> history)
+	{
 		return new SidePanelHistoryTab.Source()
 		{
 			public java.util.List<Fight> history()

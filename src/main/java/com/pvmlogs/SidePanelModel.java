@@ -114,6 +114,11 @@ final class SidePanelModel
 	{
 		String name;
 		boolean killed;
+		/** T-095: a run of monsters: its kills, and no luck or execution. */
+		boolean run;
+		int kills;
+		/** T-095: the run's own clock to its last attack ({@link #savedRunSeconds}). */
+		double runSeconds;
 		long endMillis;
 		LedgerRows.Numbers numbers;
 		boolean warning;
@@ -166,6 +171,22 @@ final class SidePanelModel
 	static final class Input
 	{
 		Kind kind = Kind.EMPTY;
+		/**
+		 * T-095: the room is a run of monsters of one kind (T-089's {@code isMonsterRoom()}), and its kills. A run has no
+		 * Luck or Execution (Eric, 2026-10-29): kills, time, kills/hr and DPS against expected.
+		 */
+		boolean run;
+		int kills;
+		/**
+		 * T-095, the Trip tab: the scope its Luck and Execution are over when the trip has runs in it, the trip's fights
+		 * less the runs'; null when it has none, so they're the trip's.
+		 */
+		LedgerRows.Scope luckScope;
+		/**
+		 * T-095: a run's own clock, as the overlay's title has it (T-094): from its start through its respawn waits, to
+		 * now while it runs or its last attack once it has ended. NaN for anything else.
+		 */
+		double runSeconds = Double.NaN;
 		/** The room's name, the target's before the first attack, or the raid's. */
 		String name;
 		/** The raid the room or scope is in, or null: a raid's rooms show its icon (T-054). */
@@ -262,6 +283,8 @@ final class SidePanelModel
 		in.scope = LedgerRows.of(room);
 		in.name = room.getName();
 		in.scoredName = room.getName();
+		in.run = room.isMonsterRoom();
+		in.kills = room.getKills();
 		final List<Fight> fights = room.getFights();
 		in.maxHp = maxHp(fights);
 		in.solo = fights.isEmpty() ? null : solo(fights);
@@ -383,6 +406,9 @@ final class SidePanelModel
 		final LastFight l = new LastFight();
 		l.name = room.getName();
 		l.killed = ended && room.isKilled();
+		l.run = room.isMonsterRoom();
+		l.kills = room.getKills();
+		l.runSeconds = l.run ? savedRunSeconds(room) : Double.NaN;
 		long end = 0;
 		for (Fight f : room.getFights())
 		{
@@ -591,6 +617,8 @@ final class SidePanelModel
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
 		final boolean warning = in.warning != null;
 		final LedgerRows.Colour luckColour = luckColour(n);
+		// T-095: a run of monsters gets the light view: no Luck or Execution, nor anything made of them.
+		final boolean run = in.run && in.kind == Kind.ROOM;
 
 		b.header = header(in, s);
 		if (warning)
@@ -610,13 +638,13 @@ final class SidePanelModel
 		{
 			b.rooms = rooms(in.rooms);
 		}
-		if (after)
+		if (after && !run)
 		{
 			b.budget = budget(n, in, luckColour, warning);
 		}
-		b.tiles = tiles(n, s, in, luckColour, warning);
+		b.tiles = run ? runTiles(n, in, warning) : tiles(n, s, in, luckColour, warning);
 		final boolean avoidable = avoidableShown(n, in);
-		if (after && !warning)
+		if (after && !warning && !run)
 		{
 			if (!Double.isNaN(n.percentile))
 			{
@@ -633,7 +661,7 @@ final class SidePanelModel
 				b.noCurveHint = Text.title(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.of(luckColour));
 			}
 		}
-		b.execution = execution(n, avoidable);
+		b.execution = run ? null : execution(n, avoidable);
 		if (in.later != null)
 		{
 			// A kill from before this session: no per-attack data, so one card says why (spec 3.2).
@@ -649,13 +677,84 @@ final class SidePanelModel
 		}
 		if (after)
 		{
-			b.details = details(s, avoidable);
-			if (!raid && in.drain != null)
+			b.details = details(s, avoidable, run);
+			if (!raid && !run && in.drain != null)
 			{
 				b.defence = defence(in.drain);
 			}
 		}
 		b.taken = taken(s, in, avoidable);
+	}
+
+	// ---- T-095: a run of monsters ----
+
+	/**
+	 * T-095: a run's own clock, the overlay's (T-094, {@link PvmPerformanceOverlay#runState}): from its start, through
+	 * its respawn waits, to {@code now} while it runs, else to its last attack. Kills/hr is over it, so the panel and
+	 * the overlay give one rate.
+	 */
+	static double runSeconds(Encounter room, long now)
+	{
+		return PvmPerformanceOverlay.runState(room, false, now).runSeconds;
+	}
+
+	/**
+	 * T-095: a saved run's clock, rebuilt from History: from its first fight's start to its last attack, as the
+	 * overlay's ended run has it.
+	 */
+	static double savedRunSeconds(Encounter room)
+	{
+		return room.durationMillis() / 1000.0;
+	}
+
+	/** T-095: {@code Abyssal demon ×12}; no {@code ×} before the first kill, as the overlay's title (T-094). */
+	static String runName(String name, int kills)
+	{
+		return kills > 0 ? name + " ×" + kills : name;
+	}
+
+	/** T-095: a run's clock under which kills/hr is hidden, so one fast kill doesn't read as 600/hr. */
+	static final double PER_HOUR_FROM_SECONDS = 60;
+
+	/**
+	 * T-095: kills over the run's clock, an hour of it: {@code 227}. Null under a minute. The run's clock is its
+	 * fighting time, as the header's and the overlay's (T-094); the walk to the next monster after a kill, once no
+	 * fight is open, isn't in it (T-089).
+	 */
+	static String perHour(int kills, double seconds)
+	{
+		if (Double.isNaN(seconds) || seconds < PER_HOUR_FROM_SECONDS)
+		{
+			return null;
+		}
+		return LedgerRows.number(Math.round(kills * 3600.0 / seconds));
+	}
+
+	/**
+	 * T-095: a run's tiles: kills, kills/hr, DPS against expected and damage. DPS and its expected are both over the
+	 * run's scored combat time, so the pair says what damage against expected says, per second, without luck's colours.
+	 */
+	static List<Tile> runTiles(LedgerRows.Numbers n, Input in, boolean warning)
+	{
+		final List<Tile> tiles = new ArrayList<>(4);
+		final double clock = Double.isNaN(in.runSeconds) ? n.clock : in.runSeconds;
+		final String each = in.kills > 0 && clock > 0 ? "one every " + SidePanelStyle.seconds(clock / in.kills)
+			: "none yet";
+		tiles.add(tile("Kills", Text.title(LedgerRows.number(in.kills), SidePanelStyle.VALUE),
+			Text.small(each, SidePanelStyle.SECONDARY), SidePanelStyle.TRACK));
+		final String rate = perHour(in.kills, clock);
+		tiles.add(tile("Kills/hr", Text.title(rate == null ? LedgerRows.UNKNOWN : rate, SidePanelStyle.VALUE),
+			Text.small(rate == null ? "after a minute" : "over " + LedgerRows.duration(clock), rate == null
+				? SidePanelStyle.MUTED : SidePanelStyle.SECONDARY), SidePanelStyle.TRACK));
+		final double expectedDps = n.scoredClock > 0 && n.expected > 0 ? n.expected / n.scoredClock : Double.NaN;
+		tiles.add(tile("DPS", Text.title(Double.isNaN(n.dps) ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps),
+			SidePanelStyle.VALUE), Text.small(warning ? "expected hidden" : Double.isNaN(expectedDps) ? "weapon only"
+			: "expected " + LedgerRows.oneDecimal(expectedDps), warning ? SidePanelStyle.MUTED : SidePanelStyle.SECONDARY),
+			SidePanelStyle.TRACK));
+		final String other = otherDamage(in);
+		tiles.add(tile("Damage", Text.title(LedgerRows.number(n.damage), SidePanelStyle.VALUE),
+			Text.small(other.isEmpty() ? "weapon only" : other, SidePanelStyle.SECONDARY), SidePanelStyle.TRACK));
+		return tiles;
 	}
 
 	private static PanelSnapshot.Header header(Input in, LedgerRows.Scope s)
@@ -674,12 +773,15 @@ final class SidePanelModel
 		}
 		else if (in.saved)
 		{
-			suffix = in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD) : Text.title(" (ended)", SidePanelStyle.SECONDARY);
+			// T-095: a run has no suffix: "(dead)" is a boss's, and "saved run" says it ended, while "Abyssal demon ×12"
+			// leaves no room for " (ended)" beside the clock.
+			suffix = in.run ? Text.NONE : in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD)
+				: Text.title(" (ended)", SidePanelStyle.SECONDARY);
 			if (in.endMillis > 0)
 			{
 				sub.add(date(in.endMillis, in.now, in.zone));
 			}
-			sub.add("saved kill");
+			sub.add(in.run ? "saved run" : "saved kill");
 		}
 		else
 		{
@@ -695,11 +797,16 @@ final class SidePanelModel
 			}
 			if (in.ended)
 			{
-				suffix = in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD)
+				// T-095: a run's "ended" goes on the sub-line, as above.
+				suffix = in.run ? Text.NONE : in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD)
 					: Text.title(" (ended)", SidePanelStyle.SECONDARY);
 				if (in.endMillis > 0)
 				{
-					sub.add(time(in.endMillis, in.zone));
+					sub.add((in.run ? "ended " : "") + time(in.endMillis, in.zone));
+				}
+				else if (in.run)
+				{
+					sub.add("ended");
 				}
 			}
 		}
@@ -710,9 +817,11 @@ final class SidePanelModel
 			shorter.remove(soloAt);
 			subShort = Collections.singletonList(String.join(DOT, shorter));
 		}
-		return new PanelSnapshot.Header(Text.title(in.name, SidePanelStyle.VALUE), suffix,
-			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
-			new Text(LedgerRows.clock(s.combatTicks()), SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK),
+		return new PanelSnapshot.Header(Text.title(in.run && in.kind == Kind.ROOM ? runName(in.name, in.kills) : in.name,
+			SidePanelStyle.VALUE), suffix, Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
+			// T-095: a run's clock is its own, the overlay's: the time to kill them, respawn waits and all.
+			new Text(in.run && in.kind == Kind.ROOM && !Double.isNaN(in.runSeconds) ? LedgerRows.duration(in.runSeconds)
+				: LedgerRows.clock(s.combatTicks()), SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK),
 			SidePanelBossIcons.sprite(in.name, in.raidType),
 			in.ended || in.kind == Kind.RAID ? Text.NONE : liveDefenceText(in.liveDefence), subShort);
 	}
@@ -769,10 +878,21 @@ final class SidePanelModel
 		if (s != null && s.attacksMade() > 0)
 		{
 			final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
-			tiles = tiles(n, s, in, luckColour(n), false);
-			final boolean avoidable = avoidableShown(n, in);
-			execution = execution(n, avoidable);
-			taken = taken(s, in, avoidable);
+			if (in.luckScope == null)
+			{
+				tiles = tiles(n, s, in, luckColour(n), false);
+				final boolean avoidable = avoidableShown(n, in);
+				execution = execution(n, avoidable);
+				taken = taken(s, in, avoidable);
+			}
+			else
+			{
+				// T-095: runs count toward the trip's damage, DPS and time, but its Luck and Execution are over the rest.
+				final LedgerRows.Numbers rest = new LedgerRows.Numbers(in.luckScope);
+				tiles = tripTilesWithRuns(n, s, rest, in);
+				execution = in.luckScope.attacksMade() > 0 ? execution(rest, avoidableShown(rest, in)) : null;
+				taken = taken(s, in, avoidableShown(n, in));
+			}
 		}
 		int kills = 0;
 		int ended = 0;
@@ -784,7 +904,8 @@ final class SidePanelModel
 			}
 			else
 			{
-				kills++;
+				// T-095: a run counts its kills.
+				kills += r.kills;
 			}
 		}
 		final String hint = in.tripRows.isEmpty() ? "" : kills + (kills == 1 ? " kill" : " kills")
@@ -804,11 +925,76 @@ final class SidePanelModel
 			taken, other.isEmpty() ? null : new PanelSnapshot.Rows(null, other), tripDrains(in.drain));
 	}
 
+	/**
+	 * T-095: the Trip tab's tiles when runs are in it. Luck and Execution are over the trip's fights less the runs'
+	 * ({@code rest}): a run's luck and execution mean little (Eric, 2026-10-29), and an hour of one would drown the boss
+	 * kills'. Their labels say so. Damage and DPS are the whole trip's; the damage tile goes neutral, since its expected
+	 * holds the runs' too and luck's colour is the rest's.
+	 */
+	static List<Tile> tripTilesWithRuns(LedgerRows.Numbers n, LedgerRows.Scope s, LedgerRows.Numbers rest, Input in)
+	{
+		final boolean any = in.luckScope.attacksMade() > 0;
+		final List<Tile> all = tiles(n, s, in, LedgerRows.Colour.NEUTRAL, false);
+		final List<Tile> others = any ? tiles(rest, in.luckScope, in, luckColour(rest), false) : null;
+		final List<Tile> out = new ArrayList<>(4);
+		out.add(any ? relabel(others.get(0), LUCK_NO_RUNS) : new Tile(Text.small(LUCK_NO_RUNS, SidePanelStyle.SECONDARY),
+			Text.title(LedgerRows.UNKNOWN, SidePanelStyle.VALUE), Text.small("runs only", SidePanelStyle.MUTED),
+			SidePanelStyle.TRACK));
+		out.add(all.get(1));
+		out.add(all.get(2));
+		out.add(any ? relabel(others.get(3), EXECUTION_NO_RUNS) : new Tile(Text.small(EXECUTION_NO_RUNS,
+			SidePanelStyle.SECONDARY), Text.title(LedgerRows.UNKNOWN, SidePanelStyle.VALUE), Text.small("runs only",
+			SidePanelStyle.MUTED), SidePanelStyle.TRACK));
+		return out;
+	}
+
+	/**
+	 * T-095: the trip's rooms less its runs (T-089), their fights as one room for its Luck and Execution: an
+	 * {@link Encounter} only adds its fights' figures up. Empty for a trip of runs only, so its Luck and Execution read
+	 * "—", never the runs'.
+	 */
+	static Encounter withoutRuns(List<SidePanelHistory.KillRow> rooms)
+	{
+		final Encounter rest = new Encounter("Trip", null, 0L);
+		final Set<Fight> seen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+		for (SidePanelHistory.KillRow r : rooms)
+		{
+			if (r.room == null || r.room.isMonsterRoom())
+			{
+				continue;
+			}
+			for (Fight f : r.room.getFights())
+			{
+				if (seen.add(f))
+				{
+					rest.add(f);
+				}
+			}
+		}
+		return rest;
+	}
+
+	/** T-095: a trip's Luck and Execution with its runs left out: its boss kills' (T-089: what isn't a monster). */
+	static final String LUCK_NO_RUNS = "Boss luck";
+	static final String EXECUTION_NO_RUNS = "Boss execution";
+
+	private static Tile relabel(Tile t, String label)
+	{
+		return new Tile(Text.small(label, SidePanelStyle.SECONDARY), t.value, t.sub, t.subShort, t.edge);
+	}
+
 	/** A trip row from a rebuilt or running room: texts only. The running one is never "(ended)". */
 	static PanelSnapshot.TripRow tripRow(SidePanelHistory.KillRow r)
 	{
-		return new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill,
-			r.room == null ? SidePanelBossIcons.NONE : SidePanelBossIcons.sprite(r.room.getName(), r.room.getRaid()));
+		final int icon = r.room == null ? SidePanelBossIcons.NONE : SidePanelBossIcons.sprite(r.room.getName(),
+			r.room.getRaid());
+		if (r.kills >= 0 && r.room != null)
+		{
+			// A run: its kills after the name, kept when the name is cut short.
+			return new PanelSnapshot.TripRow(r.room.getName(), r.ended, r.clock, r.chip, r.chipFill, icon, r.kills,
+				r.kills > 0 ? " ×" + r.kills : "");
+		}
+		return new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill, icon, r.ended ? 0 : 1);
 	}
 
 	// ---- tiles ----
@@ -1489,6 +1675,17 @@ final class SidePanelModel
 		{
 			sub.add(time(l.endMillis, zone));
 		}
+		if (l.run)
+		{
+			// T-095: a run: its kills in the name, kills/hr where the luck chip goes, no execution, and "(ended)".
+			final String rate = perHour(l.kills, l.runSeconds);
+			return new ListRow(Text.title(runName(l.name, l.kills), SidePanelStyle.VALUE),
+				Text.title(" (ended)", SidePanelStyle.SECONDARY),
+				Text.title(LedgerRows.duration(l.runSeconds), SidePanelStyle.VALUE),
+				Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),
+				rate == null ? null : Text.small(rate + "/hr", SidePanelStyle.BODY), rate == null ? null
+					: SidePanelStyle.CHIP_NEUTRAL);
+		}
 		if (!Double.isNaN(l.numbers.execution))
 		{
 			sub.add("execution " + LedgerRows.partPercent(l.numbers.execution));
@@ -1831,14 +2028,31 @@ final class SidePanelModel
 				main = i;
 			}
 		}
+		// T-095: a run's tick strip has no lost or eating colouring: its idle ticks are the walk, the loot and the respawn
+		// waits, which aren't Execution's there. They're drawn as the track, and the legend leaves them out.
+		byte[] states = Arrays.copyOfRange(v.states, from, length);
+		if (in.run && in.kind == Kind.ROOM)
+		{
+			for (int i = 0; i < states.length; i++)
+			{
+				if (states[i] == FightTimeline.LOST || states[i] == FightTimeline.EATING)
+				{
+					states[i] = FightTimeline.COOLDOWN;
+				}
+			}
+			// -1: no lost or eating entry in the legend.
+			lost = -1;
+			eating = -1;
+		}
 		final float last = v.damage[length - 1];
 		final float lastExpected = v.expected[length - 1];
 		final boolean rangeKnown = s.damageVariance() > 0 && v.variance[length - 1] > 0;
 		final int ticks = s.combatTicks();
 		return new PanelSnapshot.Chart(from, length, Arrays.copyOfRange(v.damage, from, length),
 			Arrays.copyOfRange(v.expected, from, length), Arrays.copyOfRange(v.variance, from, length),
-			Arrays.copyOfRange(v.states, from, length), styles,
-			luckColour == LedgerRows.Colour.NEUTRAL || warning ? SidePanelStyle.VALUE : SidePanelStyle.of(luckColour),
+			states, styles,
+			luckColour == LedgerRows.Colour.NEUTRAL || warning || (in.run && in.kind == Kind.ROOM) ? SidePanelStyle.VALUE
+				: SidePanelStyle.of(luckColour),
 			!warning, !warning && rangeKnown, LedgerRows.clock(ticks), "you " + LedgerRows.number(Math.round(last)),
 			expectedLegend(lastExpected, s), lost, eating, mechanics,
 			styleColour(FightTimeline.Style.values()[main], false));
@@ -1866,8 +2080,17 @@ final class SidePanelModel
 	/** With {@code avoidable} (T-044), the eating row is what's left once the avoidable eating is Execution's, as on the overlay. */
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable)
 	{
+		return details(s, avoidable, false);
+	}
+
+	/**
+	 * With {@code run} (T-095), a run of monsters: no hits against expected, which is luck's, and no eating, which is
+	 * Execution's; the other damage stays.
+	 */
+	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run)
+	{
 		final List<Row> rows = new ArrayList<>();
-		if (s.expectedHits() > 0)
+		if (s.expectedHits() > 0 && !run)
 		{
 			rows.add(row("hits/expected", s.hits() + "/" + LedgerRows.oneDecimal(s.expectedHits())));
 		}
@@ -1888,7 +2111,7 @@ final class SidePanelModel
 		}
 		final double eating = s.ticksLostEating() * LedgerRows.SECONDS_PER_TICK
 			- (avoidable ? avoidableEating(new LedgerRows.Numbers(s)) : 0);
-		if (s.ticksLostEating() > 0 && LedgerRows.roundHalfAway(eating) >= 1)
+		if (s.ticksLostEating() > 0 && LedgerRows.roundHalfAway(eating) >= 1 && !run)
 		{
 			rows.add(row("eating", LedgerRows.roundHalfAway(eating) + " s"));
 		}

@@ -84,14 +84,9 @@ final class SidePanelHistory
 	 */
 	static boolean isKill(Encounter room)
 	{
-		for (Fight f : room.getFights())
-		{
-			if (f.isClosedRoom() || (f.getGroupName() == null && f.isTargetDied()))
-			{
-				return true;
-			}
-		}
-		return false;
+		// T-095: the overlay's own test (T-094), so the two agree: a run of monsters (T-089) is a kill once it has
+		// closed with a kill in it.
+		return LedgerHistory.isKill(room);
 	}
 
 	/** The room was fought at all: a look that opened a fight and nothing more isn't a room to list. */
@@ -141,6 +136,14 @@ final class SidePanelHistory
 		final boolean boss;
 		/** The boss's icon, a hiscores sprite, or {@link SidePanelBossIcons#NONE} (T-054). */
 		final int icon;
+		/**
+		 * T-095: for a kind fought in runs (T-089), its runs with kills, the monsters killed in them, and its best
+		 * kills/hr ({@code 227}, or null where no run had a minute). 0, 0 and null for a boss, and for a kind saved only
+		 * before T-089, whose rows are still one per fight.
+		 */
+		final int runs;
+		final int runKills;
+		final String bestPerHour;
 
 		BossEntry(String name, int kills, String average, List<String> adds, boolean boss)
 		{
@@ -149,23 +152,46 @@ final class SidePanelHistory
 
 		BossEntry(String name, int kills, String average, List<String> adds, boolean boss, int icon)
 		{
+			this(name, kills, average, adds, boss, icon, 0, 0, null);
+		}
+
+		BossEntry(String name, int kills, String average, List<String> adds, boolean boss, int icon, int runs,
+			int runKills, String bestPerHour)
+		{
 			this.name = name;
 			this.kills = kills;
 			this.average = average;
 			this.adds = Collections.unmodifiableList(adds);
 			this.boss = boss;
 			this.icon = icon;
+			this.runs = runs;
+			this.runKills = runKills;
+			this.bestPerHour = bestPerHour;
 		}
 
-		/** The right side: {@code 23 kills · 1:49} for a boss with an average, else {@code 12 kills}. */
+		/**
+		 * The right side: {@code 23 kills · 1:49} for a boss with an average, else {@code 12 kills}; T-095:
+		 * {@code 5 runs · 312 kills} for a kind fought in runs.
+		 */
 		String right()
 		{
+			if (runs > 0)
+			{
+				return plural(runs, "run") + " · " + plural(runKills, "kill");
+			}
 			return boss && average != null ? plural(kills, "kill") + " · " + average : plural(kills, "kill");
 		}
 
-		/** The sub-line: {@code with Respiratory system, Scion}, {@code not a boss}, or empty. */
+		/**
+		 * The sub-line: {@code with Respiratory system, Scion}, {@code not a boss}, or empty; T-095: a kind fought in runs
+		 * has its best kills/hr in the average's place, {@code best 227/hr}.
+		 */
 		String sub()
 		{
+			if (runs > 0)
+			{
+				return bestPerHour == null ? "not a boss" : "best " + bestPerHour + "/hr";
+			}
 			if (!boss)
 			{
 				return "not a boss";
@@ -202,10 +228,27 @@ final class SidePanelHistory
 			}
 			int kills = 0;
 			Encounter latestKill = null;
+			// T-095: runs (T-089) count their kills, not themselves.
+			int runs = 0;
+			int runKills = 0;
+			double best = -1;
 			final Set<String> adds = new LinkedHashSet<>();
 			for (Encounter room : rooms)
 			{
-				if (isKill(room))
+				if (room.isMonsterRoom())
+				{
+					if (isKill(room))
+					{
+						runs++;
+						runKills += room.getKills();
+						final double seconds = SidePanelModel.savedRunSeconds(room);
+						if (seconds >= SidePanelModel.PER_HOUR_FROM_SECONDS)
+						{
+							best = Math.max(best, room.getKills() * 3600.0 / seconds);
+						}
+					}
+				}
+				else if (isKill(room))
 				{
 					kills++;
 					if (latestKill == null)
@@ -223,8 +266,9 @@ final class SidePanelHistory
 			}
 			final LedgerHistory.Average a = latestKill == null ? null
 				: LedgerHistory.of(history, LedgerHistory.Like.of(latestKill), null);
-			out.add(new BossEntry(name, kills, a == null ? null : LedgerRows.duration(a.actual.median),
-				new ArrayList<>(adds), boss, icon(name, rooms)));
+			out.add(new BossEntry(name, kills + runKills, a == null ? null : LedgerRows.duration(a.actual.median),
+				new ArrayList<>(adds), boss, icon(name, rooms), runs, kills + runKills, best < 0 ? null
+					: LedgerRows.number(Math.round(best))));
 		}
 		return out;
 	}
@@ -316,9 +360,18 @@ final class SidePanelHistory
 		final Spark spark;
 		/** The boss's icon beside its name (T-054). */
 		final int icon;
+		/** T-095: a kind fought in runs: how many with kills, and no version picker or sparkline. */
+		final int runs;
 
 		Card(String name, int kills, List<Version> versions, int selected, List<Tile> tiles, Spark spark, int icon)
 		{
+			this(name, kills, versions, selected, tiles, spark, icon, 0);
+		}
+
+		Card(String name, int kills, List<Version> versions, int selected, List<Tile> tiles, Spark spark, int icon,
+			int runs)
+		{
+			this.runs = runs;
 			this.icon = icon;
 			this.name = name;
 			this.kills = kills;
@@ -421,6 +474,11 @@ final class SidePanelHistory
 		{
 			return null;
 		}
+		final Card runs = runCard(name, rooms);
+		if (runs != null)
+		{
+			return runs;
+		}
 		// Versions in the order their latest kill came, newest first.
 		final Map<String, Version> byKey = new LinkedHashMap<>();
 		for (Encounter k : kills)
@@ -458,6 +516,66 @@ final class SidePanelHistory
 		final int likeCount = like == null ? 0 : likeKills(history, like).size();
 		return new Card(name, kills.size(), versions, selected, tiles(usual, likeCount), spark(history, like),
 			icon(name, rooms));
+	}
+
+	/**
+	 * T-095: the card for a kind fought in runs (T-089), or null for a boss and for a kind saved only before T-089: its
+	 * runs and kills, and four tiles in the usual ones' place. No version picker and no sparkline: a run has no "your
+	 * average" to pick or chart. Kills from before T-089, one per fight, are in the kills.
+	 */
+	static Card runCard(String name, List<Encounter> rooms)
+	{
+		int runs = 0;
+		int kills = 0;
+		double runSeconds = 0;
+		double scoredSeconds = 0;
+		int damage = 0;
+		double expected = 0;
+		int taken = 0;
+		int runKills = 0;
+		double best = -1;
+		for (Encounter r : rooms)
+		{
+			if (!fought(r) || !isKill(r))
+			{
+				continue;
+			}
+			if (!r.isMonsterRoom())
+			{
+				kills++;
+				continue;
+			}
+			runs++;
+			kills += r.getKills();
+			runKills += r.getKills();
+			final double seconds = SidePanelModel.savedRunSeconds(r);
+			runSeconds += seconds;
+			final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(r));
+			scoredSeconds += n.scoredClock;
+			damage += Math.max(0, n.damage);
+			expected += Math.max(0, n.expected);
+			taken += Math.max(0, r.getDamageTaken());
+			if (seconds >= SidePanelModel.PER_HOUR_FROM_SECONDS)
+			{
+				best = Math.max(best, r.getKills() * 3600.0 / seconds);
+			}
+		}
+		if (runs == 0)
+		{
+			return null;
+		}
+		final List<Tile> tiles = new ArrayList<>(4);
+		tiles.add(tile("best kills/hr", best < 0 ? LedgerRows.UNKNOWN : LedgerRows.number(Math.round(best)),
+			best < 0 ? "from runs of a minute" : "best run", SidePanelStyle.TRACK));
+		final String all = SidePanelModel.perHour(runKills, runSeconds);
+		tiles.add(tile("kills/hr", all == null ? LedgerRows.UNKNOWN : all, "over " + plural(runs, "run"),
+			SidePanelStyle.TRACK));
+		tiles.add(tile("DPS", scoredSeconds <= 0 ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(damage / scoredSeconds),
+			scoredSeconds > 0 && expected > 0 ? "expected " + LedgerRows.oneDecimal(expected / scoredSeconds) : "",
+			SidePanelStyle.TRACK));
+		tiles.add(tile("taken per kill", runKills == 0 ? LedgerRows.UNKNOWN
+			: LedgerRows.oneDecimal((double) taken / runKills), "damage", SidePanelStyle.TRACK));
+		return new Card(name, kills, Collections.emptyList(), 0, tiles, null, icon(name, rooms), runs);
 	}
 
 	/** T-054: the icon for rooms of this name, by their raid when they were fought in one. */
@@ -562,10 +680,22 @@ final class SidePanelHistory
 		/** For the Trip tab's rows: the room's name, and whether it ended without a kill. */
 		final String name;
 		final boolean ended;
+		/**
+		 * T-095: a run's kills (T-089), its name then {@code Abyssal demon ×12}, its chip its kills/hr, and no execution;
+		 * -1 for a boss's room, or a fight saved before T-089.
+		 */
+		final int kills;
 
 		KillRow(Encounter room, String clock, String date, Text chip, Color chipFill, String execution, String name,
 			boolean ended)
 		{
+			this(room, clock, date, chip, chipFill, execution, name, ended, -1);
+		}
+
+		KillRow(Encounter room, String clock, String date, Text chip, Color chipFill, String execution, String name,
+			boolean ended, int kills)
+		{
+			this.kills = kills;
 			this.room = room;
 			this.clock = clock;
 			this.date = date;
@@ -596,13 +726,32 @@ final class SidePanelHistory
 	/** A room as a row: its own figures, the overlay's chip rules. */
 	static KillRow row(Encounter room, long now, ZoneId zone)
 	{
+		final long end = endMillis(room);
+		if (room.isMonsterRoom())
+		{
+			return runRow(room, end > 0 ? SidePanelModel.rowDate(end, now, zone) : "");
+		}
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(room));
 		final boolean warning = room.getStatsWarning() != null;
-		final long end = endMillis(room);
 		return new KillRow(room, LedgerRows.clock(room.getCombatTicks()),
 			end > 0 ? SidePanelModel.rowDate(end, now, zone) : "", SidePanelModel.chip(n, warning),
 			chipFill(n, warning), Double.isNaN(n.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(n.execution),
 			room.getName(), !isKill(room));
+	}
+
+	/**
+	 * T-095: a run as a row (T-089): {@code Abyssal demon ×12}, its clock, and its kills/hr in the luck chip's and
+	 * Execution's place, neutral. No luck or execution: over a run they mean little (Eric, 2026-10-29).
+	 */
+	static KillRow runRow(Encounter room, String date)
+	{
+		final int kills = room.getKills();
+		// The run's own clock, as the overlay's (T-094): kills/hr over it.
+		final double seconds = SidePanelModel.savedRunSeconds(room);
+		final String rate = SidePanelModel.perHour(kills, seconds);
+		return new KillRow(room, LedgerRows.duration(seconds), date,
+			rate == null ? null : Text.small(rate + "/hr", SidePanelStyle.BODY), rate == null ? null
+				: SidePanelStyle.CHIP_NEUTRAL, "", SidePanelModel.runName(room.getName(), kills), !isKill(room), kills);
 	}
 
 	private static Color chipFill(LedgerRows.Numbers n, boolean warning)
@@ -644,6 +793,10 @@ final class SidePanelHistory
 		in.saved = true;
 		in.ended = true;
 		in.killed = isKill(room);
+		if (in.run)
+		{
+			in.runSeconds = SidePanelModel.savedRunSeconds(room);
+		}
 		in.endMillis = endMillis(room);
 		in.warning = room.getStatsWarning();
 		in.now = now;
@@ -651,7 +804,8 @@ final class SidePanelHistory
 		in.historyFights = history.size();
 		in.version = names == null ? null : names.name(room, in.maxHp);
 		in.avoidableAttacks = names == null ? Collections.emptySet() : names.avoidable(room);
-		if (in.killed && room.getRaid() == null && in.warning == null)
+		// T-095: a run has no average to set against, and no luck to remove.
+		if (in.killed && room.getRaid() == null && in.warning == null && !in.run)
 		{
 			in.average = LedgerHistory.of(history, room);
 			in.luckRemoved = in.average == null ? null : SidePanelModel.luckRemoved(history, room);
@@ -722,10 +876,19 @@ final class SidePanelHistory
 		final Set<Fight> live = Collections.newSetFromMap(new IdentityHashMap<>());
 		live.addAll(running.getFights());
 		final List<KillRow> out = new ArrayList<>(saved.size() + 1);
-		final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(running));
-		final boolean warning = running.getStatsWarning() != null;
-		out.add(new KillRow(running, LedgerRows.clock(running.getCombatTicks()), "", SidePanelModel.chip(n, warning),
-			chipFill(n, warning), "", running.getName(), false));
+		if (running.isMonsterRoom())
+		{
+			// T-095: the run being fought: its kills and kills/hr, never "(ended)".
+			final KillRow r = runRow(running, "");
+			out.add(new KillRow(running, r.clock, "", r.chip, r.chipFill, "", r.name, false, r.kills));
+		}
+		else
+		{
+			final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(running));
+			final boolean warning = running.getStatsWarning() != null;
+			out.add(new KillRow(running, LedgerRows.clock(running.getCombatTicks()), "", SidePanelModel.chip(n, warning),
+				chipFill(n, warning), "", running.getName(), false));
+		}
 		for (KillRow r : saved)
 		{
 			if (r.room.getFights().stream().noneMatch(live::contains))
