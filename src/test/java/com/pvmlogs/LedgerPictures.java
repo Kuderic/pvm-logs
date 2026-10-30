@@ -71,6 +71,26 @@ public final class LedgerPictures
 		costingOnly.parts = ExecutionParts.COSTING;
 		s.put("32-leviathan-costing", LedgerRows.build(leviathan, LedgerRows.State.fight("The Leviathan", false, false,
 			false), costingOnly));
+		// T-094: a run of Abyssal demons, the light view. 150 s of fighting in a 3:10 run, 930 against 975: 6.2 against 6.5.
+		final LedgerExamples.FakeScope demons = new LedgerExamples.FakeScope();
+		demons.combatTicks = 250;
+		demons.damage = 930;
+		demons.expectedDamage = 975;
+		s.put("33-run-mid", LedgerRows.build(demons, LedgerRows.State.run("Abyssal demon", 12, 190, false, false), all));
+		// Ended after its pause: the clock stopped at the last attack.
+		s.put("34-run-ended", LedgerRows.build(demons, LedgerRows.State.run("Abyssal demon", 12, 172, true, false), all));
+		final LedgerExamples.FakeScope first = new LedgerExamples.FakeScope();
+		first.combatTicks = 40;
+		first.damage = 150;
+		first.expectedDamage = 156;
+		s.put("35-run-no-kills", LedgerRows.build(first, LedgerRows.State.run("Abyssal demon", 0, 26, false, false),
+			all));
+		s.put("36-run-unsure", LedgerRows.build(demons, LedgerRows.State.run("Abyssal demon", 12, 190, false, true),
+			all));
+		s.put("37-run-narrow", LedgerRows.build(demons, LedgerRows.State.run("Abyssal demon", 12, 190, false, false),
+			all));
+		s.put("38-run-long", LedgerRows.build(demons, LedgerRows.State.run("Greater abyssal demon", 120, 3_753, false,
+			false), all));
 		// T-075: the trip's drains and specs, in words.
 		final LedgerExamples.FakeScope tripDrains = LedgerExamples.trip();
 		tripDrains.damageVariance = 60_000;
@@ -269,6 +289,7 @@ public final class LedgerPictures
 		SAVED_WIDTH.put("12-saved-width", 160);
 		SAVED_WIDTH.put("12-saved-width.L", 160);
 		SAVED_WIDTH.put("28-dps-narrow", 120);
+		SAVED_WIDTH.put("37-run-narrow", PvmPerformanceOverlay.MIN_WIDTH);
 	}
 
 	public static void main(String[] args) throws IOException

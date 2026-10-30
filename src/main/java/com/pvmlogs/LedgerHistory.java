@@ -193,11 +193,18 @@ final class LedgerHistory
 		return rooms;
 	}
 
-	/** A kill, outside a raid, recorded by a build with a trustworthy expected side, with no warning on it. */
+	/**
+	 * A kill, outside a raid, recorded by a build with a trustworthy expected
+	 * side, with no warning on it: one of a boss's averages. Never a run of
+	 * monsters (T-094): a run isn't a boss's kill, and its clock is a run's.
+	 */
 	static boolean counts(Encounter room, Set<Fight> exclude)
 	{
+		if (room.isMonsterRoom())
+		{
+			return false;
+		}
 		boolean scored = false;
-		boolean killed = false;
 		for (Fight fight : room.getFights())
 		{
 			if (exclude.contains(fight) || fight.getRaidName() != null || fight.getStatsWarning() != null)
@@ -212,10 +219,24 @@ final class LedgerHistory
 				}
 				scored = true;
 			}
-			// A grouped boss is killed when its room closes on the loot; one of its parts dying is not the kill.
+		}
+		return scored && isKill(room);
+	}
+
+	/**
+	 * Whether a saved room is a kill. A grouped boss is killed when its room
+	 * closes on the loot; one of its parts dying is not the kill. A run of
+	 * monsters (T-089) closes on its last fight whatever happened in it, so it
+	 * is a kill only with a kill in it (T-094).
+	 */
+	static boolean isKill(Encounter room)
+	{
+		boolean killed = false;
+		for (Fight fight : room.getFights())
+		{
 			killed |= fight.isClosedRoom() || (fight.getGroupName() == null && fight.isTargetDied());
 		}
-		return scored && killed;
+		return killed && (!room.isMonsterRoom() || room.getKills() > 0);
 	}
 
 	/** Linear between the two nearest ranks. */
