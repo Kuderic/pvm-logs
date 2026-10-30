@@ -5693,12 +5693,6 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/**
-	 * The local calibration report (T-110): per boss, target, weapon and build,
-	 * A/E, the mean luck z with its standard error, and the deciles, flagged
-	 * groups first. For the side panel's Tools button (T-111): it reads a copy
-	 * of the history, so call it off the client thread.
-	 */
-	/**
 	 * T-111: the data folder, for the side panel's Calibration report button to save the report in; null when
 	 * RuneLite couldn't give one. Read-only.
 	 */
@@ -5707,10 +5701,28 @@ public class PvmPerformancePlugin extends Plugin
 		return dataDirectory;
 	}
 
+	/**
+	 * The local calibration report (T-110, T-113): its findings in plain
+	 * sentences, the flagged groups (recorded builds only), then per boss,
+	 * target and weapon on each recorded build, A/E, the mean luck z with its
+	 * standard error and the deciles, and the older kills apart, unflagged.
+	 * For the side panel's Tools button (T-111): it reads a copy of the
+	 * history, so call it off the client thread.
+	 */
 	String calibrationReport()
 	{
 		// A copy-on-write list: the copy is safe from any thread.
 		return Calibration.report(new ArrayList<>(history), monsterStats == null ? null : monsterStats.rules());
+	}
+
+	/**
+	 * T-113: the report's findings as a few plain sentences, for the side
+	 * panel (T-114): one per flagged group, or one saying nothing looks off.
+	 * Reads a copy of the history, so call it off the client thread.
+	 */
+	List<String> calibrationSummary()
+	{
+		return Calibration.summary(new ArrayList<>(history), monsterStats == null ? null : monsterStats.rules());
 	}
 
 	// The commit in BossRules.provenance's "repo@commit (date)", or "unknown".
