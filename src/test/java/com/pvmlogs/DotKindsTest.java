@@ -267,7 +267,7 @@ public class DotKindsTest
 		assertEquals(left.indexOf(" thrall dmg") + 1, left.indexOf(" venom dmg"));
 		assertEquals(left.indexOf(" venom dmg") + 1, left.indexOf(" boss healed"));
 		assertEquals(left.indexOf(" boss healed") + 1, left.indexOf(" poison taken"));
-		assertEquals(left.indexOf(" poison taken") + 1, left.indexOf(" biggest hit taken"));
+		assertEquals(left.indexOf(" poison taken") + 1, left.indexOf(" largest hit taken"));
 	}
 
 	@Test
@@ -326,7 +326,7 @@ public class DotKindsTest
 		{
 			if (row.left.endsWith(" dmg") && !row.left.equals(" thrall dmg") && !row.left.equals(" recoil/veng dmg")
 				|| row.left.endsWith(" taken") && !row.left.equals(" damage taken")
-				&& !row.left.equals(" biggest hit taken"))
+				&& !row.left.equals(" largest hit taken"))
 			{
 				out.add(row.left + " " + row.right);
 			}

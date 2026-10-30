@@ -95,7 +95,16 @@ public class SidePanelModelTest
 		{
 			final LedgerRows.Row r = row(rows, " " + part);
 			final PanelSnapshot.Part p = part(t, part);
-			assertEquals(part, r.right, p.value.text);
+			if (part.equals("uptime"))
+			{
+				assertEquals(part, r.right, p.value.text);
+			}
+			else
+			{
+				// T-117: the overlay prices the setup parts in damage (`97% (-45 dmg)`); the panel still prices them in ticks
+				// until T-118 reads Numbers' damage. The share before the bracket is the same.
+				assertEquals(part, r.right.split(" \\(")[0], p.value.text.split(" \\(")[0]);
+			}
 			// Costing parts are orange on both.
 			assertEquals(part, r.rightColour == LedgerRows.Colour.COST, p.value.colour.equals(SidePanelStyle.COST));
 		}

@@ -138,6 +138,23 @@ final class LedgerExamples
 			return efficiency;
 		}
 
+		/**
+		 * T-117: unless a test sets it, the expected damage over the ideal setup's
+		 * share, as T-010's sums would have it (actual = expected, ideal = actual ÷
+		 * efficiency).
+		 */
+		double idealSetupDamage = -1;
+
+		@Override
+		public double idealSetupDamage()
+		{
+			if (idealSetupDamage >= 0)
+			{
+				return idealSetupDamage;
+			}
+			return efficiency > 0 && expectedDamage > 0 ? expectedDamage / efficiency : -1;
+		}
+
 		public double boostShare()
 		{
 			return boostShare;

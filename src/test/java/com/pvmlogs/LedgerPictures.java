@@ -89,6 +89,9 @@ public final class LedgerPictures
 			all));
 		s.put("37-run-narrow", LedgerRows.build(demons, LedgerRows.State.run("Abyssal demon", 12, 190, false, false),
 			all));
+		// T-117: Eric's kill at the Leviathan in a box saved at the narrowest width: the ticks' short forms.
+		s.put("39-ticks-narrow", LedgerRows.build(leviathan, LedgerRows.State.fight("The Leviathan", true, true, false),
+			all));
 		s.put("38-run-long", LedgerRows.build(demons, LedgerRows.State.run("Greater abyssal demon", 120, 3_753, false,
 			false), all));
 		// T-075: the trip's drains and specs, in words.
@@ -290,6 +293,7 @@ public final class LedgerPictures
 		SAVED_WIDTH.put("12-saved-width.L", 160);
 		SAVED_WIDTH.put("28-dps-narrow", 120);
 		SAVED_WIDTH.put("37-run-narrow", PvmPerformanceOverlay.MIN_WIDTH);
+		SAVED_WIDTH.put("39-ticks-narrow", PvmPerformanceOverlay.MIN_WIDTH);
 	}
 
 	public static void main(String[] args) throws IOException

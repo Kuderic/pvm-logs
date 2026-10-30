@@ -167,7 +167,9 @@ public class SidePanelNoLagTest
 		// A clock reaching 10:00, damage reaching 1,000 and the like: a handful in ten minutes, against every update before.
 		System.out.println("T-046: " + updates + " updates, " + stripLayouts + " layouts for a new strip row, "
 			+ digitLayouts + " for a value gaining a digit");
-		assertTrue("digit layouts " + digitLayouts, digitLayouts <= 6);
+		// T-117: 8 with the parts' costs in ticks, against 6 in seconds. A count of ticks is 1.67 times the seconds, so it
+		// reaches two digits sooner, and "1 tick" becomes "2 ticks", a letter wider, once. Still a handful in ten minutes.
+		assertTrue("digit layouts " + digitLayouts, digitLayouts <= 8);
 	}
 
 	@Test
