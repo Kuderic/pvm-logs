@@ -11,8 +11,14 @@ import lombok.Getter;
 class Fight
 {
 	private final String targetName;
-	// The room or boss this fight is a part of, or null if it stands alone.
-	private final String groupName;
+	// The room or boss this fight is a part of, or null if it stands alone. A monster's fight (T-089) is grouped under its
+	// own name, so a run of them is one room: set once, as the fight opens.
+	private String groupName;
+	// T-089: this is a fight on a monster rather than a boss, in a room of every monster of its kind fought back to back,
+	// and the monsters of that kind that died to the player's damage while it was open, the ones a splash killed included.
+	// False and 0 on a fight saved before, which then stands alone as it always did.
+	private boolean monsterRoom;
+	private int kills;
 	// Overrides the group name where the room alone is too coarse to compare against itself - Olm's phases. Null unless
 	// set.
 	private String encounterLabel;
@@ -221,6 +227,26 @@ class Fight
 	void setEncounterLabel(String label)
 	{
 		this.encounterLabel = label;
+	}
+
+	/**
+	 * A fight on a monster, not a boss (T-089): grouped under the monster's
+	 * name, so every fight on its kind fought back to back is one room. Not for a
+	 * fight already in a group.
+	 */
+	void groupAsMonster()
+	{
+		if (groupName == null)
+		{
+			groupName = targetName;
+			monsterRoom = true;
+		}
+	}
+
+	/** A monster of this fight's kind died to the player's damage while it was open (T-089). */
+	void recordKill()
+	{
+		kills++;
 	}
 
 	/**

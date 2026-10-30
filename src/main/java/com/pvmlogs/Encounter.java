@@ -64,7 +64,55 @@ class Encounter
 	 */
 	boolean closesOnLootFrom(int npcId)
 	{
-		return !isEnded() && EncounterGroup.lootIsTheKill(npcId) && holds(npcId);
+		// A run of monsters (T-089) goes on through every drop: it ends on a pause, another kind, or leaving.
+		return !isEnded() && !isMonsterRoom() && EncounterGroup.lootIsTheKill(npcId) && holds(npcId);
+	}
+
+	/** Whether this is a run of monsters of one kind rather than a boss's room (T-089). */
+	boolean isMonsterRoom()
+	{
+		return !fights.isEmpty() && fights.get(0).isMonsterRoom();
+	}
+
+	/** The monsters that died to the player's damage in the room (T-089); 0 in a boss's room. */
+	int getKills()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getKills();
+		}
+		return total;
+	}
+
+	/**
+	 * Ends a run of monsters (T-089) at its last attack, rather than when the
+	 * pause ran out or the player left, so the room's time is its fighting. Its
+	 * last fight with anything thrown in it - the history keeps only those -
+	 * carries the boundary, as the fight a boss's kill closes on does. Before
+	 * any attack, at {@code now}.
+	 */
+	void endMonsterRoom(long now)
+	{
+		end(lastAttackMillis > 0 ? Math.min(now, lastAttackMillis) : now);
+		final Fight last = lastAttempted();
+		if (last != null)
+		{
+			last.closeRoom();
+		}
+	}
+
+	/** The room's latest fight with anything thrown in it, or null: the one a monster's kill is credited to (T-089). */
+	Fight lastAttempted()
+	{
+		for (int i = fights.size() - 1; i >= 0; i--)
+		{
+			if (fights.get(i).getAttempts() > 0)
+			{
+				return fights.get(i);
+			}
+		}
+		return null;
 	}
 
 	/** The parts that have gone down, by npc index, for a room that closes on deaths (T-061). */
@@ -104,10 +152,14 @@ class Encounter
 	 * fight - and so it costs nothing on a room holding hundreds of them.
 	 */
 	private boolean engaged;
+	// When the room's last attack was booked (T-089): a run of monsters ends at it, once nothing has been attacked for
+	// MonsterRooms.PAUSE_MILLIS. 0 before the first.
+	private long lastAttackMillis;
 
-	void noteAttack()
+	void noteAttack(long now)
 	{
 		engaged = true;
+		lastAttackMillis = Math.max(lastAttackMillis, now);
 	}
 
 	boolean isEngaged()
@@ -151,6 +203,17 @@ class Encounter
 	 */
 	boolean isKilled()
 	{
+		// A run of monsters (T-089) is not over at any one death, only when it has ended with a kill in it: ended live, or
+		// closed by its last fight in a room rebuilt from the history.
+		if (isMonsterRoom())
+		{
+			boolean closed = isEnded();
+			for (Fight fight : fights)
+			{
+				closed |= fight.isClosedRoom();
+			}
+			return closed && getKills() > 0;
+		}
 		boolean ungroupedDied = false;
 		for (Fight fight : fights)
 		{

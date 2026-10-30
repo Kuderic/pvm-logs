@@ -44,6 +44,7 @@ import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
 import net.runelite.api.Projectile;
 import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.BeforeRender;
 import net.runelite.api.events.ChatMessage;
@@ -319,6 +320,12 @@ public class PvmPerformancePlugin extends Plugin
 	// rather than read off a health bar that is bucketed into thirtieths and not always drawn. Per npc because one AoE
 	// attack puts damage on several and only the target's own counts towards what the target has left.
 	private final Map<Integer, Integer> damageByIndex = new HashMap<>();
+	// T-089: the monsters of the open run's kind the player's damage reached, whose deaths are its kills; and where the
+	// player stood last tick, so a teleport ends the run.
+	private final MonsterRooms monsterRooms = new MonsterRooms();
+	private WorldPoint lastPlayerPoint;
+	// A run of monsters set aside while another kind is fought, until its pause runs out or a boss is fought (T-089).
+	private Encounter setAsideRun;
 	// The tick one of my hitsplats last landed on, whichever npc took it. Two in a tick are one attack.
 	private int lastMineHitsplatTick = Integer.MIN_VALUE;
 	// The tick my last attack of any style went out on. Apart from attackDueTick, which is only set once booked: this has
@@ -959,6 +966,7 @@ public class PvmPerformancePlugin extends Plugin
 				landedAttack, arrivedFromFlight,
 				onHitpoints ? "" : ", NOT HITPOINTS (" + HitsplatKind.typeName(hitsplat.getHitsplatType()) + ")");
 			current.recordDamageDealt(hitsplat.getAmount(), now, landedAttack);
+			noteMonsterHit(npc, hitsplat.getAmount());
 			maxHits.splat(npc.getIndex(), client.getTickCount(), hitsplat.getAmount());
 			if (current.isScored())
 			{
@@ -3733,9 +3741,12 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("LOOT from %s (npc %d, index %d)%s: %s", npc.getName(), npc.getId(), npc.getIndex(),
 				add ? ", an add's: not the kill" : "", lootItems(event.getItems()));
 		}
+		// A monster's drop is a kill of the run, and the run goes on (T-089): what the others have left is kept.
+		creditMonsterKill(npc, "dropped loot");
 		if (lootEndsFight(current, npc.getId(), npc.getIndex()))
 		{
-			finalizeFight(true, now, "loot received");
+			finalizeFight(true, now, "loot received", current.isMonsterRoom()
+				&& roomGoesOnAtDeath(currentEncounter, current, npc.getId()));
 		}
 		// A room ends with the kill that closed it, so the next opens a fresh one. Without it a grouped boss kept a whole
 		// trip in the room the first kill opened, and the overlay read as a running total with the trip totals off. The loot
@@ -3840,11 +3851,22 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			thralls.onThrallDespawned(npc.getIndex(), client.getTickCount());
 		}
+		// A monster of the run dying is one of its kills (T-089), the target or not; before its fight closes, which saves it.
+		if (npc.isDead())
+		{
+			creditMonsterKill(npc, "died");
+		}
+		monsterRooms.forget(npc.getIndex());
 		// What it had left goes too - the server can hand its index to the next spawn. The fight's own target is kept until
-		// the fight is closed below, which reconciles against it.
+		// the fight is closed below, which reconciles against it. A dead one's damage as well (T-089): in a run of monsters
+		// the counts outlive the fights, and a respawn on the index would start at what the last one had left.
 		if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
 		{
 			health.forget(npc.getIndex());
+			if (npc.isDead())
+			{
+				damageByIndex.remove(npc.getIndex());
+			}
 		}
 		if (current == null || current.isEnded())
 		{
@@ -3852,9 +3874,10 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		if (current.getTargetIndex() == npc.getIndex())
 		{
-			// An add of the room dying is the room going on (T-021): what the boss and the other adds have left is kept.
+			// An add of the room dying is the room going on (T-021): what the boss and the other adds have left is kept. So is
+			// a monster of the run (T-089).
 			finalizeFight(npc.isDead(), System.currentTimeMillis(), npc.isDead() ? "target died" : "target despawned",
-				npc.isDead() && EncounterGroup.isUnscored(npc.getId()) && switchesWithinRoom(current, npc.getId()));
+				npc.isDead() && roomGoesOnAtDeath(currentEncounter, current, npc.getId()));
 			return;
 		}
 		// A boss made of several NPCs does not die on the one being hit: the Hueycoatl is killed at its head while the fight
@@ -3984,7 +4007,7 @@ public class PvmPerformancePlugin extends Plugin
 			// waiting to be attacked in its own right.
 			if (currentEncounter != null && !currentEncounter.isEnded())
 			{
-				currentEncounter.noteAttack();
+				currentEncounter.noteAttack(System.currentTimeMillis());
 			}
 			if (attacker.isScored())
 			{
@@ -4079,6 +4102,18 @@ public class PvmPerformancePlugin extends Plugin
 		// added, idle after it.
 		final int added = foodDelay.added(attackDueTick);
 		final boolean eating = FoodDelay.isEatingTick(client.getTickCount(), attackDueTick, lag, added);
+		// Moving to the next monster of a run (T-089) is neither lost nor spent: the next one targeted after a kill and being
+		// walked to, or another of the kind already aimed at.
+		final Player me = client.getLocalPlayer();
+		final Actor aimed = me == null ? null : me.getInteracting();
+		final NPC aimedNpc = aimed instanceof NPC ? (NPC) aimed : null;
+		if (MonsterRooms.switchingTick(current, roomEngaged, eating,
+			aimedNpc == null ? null : Text.removeTags(aimedNpc.getName()), aimedNpc == null ? -1 : aimedNpc.getIndex()))
+		{
+			debug.log("tick UNCOUNTED: moving to the next %s (%s)", current.getTargetName(), !current.isAttacking()
+				? "nothing thrown at this one yet" : "aimed at index " + aimedNpc.getIndex());
+			return;
+		}
 		// Downtime a boss's mechanic forced, inside its allowance (T-074): neutral, not lost. Judged on the tick the idle
 		// attack would have gone out, a booking lag before this one, as the windows are.
 		final MechanicAllowances.Run excused = eating || !counts ? null
@@ -4572,6 +4607,8 @@ public class PvmPerformancePlugin extends Plugin
 			combatCalc.invalidateGear();
 		}
 		trackRaid(System.currentTimeMillis());
+		// After the raid's own boundary, before anything opens a fight this tick (T-089).
+		trackMonsterRoom(System.currentTimeMillis());
 		noteEngaged();
 		startFightOnTarget();
 		// After any fight this tick opened, before anything is judged against the target: what it wears now.
@@ -4714,10 +4751,11 @@ public class PvmPerformancePlugin extends Plugin
 			// And the ROOM with it. Left open, it waits for a kill that may be a night away and counts the whole gap as
 			// room time: one Hueycoatl room in a real export ran 33,541 seconds across a night's sleep and swallowed two
 			// kills, because a room only ends at its loot drop and nothing else was closing it.
-			if (currentEncounter != null && !currentEncounter.isEnded())
-			{
-				currentEncounter.end(System.currentTimeMillis());
-			}
+			endRoom(currentEncounter, System.currentTimeMillis(), state == GameState.LOGIN_SCREEN ? "logged out" : "hopped");
+			endRoom(setAsideRun, System.currentTimeMillis(), state == GameState.LOGIN_SCREEN ? "logged out" : "hopped");
+			setAsideRun = null;
+			monsterRooms.clear();
+			lastPlayerPoint = null;
 			countedProjectiles.clear();
 			taken.clear();
 			targetSeen.clear();
@@ -4758,11 +4796,13 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void startFight(NPC npc, long now)
 	{
+		final boolean monster = isMonster(npc);
 		if (current != null && !current.isEnded())
 		{
-			final boolean sameRoom = switchesWithinRoom(current, npc.getId());
+			final boolean sameRoom = switchesWithinRoom(current, npc.getId())
+				|| MonsterRooms.switchesWithin(currentEncounter, current, Text.removeTags(npc.getName()), monster);
 			finalizeFight(false, now, sameRoom ? "a different target in the room was attacked"
-				: "a different target was attacked", sameRoom);
+				: "a different target was attacked", keepsCountsOnSwitch(currentEncounter, current, npc.getId(), monster));
 		}
 		// Full hitpoints from the version of the monster data in use, which knows the Chambers and Vardorvis where
 		// RuneLite's table does not; RuneLite's (nullable) as the fallback. The boss health bar, once read, beats both.
@@ -4778,6 +4818,11 @@ public class PvmPerformancePlugin extends Plugin
 		current = new Fight(Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(),
 			maxHp, now,
 			raidType, raidCounter);
+		// A monster's fight joins the run of its kind (T-089), so the room below continues the one open on it.
+		if (monster)
+		{
+			current.groupAsMonster();
+		}
 		current.noteStartTick(client.getTickCount());
 		timelines.attach(current);
 		perf.fightStarted();
@@ -4857,6 +4902,149 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		return room != null && !room.isEnded() && fight.getGroupName() != null
 			&& EncounterGroup.sameGroup(npcId, fight.getTargetId());
+	}
+
+	/**
+	 * Whether ending {@code fight} for one on this NPC keeps what every target
+	 * has left (finalizeFight's keepCounts): a switch between targets of one
+	 * room (T-021), or from a monster to a monster (T-089) - of one run, or of
+	 * another kind with the run set aside, since the demons a splash reached
+	 * still have only what it left them.
+	 */
+	static boolean keepsCountsOnSwitch(Encounter room, Fight fight, int npcId, boolean monster)
+	{
+		return switchesWithinRoom(room, fight, npcId) || monster && fight.isMonsterRoom();
+	}
+
+	/**
+	 * Whether the room goes on past the death of {@code fight}'s target, keeping
+	 * what the others have left: an unscored add of an open room (T-021), or any
+	 * monster of an open run (T-089).
+	 */
+	static boolean roomGoesOnAtDeath(Encounter room, Fight fight, int npcId)
+	{
+		return EncounterGroup.isUnscored(npcId) && switchesWithinRoom(room, fight, npcId)
+			|| fight.isMonsterRoom() && room != null && !room.isEnded();
+	}
+
+	/** Whether this NPC is a monster rather than a boss (T-089): see {@link MonsterRooms#isMonster}. */
+	private boolean isMonster(NPC npc)
+	{
+		return MonsterRooms.isMonster(Text.removeTags(npc.getName()), npc.getId(), raidType != null,
+			monsterStats == null ? null : monsterStats.rules());
+	}
+
+	/**
+	 * The player's damage reached a monster of the run's kind (T-089), so its
+	 * death is the room's kill, whoever's target it was.
+	 */
+	private void noteMonsterHit(NPC npc, int amount)
+	{
+		if (amount > 0 && runOf(Text.removeTags(npc.getName())) != null)
+		{
+			monsterRooms.hit(npc.getIndex());
+		}
+	}
+
+	/** The open run of monsters of this kind (T-089): the room open now, or the one set aside; null for none. */
+	private Encounter runOf(String name)
+	{
+		for (Encounter room : new Encounter[]{currentEncounter, setAsideRun})
+		{
+			if (room != null && !room.isEnded() && room.isMonsterRoom()
+				&& MonsterRooms.sameKind(room.getFights().get(0), name))
+			{
+				return room;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * A monster of the run's kind died (T-089): the room's kill when the
+	 * player's damage reached it, the ones a splash killed included. Credited
+	 * to the fight open on the run if anything has been thrown in it, otherwise
+	 * to the run's last fight that had - the history keeps only those - and
+	 * saved again if that one has already been.
+	 */
+	private void creditMonsterKill(NPC npc, String how)
+	{
+		final Encounter room = runOf(Text.removeTags(npc.getName()));
+		if (room == null || !monsterRooms.takeKill(npc.getIndex()))
+		{
+			return;
+		}
+		final Fight onto = current != null && !current.isEnded() && current.getAttempts() > 0
+			&& room.getFights().contains(current) ? current : room.lastAttempted();
+		if (onto == null)
+		{
+			return;
+		}
+		onto.recordKill();
+		debug.log("KILL %s (npc %d, index %d) %s: kill %d of room '%s'%s", npc.getName(), npc.getId(), npc.getIndex(), how,
+			room.getKills(), room.getName(), onto.getTargetIndex() == npc.getIndex() ? "" : ", not the target");
+		if (onto.isEnded())
+		{
+			saveHistory();
+		}
+	}
+
+	/**
+	 * Ends the room open now. A run of monsters ends at its last attack, its last
+	 * fight carrying the boundary into the history (T-089), and is saved with it.
+	 */
+	private void endRoom(Encounter room, long now, String why)
+	{
+		if (room == null || room.isEnded())
+		{
+			return;
+		}
+		if (!room.isMonsterRoom())
+		{
+			room.end(now);
+			return;
+		}
+		room.endMonsterRoom(now);
+		debug.log("ROOM '%s' ended (%s): %d kills, %d fights, %.1f s", room.getName(), why, room.getKills(),
+			room.getFights().size(), room.durationMillis() / 1000.0);
+		saveHistory();
+	}
+
+	/**
+	 * Ends a run of monsters that has paused or been left (T-089): nothing of
+	 * its kind attacked for {@link MonsterRooms#PAUSE_MILLIS}, or the player
+	 * teleported, died or took a ladder. The fight still open on it ends at the
+	 * run's last attack too.
+	 */
+	private void trackMonsterRoom(long now)
+	{
+		final Player me = client.getLocalPlayer();
+		final WorldPoint here = me == null ? null : me.getWorldLocation();
+		final WorldPoint before = lastPlayerPoint;
+		lastPlayerPoint = here;
+		final boolean left = MonsterRooms.leftArea(before, here);
+		if (setAsideRun != null && (left || MonsterRooms.pauseEnds(setAsideRun, now)))
+		{
+			endRoom(setAsideRun, now, left ? "the player left the area" : "nothing of its kind attacked for 60 s");
+			setAsideRun = null;
+		}
+		final Encounter room = currentEncounter;
+		if (room == null || room.isEnded() || !room.isMonsterRoom() || !room.isEngaged())
+		{
+			return;
+		}
+		final String why = MonsterRooms.pauseEnds(room, now) ? "nothing attacked for 60 s"
+			: left ? "the player left the area" : null;
+		if (why == null)
+		{
+			return;
+		}
+		if (current != null && !current.isEnded() && room.getFights().contains(current))
+		{
+			finalizeFight(false, Math.max(current.getStartMillis(), Math.min(now, room.getLastAttackMillis())),
+				"the room ended: " + why);
+		}
+		endRoom(room, now, why);
 	}
 
 	/**
@@ -5030,6 +5218,7 @@ public class PvmPerformancePlugin extends Plugin
 		damageByIndex.merge(npc.getIndex(), damage, Integer::sum);
 		health.damage(npc.getIndex(), npc.getId(), damage, tick);
 		current.recordExtraTarget(damage, now, newTarget, landed);
+		noteMonsterHit(npc, damage);
 		// The attack whose splat on the fight's target it lands beside (T-059): a chinchompa's collateral otherwise waited for
 		// the next damage and went to whatever attack was latest by then. With no splat on the target this tick, the latest.
 		final FightTimeline line = timelines.of(current);
@@ -5073,11 +5262,39 @@ public class PvmPerformancePlugin extends Plugin
 		// room would have run from a glance at 4191 to a kill at 4896, twice the 351 ticks of the kill (T-020).
 		if (opensRoom(currentEncounter, fight))
 		{
+			// Back to a run of monsters set aside for another kind (T-089): the other kind's room ends, the run goes on.
+			if (MonsterRooms.resumesRun(setAsideRun, fight))
+			{
+				endRoom(currentEncounter, now, "back to the run of " + setAsideRun.getName());
+				if (currentEncounter != null && currentEncounter.hasAttempts())
+				{
+					lastFinishedEncounter = currentEncounter;
+				}
+				currentEncounter = setAsideRun;
+				setAsideRun = null;
+				debug.log("ROOM '%s' goes on: back to its kind", currentEncounter.getName());
+				currentEncounter.add(fight);
+				return;
+			}
+			// A boss ends a run set aside, at its last attack.
+			if (!fight.isMonsterRoom())
+			{
+				endRoom(setAsideRun, now, "a fight opened on " + fight.getTargetName());
+				setAsideRun = null;
+			}
 			if (currentEncounter != null)
 			{
-				if (!currentEncounter.isEnded())
+				// A run of monsters is set aside while another kind is fought, until its pause runs out (T-089): one swing at a
+				// Reanimated abyssal at [16570] of Eric's demon trip would have split it in three. Only one is kept: any other
+				// room ends at its last attack, as a boss's ends here.
+				if (setAsideRun == null && MonsterRooms.setsRunAside(currentEncounter, fight))
 				{
-					currentEncounter.end(now);
+					setAsideRun = currentEncounter;
+					debug.log("ROOM '%s' set aside for %s", setAsideRun.getName(), fight.getTargetName());
+				}
+				else
+				{
+					endRoom(currentEncounter, now, "a fight opened on " + fight.getTargetName());
 				}
 				if (currentEncounter.hasAttempts())
 				{
@@ -5126,9 +5343,11 @@ public class PvmPerformancePlugin extends Plugin
 		// A room does not span two raids, nor a raid and the world outside it.
 		if (currentEncounter != null)
 		{
-			currentEncounter.end(now);
+			endRoom(currentEncounter, now, "a raid began or ended");
 			currentEncounter = null;
 		}
+		endRoom(setAsideRun, now, "a raid began or ended");
+		setAsideRun = null;
 		raidType = now_;
 		olmPhase = null;
 		if (raidType != null)
