@@ -50,6 +50,8 @@ final class PanelSnapshot
 		 * for a boss's room, or a run with no kill yet.
 		 */
 		final String suffix;
+		/** T-102: an ended room the player died in (T-100): {@code (died)} in place of {@code (ended)}. */
+		final boolean died;
 
 		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill)
 		{
@@ -68,6 +70,13 @@ final class PanelSnapshot
 
 		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill, int icon, int kills, String suffix)
 		{
+			this(name, ended, clock, chip, chipFill, icon, kills, suffix, false);
+		}
+
+		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill, int icon, int kills, String suffix,
+			boolean died)
+		{
+			this.died = died;
 			this.kills = kills;
 			this.suffix = suffix == null ? "" : suffix;
 			this.name = name;

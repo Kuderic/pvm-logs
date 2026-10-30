@@ -138,7 +138,9 @@ public class SidePanelHistoryTest
 		assertEquals(Arrays.asList("Abyssal Sire", "Abyssal demon"), names(SidePanelHistory.bosses(h, false, "ABYSS")));
 		final SidePanelHistory.BossEntry demon = SidePanelHistory.bosses(h, false, "demon").get(0);
 		assertEquals("3 kills", demon.right());
-		assertEquals("not a boss", demon.sub());
+		// T-102: the Monsters section says it isn't a boss.
+		assertEquals("", demon.sub());
+		assertFalse(demon.boss);
 	}
 
 	private static List<String> names(List<SidePanelHistory.BossEntry> entries)

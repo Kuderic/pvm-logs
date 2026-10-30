@@ -914,6 +914,14 @@ class PvmPerformancePanel extends PluginPanel
 		}
 
 		@Override
+		public BossRules rules()
+		{
+			// T-102: the rules the history budget classes fights by, from the plugin's own MonsterStatsProvider.
+			final MonsterStatsProvider stats = instance(plugin, MonsterStatsProvider.class);
+			return stats == null ? null : stats.rules();
+		}
+
+		@Override
 		public void charts(Encounter room, java.util.function.Consumer<FightTimeline.View> done)
 		{
 			// The store is the client thread's: the view is built there and handed back to Swing's.

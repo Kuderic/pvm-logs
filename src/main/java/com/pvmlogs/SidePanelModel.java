@@ -119,6 +119,8 @@ final class SidePanelModel
 		int kills;
 		/** T-095: the run's own clock to its last attack ({@link #savedRunSeconds}). */
 		double runSeconds;
+		/** T-102: the player died in it (T-100). */
+		boolean died;
 		long endMillis;
 		LedgerRows.Numbers numbers;
 		boolean warning;
@@ -197,6 +199,8 @@ final class SidePanelModel
 		Encounter part;
 		/** T-099: in {@link #bossOnly} and {@link #addsOnly}, none of its fights scored (Zulrah's snakelings). */
 		boolean noneScored;
+		/** T-102: the room ended because the player died in it (T-100): {@code (died)} where {@code (ended)} goes. */
+		boolean died;
 		/** The room's name, the target's before the first attack, or the raid's. */
 		String name;
 		/** The raid the room or scope is in, or null: a raid's rooms show its icon (T-054). */
@@ -295,6 +299,7 @@ final class SidePanelModel
 		in.scoredName = room.getName();
 		in.run = room.isMonsterRoom();
 		in.kills = room.getKills();
+		in.died = SidePanelHistory.died(room);
 		final List<Fight> fights = room.getFights();
 		in.maxHp = maxHp(fights);
 		in.solo = fights.isEmpty() ? null : solo(fights);
@@ -309,6 +314,20 @@ final class SidePanelModel
 		fillOther(in, fights);
 		in.targets = targets(fights);
 		split(in, room);
+	}
+
+	// ---- T-102: a room the player died in ----
+
+	static final String ENDED = " (ended)";
+	static final String DIED = " (died)";
+
+	/**
+	 * T-102: what follows a room's name when it isn't a kill: {@code (died)} when the player died in it (T-100's {@code
+	 * roomEnd}), else {@code (ended)}, a room left included.
+	 */
+	static Text notAKill(boolean died)
+	{
+		return Text.title(died ? DIED : ENDED, SidePanelStyle.SECONDARY);
 	}
 
 	// ---- T-099: the Damage card's Boss · Adds · All ----
@@ -520,6 +539,7 @@ final class SidePanelModel
 		l.run = room.isMonsterRoom();
 		l.kills = room.getKills();
 		l.runSeconds = l.run ? savedRunSeconds(room) : Double.NaN;
+		l.died = SidePanelHistory.died(room);
 		long end = 0;
 		for (Fight f : room.getFights())
 		{
@@ -896,8 +916,7 @@ final class SidePanelModel
 		{
 			// T-095: a run has no suffix: "(dead)" is a boss's, and "saved run" says it ended, while "Abyssal demon ×12"
 			// leaves no room for " (ended)" beside the clock.
-			suffix = in.run ? Text.NONE : in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD)
-				: Text.title(" (ended)", SidePanelStyle.SECONDARY);
+			suffix = in.run ? Text.NONE : in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD) : notAKill(in.died);
 			if (in.endMillis > 0)
 			{
 				sub.add(date(in.endMillis, in.now, in.zone));
@@ -919,8 +938,7 @@ final class SidePanelModel
 			if (in.ended)
 			{
 				// T-095: a run's "ended" goes on the sub-line, as above.
-				suffix = in.run ? Text.NONE : in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD)
-					: Text.title(" (ended)", SidePanelStyle.SECONDARY);
+				suffix = in.run ? Text.NONE : in.killed ? Text.title(" (dead)", SidePanelStyle.DEAD) : notAKill(in.died);
 				if (in.endMillis > 0)
 				{
 					sub.add((in.run ? "ended " : "") + time(in.endMillis, in.zone));
@@ -1115,7 +1133,8 @@ final class SidePanelModel
 			return new PanelSnapshot.TripRow(r.room.getName(), r.ended, r.clock, r.chip, r.chipFill, icon, r.kills,
 				r.kills > 0 ? " ×" + r.kills : "");
 		}
-		return new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill, icon, r.ended ? 0 : 1);
+		return new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill, icon, r.ended ? 0 : 1, "",
+			r.ended && SidePanelHistory.died(r.room));
 	}
 
 	// ---- tiles ----
@@ -1812,7 +1831,7 @@ final class SidePanelModel
 			sub.add("execution " + LedgerRows.partPercent(l.numbers.execution));
 		}
 		return new ListRow(Text.title(l.name, SidePanelStyle.VALUE),
-			l.killed ? Text.title(" (dead)", SidePanelStyle.DEAD) : Text.title(" (ended)", SidePanelStyle.SECONDARY),
+			l.killed ? Text.title(" (dead)", SidePanelStyle.DEAD) : notAKill(l.died),
 			Text.title(LedgerRows.duration(l.numbers.clock), SidePanelStyle.VALUE),
 			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY), chip(l.numbers, l.warning),
 			chipFill(l.numbers, l.warning));

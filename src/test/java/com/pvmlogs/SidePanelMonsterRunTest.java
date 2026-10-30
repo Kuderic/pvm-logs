@@ -242,7 +242,8 @@ public class SidePanelMonsterRunTest
 			if (DEMON.equals(e.name))
 			{
 				assertEquals("3 kills", e.right());
-				assertEquals("not a boss", e.sub());
+				// T-102: in Monsters, so no "not a boss".
+				assertEquals("", e.sub());
 			}
 		}
 		final SidePanelHistory.Card card = SidePanelHistory.card(old, DEMON, null, null);
