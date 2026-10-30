@@ -835,8 +835,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
-		// T-099: the switch on top, and its line: the time on that target set, and what the card leaves to the room.
-		final SidePanelParts.Paragraph note = tab.byTarget == null ? null : targetSwitch(tab, list);
 		final List<SidePanelParts.SourceRowView> rows = new ArrayList<>();
 		// T-085: the weapon rows' sub-lines in one form, the longest that fits them all.
 		final SidePanelText.FormGroup forms = new SidePanelText.FormGroup();
@@ -847,14 +845,34 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			rows.add(v);
 			list.add(v);
 		}
-		final SidePanelSection section = new SidePanelSection("damage", "Damage", hint(tab), list, folds);
+		final String empty = tab.byTarget == null ? null : tab.byTarget.get(tab.target).empty;
+		if (empty != null)
+		{
+			// T-105: a side with nothing scored (the Sire's respiratory systems, Zulrah's snakelings) says so.
+			final JPanel card = SidePanelParts.card(0);
+			card.add(new SidePanelParts.Paragraph(empty, SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL,
+				SidePanelStyle.CONTENT_WIDTH - 14));
+			list.add(card);
+		}
+		// With the switch the text hint is empty from the start, so it reserves no width beside it.
+		final SidePanelSection section = new SidePanelSection("damage", "Damage", tab.damage == null
+			|| tab.byTarget != null ? Text.NONE : tab.damage.hint, list, folds);
+		// T-105: the switch is the header's hint, boss · adds · all; its tooltip holds the damage, time and the note.
+		final TargetSwitch words = tab.byTarget == null ? null : new TargetSwitch(tab, this::pick);
+		if (words != null)
+		{
+			section.setHintComponent(words);
+		}
 		add(section);
 		updaters.add(t ->
 		{
-			section.setHint(hint(t));
-			if (note != null)
+			if (words != null)
 			{
-				note.set(t.byTarget.get(t.target).note, SidePanelStyle.MUTED);
+				words.set(t.target, t.byTarget.get(t.target).note);
+			}
+			else
+			{
+				section.setHint(t.damage.hint);
 			}
 			for (int i = 0; i < rows.size(); i++)
 			{
@@ -863,28 +881,115 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
-	private static Text hint(FightTab t)
+	/**
+	 * T-105: the Damage card's switch in its header, {@code boss · adds · all} in small lower-case text like the other
+	 * hints: the picked word bright, the others and the dots muted, no fill. Hovering a word that isn't picked brings it
+	 * to the secondary grey, with a hand cursor; a click on it picks that view. A hover is a colour change, painted in
+	 * place: the words keep their widths, so it never asks for layout (T-046).
+	 */
+	static final class TargetSwitch extends JPanel
 	{
-		return t.damage == null ? Text.small("nothing scored", SidePanelStyle.MUTED) : t.damage.hint;
-	}
+		static final String DOT = " · ";
+		private final List<SidePanelText> words = new ArrayList<>();
+		private final List<SidePanelText> dots = new ArrayList<>();
+		private int picked;
+		private int hover = -1;
 
-	/** T-099: Boss · Adds · All, a click shows the last snapshot again in that view; the line under it. */
-	private SidePanelParts.Paragraph targetSwitch(FightTab tab, JPanel list)
-	{
-		final JPanel row = new JPanel(new GridLayout(1, tab.byTarget.size(), 0, 0));
-		row.setOpaque(false);
-		for (int i = 0; i < tab.byTarget.size(); i++)
+		TargetSwitch(FightTab tab, java.util.function.IntConsumer onPick)
 		{
-			final int pick = i;
-			final Segment s = new Segment(tab.byTarget.get(i).label, () -> pick(pick));
-			s.select(i == tab.target);
-			row.add(s);
+			setOpaque(false);
+			setLayout(new javax.swing.BoxLayout(this, javax.swing.BoxLayout.X_AXIS));
+			picked = tab.target;
+			// Clicks between the words are the switch's, not the header's fold.
+			final MouseAdapter absorb = new MouseAdapter()
+			{
+			};
+			addMouseListener(absorb);
+			for (int i = 0; i < tab.byTarget.size(); i++)
+			{
+				if (i > 0)
+				{
+					final SidePanelText dot = new SidePanelText(Text.small(DOT, SidePanelStyle.MUTED), false);
+					dot.addMouseListener(absorb);
+					dots.add(dot);
+					add(dot);
+				}
+				final int view = i;
+				final SidePanelText word = new SidePanelText(Text.small(tab.byTarget.get(i).label.toLowerCase(
+					java.util.Locale.ENGLISH), SidePanelStyle.MUTED), false);
+				word.addMouseListener(new MouseAdapter()
+				{
+					@Override
+					public void mouseEntered(MouseEvent e)
+					{
+						hover = view;
+						paintWords();
+					}
+
+					@Override
+					public void mouseExited(MouseEvent e)
+					{
+						if (hover == view)
+						{
+							hover = -1;
+							paintWords();
+						}
+					}
+
+					@Override
+					public void mouseClicked(MouseEvent e)
+					{
+						if (view != picked)
+						{
+							onPick.accept(view);
+						}
+					}
+				});
+				words.add(word);
+				add(word);
+			}
+			set(tab.target, tab.byTarget.get(tab.target).note);
 		}
-		list.add(row);
-		final SidePanelParts.Paragraph note = new SidePanelParts.Paragraph(tab.byTarget.get(tab.target).note,
-			SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH);
-		list.add(note);
-		return note;
+
+		void set(int picked, String tooltip)
+		{
+			this.picked = picked;
+			setToolTipText(tooltip);
+			for (SidePanelText w : words)
+			{
+				w.setToolTipText(tooltip);
+			}
+			for (SidePanelText d : dots)
+			{
+				d.setToolTipText(tooltip);
+			}
+			paintWords();
+		}
+
+		private void paintWords()
+		{
+			for (int i = 0; i < words.size(); i++)
+			{
+				final SidePanelText w = words.get(i);
+				final Color c = i == picked ? SidePanelStyle.VALUE : i == hover ? SidePanelStyle.SECONDARY
+					: SidePanelStyle.MUTED;
+				w.set(Text.small(w.getText(), c));
+				w.setCursor(i == picked ? Cursor.getDefaultCursor() : Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			}
+		}
+
+		/** The words as shown, for tests. */
+		List<SidePanelText> words()
+		{
+			return words;
+		}
+
+		/** The word hovered, -1 for none: for tests and renders. */
+		void hover(int view)
+		{
+			hover = view;
+			paintWords();
+		}
 	}
 
 	/** T-099: the switch clicked: every tab shows that view from now on, this one at once. */

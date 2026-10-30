@@ -58,6 +58,8 @@ final class SidePanelSection extends JPanel
 	private final SidePanelParts.Line header;
 	private final JComponent body;
 	private PanelSnapshot.Text hint = PanelSnapshot.Text.NONE;
+	/** T-105: a control in the hint's place (the Damage card's switch); null for the text hint. */
+	private JComponent hintComponent;
 
 	SidePanelSection(String id, String title, PanelSnapshot.Text hint, JComponent body, Folds folds)
 	{
@@ -113,9 +115,33 @@ final class SidePanelSection extends JPanel
 	void setHint(PanelSnapshot.Text h)
 	{
 		hint = h == null ? PanelSnapshot.Text.NONE : h;
+		if (hintComponent != null)
+		{
+			// T-105: the control hides while folded, and the mark alone says it opens.
+			hintComponent.setVisible(!isFolded());
+			header.right.set(isFolded() ? PanelSnapshot.Text.small(FOLDED_MARK, SidePanelStyle.SECONDARY)
+				: PanelSnapshot.Text.NONE);
+			return;
+		}
 		final PanelSnapshot.Text shown = !isFolded() ? hint : hint.isEmpty()
 			? PanelSnapshot.Text.small(FOLDED_MARK, SidePanelStyle.SECONDARY)
 			: new PanelSnapshot.Text(hint.text + " " + FOLDED_MARK, hint.colour, hint.type);
 		header.right.set(shown);
+	}
+
+	/**
+	 * T-105: a small control in the hint's place on the header's right (the Damage card's {@code boss · adds · all}),
+	 * set once when the section is built. Its clicks are its own; a click elsewhere on the header still folds.
+	 */
+	void setHintComponent(JComponent c)
+	{
+		header.remove(header.right);
+		final JPanel east = new JPanel(new java.awt.BorderLayout(0, 0));
+		east.setOpaque(false);
+		east.add(c, java.awt.BorderLayout.CENTER);
+		east.add(header.right, java.awt.BorderLayout.EAST);
+		header.add(east, java.awt.BorderLayout.EAST);
+		hintComponent = c;
+		setHint(hint);
 	}
 }

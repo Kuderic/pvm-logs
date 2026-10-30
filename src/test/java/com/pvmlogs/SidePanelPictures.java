@@ -52,6 +52,11 @@ public final class SidePanelPictures
 			dpsCards(out);
 			return;
 		}
+		if (args.length > 1 && "switch".equals(args[1]))
+		{
+			switchInHeader(out);
+			return;
+		}
 		if (args.length > 1 && "bosses".equals(args[1]))
 		{
 			bossesAndMonsters(out);
@@ -764,6 +769,103 @@ public final class SidePanelPictures
 			(int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), (int) Math.ceil(r.height * scale));
 		final javax.swing.JToolTip tip = row.createToolTip();
 		tip.setTipText(row.getToolTipText());
+		tip.setSize(tip.getPreferredSize());
+		layout(tip);
+		final int w = Math.max(card.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
+		final BufferedImage img = new BufferedImage(w, card.getHeight() + (int) Math.ceil((tip.getHeight() + 8) * scale),
+			BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		g.drawImage(card, 0, 0, null);
+		g.translate(0, card.getHeight() + 4 * scale);
+		g.scale(scale, scale);
+		tip.printAll(g);
+		g.dispose();
+		return img;
+	}
+
+	/**
+	 * T-105: the Damage card's {@code boss · adds · all} in its header: Araxxor in each view, a word hovered, the
+	 * tooltip, the Sire, Zulrah (its adds: nothing scored) and an ungrouped boss with today's hint. Normal and Smooth,
+	 * Larger, and Smooth with Larger, 1× and 2×, a folder each.
+	 */
+	private static void switchInHeader(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger", "smooth-larger"};
+		final String[] views = {"boss", "adds", "all"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1 || m == 3;
+			larger = m >= 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				for (int v = 0; v < views.length; v++)
+				{
+					SidePanelFightTab.useTarget(v);
+					write(dir, "a" + v + "-araxxor-" + views[v], scale, switchCard(SidePanelTargetExamples.input(
+						SidePanelTargetExamples.araxxor()), scale, -1, false));
+				}
+				SidePanelFightTab.useTarget(0);
+				write(dir, "b-hover-adds", scale, switchCard(SidePanelTargetExamples.input(
+					SidePanelTargetExamples.araxxor()), scale, 1, false));
+				write(dir, "c-tooltip", scale, switchCard(SidePanelTargetExamples.input(SidePanelTargetExamples.araxxor()),
+					scale, -1, true));
+				write(dir, "d0-sire-boss", scale, switchCard(SidePanelTargetExamples.input(SidePanelTargetExamples.sire()),
+					scale, -1, false));
+				SidePanelFightTab.useTarget(1);
+				write(dir, "d1-sire-adds", scale, switchCard(SidePanelTargetExamples.input(SidePanelTargetExamples.sire()),
+					scale, -1, false));
+				write(dir, "e1-zulrah-adds", scale, switchCard(SidePanelTargetExamples.input(
+					SidePanelTargetExamples.zulrah()), scale, -1, false));
+				SidePanelFightTab.useTarget(0);
+				write(dir, "e0-zulrah-boss", scale, switchCard(SidePanelTargetExamples.input(
+					SidePanelTargetExamples.zulrah()), scale, -1, false));
+				write(dir, "f-ungrouped-no-switch", scale, card(SidePanelTargetExamples.ungrouped(), scale, "damage"));
+				write(dir, "g-araxxor-whole-tab", scale, render(SidePanelTargetExamples.input(
+					SidePanelTargetExamples.araxxor()), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelFightTab.resetTarget();
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-105: the Damage card with the word {@code hover} hovered (-1 none), and its tooltip under it if asked. */
+	static BufferedImage switchCard(SidePanelModel.Input in, double scale, int hover, boolean tooltip)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		SidePanelFightTab.TargetSwitch words = null;
+		for (Component k : all(panel.fightTab()))
+		{
+			if (k instanceof SidePanelFightTab.TargetSwitch)
+			{
+				words = (SidePanelFightTab.TargetSwitch) k;
+			}
+		}
+		if (hover >= 0)
+		{
+			words.hover(hover);
+		}
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection section = sectionOf(panel.fightTab(), "damage");
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height) * scale));
+		final BufferedImage card = whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+		if (!tooltip)
+		{
+			return card;
+		}
+		final javax.swing.JToolTip tip = words.createToolTip();
+		tip.setTipText(words.getToolTipText());
 		tip.setSize(tip.getPreferredSize());
 		layout(tip);
 		final int w = Math.max(card.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
