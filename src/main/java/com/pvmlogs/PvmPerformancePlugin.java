@@ -3823,6 +3823,12 @@ public class PvmPerformancePlugin extends Plugin
 	private void handleNpcDespawned(NpcDespawned event)
 	{
 		final NPC npc = event.getNpc();
+		// Before the fight on it is closed: whether it was the player's target, for the slayer table's check (T-090).
+		if (npc.isDead())
+		{
+			logTaskMismatch(combatCalc.onNpcDiedForSlayer(npc, current != null && current.getTargetIndex() == npc.getIndex(),
+				client.getTickCount()));
+		}
 		closeOnDespawn(npc);
 		// After the fight on it is closed. Whatever was fighting it: a death a party member landed counts as well.
 		if (npc.isDead())
@@ -4481,6 +4487,19 @@ public class PvmPerformancePlugin extends Plugin
 			drain.onVarbitChanged(event.getVarbitId(), event.getValue());
 		}
 		noteSpecialEnergy();
+		// The slayer task's count: the game's check on the slayer table (T-090).
+		if (event.getVarpId() == VarPlayerID.SLAYER_COUNT)
+		{
+			logTaskMismatch(combatCalc.onSlayerCountChanged(client.getTickCount()));
+		}
+	}
+
+	private void logTaskMismatch(String line)
+	{
+		if (line != null)
+		{
+			debug.log("%s", line);
+		}
 	}
 
 	/** "Taste vengeance!": the player's own words as the rebound goes off, beside the varbit (T-017 Part B). */
@@ -4552,6 +4571,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Before anything asks for the target's stats: the bar decides which version of a boss this is, and what it has left
 		// moves Vardorvis's defence.
 		readHealthBar();
+		logTaskMismatch(combatCalc.onSlayerTick(client.getTickCount()));
 		// First: the tick's experience has all arrived by now, and none of the splats it pays for can have.
 		trackThrallAndXp();
 		// The specials due this tick land their drains before anything works out an expectation (T-049).
