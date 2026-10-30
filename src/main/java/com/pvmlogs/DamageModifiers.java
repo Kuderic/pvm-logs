@@ -66,6 +66,12 @@ class DamageModifiers
 		return boss == null || boss.damageModifiers == null ? null : boss;
 	}
 
+	/** Whether a damage-modifier state is open on this npc now (T-106: Araxxor enraged, for naming his own cleave). */
+	boolean isOpen(NPC npc, String state)
+	{
+		return npc != null && bossFor(npc.getId()) != null && tracker.isOpen(npc.getIndex(), state, client.getTickCount());
+	}
+
 	/** Whether this npc has any damage modifiers: the hooks below do nothing for one that has none. */
 	boolean hasModifiers(NPC npc)
 	{

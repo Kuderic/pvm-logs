@@ -57,7 +57,11 @@
       "defenceDrain": {
         "maxDefenceDrain": 45,
         "source": "OSRS Wiki, read 2026-10-28: Araxxor/Strategies: 'His Defence level can be only drained by up to 45 levels'; 'drained stats will carry over to enrage' (the enrage is a form change: drains carry). DPS calc floor 90 agrees."
-      }
+      },
+      "roomDamage": [
+        {"name": "a Ruptura araxyte's explosion", "amounts": [33, 80], "source": "T-106. OSRS Wiki, read 2026-10-29: Araxxor/Strategies: 'the explosion deals 80 damage if the target's hitboxes are over it, 64 if next to it', 'with a minimum of 33 damage if three tiles away from it'. Eric's logs of 2026-10-29 (pvm-debug-20261029-212024, -214018, -223259): 80s and 64s as others' damage (type 17) on Araxxor, solo, and a 56 and a 22 at [1021] and [1362] of 21:20, each the hitpoints he had left. Only names the splat in the log: whether it is the room's is decided by whether another player is there."},
+        {"name": "his own cleave", "amounts": [8, 12], "state": "enraged", "source": "T-106. OSRS Wiki, read 2026-10-29: Araxxor/Strategies: once enraged, 'bait Araxxor into attacking the tiles he occupies, which results in him damaging himself for 8-12 damage'. Eric's logs of 2026-10-29: 8 to 12 as others' damage (type 17) on Araxxor, solo, with the enraged state open (e.g. [930] of pvm-debug-20261029-214018, enraged from [906]). Only names the splat in the log."}
+      ]
     },
     {
       "name": "Araxytes",

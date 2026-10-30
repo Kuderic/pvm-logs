@@ -72,6 +72,13 @@ enum HitsplatKind
 	HEAL,
 	/** Another player's hit. */
 	OTHER_PLAYER,
+	/**
+	 * T-106: the room's damage on the boss, a mechanic's or the boss's own: shown
+	 * as another player's (type 17) with no other player there. It takes the
+	 * target's hitpoints down and is nobody's. Only {@link RoomDamage#kindOf} gives
+	 * it.
+	 */
+	ROOM,
 	/** A splat that changes something other than hitpoints: a charge, poise, prayer, sanity, a stat drain. */
 	NO_HEALTH_EFFECT,
 	/**
@@ -204,7 +211,7 @@ enum HitsplatKind
 	/** Whether a splat of this kind takes the target's hitpoints down. */
 	boolean damagesTarget()
 	{
-		return this == PLAYER || this == DAMAGE_OVER_TIME || this == OTHER_PLAYER || this == UNCLASSIFIED;
+		return this == PLAYER || this == DAMAGE_OVER_TIME || this == OTHER_PLAYER || this == ROOM || this == UNCLASSIFIED;
 	}
 
 	/** A short name for a hitsplat type, for the log and the breakdown. Unknown types read as their number. */

@@ -65,6 +65,11 @@ class Fight
 	private int healed;
 	// Other players' hits on the target, which take its health down and are nobody's business here beyond that.
 	private int othersDamage;
+	// T-106: the room's damage on the target, a mechanic's or its own (Araxxor's Ruptura explosions and enraged cleave):
+	// shown as another player's with no other player there. Takes its health down like others' damage and isn't the
+	// player's; not another player's either, so the solo tests stay solo. 0 on a fight saved before, whose room damage
+	// is in othersDamage.
+	private int roomDamage;
 	// Splats of a type this plugin does not know, counted against the target's health and logged by type so they can be
 	// identified. Never the player's.
 	private int unclassifiedDamage;
@@ -377,6 +382,12 @@ class Fight
 	void recordOthersDamage(int amount)
 	{
 		othersDamage += Math.max(0, amount);
+	}
+
+	/** The room's damage on the target (T-106). See roomDamage. */
+	void recordRoomDamage(int amount)
+	{
+		roomDamage += Math.max(0, amount);
 	}
 
 	/** A splat of a type not known here. See unclassifiedDamage. */
