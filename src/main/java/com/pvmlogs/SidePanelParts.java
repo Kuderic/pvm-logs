@@ -101,8 +101,24 @@ final class SidePanelParts
 			set(row);
 		}
 
+		/** T-112: the indent it's set in by and the gap above it, kept so the border is only set again when they change. */
+		private int indent = -1;
+		private int above = -1;
+
 		void set(PanelSnapshot.Row row)
 		{
+			set(row, row.indent ? INDENT : 0, 0);
+		}
+
+		/** T-112: with {@code px} of indent on the left (a row under a subheading) and {@code gap} above (a subheading). */
+		void set(PanelSnapshot.Row row, int px, int gap)
+		{
+			if (px != indent || gap != above)
+			{
+				indent = px;
+				above = gap;
+				setBorder(px == 0 && gap == 0 ? null : new EmptyBorder(gap, px, 0, 0));
+			}
 			left.set(row.left, row.hint.isEmpty() ? null : row.hint);
 			right.set(row.right);
 			// T-109: a row's tooltip on the whole line, both its texts.
@@ -118,10 +134,19 @@ final class SidePanelParts
 		}
 	}
 
+	/** T-112: a row under a subheading is set in by this much (Eric's pick, layout A). */
+	static final int INDENT = 8;
+
+	/** T-112: the gap above a subheading that isn't the card's first row. */
+	static final int GROUP_GAP = 5;
+
 	/** Rows of {@link Line}s in a card, updated in place while their count holds. */
 	static final class RowsCard extends JPanel
 	{
 		private final List<Line> lines = new ArrayList<>();
+
+		/** T-112: while placing rows, whether the row before was in a group. */
+		private boolean previousIndented;
 
 		RowsCard(List<PanelSnapshot.Row> rows, int gap)
 		{
@@ -129,9 +154,10 @@ final class SidePanelParts
 			setBackground(SidePanelStyle.CARD);
 			setBorder(new EmptyBorder(SidePanelStyle.CARD_PAD_V, SidePanelStyle.CARD_PAD_H, SidePanelStyle.CARD_PAD_V,
 				SidePanelStyle.CARD_PAD_H));
-			for (PanelSnapshot.Row r : rows)
+			for (int i = 0; i < rows.size(); i++)
 			{
-				final Line l = new Line(r);
+				final Line l = new Line(rows.get(i));
+				place(l, rows.get(i), i);
 				lines.add(l);
 				add(l);
 			}
@@ -141,8 +167,19 @@ final class SidePanelParts
 		{
 			for (int i = 0; i < lines.size() && i < rows.size(); i++)
 			{
-				lines.get(i).set(rows.get(i));
+				place(lines.get(i), rows.get(i), i);
 			}
+		}
+
+		/**
+		 * T-112: a row under a subheading set in; a gap above a subheading that isn't the first row, and above a row
+		 * standing alone after a group, so it doesn't read as the group's last.
+		 */
+		private void place(Line l, PanelSnapshot.Row r, int i)
+		{
+			final boolean gap = i > 0 && (r.heading || (!r.indent && previousIndented));
+			previousIndented = r.indent;
+			l.set(r, r.indent ? INDENT : 0, gap ? GROUP_GAP : 0);
 		}
 	}
 

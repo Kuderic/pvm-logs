@@ -470,8 +470,8 @@ public class SidePanelModelTest
 		assertEquals("+4 s", eating.value.text);
 		assertEquals(SidePanelStyle.BODY, eating.value.colour);
 		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
-		// The details keep their own eating row.
-		assertTrue(tab(SidePanelExamples.dead()).details.rows.stream().anyMatch(r -> r.left.text.equals("eating")));
+		// T-112 (Eric's pick): the details no longer repeat it.
+		assertFalse(tab(SidePanelExamples.dead()).details.rows.stream().anyMatch(r -> r.left.text.equals("eating")));
 	}
 
 	@Test

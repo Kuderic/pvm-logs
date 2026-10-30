@@ -2339,15 +2339,17 @@ final class SidePanelModel
 		return details(s, false);
 	}
 
-	/** With {@code avoidable} (T-044), the eating row is what's left once the avoidable eating is Execution's, as on the overlay. */
+	/**
+	 * {@code avoidable} (T-044) once set the eating row, which T-112 moved out of Details (Where the time went has it);
+	 * kept for the callers.
+	 */
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable)
 	{
 		return details(s, avoidable, false);
 	}
 
 	/**
-	 * With {@code run} (T-095), a run of monsters: no hits against expected, which is luck's, and no eating, which is
-	 * Execution's; the other damage stays.
+	 * With {@code run} (T-095), a run of monsters: no hits against expected, which is luck's; the other damage stays.
 	 */
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run)
 	{
@@ -2361,45 +2363,80 @@ final class SidePanelModel
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run, int roomDamage, String boss,
 		List<String> sources)
 	{
-		final List<Row> rows = new ArrayList<>();
+		// T-112: in two groups, your damage and the boss's own; see grouped().
+		final List<Row> yours = new ArrayList<>();
+		final List<Row> theBoss = new ArrayList<>();
 		if (s.expectedHits() > 0 && !run)
 		{
-			rows.add(row("hits/expected", s.hits() + "/" + LedgerRows.oneDecimal(s.expectedHits())));
+			yours.add(row("hits/expected", s.hits() + "/" + LedgerRows.oneDecimal(s.expectedHits())));
 		}
 		if (s.thrallDamage() > 0)
 		{
-			rows.add(row("thrall dmg", LedgerRows.number(s.thrallDamage())));
+			yours.add(row("thrall dmg", LedgerRows.number(s.thrallDamage())));
 		}
 		if (s.reflectDamage() > 0)
 		{
-			rows.add(row("recoil/veng dmg", LedgerRows.number(s.reflectDamage())));
+			yours.add(row("recoil/veng dmg", LedgerRows.number(s.reflectDamage())));
 		}
 		// T-063: a line a kind, then "DoT dmg" for what has no kind, as the overlay has them (T-062).
-		dotRows(rows, s.dotDamageByKind(), s.dotDamage(), " dmg");
+		dotRows(yours, s.dotDamageByKind(), s.dotDamage(), " dmg");
 		// The boss's doing rather than the player's, so after the fight only (own-output guardrail).
 		if (s.healed() > 0)
 		{
-			rows.add(row("boss healed", LedgerRows.number(s.healed())));
+			theBoss.add(row("boss healed", LedgerRows.number(s.healed())));
 		}
 		// T-109: the boss's room's doing too (Araxxor's Ruptura explosions, his own cleave), so after the fight only.
 		if (roomDamage > 0 && !run)
 		{
-			rows.add(roomDamageRow(roomDamage, boss, sources));
+			theBoss.add(roomDamageRow(roomDamage, boss, sources));
 		}
-		final double eating = s.ticksLostEating() * LedgerRows.SECONDS_PER_TICK
-			- (avoidable ? avoidableEating(new LedgerRows.Numbers(s)) : 0);
-		if (s.ticksLostEating() > 0 && LedgerRows.roundHalfAway(eating) >= 1 && !run)
-		{
-			rows.add(row("eating", LedgerRows.roundHalfAway(eating) + " s"));
-		}
-		// T-081: the idle time a boss's mechanic forced (T-074), beside eating and neutral like it, as the overlay's
-		// T-080 line. Nothing for a boss with no allowances, or an old kill.
-		final long mechanics = LedgerRows.roundHalfAway(Math.max(0, s.ticksMechanics()) * LedgerRows.SECONDS_PER_TICK);
-		if (mechanics >= 1)
-		{
-			rows.add(row("mechanics", mechanics + " s"));
-		}
+		// T-112 (Eric's pick, 07:45): no eating or mechanics here: Where the time went has them.
+		final List<Row> rows = grouped(new String[]{YOUR_DAMAGE, THE_BOSS}, yours, theBoss);
 		return rows.isEmpty() ? null : new PanelSnapshot.Rows(null, rows);
+	}
+
+	// ---- T-112: Details and Damage taken in groups ----
+
+	static final String YOUR_DAMAGE = "Your damage";
+	static final String THE_BOSS = "The boss";
+	static final String TOTAL = "Total";
+	static final String BY_ATTACK = "By attack";
+	static final String OVER_TIME = "Over time";
+
+	/**
+	 * T-112 (Eric, 2026-10-30: "need overhaul/more subcategories to be more easily readable"; his pick at 07:45, layout
+	 * A): each group under a muted subheading, its rows set in under it, a gap before each subheading but the first. An
+	 * empty group is left out; a group of one row is that row alone, with no subheading over it; a card with one group
+	 * only is its rows as before, with no subheading.
+	 */
+	@SafeVarargs
+	static List<Row> grouped(String[] titles, List<Row>... groups)
+	{
+		int shown = 0;
+		for (List<Row> g : groups)
+		{
+			shown += g.isEmpty() ? 0 : 1;
+		}
+		final List<Row> out = new ArrayList<>();
+		for (int i = 0; i < groups.length; i++)
+		{
+			final List<Row> g = groups[i];
+			if (g.isEmpty())
+			{
+				continue;
+			}
+			if (shown == 1 || g.size() == 1)
+			{
+				out.addAll(g);
+				continue;
+			}
+			out.add(Row.heading(titles[i]));
+			for (Row r : g)
+			{
+				out.add(r.indented());
+			}
+		}
+		return out;
 	}
 
 	/** Damage taken without T-044's rows by attack: a running scope, or no attack rules. */
@@ -2428,6 +2465,7 @@ final class SidePanelModel
 		// count its 0s apart, so its hits stay its one number.
 		final int missed = Math.max(0, Math.min(in.hitsTaken, in.missedHitsTaken));
 		final int hitsTaken = in.hitsTaken - missed;
+		// T-112: in groups after the fight: by attack (its avoidable share last), the total, and damage over time.
 		final List<Row> rows = new ArrayList<>(12);
 		final int part = s.damageTakenAvoidable();
 		if (avoidable && part >= 0)
@@ -2456,27 +2494,30 @@ final class SidePanelModel
 			rows.add(new Row(Text.small(AFTER_THE_FIGHT, SidePanelStyle.MUTED), Text.NONE));
 			return new PanelSnapshot.Rows(Text.title(LedgerRows.number(s.damageTaken()), SidePanelStyle.VALUE), rows);
 		}
+		final List<Row> total = new ArrayList<>(4);
 		if (hitsTaken > 0)
 		{
-			rows.add(row("hits", LedgerRows.number(hitsTaken)));
+			total.add(row("hits", LedgerRows.number(hitsTaken)));
 		}
 		if (missed > 0)
 		{
-			rows.add(row(MISSED, LedgerRows.number(missed)));
+			total.add(row(MISSED, LedgerRows.number(missed)));
 		}
 		if (s.biggestHitTaken() > 0)
 		{
-			rows.add(row("biggest hit", LedgerRows.number(s.biggestHitTaken())));
+			total.add(row("biggest hit", LedgerRows.number(s.biggestHitTaken())));
 		}
-		rows.add(new Row(Text.small("without protection", SidePanelStyle.BODY),
+		total.add(new Row(Text.small("without protection", SidePanelStyle.BODY),
 			Text.small(LedgerRows.number(s.damageTakenUnprotected()), s.damageTakenUnprotected() > 0
 				? SidePanelStyle.COST : SidePanelStyle.BODY)));
 		// By kind, as the overlay has them (T-062, T-063): poison taken, venom taken, ..., then DoT taken.
+		final List<Row> overTime = new ArrayList<>(3);
 		if (dotShown)
 		{
-			dotRows(rows, s.dotTakenByKind(), s.dotTaken(), " taken");
+			dotRows(overTime, s.dotTakenByKind(), s.dotTaken(), " taken");
 		}
-		return new PanelSnapshot.Rows(Text.title(LedgerRows.number(s.damageTaken()), SidePanelStyle.VALUE), rows);
+		return new PanelSnapshot.Rows(Text.title(LedgerRows.number(s.damageTaken()), SidePanelStyle.VALUE),
+			grouped(new String[]{BY_ATTACK, TOTAL, OVER_TIME}, rows, total, overTime));
 	}
 
 	static final String AVOIDABLE = "avoidable";
