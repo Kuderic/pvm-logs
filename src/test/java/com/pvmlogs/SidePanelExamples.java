@@ -244,7 +244,7 @@ final class SidePanelExamples
 		return in;
 	}
 
-	private static PanelSnapshot.TripRow tripRow(String name, boolean ended, String clock, String chip,
+	static PanelSnapshot.TripRow tripRow(String name, boolean ended, String clock, String chip,
 		LedgerRows.Colour colour)
 	{
 		return new PanelSnapshot.TripRow(name, ended, clock, PanelSnapshot.Text.small(chip, colour == LedgerRows.Colour.NEUTRAL

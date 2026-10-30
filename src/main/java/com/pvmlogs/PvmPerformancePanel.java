@@ -110,6 +110,9 @@ class PvmPerformancePanel extends PluginPanel
 	private List<Object> tripSavedKey;
 	/** T-044: the avoidable attack names at the trip's saved fights' bosses, worked out with {@link #tripSaved}. */
 	private java.util.Set<String> tripAvoidable = java.util.Collections.emptySet();
+	/** T-119: the trip's drain specials and the timelines' expectations of them, rebuilt with {@link #tripSaved}. */
+	private java.util.Map<String, int[]> tripSpecs = java.util.Collections.emptyMap();
+	private List<SidePanelModel.WeaponRow> tripSpecRows = java.util.Collections.emptyList();
 
 	PvmPerformancePanel(PvmPerformancePlugin plugin)
 	{
@@ -634,6 +637,27 @@ class PvmPerformancePanel extends PluginPanel
 		return monsterStats == null ? null : SidePanelModel.versionName(monsterStats.rules(), fights, maxHp);
 	}
 
+	/** T-119: the trip's own drain specials by weapon, {thrown, landed}, summed over its saved fights' drain records. */
+	static java.util.Map<String, int[]> tripSpecs(List<Fight> fights)
+	{
+		final java.util.Map<String, int[]> out = new java.util.LinkedHashMap<>();
+		for (Fight f : fights)
+		{
+			final DrainRecord r = f.getDrainRecord();
+			if (r == null || r.immune || r.specs == null)
+			{
+				continue;
+			}
+			for (java.util.Map.Entry<String, int[]> e : r.specs.entrySet())
+			{
+				final int[] sum = out.computeIfAbsent(e.getKey(), k -> new int[2]);
+				sum[0] += e.getValue()[0];
+				sum[1] += e.getValue()[1];
+			}
+		}
+		return out;
+	}
+
 	/** The trip's figures and rooms (spec 3.3); client thread. The saved rooms are rebuilt only when the history or trip change. */
 	private SidePanelModel.Input readTrip(SessionTotals trip, List<Fight> history, Fight head, Encounter running)
 	{
@@ -674,8 +698,15 @@ class PvmPerformancePanel extends PluginPanel
 				}
 			}
 			tripAvoidable = avoidableAttacks(tripFights);
+			// T-119: the trip's drain specials, thrown and landed, and what this session's timelines expected of them.
+			tripSpecs = tripSpecs(tripFights);
+			tripSpecRows = clientThread == null || plugin == null || (config != null && !config.panelCharts())
+				? java.util.Collections.<SidePanelModel.WeaponRow>emptyList()
+				: SidePanelModel.specials(SidePanelModel.weaponRows(FightTimeline.view(tripFights, plugin.getTimelines())));
 		}
 		in.avoidableAttacks = tripAvoidable;
+		drains.specs = tripSpecs;
+		drains.specRows = tripSpecRows;
 		final List<PanelSnapshot.TripRow> rows = new ArrayList<>();
 		final List<SidePanelHistory.KillRow> rooms = SidePanelHistory.tripRooms(tripSaved, running);
 		for (SidePanelHistory.KillRow r : rooms)

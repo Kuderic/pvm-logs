@@ -95,8 +95,8 @@ public class SidePanelGroupingTest
 			}
 		}
 		// The facts the cards had before T-112 (this kill's hits/expected, thrall, damage taken).
-		for (String fact : new String[]{"hits/expected", "thrall dmg", "melee", "spike", "avoidable", "hits", "biggest hit",
-			"without protection"})
+		for (String fact : new String[]{"hits/expected", "thrall dmg", "melee", "spike", "avoidable", "times hit",
+			"largest hit taken", "off-prayer damage"})
 		{
 			assertTrue(fact + " in\n" + all, all.toString().contains(fact + " "));
 		}

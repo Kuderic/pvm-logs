@@ -118,6 +118,18 @@ final class SidePanelText extends JComponent
 	}
 
 	/** The width the text and its second run take. */
+	/** T-119: its full text's width in its fonts, both runs. */
+	int naturalWidth()
+	{
+		return natural();
+	}
+
+	/** T-119: {@code s}'s width in its first run's font. */
+	int widthOf(String s)
+	{
+		return SidePanelStyle.metrics(this, getFont()).stringWidth(s);
+	}
+
 	private int natural()
 	{
 		return SidePanelStyle.metrics(this, getFont()).stringWidth(text)
