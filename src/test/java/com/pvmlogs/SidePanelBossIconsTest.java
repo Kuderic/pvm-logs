@@ -110,6 +110,9 @@ public class SidePanelBossIconsTest
 		// The boss rules (boss-rules.json).
 		m.put("Vardorvis", HiscoreSkill.VARDORVIS);
 		m.put("Araxxor", HiscoreSkill.ARAXXOR);
+		// T-098: a rules entry for Araxxor's araxytes, which are fought in his room (grouped "Araxxor") and name none of
+		// their own.
+		m.put("Araxytes", null);
 		m.put("Yama", HiscoreSkill.YAMA);
 		m.put("Abyssal Sire", HiscoreSkill.ABYSSAL_SIRE);
 		m.put("Bork", HiscoreSkill.FRACTURED_ARCHIVE);

@@ -467,6 +467,11 @@ final class ModifierTracker
 			{
 				a = m.accuracy;
 			}
+			// A guaranteed max hit (T-098) cannot miss either.
+			if (Boolean.TRUE.equals(m.guaranteedMax) && a >= 0)
+			{
+				a = 1.0;
+			}
 		}
 		return a;
 	}
@@ -483,6 +488,11 @@ final class ModifierTracker
 		int v = rolled;
 		for (BossRules.ModifierRule m : mods)
 		{
+			// T-098: whatever was rolled, the max.
+			if (landed && Boolean.TRUE.equals(m.guaranteedMax))
+			{
+				v = Math.max(v, max);
+			}
 			if (landed && m.minHitShare != null)
 			{
 				v = Math.max(v, (int) Math.floor(m.minHitShare * max));
@@ -562,6 +572,73 @@ final class ModifierTracker
 			}
 		}
 		return v;
+	}
+
+	/**
+	 * The modifiers whose conditions on the player's attack hold (T-098): the
+	 * weapon in hand, its category, the attack type rolled (for a guaranteed max)
+	 * and the player's highest attack bonus. A modifier that names none of them
+	 * is kept.
+	 *
+	 * @param weaponId   the weapon's item id, or -1
+	 * @param category   its WeaponCategory name, or null
+	 * @param attackType the attack type rolled: STAB, SLASH, CRUSH, RANGED or MAGIC
+	 * @param highest    the player's highest attack bonus, as {@link #highestAccuracy} has it
+	 */
+	static List<BossRules.ModifierRule> forPlayer(List<BossRules.ModifierRule> mods, int weaponId, String category,
+		String attackType, String highest)
+	{
+		List<BossRules.ModifierRule> out = null;
+		for (int i = 0; i < mods.size(); i++)
+		{
+			final BossRules.ModifierRule m = mods.get(i);
+			final boolean holds = (m.weapons == null || contains(m.weapons, weaponId))
+				&& (m.weaponCategories == null || category != null && m.weaponCategories.contains(category))
+				&& (m.highestAccuracy == null || m.highestAccuracy.equals(highest))
+				&& (!Boolean.TRUE.equals(m.guaranteedMax) || m.attackTypes == null || m.attackTypes.contains(attackType));
+			if (!holds && out == null)
+			{
+				out = new ArrayList<>(mods.subList(0, i));
+			}
+			else if (holds && out != null)
+			{
+				out.add(m);
+			}
+		}
+		return out == null ? mods : out;
+	}
+
+	/**
+	 * The player's "highest accuracy style" (T-098), as the DPS calc reads the
+	 * araxytes' rule: the largest of the attack bonuses over everything worn,
+	 * the ties going to the first in the order slash, stab, crush, ranged, magic
+	 * (the calc compares its totals in that order and takes a later one only if
+	 * strictly larger). Levels, prayers and the style in use don't enter it.
+	 */
+	static String highestAccuracy(int stab, int slash, int crush, int magic, int ranged)
+	{
+		String best = "SLASH";
+		int top = slash;
+		if (stab > top)
+		{
+			best = "STAB";
+			top = stab;
+		}
+		if (crush > top)
+		{
+			best = "CRUSH";
+			top = crush;
+		}
+		if (ranged > top)
+		{
+			best = "RANGED";
+			top = ranged;
+		}
+		if (magic > top)
+		{
+			best = "MAGIC";
+		}
+		return best;
 	}
 
 	/** The Defence, Magic and Ranged levels the modifiers add (T-091: Araxxor's enrage), summed; zeros for none. */
