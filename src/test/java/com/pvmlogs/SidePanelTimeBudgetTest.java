@@ -172,11 +172,12 @@ public class SidePanelTimeBudgetTest
 		// B = T - U + L - (Cu + Ce + Cb) = 76.2 + 15 - 1.8 - 2.4 - 1 = 86 s.
 		assertEquals("best play", rows.get(0).label.text);
 		assertEquals("1:26", rows.get(0).value.text);
-		assertEquals("+2 s", rows.get(1).value.text);
+		// T-118: idle time in ticks: 1.8 s, 2.4 s and 1 s.
+		assertEquals("+3 ticks", rows.get(1).value.text);
 		assertEquals("eating", rows.get(2).label.text);
-		assertEquals("+2 s", rows.get(2).value.text);
+		assertEquals("+4 ticks", rows.get(2).value.text);
 		assertEquals("stat boost", rows.get(3).label.text);
-		assertEquals("+1 s", rows.get(3).value.text);
+		assertEquals("+2 ticks", rows.get(3).value.text);
 		double sum = 0;
 		for (PanelSnapshot.Segment s : b.segments)
 		{

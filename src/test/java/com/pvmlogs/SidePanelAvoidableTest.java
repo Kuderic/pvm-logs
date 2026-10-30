@@ -54,9 +54,9 @@ public class SidePanelAvoidableTest
 		assertEquals(PanelSnapshot.Fill.EATING, s.get(3).fill);
 		assertEquals(16.2 - 10.8, s.get(3).seconds, 1e-9);
 		final List<String> rows = rowLabels(b);
-		assertTrue(rows.toString(), rows.contains("avoidable eating +11 s"));
-		assertTrue(rows.toString(), rows.contains("eating +5 s"));
-		assertTrue(rows.indexOf("avoidable eating +11 s") < rows.indexOf("eating +5 s"));
+		assertTrue(rows.toString(), rows.contains("avoidable eating +18 ticks"));
+		assertTrue(rows.toString(), rows.contains("eating +9 ticks"));
+		assertTrue(rows.indexOf("avoidable eating +18 ticks") < rows.indexOf("eating +9 ticks"));
 		// The row is in Cost when it's costing, as the other parts are.
 		for (PanelSnapshot.BudgetRow r : b.rows)
 		{
@@ -114,7 +114,7 @@ public class SidePanelAvoidableTest
 		final PanelSnapshot.Tile execution = tab(in).tiles.get(3);
 		assertEquals(LedgerRows.partPercent(n.execution), execution.value.text);
 		final double lost = SidePanelModel.lostSeconds(n, false) + 10.8;
-		assertEquals(SidePanelStyle.seconds(lost) + " lost", execution.sub.text);
+		assertEquals(SidePanelStyle.ticks(lost) + " lost", execution.sub.text);
 		assertEquals(lost, SidePanelModel.lostSeconds(n, true), 1e-9);
 	}
 
@@ -183,7 +183,7 @@ public class SidePanelAvoidableTest
 		assertEquals(4, t.execution.parts.size());
 		assertEquals(LedgerRows.partPercent(n.executionLive), t.execution.hint.text);
 		assertEquals(LedgerRows.partPercent(n.executionLive), t.tiles.get(3).value.text);
-		assertEquals(SidePanelStyle.seconds(SidePanelModel.lostSeconds(n, false)) + " lost", t.tiles.get(3).sub.text);
+		assertEquals(SidePanelStyle.ticks(SidePanelModel.lostSeconds(n, false)) + " lost", t.tiles.get(3).sub.text);
 		for (PanelSnapshot.Row r : t.taken.rows)
 		{
 			assertTrue(r.toString(), r.hint.isEmpty());
@@ -197,7 +197,7 @@ public class SidePanelAvoidableTest
 		final PanelSnapshot.FightTab t = tab(SidePanelExamples.unruledKill());
 		assertEquals(4, t.execution.parts.size());
 		final List<String> rows = rowLabels(t.budget);
-		assertTrue(rows.toString(), rows.contains("eating +16 s"));
+		assertTrue(rows.toString(), rows.contains("eating +27 ticks"));
 		for (String r : rows)
 		{
 			assertFalse(r, r.startsWith("avoidable"));

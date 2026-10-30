@@ -58,6 +58,9 @@ final class SidePanelModel
 	static final String NO_CURVE_TEXT = "No curve: kills saved before 27 Oct didn't keep the spread of their hits, so "
 		+ "their luck is in seconds only.";
 	static final String NOT_A_KILL = "not a kill, so no average to compare";
+	/** T-118: the units, said once (Eric, 2026-10-30 10:04): luck in seconds, time spent not attacking in ticks. */
+	static final String TICK_NOTE = "Luck and comparisons with your average are in seconds; time spent not attacking is in"
+		+ " ticks (1 tick is 0.6 s).";
 	static final String RAID_NO_AVERAGE = "no average yet: raid level isn't recorded";
 	/** T-042: the time budget bar's end when luck saved time, after its clock. */
 	static final String AT_AVERAGE_LUCK = " at average luck";
@@ -1288,6 +1291,7 @@ final class SidePanelModel
 		}
 		else if (Double.isNaN(n.percentile))
 		{
+			// Luck stays in seconds (T-118, Eric 10:04): how the kill's time came out against average.
 			tiles.add(tile("Luck", Text.title(LedgerRows.fasterOrSlower(n.luck), luck),
 				Text.small("no percentile", SidePanelStyle.MUTED), edge));
 		}
@@ -1321,11 +1325,14 @@ final class SidePanelModel
 		final double execution = shownExecution(n, in);
 		final double lost = lostSeconds(n, avoidable);
 		final boolean costing = anyCosting(n, avoidable);
-		final Text lostText = LedgerRows.roundHalfAway(lost) >= 1
-			? Text.small(SidePanelStyle.seconds(lost) + " lost", costing ? SidePanelStyle.COST : SidePanelStyle.SECONDARY)
+		// T-118 (Eric, 2026-10-30): in ticks, "28 ticks lost", and "28t lost" where that doesn't fit.
+		final boolean anyLost = LedgerRows.ticks(lost) >= 1;
+		final Text lostText = anyLost
+			? Text.small(SidePanelStyle.ticks(lost) + " lost", costing ? SidePanelStyle.COST : SidePanelStyle.SECONDARY)
 			: Text.small(Double.isNaN(execution) ? "" : "no time lost", SidePanelStyle.MUTED);
-		tiles.add(tile("Execution", Text.title(Double.isNaN(execution) ? LedgerRows.UNKNOWN
-			: LedgerRows.partPercent(execution), SidePanelStyle.VALUE), lostText, SidePanelStyle.TRACK));
+		tiles.add(new Tile(Text.small("Execution", SidePanelStyle.SECONDARY), Text.title(Double.isNaN(execution)
+			? LedgerRows.UNKNOWN : LedgerRows.partPercent(execution), SidePanelStyle.VALUE), lostText,
+			anyLost ? SidePanelStyle.ticksShort(lost) + " lost" : null, SidePanelStyle.TRACK));
 		return tiles;
 	}
 
@@ -1503,17 +1510,20 @@ final class SidePanelModel
 		{
 			if (n.split)
 			{
-				// The overlay's order (Eric, 2026-10-26): uptime, prayer, gear, stat boost.
-				parts.add(part("prayer", n.prayerShare, n.prayerCost, n));
-				parts.add(part("gear", n.gearShare, n.gearCost, n));
-				final Part boost = part("stat boost", n.boostShare, n.boostCost, n);
-				parts.add(n.drained ? new Part(boost.label, Text.small(LedgerRows.withSeconds(LedgerRows.DRAINED,
-					n.boostCost), boost.value.colour), boost.kept, boost.lost) : boost);
+				// The overlay's order (Eric, 2026-10-26): uptime, prayer, gear, stat boost. T-118 (Eric, 09:01): the setup
+				// rows in the damage they cost, so nobody has to turn ticks back into damage; uptime stays in ticks.
+				parts.add(setupPart(PRAYER, n.prayerShare, n.prayerCost, setupDamage(n, PRAYER), n));
+				parts.add(setupPart(GEAR, n.gearShare, n.gearCost, setupDamage(n, GEAR), n));
+				final Part boost = setupPart(BOOST, n.boostShare, n.boostCost, setupDamage(n, BOOST), n);
+				final double boostDamage = setupDamage(n, BOOST);
+				parts.add(n.drained ? new Part(boost.label, Text.small(Double.isNaN(boostDamage) ? LedgerRows.withTicks(
+					LedgerRows.DRAINED, n.boostCost) : LedgerRows.withDamage(LedgerRows.DRAINED, boostDamage), boost.value.colour),
+					boost.kept, boost.lost) : boost);
 			}
 			else
 			{
 				// Fights from before T-010: one row stands in for the three, as on the overlay.
-				parts.add(part("setup", n.efficiency, n.setupCost, n));
+				parts.add(setupPart("setup", n.efficiency, n.setupCost, setupDamage(n, "setup"), n));
 			}
 		}
 		final double execution = shownExecution(n, avoidable);
@@ -1521,10 +1531,65 @@ final class SidePanelModel
 			: LedgerRows.partPercent(execution), SidePanelStyle.VALUE), parts);
 	}
 
+	static final String PRAYER = "prayer";
+	static final String GEAR = "gear";
+	static final String BOOST = "stat boost";
+
+	/**
+	 * T-118 (Eric, 2026-10-30 09:01): a setup row in the expected damage it cost, {@code stat boost  97% (-45 dmg)}, as
+	 * the overlay has it (T-117). Coloured as before, by its time. Where the damage isn't known (a kill saved before it
+	 * was), its ticks, as the uptime row.
+	 */
+	private static Part setupPart(String label, double share, double cost, double damage, LedgerRows.Numbers n)
+	{
+		final Part p = part(label, share, cost, n);
+		if (Double.isNaN(damage) || Double.isNaN(share))
+		{
+			return p;
+		}
+		return new Part(p.label, Text.small(LedgerRows.withDamage(LedgerRows.partPercent(share), damage), p.value.colour), p.kept,
+			p.lost);
+	}
+
+	/**
+	 * T-118: the expected damage a setup part cost (T-117's figures on {@link LedgerRows.Numbers}, so the panel and the
+	 * overlay agree); NaN when unknown.
+	 */
+	static double setupDamage(LedgerRows.Numbers n, String part)
+	{
+		switch (part)
+		{
+			case BOOST:
+				return n.boostDamage;
+			case PRAYER:
+				return n.prayerDamage;
+			case GEAR:
+				return n.gearDamage;
+			case "setup":
+				// Fights from before T-010: the one setup row, as on the overlay.
+				return n.setupDamage;
+			default:
+				return Double.NaN;
+		}
+	}
+
+	/** T-118: a setup part's damage for Where the time went's tooltip, or null when unknown or none. */
+	static String setupTip(String label, long ticks, double damage)
+	{
+		if (Double.isNaN(damage) || LedgerRows.roundHalfAway(damage) < 1)
+		{
+			return null;
+		}
+		final String why = BOOST.equals(label) ? "a lower boost" : PRAYER.equals(label) ? "your offensive prayer"
+			: GEAR.equals(label) ? "your gear" : "your setup";
+		return label + " +" + LedgerRows.ticksWord(ticks) + ": " + LedgerRows.number(LedgerRows.roundHalfAway(damage))
+			+ " expected damage lost to " + why + ".";
+	}
+
 	private static Part part(String label, double share, double cost, LedgerRows.Numbers n)
 	{
 		final boolean costing = LedgerRows.isCosting(cost, n.clock);
-		final String figure = Double.isNaN(share) ? LedgerRows.UNKNOWN : LedgerRows.withSeconds(
+		final String figure = Double.isNaN(share) ? LedgerRows.UNKNOWN : LedgerRows.withTicks(
 			LedgerRows.partPercent(share), cost);
 		return new Part(Text.small(label, SidePanelStyle.BODY),
 			Text.small(figure, costing ? SidePanelStyle.COST : SidePanelStyle.BODY),
@@ -1606,33 +1671,36 @@ final class SidePanelModel
 			Text.small(bestKnown ? SidePanelStyle.roundedDuration(best) : LedgerRows.UNKNOWN, SidePanelStyle.VALUE)));
 		for (int i = 0; i < costs.length; i++)
 		{
-			if (LedgerRows.roundHalfAway(costs[i]) >= 1)
+			// T-118 (Eric, 2026-10-30): each part in ticks, "+25 ticks", once it rounds to a tick.
+			if (LedgerRows.ticks(costs[i]) >= 1)
 			{
 				final boolean costing = LedgerRows.isCosting(costs[i], n.clock);
+				// T-118: a setup part's damage on hover; the bar and rows stay in ticks so they add up to the clock.
 				rows.add(new BudgetRow(costing ? Fill.COST : Fill.MINOR_COST, Text.small(labels[i], SidePanelStyle.BODY),
-					null, Text.small("+" + SidePanelStyle.seconds(costs[i]), costing ? SidePanelStyle.COST
-						: SidePanelStyle.BODY)));
+					null, Text.small("+" + SidePanelStyle.ticks(costs[i]), costing ? SidePanelStyle.COST
+						: SidePanelStyle.BODY), i == 0 ? null : setupTip(labels[i], LedgerRows.ticks(costs[i]),
+					setupDamage(n, labels[i]))));
 			}
 			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
-			if (i == 0 && LedgerRows.roundHalfAway(ca) >= 1)
+			if (i == 0 && LedgerRows.ticks(ca) >= 1)
 			{
 				rows.add(new BudgetRow(caCosting ? Fill.COST : Fill.MINOR_COST, Text.small("avoidable eating",
-					SidePanelStyle.BODY), null, Text.small("+" + SidePanelStyle.seconds(ca), caCosting ? SidePanelStyle.COST
+					SidePanelStyle.BODY), null, Text.small("+" + SidePanelStyle.ticks(ca), caCosting ? SidePanelStyle.COST
 					: SidePanelStyle.BODY)));
 			}
-			if (i == 0 && LedgerRows.roundHalfAway(e - ca) >= 1)
+			if (i == 0 && LedgerRows.ticks(e - ca) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
-					Text.small("+" + SidePanelStyle.seconds(e - ca), SidePanelStyle.BODY)));
+					Text.small("+" + SidePanelStyle.ticks(e - ca), SidePanelStyle.BODY)));
 			}
-			if (i == 0 && LedgerRows.roundHalfAway(m) >= 1)
+			if (i == 0 && LedgerRows.ticks(m) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(MECHANICS, SidePanelStyle.BODY), null,
-					Text.small("+" + SidePanelStyle.seconds(m), SidePanelStyle.BODY)));
+					Text.small("+" + SidePanelStyle.ticks(m), SidePanelStyle.BODY)));
 			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
-		// slower)", so a saving doesn't read like a cost.
+		// slower)", so a saving doesn't read like a cost. In seconds (T-118, Eric 10:04); the other parts are ticks.
 		// T-042: time luck saved is the striped stretch past your clock, in the middle half too (grey stripes there), and
 		// the row says it's the part past your time.
 		final Fill luckSwatch = luckSaved > 0 ? Fill.LUCK_FASTER : averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER;
@@ -1644,7 +1712,7 @@ final class SidePanelModel
 		if (u > 0)
 		{
 			rows.add(new BudgetRow(Fill.UNSCORED, Text.small("adds, not scored", SidePanelStyle.BODY), null,
-				Text.small("+" + SidePanelStyle.seconds(u), SidePanelStyle.BODY)));
+				Text.small("+" + SidePanelStyle.ticks(u), SidePanelStyle.BODY)));
 		}
 
 		// Against your average: after a kill only, outside a raid, never under the warning (spec 3.1).
@@ -1669,10 +1737,11 @@ final class SidePanelModel
 			if (in.luckRemoved != null)
 			{
 				final LedgerHistory.Spread r = in.luckRemoved;
+				// T-118: "25 s faster" alone where "… than 1:46" would cut the clock on the left (in the tooltip whole).
 				average.add(new Row(Text.small("luck removed " + LedgerRows.duration(n.expectedDuration), SidePanelStyle.BODY),
 					Text.small(against(n.expectedDuration, r.median) + (LedgerRows.roundHalfAway(n.expectedDuration - r.median)
 						== 0 ? " with " : " than ") + LedgerRows.duration(r.median), SidePanelStyle.of(usual(n.expectedDuration,
-						r)))));
+						r)))).withRightShort(against(n.expectedDuration, r.median)));
 			}
 		}
 		return new PanelSnapshot.TimeBudget(segments, total, t, luckSaved,
@@ -1915,7 +1984,7 @@ final class SidePanelModel
 	}
 
 	/**
-	 * T-050's spec luck: {@code Specials' luck  +12 · 1 s faster}, in Better or Cost. It is the difference between the
+	 * T-050's spec luck: {@code Specials' luck  +12 · 2 ticks faster}, in Better or Cost. It is the difference between the
 	 * chart's expected line as thrown and the tile's averaged figure (T-076). Null without own draining specials, or
 	 * when unknown.
 	 */
@@ -1944,7 +2013,7 @@ final class SidePanelModel
 			+ LedgerRows.fasterOrSlower(d.specLuckSeconds);
 	}
 
-	/** Luck's caption, second sentence: {@code Your specials' share: 5 s faster}. Null without own specials. */
+	/** Luck's caption, second sentence: {@code Your specials' share: 8 ticks faster}. Null without own specials. */
 	static String specsShareOfLuck(Drain d)
 	{
 		if (specLuckPhrase(d) == null)
