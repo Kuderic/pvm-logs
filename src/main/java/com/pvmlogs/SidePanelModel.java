@@ -85,7 +85,11 @@ final class SidePanelModel
 	static final class Target
 	{
 		String name;
-		int fights;
+		/**
+		 * The NPCs of this name fought, by index: two Acidic araxytes are 2. Araxxor's room has a fight per stretch
+		 * between his araxytes, all on him, so he is 1.
+		 */
+		int npcs;
 		int damage;
 		double expected;
 		int attacks;
@@ -451,6 +455,7 @@ final class SidePanelModel
 	{
 		final Map<String, Target> byName = new LinkedHashMap<>();
 		final Map<String, Set<Integer>> ids = new LinkedHashMap<>();
+		final Map<String, Set<Integer>> npcs = new LinkedHashMap<>();
 		for (Fight f : fights)
 		{
 			if (f.getAttempts() <= 0)
@@ -467,8 +472,9 @@ final class SidePanelModel
 				t.scored = true;
 				byName.put(name, t);
 				ids.put(name, new LinkedHashSet<>());
+				npcs.put(name, new LinkedHashSet<>());
 			}
-			t.fights++;
+			npcs.get(name).add(f.getTargetIndex());
 			t.damage += f.getDamageDealt();
 			t.expected += f.getSumExpectedAverageHit();
 			t.attacks += f.getAttacksMade();
@@ -479,6 +485,7 @@ final class SidePanelModel
 		for (Target t : byName.values())
 		{
 			t.phases = ids.get(t.name).size();
+			t.npcs = npcs.get(t.name).size();
 		}
 		return new ArrayList<>(byName.values());
 	}
@@ -1445,7 +1452,7 @@ final class SidePanelModel
 			sub.add(LedgerRows.clock(t.combatTicks));
 			final boolean figures = t.scored && !warning && t.expected > 0;
 			final Color text = t.scored ? SidePanelStyle.VALUE : SidePanelStyle.MUTED;
-			rows.add(new ListRow(Text.body(t.name + (t.fights > 1 && t.phases <= 1 ? " ×" + t.fights : ""), text), null,
+			rows.add(new ListRow(Text.body(t.name + (t.npcs > 1 && t.phases <= 1 ? " ×" + t.npcs : ""), text), null,
 				Text.title(figures ? LedgerRows.number(t.damage) + "/" + LedgerRows.number(Math.round(t.expected))
 					: LedgerRows.number(t.damage), text),
 				Text.small(String.join(DOT, sub), t.scored ? SidePanelStyle.SECONDARY : SidePanelStyle.MUTED),
