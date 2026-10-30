@@ -137,6 +137,13 @@ final class MonsterRunReplay
 		return this;
 	}
 
+	/** Damage on an NPC that is not the player's weapon - a thrall's, a DoT, another source - counted on what it has left. */
+	MonsterRunReplay counted(int index, int amount)
+	{
+		damageByIndex.merge(index, amount, Integer::sum);
+		return this;
+	}
+
 	/** The attack's splash on another NPC (recordExtraTarget). */
 	MonsterRunReplay splash(String name, int index, int amount)
 	{
@@ -166,6 +173,7 @@ final class MonsterRunReplay
 			damageByIndex.remove(index);
 			return this;
 		}
+		lastCounted = damageByIndex.getOrDefault(index, 0);
 		finish(true, PvmPerformancePlugin.roomGoesOnAtDeath(room, open, open.getTargetId()));
 		return this;
 	}
@@ -181,6 +189,36 @@ final class MonsterRunReplay
 		}
 		return this;
 	}
+
+	/**
+	 * The NPC changes into another form (handleNpcChanged): into its beaten form,
+	 * the fight on it ends a kill (T-091: Araxxor into his corpse), and the room
+	 * closes if its death rule counts the fall.
+	 */
+	MonsterRunReplay becomes(int index, int newId)
+	{
+		tick();
+		if (!EncounterGroup.isDefeated(newId))
+		{
+			return this;
+		}
+		if (open != null && !open.isEnded() && (open.getTargetIndex() == index
+			|| EncounterGroup.otherFallEndsFight(newId, open.getTargetId())))
+		{
+			lastCounted = damageByIndex.getOrDefault(index, 0);
+			finish(true, false);
+		}
+		if (room != null && room.closesOnDeathOf(newId, index, true))
+		{
+			room.end(now);
+			final List<Fight> held = room.getFights();
+			held.get(held.size() - 1).closeRoom();
+		}
+		return this;
+	}
+
+	/** What the target that fell last had counted on it as its fight closed: what its RECONCILE reads. */
+	int lastCounted = -1;
 
 	/** The NPC drops loot (handleNpcLootReceived). */
 	MonsterRunReplay loot(int npcId, int index)

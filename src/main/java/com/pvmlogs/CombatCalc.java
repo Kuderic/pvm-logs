@@ -739,16 +739,16 @@ class CombatCalc
 	 */
 	private MonsterStatsProvider.MonsterStats attackStats(int npcId)
 	{
-		final String version = ModifierTracker.version(bossModifiers(npcId));
-		if (version != null)
+		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
+		final String version = ModifierTracker.version(mods);
+		MonsterStatsProvider.MonsterStats stats = version == null ? null : monsters.get(npcId, version);
+		if (stats == null)
 		{
-			final MonsterStatsProvider.MonsterStats named = monsters.get(npcId, version);
-			if (named != null)
-			{
-				return named;
-			}
+			stats = monsters.get(npcId);
 		}
-		return monsters.get(npcId);
+		// And the levels a phase adds (T-091: Araxxor enraged), under the drains, which come off the result.
+		final int[] levels = ModifierTracker.levels(mods);
+		return stats == null ? null : stats.withLevels(levels[0], levels[1], levels[2]);
 	}
 
 	/**
