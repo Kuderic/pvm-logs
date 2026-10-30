@@ -448,7 +448,11 @@ final class EncounterGroup
 			// counted a kill: nine of each in one trip against an npc nobody had touched. Named outright rather than left
 			// to the fightable test, because that test can only ask what the game says about it and the answer was enough
 			// to get through once already.
-			NpcID.HUEY_SEER)));
+			NpcID.HUEY_SEER,
+			// Araxxor's corpse (T-098). Clicking it to harvest or destroy it opened a fight on it ([282] and [748] of Eric's
+			// log of 2026-10-29 21:20): no attack, so not saved, but a RECONCILE line reading -100%. His death is the change
+			// into it, which the fight on him and the room still see (handleNpcChanged asks nothing of this list).
+			NpcID.ARAXXOR_DEAD)));
 	}
 
 	/**

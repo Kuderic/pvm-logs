@@ -96,6 +96,9 @@ public class AraxxorTest
 		assertTrue(EncounterGroup.lootIsTheKill(ARAXXOR));
 		assertTrue(EncounterGroup.isDefeated(NpcID.ARAXXOR_DEAD));
 		assertTrue(EncounterGroup.isUnattackable(NpcID.ARAXXOR_DEAD));
+		// T-098: looting it opens no fight (it is not fightable); his change into it still ends his fight and the room.
+		assertTrue(EncounterGroup.isIgnored(NpcID.ARAXXOR_DEAD));
+		assertFalse(EncounterGroup.isIgnored(ARAXXOR));
 		assertFalse(EncounterGroup.isDefeated(ARAXXOR));
 		// His corpse despawning with a fight open on an araxyte left alive is not that araxyte's kill.
 		assertFalse(EncounterGroup.otherFallEndsFight(NpcID.ARAXXOR_DEAD, NpcID.ARAXXOR_MINION_VENOM));

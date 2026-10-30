@@ -411,6 +411,23 @@ class BossRules
 		 * the monster data's and under any drain, which carries over.
 		 */
 		Levels levels;
+		/**
+		 * T-098: the attack lands for certain at its max hit, every hitsplat of it,
+		 * before any cap or multiplier: Araxxor's hatched araxytes against the
+		 * right weapon. Its conditions on the player are the next three, with
+		 * {@link #styles} and {@link #attackTypes}; all that are given must hold.
+		 */
+		Boolean guaranteedMax;
+		/** The weapon in hand is one of these item ids; any when left out. */
+		int[] weapons;
+		/** The weapon's category (WeaponCategory names: CROSSBOW, ...) is one of these; any when left out. */
+		List<String> weaponCategories;
+		/**
+		 * The player's highest attack bonus, over everything worn, is this one
+		 * (STAB, SLASH, CRUSH, RANGED or MAGIC): see
+		 * {@link ModifierTracker#highestAccuracy}.
+		 */
+		String highestAccuracy;
 		String source;
 	}
 

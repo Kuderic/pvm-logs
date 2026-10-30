@@ -704,7 +704,22 @@ class CombatCalc
 		{
 			return Collections.emptyList();
 		}
-		return modifiers.forAttack(npc, weaponStyle(), landsInTicks(npc));
+		final List<BossRules.ModifierRule> mods = modifiers.forAttack(npc, weaponStyle(), landsInTicks(npc));
+		if (mods.isEmpty())
+		{
+			return mods;
+		}
+		// The conditions on the player's own attack (T-098: the araxytes' guaranteed max hit).
+		final WeaponCategory category = weaponCategory();
+		return ModifierTracker.forPlayer(mods, weaponItemId(), category == null ? null : category.name(),
+			attackStyle().getAttackType().name(), highestAccuracy());
+	}
+
+	/** The player's highest attack bonus over everything worn (T-098): see {@link ModifierTracker#highestAccuracy}. */
+	private String highestAccuracy()
+	{
+		return ModifierTracker.highestAccuracy(computeAttackBonus(AttackType.STAB), computeAttackBonus(AttackType.SLASH),
+			computeAttackBonus(AttackType.CRUSH), computeAttackBonus(AttackType.MAGIC), computeAttackBonus(AttackType.RANGED));
 	}
 
 	// Ticks from the attack going out to its hitsplat, as the client sees it: melee the next tick, ranged and magic by
