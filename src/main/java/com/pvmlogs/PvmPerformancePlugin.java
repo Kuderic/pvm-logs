@@ -450,6 +450,9 @@ public class PvmPerformancePlugin extends Plugin
 	// booked after its splat has been counted, and a shot resolved at the tick's end too.
 	private final Map<Integer, int[]> capBeforeLanding = new HashMap<>();
 	private final Map<Integer, double[]> expectedByTick = new HashMap<>();
+	// T-107: the same figures, each tick, for the npc the player is attacking when it isn't the shown fight's target - the
+	// first shot at an add before its fight opens. The npc's index rides in the slot after the row's own.
+	private final Map<Integer, double[]> aimedByTick = new HashMap<>();
 	// The tick the special attack energy last fell, which is the tick a special went out on. Read back at the booking
 	// rather than at the sample: the varp can arrive after the tick's onGameTick has already run. How long after the
 	// energy falls an attack may still be that special's.
@@ -754,6 +757,7 @@ public class PvmPerformancePlugin extends Plugin
 		targetSeen.clear();
 		recentTiles.clear();
 		expectedByTick.clear();
+		aimedByTick.clear();
 		// Both re-read from scratch: a stale energy reading across a reset would look like a special the moment the bar came
 		// back lower than it was.
 		specFiredTick = Integer.MIN_VALUE;
@@ -2755,6 +2759,8 @@ public class PvmPerformancePlugin extends Plugin
 			idleMaxHit = -1;
 			idleSpecMaxHit = -1;
 		}
+		// Last: the calculator is aimed elsewhere while it runs, and put back.
+		recordAimedRow(shown);
 	}
 
 	/**
@@ -2871,7 +2877,10 @@ public class PvmPerformancePlugin extends Plugin
 		int capThen = capLeft(fight.getTargetIndex());
 		// Prefer the figures from the tick the attack left on. A slow projectile surfaces a tick late, and scoring it with
 		// the loadout held by then credited a shadow's attack to the whip switched to mid-flight.
-		final double[] atOrigin = expectedByTick.get(figuresTick);
+		// Or, where that row was another npc's - the shown fight's, as a first shot goes out at an add - the row read that tick
+		// for the npc it was aimed at (T-107): the figures, and the prayer, of the tick it was thrown on.
+		final double[] atOrigin = rowFor(expectedByTick.get(figuresTick), aimedByTick.get(figuresTick), targetId,
+			fight.getTargetIndex());
 		// A PROJECTILE is scored from the tick it set off, not from the live reading taken when its event surfaced - by then
 		// the player may have switched, and the observed figures are the new weapon's. Alternating a blowpipe and a crossbow
 		// scored every shot with the OTHER one's average, which is what this ordering is for and what it was not doing: the
@@ -2970,7 +2979,9 @@ public class PvmPerformancePlugin extends Plugin
 		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f, var %.1f%s",
 			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance,
 			originIsAuthoritative && beforeSwitch ? beforeSwitchNote(figuresTick)
-				: originIsAuthoritative && punishedAttack() ? " (a punish, from its throw's row on tick " + figuresTick + ")" : "");
+				: originIsAuthoritative && punishedAttack() ? " (a punish, from its throw's row on tick " + figuresTick + ")"
+				: originIsAuthoritative && atOrigin.length > EXP_WIDTH
+					? " (from tick " + figuresTick + "'s row for the npc it was aimed at)" : "");
 		// Only an ordinary one-splat attack's max can be checked against a single splat (T-056).
 		final boolean checkable = !special && combatCalc.maxIsOneSplat();
 		// The special in hand on the tick it was thrown, for its drain's outcomes (T-050).
@@ -3001,6 +3012,83 @@ public class PvmPerformancePlugin extends Plugin
 		attackObservedAccuracy = -1;
 		attackObservedAverageHit = -1;
 		attackObservedVariance = -1;
+	}
+
+	/**
+	 * The row an attack at this npc is scored from (T-107): the shown fight's
+	 * row of that tick when it is this npc's, else the row read that tick for the
+	 * npc the player was attacking when that is this one (same id and index),
+	 * else the shown one as before.
+	 */
+	static double[] rowFor(double[] shownRow, double[] aimedRow, int targetId, int targetIndex)
+	{
+		if (shownRow != null && (int) shownRow[EXP_NPC_ID] == targetId)
+		{
+			return shownRow;
+		}
+		if (aimedRow != null && aimedRow.length > EXP_WIDTH && (int) aimedRow[EXP_NPC_ID] == targetId
+			&& (int) aimedRow[EXP_WIDTH] == targetIndex)
+		{
+			return aimedRow;
+		}
+		return shownRow;
+	}
+
+	/**
+	 * The figures, as a row, for the npc the player is attacking when it isn't
+	 * the shown fight's target (T-107). A shot at an add goes out while the fight
+	 * on the boss is still the one shown, so the throw's row was the boss's, and
+	 * the shot took figures read when its projectile was seen, two ticks later,
+	 * with the prayer as it was by then: in Eric's 22:32 log a Deadeye flicked
+	 * on for the throw at [1752] was off by [1754], and a shot at [2658] thrown
+	 * without it was read with it on at [2660]. Read with the calculator aimed at
+	 * that npc - its stats, its drains, its hitpoints, its boss modifiers - and
+	 * put back. Only on ticks the player attacks something other than what is
+	 * shown: a switch's tick or two.
+	 */
+	private void recordAimedRow(Fight shown)
+	{
+		final int tick = client.getTickCount();
+		aimedByTick.keySet().removeIf(t -> tick - t > RECENT_TILES);
+		final Player me = client.getLocalPlayer();
+		final Actor at = me == null ? null : me.getInteracting();
+		if (!(at instanceof NPC))
+		{
+			return;
+		}
+		final NPC npc = (NPC) at;
+		if (shown != null && !shown.isEnded() && shown.getTargetIndex() == npc.getIndex()
+			|| EncounterGroup.isIgnored(npc.getId()) || !isFightable(npc))
+		{
+			return;
+		}
+		final NPC was = targetNpc;
+		combatCalc.setTarget(npc);
+		combatCalc.noteTargetDamageTaken(damageByIndex.getOrDefault(npc.getIndex(), 0));
+		try
+		{
+			final int id = npc.getId();
+			final DamageMoments ordinary = combatCalc.averageHitMoments(id);
+			final DamageMoments special = combatCalc.specialAttackMoments(id);
+			final double[] row = new double[EXP_WIDTH + 1];
+			row[EXP_MAX] = combatCalc.maxHit(id);
+			row[EXP_ACCURACY] = combatCalc.hitChance(id);
+			row[EXP_AVERAGE] = meanOf(ordinary);
+			row[EXP_NPC_ID] = id;
+			row[EXP_SPEC_MAX] = combatCalc.specialAttackMaxHit(id);
+			row[EXP_SPEC_ACCURACY] = combatCalc.specialAttackLandChance(id);
+			row[EXP_SPEC_AVERAGE] = meanOf(special);
+			row[EXP_VARIANCE] = varianceOf(ordinary);
+			row[EXP_SPEC_VARIANCE] = varianceOf(special);
+			row[EXP_CAP] = capLeft(npc.getIndex());
+			row[EXP_WIDTH] = npc.getIndex();
+			aimedByTick.put(tick, row);
+		}
+		finally
+		{
+			combatCalc.setTarget(was);
+			combatCalc.noteTargetDamageTaken(shown == null ? 0 : damageByIndex.getOrDefault(shown.getTargetIndex(), 0));
+		}
 	}
 
 	/** What this npc has left, for capping an attack (T-103): as the calculator's overkill cap reads it; -1 unknown. */
@@ -4368,6 +4456,14 @@ public class PvmPerformancePlugin extends Plugin
 			// better: it reads as set up right, and its setup pair below is left out.
 			final boolean mechanic = attackIsMechanic;
 			final boolean prayed = mechanic || Boolean.TRUE.equals(prayerUpByTick.get(attackTick));
+			// The prayer at the throw against the prayer when the attack was seen (T-107): a flick between them is what scored a
+			// shot read at its projectile with the wrong one. The throw's is what the server rolled with.
+			final Boolean seenPrayed = prayerUpByTick.get(attackOriginTick);
+			if (!mechanic && attackOriginTick != attackTick && seenPrayed != null && seenPrayed != prayed)
+			{
+				debug.log("  PRAYER at the throw (tick %d) %s, when the attack was seen (tick %d) %s", attackTick,
+					prayed ? "up" : "not up", attackOriginTick, seenPrayed ? "up" : "not up");
+			}
 			final boolean potted = mechanic || attackObservedPotted;
 			final double boostShare = mechanic ? 1 : attackObservedBoostShare;
 			final boolean drained = !mechanic && attackObservedDrained;
@@ -6593,15 +6689,28 @@ public class PvmPerformancePlugin extends Plugin
 
 	void exportAll(boolean bossOnly)
 	{
+		writeCsvAsync(bossOnly ? "bosses" : "all",
+			exported(history, bossOnly, monsterStats == null ? null : monsterStats.rules()));
+	}
+
+	/**
+	 * The fights an export of the whole history writes. "Bosses only" keeps
+	 * what History's Bosses list keeps (T-102, T-107): every fight that isn't a
+	 * monster's by the history budget's rule, so a boss's adds - the Sire's
+	 * respiratory systems, Araxxor's araxytes, Hespori's flowers - stay with
+	 * their boss, where the hiscores' name per fight dropped them.
+	 */
+	static List<Fight> exported(List<Fight> history, boolean bossOnly, BossRules rules)
+	{
 		final List<Fight> fights = new ArrayList<>();
 		for (Fight fight : history)
 		{
-			if (!bossOnly || isBoss(fight))
+			if (!bossOnly || !HistoryBudget.isMonster(fight, rules))
 			{
 				fights.add(fight);
 			}
 		}
-		writeCsvAsync(bossOnly ? "bosses" : "all", fights);
+		return fights;
 	}
 
 	private void writeCsvAsync(String label, List<Fight> fights)
