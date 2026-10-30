@@ -30,7 +30,7 @@ class Fight
 	private final String raidName;
 	private final int raidId;
 	private final int targetId;
-	private final int targetIndex;
+	private int targetIndex;
 	// The NPC's full hitpoints, or -1 if unknown; used to classify bosses. From the version of the monster data in use when
 	// the fight opened (RuneLite's NPCManager knows nothing of Vardorvis or the Chambers), corrected at the end from the
 	// boss health bar where the game drew one.
@@ -116,6 +116,10 @@ class Fight
 	// sets several times on the way down.
 	private boolean closedRoom;
 	private long endMillis;
+	// T-088: trips away from this target the player came back from, and their time, which the kill's time leaves out.
+	// Saved, so History can say a kill was resumed; 0 in an older history file, which is right for those.
+	private int trips;
+	private long awayMillis;
 
 	// Sampled once per attack rather than snapshotted once for the fight: with a spec weapon swapped in partway the mean
 	// is the actual blend wielded, which no single snapshot could represent.
@@ -617,7 +621,32 @@ class Fight
 	long durationMillis()
 	{
 		final long stop = ended ? endMillis : lastActivityMillis;
-		return Math.max(0, stop - startMillis);
+		// Less the time the player was away on trips (T-088), which is no part of the kill.
+		return Math.max(0, stop - startMillis - awayMillis);
+	}
+
+	/**
+	 * The player came back from a trip to the same target (T-088), now at {@code
+	 * index}: its index can change on the way. The time away is kept, so the
+	 * kill's time leaves it out and its record can say it was resumed.
+	 */
+	void resumeAfterTrip(int index, long away)
+	{
+		targetIndex = index;
+		trips++;
+		awayMillis += Math.max(0, away);
+	}
+
+	/** Times the player left on a trip and came back to finish this target (T-088); 0 for one fought in one go. */
+	int getTrips()
+	{
+		return trips;
+	}
+
+	/** How long those trips took in all, left out of the kill's time (T-088). */
+	long getAwayMillis()
+	{
+		return awayMillis;
 	}
 
 	double durationSeconds()

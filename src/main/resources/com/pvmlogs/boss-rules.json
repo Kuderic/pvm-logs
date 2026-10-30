@@ -302,6 +302,19 @@
       ]
     },
     {
+      "name": "Giant Mole",
+      "npcIds": [5779],
+      "onePerWorld": true,
+      "damageModifiers": {
+        "states": [
+          {"name": "burrowed", "startOnBossAnim": [3314], "endOnBossAnim": [3315], "maxTicks": 100, "source": "T-088: the Giant Mole burrowing (MOLE_BURROW_DOWN 3314) to come up elsewhere in the lair (MOLE_BURROW_UP 3315), gamevals. OSRS Wiki, Giant Mole: 'While between 50% and 5% of her health, every attack from the player has a 25% chance of causing her to burrow into the ground' and move to 'another area in the lair'. The 100-tick limit is a backstop for a surfacing never seen."}
+        ]
+      },
+      "uptimeAllowances": [
+        {"state": "burrowed", "from": "open", "maxTicks": 50, "afterTicks": 10, "source": "T-088, PROPOSED, for Eric to approve. Finding her after a burrow and hitting her again. Measured on only two chases in Eric's log of 2026-10-29: 34 and 52 idle ticks from her going out of view to his next attack ([11829]-[11863], [11866]-[11918]); the burrow animation was not logged then, so the window's own length is not measured yet. The cap is the longer chase, rounded; the 10 ticks after she surfaces are for reaching her. Re-measure from the next kill's BOSS ANIM and OUT OF VIEW lines."}
+      ]
+    },
+    {
       "name": "Vorkath",
       "npcIds": [8058, 8059, 8060, 8061],
       "defenceDrain": {

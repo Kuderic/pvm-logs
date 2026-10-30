@@ -372,6 +372,27 @@ final class DrainTracker
 			old.state.defence, t.state.defence, old.state.magic, t.state.magic));
 	}
 
+	/**
+	 * The same target came back under another index (T-088: the Giant Mole after
+	 * a trip away): its drained stats go with it, regenerated through the gap as
+	 * they would have been.
+	 */
+	void move(int fromIndex, int toIndex)
+	{
+		final Tracked old = targets.remove(fromIndex);
+		if (old == null || fromIndex == toIndex)
+		{
+			if (old != null)
+			{
+				targets.put(fromIndex, old);
+			}
+			return;
+		}
+		targets.put(toIndex, old.moved(toIndex, old.npcId, old.name, old.target, old.state));
+		log.accept(String.format("DRAIN CARRY %s: index %d -> index %d (back after a trip); defence %d, magic %d", old.name,
+			fromIndex, toIndex, old.state.defence, old.state.magic));
+	}
+
 	/** Drops waiting stats no actor took up in time. */
 	void expireCarried(int now)
 	{

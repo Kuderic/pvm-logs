@@ -343,6 +343,16 @@ class TargetHealth
 	}
 
 	/** The npc on this index has left the scene; the server may give its index to the next one. */
+	/** The same target back under another index (T-088): what was counted on it goes with it. */
+	void move(int fromIndex, int toIndex)
+	{
+		final Entry e = byIndex.remove(fromIndex);
+		if (e != null)
+		{
+			byIndex.put(toIndex, e);
+		}
+	}
+
 	void forget(int index)
 	{
 		byIndex.remove(index);

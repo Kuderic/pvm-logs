@@ -137,6 +137,8 @@ public class SidePanelBossIconsTest
 		m.put("Muttadiles", HiscoreSkill.CHAMBERS_OF_XERIC);
 		m.put("Pestilent Bloat", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("Zulrah", HiscoreSkill.ZULRAH);
+		// T-088: in the rules for her burrow and as one per world.
+		m.put("Giant Mole", HiscoreSkill.GIANT_MOLE);
 		m.put("Vorkath", HiscoreSkill.VORKATH);
 		m.put("Cerberus", HiscoreSkill.CERBERUS);
 		m.put("Commander Zilyana", HiscoreSkill.COMMANDER_ZILYANA);

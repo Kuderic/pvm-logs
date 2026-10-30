@@ -390,6 +390,13 @@ public class PvmPerformancePlugin extends Plugin
 	// The last tick a melee blow at an add of the open boss was booked from its splat (T-086), so its next splat is not
 	// another.
 	private int lastAddBlowTick = Integer.MIN_VALUE;
+	// T-088: the fought target out of view, alive, its fight held open for it; the last tick the client loaded an area
+	// (a teleport); and, after a trip, whether the overhead bar is still to be checked for a fresh one, with the tick the
+	// target was last seen before it.
+	private BossAway away;
+	private int lastLoadingTick = Integer.MIN_VALUE;
+	private boolean barCheckOnReturn;
+	private long returnLastSeenMillis;
 	// The boss modifiers each tick's figures were worked out with (T-078), for the ATTACK line: read at the booking they
 	// were the ones left after the attack's own splat had closed its window.
 	private final Map<Integer, String> modifiersByTick = new HashMap<>();
@@ -895,6 +902,31 @@ public class PvmPerformancePlugin extends Plugin
 					return;
 				}
 				startFight(npc, now);
+			}
+			// The held fight's target hit on its own index before any spawn was seen for it (T-088): back.
+			if (away != null && npc.getIndex() == away.npcIndex && npc.getIndex() == current.getTargetIndex())
+			{
+				resumeFight(npc);
+			}
+			// After a trip (T-088): the first overhead bar on the target says whether it is still the one left part-way down.
+			// Read with this splat, before its damage is counted: a fresh one shows more of its bar than the fight has left.
+			if (barCheckOnReturn && npc.getIndex() == current.getTargetIndex())
+			{
+				barCheckOnReturn = false;
+				final int left = health.remaining(npc.getIndex(), client.getTickCount());
+				final boolean fresh = BossAway.freshOnReturn(npc.getHealthRatio(), npc.getHealthScale(), left,
+					current.getMaxHp());
+				debug.log("BAR CHECK on return: %s shows %d/%d of its bar, the fight has %d of %d left: %s", npc.getName(),
+					npc.getHealthRatio(), npc.getHealthScale(), left, current.getMaxHp(), fresh ? "a fresh one" : "the same one");
+				if (fresh)
+				{
+					finalizeFight(false, returnLastSeenMillis, "a fresh one on return: the one left was another's kill or reset");
+					// Nothing carried to it: what was counted, and drained, was the other one's.
+					health.forget(npc.getIndex());
+					damageByIndex.remove(npc.getIndex());
+					drain.forget(npc);
+					startFight(npc, now);
+				}
 			}
 			// Hitsplats arriving together are one attack: a claw special lands four across two ticks, a dark bow two on one.
 			// Grouped by adjacency, and nothing swings faster than two ticks, so no two real attacks merge.
@@ -3181,6 +3213,12 @@ public class PvmPerformancePlugin extends Plugin
 	private void handleNpcSpawned(NpcSpawned event)
 	{
 		final NPC npc = event.getNpc();
+		// The held fight's target back in view on its own index (T-088): a burrow over.
+		if (away != null && current != null && !current.isEnded() && npc.getIndex() == away.npcIndex
+			&& away.isBack(npc.getId(), npc.getIndex(), client.getWorld(), false))
+		{
+			resumeFight(npc);
+		}
 		if (Thralls.isThrall(npc.getId()))
 		{
 			traceThrall("spawned", npc);
@@ -3737,6 +3775,63 @@ public class PvmPerformancePlugin extends Plugin
 			&& open.lastTick() == tick - 1;
 	}
 
+	/** Whether a world has only one of this boss (T-088: the Giant Mole), so it is the same one after a trip away. */
+	private boolean onePerWorld(int npcId)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final BossRules.Boss boss = rules == null ? null : rules.forNpc(npcId);
+		return boss != null && boss.onePerWorld;
+	}
+
+	/** The fight's target despawned alive (T-088): its fight is held for it. */
+	private void leaveView(NPC npc)
+	{
+		final int tick = client.getTickCount();
+		final GameState state = client.getGameState();
+		away = new BossAway(npc.getId(), npc.getIndex(), current.getTargetName(), client.getWorld(), tick,
+			System.currentTimeMillis(), BossAway.playerLeft(state, lastLoadingTick, tick), lastBossAnim);
+		debug.log("OUT OF VIEW %s (npc %d, index %d) on world %d at tick %d: %s", away.name, away.npcId, away.npcIndex,
+			away.world, tick, away.why(state, lastLoadingTick));
+	}
+
+	/**
+	 * The held fight's target is back (T-088): after a burrow on its own index;
+	 * after a trip on the same world, its index perhaps changed, with what was
+	 * counted on it, its drain and its timeline carried to the new one.
+	 */
+	private void resumeFight(NPC npc)
+	{
+		final int tick = client.getTickCount();
+		final int from = current.getTargetIndex();
+		final int to = npc.getIndex();
+		if (from != to)
+		{
+			final Integer dealt = damageByIndex.remove(from);
+			if (dealt != null)
+			{
+				damageByIndex.put(to, dealt);
+			}
+			health.move(from, to);
+			drain.move(from, to);
+		}
+		final long gone = System.currentTimeMillis() - away.millis;
+		if (away.playerLeft)
+		{
+			current.resumeAfterTrip(to, gone);
+			// The first overhead bar after the return says whether she is still the one left part-way down.
+			barCheckOnReturn = true;
+			returnLastSeenMillis = away.millis;
+		}
+		debug.log("%s %s (npc %d): index %d%s on world %d, %d ticks after it was last seen%s", away.playerLeft ? "RESUME"
+				: "BACK IN VIEW", away.name, npc.getId(), from, from != to ? " -> " + to : "", client.getWorld(), tick - away.tick,
+			away.playerLeft ? String.format(" (trip %d of this fight, %d s away, left out of its time)", current.getTrips(),
+				gone / 1000) : "");
+		targetNpc = npc;
+		targetLiveId = npc.getId();
+		combatCalc.setTarget(npc);
+		away = null;
+	}
+
 	/** Whether this npc is an add of the open fight's boss that leaves its fight open (T-084: Zulrah's snakelings). */
 	private boolean isAddOfOpenBoss(NPC npc)
 	{
@@ -3873,9 +3968,13 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			closeRoomOnDeath(npc, false, System.currentTimeMillis());
 		}
-		// The drain dies with the NPC, as its stats do: after the fight on it has been closed, which saves them.
-		drain.forget(npc);
-		damageModifiers.forget(npc);
+		// The drain dies with the NPC, as its stats do: after the fight on it has been closed, which saves them. Not a held
+		// fight's target's (T-088): it is coming back, and its drain regenerates through the gap.
+		if (away == null || away.npcIndex != npc.getIndex())
+		{
+			drain.forget(npc);
+			damageModifiers.forget(npc);
+		}
 	}
 
 	private void closeOnDespawn(NPC npc)
@@ -3905,6 +4004,12 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
+		if (current.getTargetIndex() == npc.getIndex() && !npc.isDead())
+		{
+			// Gone alive (T-088): a burrow, or the player leaving on a trip. Held, not finished.
+			leaveView(npc);
+			return;
+		}
 		if (current.getTargetIndex() == npc.getIndex())
 		{
 			// An add of the room dying is the room going on (T-021): what the boss and the other adds have left is kept. So is
@@ -3930,6 +4035,13 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final boolean attacked = attackObservedTick == client.getTickCount();
 		attackObservedTick = -1;
+		// A held fight whose target never came back ends as left, at the tick it was last seen (T-088).
+		if (away != null && current != null && !current.isEnded() && away.timedOut(client.getTickCount()))
+		{
+			finalizeFight(false, away.millis, String.format("its target out of view since tick %d, %d ticks: left",
+				away.tick, client.getTickCount() - away.tick));
+			away = null;
+		}
 
 		if (current == null || current.isEnded())
 		{
@@ -4097,6 +4209,21 @@ public class PvmPerformancePlugin extends Plugin
 			// between attacks.
 			combatCalc.noteAttackKind(true);
 			return;
+		}
+		// The target out of view (T-088). On a trip, nothing: the time away is no part of the fight. Gone from a player who
+		// stayed (a burrow), only inside a boss's allowance window, where it counts as the mechanic it is, up to its cap;
+		// anywhere else nothing, since no attack was possible.
+		if (away != null)
+		{
+			final int idleTick = client.getTickCount() - pendingBookingLag(lastAttackFromProjectile, combatCalc.isMeleeEquipped());
+			if (away.playerLeft || !mechanics.covers(idleTick))
+			{
+				if (!away.playerLeft)
+				{
+					debug.log("tick UNCOUNTED: target out of view since %d, no allowance window open", away.tick);
+				}
+				return;
+			}
 		}
 		// The trip totals take the same ticks as they happen, so the share shown in whole-trip mode moves during a fight
 		// rather than only at its end.
@@ -4773,14 +4900,23 @@ public class PvmPerformancePlugin extends Plugin
 	private void handleGameStateChanged(GameStateChanged event)
 	{
 		final GameState state = event.getGameState();
+		if (state == GameState.LOADING)
+		{
+			// A teleport loads the new area: what tells a trip away from a boss leaving view (T-088).
+			lastLoadingTick = client.getTickCount();
+		}
 		if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING)
 		{
 			// Possibly another account next, with its own blowpipe.
 			dartLoaded = false;
 			if (current != null && !current.isEnded())
 			{
-				finalizeFight(false, current.getLastActivityMillis(), "logged out or hopped");
+				// A held fight ends as left, at the tick its target was last seen (T-088): a hop is a different boss.
+				finalizeFight(false, away != null ? away.millis : current.getLastActivityMillis(), away != null
+					? "logged out or hopped while its target was out of view since tick " + away.tick : "logged out or hopped");
 			}
+			away = null;
+			barCheckOnReturn = false;
 			// And the ROOM with it. Left open, it waits for a kill that may be a night away and counts the whole gap as
 			// room time: one Hueycoatl room in a real export ran 33,541 seconds across a night's sleep and swallowed two
 			// kills, because a room only ends at its loot drop and nothing else was closing it.
@@ -4829,13 +4965,27 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void startFight(NPC npc, long now)
 	{
+		// A held fight (T-088): its target back, after a trip, under a new index, or another target, and it ends as left
+		// at the tick it was last seen.
+		if (away != null && current != null && !current.isEnded())
+		{
+			if (away.isBack(npc.getId(), npc.getIndex(), client.getWorld(), onePerWorld(npc.getId())))
+			{
+				resumeFight(npc);
+				return;
+			}
+		}
 		final boolean monster = isMonster(npc);
 		if (current != null && !current.isEnded())
 		{
 			final boolean sameRoom = switchesWithinRoom(current, npc.getId())
 				|| MonsterRooms.switchesWithin(currentEncounter, current, Text.removeTags(npc.getName()), monster);
-			finalizeFight(false, now, sameRoom ? "a different target in the room was attacked"
-				: "a different target was attacked", keepsCountsOnSwitch(currentEncounter, current, npc.getId(), monster));
+			// A held fight ends at the tick its target was last seen (T-088), as left.
+			final String held = away == null ? "" : String.format(", its target out of view since tick %d (%s)", away.tick,
+				npc.getId() == away.npcId ? "another of it, on world " + client.getWorld() : "never came back");
+			finalizeFight(false, away == null ? now : away.millis, (sameRoom ? "a different target in the room was attacked"
+				: "a different target was attacked") + held, keepsCountsOnSwitch(currentEncounter, current, npc.getId(), monster));
+			away = null;
 		}
 		// Full hitpoints from the version of the monster data in use, which knows the Chambers and Vardorvis where
 		// RuneLite's table does not; RuneLite's (nullable) as the fallback. The boss health bar, once read, beats both.
@@ -4877,9 +5027,9 @@ public class PvmPerformancePlugin extends Plugin
 		labelOlmPhase(current);
 		labelNightmareTotem(current, npc.getId());
 		openEncounterFor(current, now);
-		debug.log("fight START %s (npc %d, index %d, maxHp %d) group=%s room=%s raid=%s",
+		debug.log("fight START %s (npc %d, index %d, maxHp %d) group=%s room=%s raid=%s world=%d",
 			current.getTargetName(), npc.getId(), npc.getIndex(), maxHp,
-			current.getGroupName(), current.encounterName(), raidType);
+			current.getGroupName(), current.encounterName(), raidType, client.getWorld());
 		debug.log("  %s", monsterStats.describe(npc.getId()));
 		debug.log("  %s", combatCalc.describeWorkedOut(npc.getId()));
 		// What is worn, by item id (T-056): which variant of a piece a bonus missed.
@@ -5630,6 +5780,9 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void finalizeFight(boolean died, long now, String reason, boolean keepCounts)
 	{
+		// Whatever ends a fight ends its hold (T-088).
+		away = null;
+		barCheckOnReturn = false;
 		mechanics.finish();
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
 				+ "combatTicks=%d expDamage=%.1f",

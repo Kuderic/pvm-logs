@@ -217,6 +217,11 @@ class BossRules
 		DamageModifierRules damageModifiers;
 		/** T-074: the idle ticks its mechanics may excuse from uptime, by the damage-modifier state they ride on. */
 		List<UptimeAllowance> uptimeAllowances;
+		/**
+		 * T-088: a world has only one of this boss (the Giant Mole), so after a trip away the same npc id on the same
+		 * world is the same boss, whatever its index.
+		 */
+		boolean onePerWorld;
 		/** T-086: an attack on the tick of one of its animations that ignores the weapon's attack delay; null for none. */
 		MeleePunish meleePunish;
 	}

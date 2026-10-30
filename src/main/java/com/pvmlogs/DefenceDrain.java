@@ -352,6 +352,12 @@ class DefenceDrain
 		tracker.forget(npc.getIndex(), carryKey(bossFor(npc.getId())), client.getTickCount());
 	}
 
+	/** The same target back under another index (T-088): its drain goes with it. */
+	void move(int fromIndex, int toIndex)
+	{
+		tracker.move(fromIndex, toIndex);
+	}
+
 	void clear()
 	{
 		tracker.clear();
