@@ -388,6 +388,13 @@ final class EncounterGroup
 		// The Maggot King (T-086) and his ur-maggot larvae, launched with his screeches from about 83% (wiki, Maggot
 		// King/Strategies). Not his corpse, which only stands to be looted.
 		put(groups, "Maggot King", NpcID.MAGGOT_KING, NpcID.UR_MAGGOT_LARVAE);
+		// Araxxor (T-091), the araxytes his eggs hatch - Mirrorback, Ruptura and Acidic, 58 hitpoints each (wiki,
+		// Araxxor/Strategies) - the eggs, and his corpse, which he becomes at his death and lies as until it is harvested
+		// or destroyed (wiki, Araxxor). Eric's kill of 2026-10-29 was 4 fights on him and 3 on araxytes, each in its own
+		// room; the araxytes take two or three attacks each, so their fights are scored adds of his room, as the Sire's are.
+		put(groups, "Araxxor", NpcID.ARAXXOR, NpcID.ARAXXOR_DEAD,
+			NpcID.ARAXXOR_MINION_MIRRORBACK, NpcID.ARAXXOR_MINION_EXPLODE, NpcID.ARAXXOR_MINION_VENOM,
+			NpcID.ARAXXOR_MINION_EGG_MIRRORBACK, NpcID.ARAXXOR_MINION_EGG_EXPLODE, NpcID.ARAXXOR_MINION_EGG_VENOM);
 		put(groups, "The Hueycoatl",
 			NpcID.HUEY_HEAD, NpcID.HUEY_HEAD_INVULNERABLE, NpcID.HUEY_HEAD_DEFEATED,
 			NpcID.HUEY_HEAD_ENRAGED, NpcID.HUEY_TAIL, NpcID.HUEY_TAIL_BROKEN,
@@ -502,6 +509,9 @@ final class EncounterGroup
 			NpcID.SNAKEBOSS_MINION_MELEE, NpcID.SNAKEBOSS_MINION_MAGIC, NpcID.SNAKEBOSS_MINION_DYING,
 			// The Maggot King's larvae (T-086).
 			NpcID.UR_MAGGOT_LARVAE,
+			// Araxxor's araxytes and their eggs (T-091).
+			NpcID.ARAXXOR_MINION_MIRRORBACK, NpcID.ARAXXOR_MINION_EXPLODE, NpcID.ARAXXOR_MINION_VENOM,
+			NpcID.ARAXXOR_MINION_EGG_MIRRORBACK, NpcID.ARAXXOR_MINION_EGG_EXPLODE, NpcID.ARAXXOR_MINION_EGG_VENOM,
 			// Hespori's flowers.
 			NpcID.HESPORI_HEALER_ACTIVE, NpcID.HESPORI_HEALER_INACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE, NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
@@ -583,9 +593,11 @@ final class EncounterGroup
 			|| npcId == NpcID.RAIDS_STONEGUARDIANS_LEFT_DEAD || npcId == NpcID.RAIDS_STONEGUARDIANS_RIGHT_DEAD;
 	}
 
-	// The Royal Titans' beaten forms (T-061): a titan falls and lies there to be looted rather than despawning (wiki).
+	// The Royal Titans' beaten forms (T-061): a titan falls and lies there to be looted rather than despawning (wiki). And
+	// Araxxor's corpse (T-091): at [7704] of Eric's kill his index changed from 13668 to 13669 (ARAXXOR_DEAD) once his bar
+	// read 0, and it despawned 33 ticks later at [7737], when he was harvested.
 	private static final Set<Integer> DEFEATED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-		NpcID.HUEY_HEAD_DEFEATED, NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE)));
+		NpcID.HUEY_HEAD_DEFEATED, NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE, NpcID.ARAXXOR_DEAD)));
 
 	private static Set<Integer> buildUnattackable()
 	{
@@ -624,8 +636,8 @@ final class EncounterGroup
 			NpcID.TOB_MAIDEN_DYING_A_HARD, NpcID.TOB_MAIDEN_DYING_B_HARD,
 			NpcID.XARPUS_DEATH, NpcID.XARPUS_DEATH_STORY, NpcID.XARPUS_DEATH_HARD,
 			NpcID.TOA_WARDEN_P3_DEATH_ELIDINIS, NpcID.TOA_WARDEN_P3_DEATH_TUMEKEN,
-			// A Royal Titan once beaten (T-061).
-			NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE,
+			// A Royal Titan once beaten (T-061), and Araxxor's corpse (T-091).
+			NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE, NpcID.ARAXXOR_DEAD,
 			// The Sire's respiratory systems and minions once they are dying.
 			NpcID.ABYSSALSIRE_LUNG_DYING, NpcID.ABYSSALSIRE_SPAWN_DYING, NpcID.ABYSSALSIRE_SCION_DYING)));
 	}
@@ -646,6 +658,9 @@ final class EncounterGroup
 		// The Maggot King drops no loot event: he dies, and a corpse is left to loot (Eric's four kills of 2026-10-29, no
 		// LOOT line in any). His death closes the room (T-086).
 		rules.put("Maggot King", new DeathClose(1, ids(NpcID.MAGGOT_KING), ids()));
+		// Araxxor drops no loot event: he is harvested or destroyed (wiki, Araxxor; no LOOT line for him in Eric's log of
+		// 2026-10-29). His room closes as he becomes his corpse, or at a dead despawn should that come first (T-091).
+		rules.put("Araxxor", new DeathClose(1, ids(NpcID.ARAXXOR), ids(NpcID.ARAXXOR_DEAD)));
 		rules.put("The Royal Titans", new DeathClose(2, ids(NpcID.RT_FIRE_QUEEN, NpcID.RT_ICE_KING),
 			ids(NpcID.RT_FIRE_QUEEN_INACTIVE, NpcID.RT_ICE_KING_INACTIVE)));
 		return Collections.unmodifiableMap(rules);
@@ -722,6 +737,9 @@ final class EncounterGroup
 		oneBoss(rules, "Zulrah", NpcID.SNAKEBOSS_BOSS_RANGED, NpcID.SNAKEBOSS_BOSS_MELEE, NpcID.SNAKEBOSS_BOSS_MAGIC);
 		// The King is the boss; a larva dying ends nothing but a fight on itself (T-086).
 		oneBoss(rules, "Maggot King", NpcID.MAGGOT_KING);
+		// Araxxor is the boss; an araxyte dying ends nothing but a fight on itself (T-091). Not his corpse: it despawning
+		// when harvested, with a fight open on an araxyte left alive, is not a kill of that araxyte.
+		oneBoss(rules, "Araxxor", NpcID.ARAXXOR);
 		// One snake: the head, the tail and the body segments are all it.
 		oneBossAll(rules, "The Hueycoatl");
 		oneBoss(rules, "Abyssal Sire", NpcID.ABYSSALSIRE_SIRE_STASIS_SLEEPING, NpcID.ABYSSALSIRE_SIRE_STASIS_AWAKE,

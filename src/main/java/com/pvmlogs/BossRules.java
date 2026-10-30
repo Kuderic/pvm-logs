@@ -385,7 +385,21 @@ class BossRules
 		 * change for it - the Maggot King's slam and punish must not read as a timer.
 		 */
 		Boolean hiddenLive;
+		/**
+		 * Levels the boss gains while it applies (T-091: Araxxor's enrage, +35
+		 * Defence, +28 Magic and +31 Ranged by the DPS calc's Phases.ts), on top of
+		 * the monster data's and under any drain, which carries over.
+		 */
+		Levels levels;
 		String source;
+	}
+
+	/** Levels added to a boss's own (T-091). */
+	static final class Levels
+	{
+		int defence;
+		int magic;
+		int ranged;
 	}
 
 	static final class InsideNpc

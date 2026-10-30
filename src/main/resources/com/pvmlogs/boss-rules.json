@@ -46,7 +46,14 @@
     {
       "name": "Araxxor",
       "npcIds": [13668],
-      "unmodelled": "Enraged phase adds 35 defence, 28 magic and 31 ranged levels (DPS calc scaling/Phases.ts). The enrage is not tracked, so expected figures after it read high.",
+      "damageModifiers": {
+        "states": [
+          {"name": "enraged", "startOnBossAnim": [11488, 11489, 11487], "source": "T-091. OSRS Wiki, read 2026-10-29: Araxxor/Strategies: 'When Araxxor falls below 255 health, he will enter an enrage phase' (Araxxor: 'When Araxxor reaches 25% health, he enters an enrage phase'), and it lasts 'for the remainder of the fight'. The signal is his enrage animation: RuneLite 1.13.4's gamevals name 11488 and 11489 NPC_ARAXXOR_01_ENRAGE_TRANSITION_01 and _02, and 11487 NPC_ARAXXOR_01_ATTACK_MELEE_ENRAGED_01, the cleave that replaces his melee once enraged (so a missed transition still opens it at his first cleave). Eric's log of 2026-10-29 (pvm-debug-20261029-171127), the second attempt: 11488 at [8030] on the tick his bar fell from 279 to 217, 11489 at [8032], then 11487 every 4 ticks from [8035]; in the kill, 11487 every 4 ticks from [7649] at 212 hp, where 11480 (NPC_ARAXXOR_01_ATTACK_MELEE_01) came every 6 before [7628] at 256. No end: it is open until he dies (the tracker forgets him at his despawn)."}
+        ],
+        "modifiers": [
+          {"name": "enraged", "state": "enraged", "levels": {"defence": 35, "magic": 28, "ranged": 31}, "hiddenLive": true, "source": "T-091. The DPS calc's scaling/Phases.ts: Araxxor's 'Enraged' phase adds 35 Defence, 28 Magic and 31 Ranged levels; OSRS Wiki, read 2026-10-29: Araxxor: 'his Defence level increases by 35' (135 to 170; the infobox's 190/218 Magic and 210/241 Ranged agree with the calc). Drains carry over (Araxxor/Strategies: 'drained stats will carry over to enrage'), so a drain comes off the enraged level. hiddenLive, the Jagex rule: a live change at the enrage would announce it, so only the scoring takes it."}
+        ]
+      },
       "defenceDrain": {
         "maxDefenceDrain": 45,
         "source": "OSRS Wiki, read 2026-10-28: Araxxor/Strategies: 'His Defence level can be only drained by up to 45 levels'; 'drained stats will carry over to enrage' (the enrage is a form change: drains carry). DPS calc floor 90 agrees."

@@ -50,7 +50,8 @@ public class BossRulesTest
 	public void unmodelledBossesSaySo()
 	{
 		final BossRules rules = bundled();
-		assertNotNull(rules.forNpc(13668).unmodelled); // Araxxor
+		// Araxxor's enrage is modelled since T-091 (AraxxorTest).
+		assertNull(rules.forNpc(13668).unmodelled);
 		assertNotNull(rules.forNpc(14176).unmodelled); // Yama
 		assertNotNull(rules.forNpc(16640).unmodelled); // Bork
 		assertNull(rules.forNpc(NpcIds.GOBLIN));

@@ -4951,12 +4951,15 @@ public class PvmPerformancePlugin extends Plugin
 
 	/**
 	 * Whether the room goes on past the death of {@code fight}'s target, keeping
-	 * what the others have left: an unscored add of an open room (T-021), or any
-	 * monster of an open run (T-089).
+	 * what the others have left: an add of an open room, unscored (T-021) or
+	 * scored (T-091), or any monster of an open run (T-089).
 	 */
 	static boolean roomGoesOnAtDeath(Encounter room, Fight fight, int npcId)
 	{
-		return EncounterGroup.isUnscored(npcId) && switchesWithinRoom(room, fight, npcId)
+		// Any add, scored or not (T-091): an araxyte dying left Araxxor's counts cleared, so his last fight's RECONCILE held
+		// only its own segment, 254 of his 1,020.
+		return (EncounterGroup.isUnscored(npcId) || !EncounterGroup.lootIsTheKill(npcId))
+			&& switchesWithinRoom(room, fight, npcId)
 			|| fight.isMonsterRoom() && room != null && !room.isEnded();
 	}
 

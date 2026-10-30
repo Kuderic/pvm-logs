@@ -564,6 +564,22 @@ final class ModifierTracker
 		return v;
 	}
 
+	/** The Defence, Magic and Ranged levels the modifiers add (T-091: Araxxor's enrage), summed; zeros for none. */
+	static int[] levels(List<BossRules.ModifierRule> mods)
+	{
+		final int[] add = new int[3];
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.levels != null)
+			{
+				add[0] += m.levels.defence;
+				add[1] += m.levels.magic;
+				add[2] += m.levels.ranged;
+			}
+		}
+		return add;
+	}
+
 	/** How many damage rolls the attack takes the best of (T-079): the most any modifier asks, one by default. */
 	static int rolls(List<BossRules.ModifierRule> mods)
 	{

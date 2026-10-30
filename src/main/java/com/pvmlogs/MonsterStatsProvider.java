@@ -880,6 +880,23 @@ class MonsterStatsProvider
 				drainImmune, warning));
 		}
 
+		/**
+		 * This entry with levels added to its Defence, Magic and Ranged (T-091: a
+		 * boss's enraged phase), or itself when nothing is added.
+		 */
+		MonsterStats withLevels(int defence, int magic, int ranged)
+		{
+			if (defence == 0 && magic == 0 && ranged == 0)
+			{
+				return this;
+			}
+			final MonsterStats copy = carry(new MonsterStats(name, size, hitpoints, Math.max(0, defenceLevel + defence),
+				Math.max(0, magicLevel + magic), offensiveMagic, defStab, defSlash, defCrush, defMagic, defRanged,
+				weaknessElement, weaknessSeverity, attributes, xpMultiplier, version, drainImmune, warning));
+			copy.rangedLevel = Math.max(0, rangedLevel + ranged);
+			return copy;
+		}
+
 		/** This entry carrying a warning, appended to any it already has. */
 		MonsterStats withWarning(String extra)
 		{
