@@ -68,6 +68,7 @@ Nothing about Eric's account goes in commits, PRs, fixtures or pictures:
 - no in-game name (crop RuneLite's title bar out of recordings);
 - no Windows usernames in paths;
 - no email address or tokens.
+- no links to an agent's sessions or tasks: PR descriptions end with their own content, and commit messages carry no session line.
 
 Requests to outside sites carry a generic User-Agent.
 

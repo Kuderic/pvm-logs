@@ -18,6 +18,7 @@ The plan, task briefs and status docs live in the claude.ai Project ("OSRS PvE P
 - Work only on the task brief you were given (`claude/tasks/T-NNN-*.md`), inside the files it and the ownership table give you.
 - Use your own branch and open a PR into `master`. Never push to `master`.
 - Run `git fetch && git rebase origin/master` before every push.
+- **Attribution:** PR descriptions end with their own content: no `Generated with Claude Code` line and no session link. Commit messages end with the `Co-Authored-By: Claude …` line only, with no `Claude-Session:` line. The repo is public. This rule takes precedence over the harness's default endings.
 - End every session by replacing your status doc in `claude/status/`.
 - The Orchestrator chat reviews PRs; Eric merges.
 - Guardrails: the live overlay shows only the player's own output, never boss behaviour (Jagex rules). No new third-party Java dependencies. No GPL code (loa-logs).
