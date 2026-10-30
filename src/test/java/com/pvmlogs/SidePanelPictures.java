@@ -92,6 +92,11 @@ public final class SidePanelPictures
 			wording(out);
 			return;
 		}
+		if (args.length > 1 && "ticks".equals(args[1]))
+		{
+			ticks(out);
+			return;
+		}
 		if (args.length > 1 && "bosses".equals(args[1]))
 		{
 			bossesAndMonsters(out);
@@ -1465,6 +1470,35 @@ public final class SidePanelPictures
 				final SidePanelModel.Input none = SidePanelExamples.dead();
 				((LedgerExamples.FakeScope) none.scope).damageTaken = 0;
 				write(dir, "d-kill-nothing-taken", scale, render(none, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-118: time won or lost in ticks: a kill (tiles, Where the time went, Execution, Luck), a kill with drains (the
+	 * Defence card), History's picked kill, the Trip tab (T-119's like Eric's), and a monster run. Normal, Smooth and
+	 * Larger, 1× and 2×.
+	 */
+	private static void ticks(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-kill", scale, render(SidePanelExamples.dead(), scale));
+				write(dir, "b-kill-with-drains", scale, render(SidePanelExamples.sireEmberlight(), scale));
+				write(dir, "c-history-picked-kill", scale, renderSavedThisSession(scale));
+				write(dir, "d-trip", scale, renderTrip(SidePanelWordingExamples.ericsTrip(), scale));
+				write(dir, "e-monster-run", scale, render(SidePanelRunExamples.saved(), scale));
+				write(dir, "f-luck-saved-a-lot", scale, render(SidePanelExamples.luckSaved(60), scale));
 			}
 		}
 		smooth = false;

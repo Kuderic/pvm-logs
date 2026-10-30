@@ -445,13 +445,21 @@ final class PanelSnapshot
 		final Text label;
 		final Text hint;
 		final Text value;
+		/** T-118: what the part cost in damage, on hover (a setup part's); null for none. */
+		final String tooltip;
 
 		BudgetRow(Fill swatch, Text label, Text hint, Text value)
+		{
+			this(swatch, label, hint, value, null);
+		}
+
+		BudgetRow(Fill swatch, Text label, Text hint, Text value, String tooltip)
 		{
 			this.swatch = swatch;
 			this.label = label;
 			this.hint = hint == null ? Text.NONE : hint;
 			this.value = value;
+			this.tooltip = tooltip;
 		}
 	}
 

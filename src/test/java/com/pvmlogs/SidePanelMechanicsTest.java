@@ -72,7 +72,7 @@ public class SidePanelMechanicsTest
 		final PanelSnapshot.BudgetRow row = budgetRow(b, PanelSnapshot.Fill.MECHANICS);
 		assertNotNull(row);
 		assertEquals("mechanics", row.label.text);
-		assertEquals("+17 s", row.value.text);
+		assertEquals("+29 ticks", row.value.text);
 		assertEquals(SidePanelStyle.BODY, row.value.colour);
 		// Right after eating's row.
 		assertEquals(PanelSnapshot.Fill.EATING, b.rows.get(b.rows.indexOf(row) - 1).swatch);

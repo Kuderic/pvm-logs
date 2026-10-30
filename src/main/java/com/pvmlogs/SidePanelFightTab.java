@@ -496,6 +496,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel card = SidePanelParts.card(6);
+		// T-118: the parts are in ticks; once, here, what a tick is.
+		card.setToolTipText(SidePanelModel.TICK_NOTE);
 		final SidePanelTimeBudgetBar bar = new SidePanelTimeBudgetBar(tab.budget);
 		card.add(bar);
 		final List<SidePanelParts.Swatch> swatches = new ArrayList<>();
@@ -507,6 +509,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			final SidePanelParts.Swatch sw = new SidePanelParts.Swatch(r.swatch);
 			final SidePanelParts.Line line = new SidePanelParts.Line(r.label, r.value);
 			line.left.cutSuffixFirst();
+			// T-118: a setup part's damage on hover; the others fall back to the card's note on ticks.
+			line.setToolTipText(r.tooltip);
 			row.add(sw, BorderLayout.WEST);
 			row.add(line, BorderLayout.CENTER);
 			swatches.add(sw);
@@ -542,6 +546,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				swatches.get(i).set(r.swatch, r.swatch == PanelSnapshot.Fill.LUCK_FASTER ? t.budget.luckSavedColour : null);
 				lines.get(i).set(r.label, r.hint.isEmpty() ? null : new Text(" " + r.hint.text, r.hint.colour,
 					r.hint.type), r.value);
+				if (!java.util.Objects.equals(r.tooltip, lines.get(i).getToolTipText()))
+				{
+					lines.get(i).setToolTipText(r.tooltip);
+				}
 			}
 			for (int i = 0; i < average.size(); i++)
 			{
@@ -566,6 +574,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		for (PanelSnapshot.Tile t : tab.tiles)
 		{
 			final SidePanelStatTile v = new SidePanelStatTile(t);
+			// T-118: Luck's and Execution's time is in ticks; say what a tick is.
+			if ("Luck".equals(t.label.text) || "Execution".equals(t.label.text))
+			{
+				v.setToolTipText(SidePanelModel.TICK_NOTE);
+			}
 			views.add(v);
 			grid.add(v);
 		}
@@ -823,7 +836,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		card.add(strip);
 		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(legend);
-		add(new SidePanelSection("ticks", "Ticks", Text.small("36 s a row", SidePanelStyle.SECONDARY), card, folds));
+		add(new SidePanelSection("ticks", "Ticks", Text.small("60 ticks a row", SidePanelStyle.SECONDARY), card, folds));
 		final int[] rows = {SidePanelTickStrip.rows(chartData.length())};
 		updaters.add(t ->
 		{

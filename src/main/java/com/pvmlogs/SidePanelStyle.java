@@ -431,7 +431,24 @@ final class SidePanelStyle
 			: String.format(Locale.ENGLISH, "%d:%02d", m, r);
 	}
 
-	/** {@code 14 s}, never {@code -0 s}; rounded half away from zero. */
+	/**
+	 * T-118: an amount of time won or lost, given in seconds, as whole ticks ({@link LedgerRows#ticks}): {@code 1 tick},
+	 * {@code 25 ticks}, never negative zero.
+	 */
+	static String ticks(double seconds)
+	{
+		final long t = LedgerRows.ticks(seconds);
+		return LedgerRows.ticksWord(t == 0 ? 0 : t);
+	}
+
+	/** T-118: {@link #ticks}'s short form for a box that doesn't fit it: {@code 25t}. */
+	static String ticksShort(double seconds)
+	{
+		final long t = LedgerRows.ticks(seconds);
+		return LedgerRows.number(t == 0 ? 0 : t) + LedgerRows.TICKS_SHORT;
+	}
+
+	/** {@code 14 s}, never {@code -0 s}; rounded half away from zero. A duration, not time won or lost: a run's pace. */
 	static String seconds(double seconds)
 	{
 		final long r = LedgerRows.roundHalfAway(seconds);
