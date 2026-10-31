@@ -173,6 +173,12 @@ final class SidePanelPartyTab extends JPanel
 		{
 			update(t);
 		}
+		// T-133: one paint pass for the whole update, as the Fight and Trip tabs have had since T-046. Swing paints each
+		// dirty component with no dirty ancestor in a pass of its own, and each went through this tab's buffer and its own
+		// copy to the window: the meter, the chart, the header's texts and your Fight panels, about 6 an update, each
+		// costing ~6 ms on Eric's PC outside our timers (the 11:58 log's ~42 ms "repaint after apply"). With the tab dirty,
+		// every child's repaint joins its pass.
+		repaint();
 	}
 
 	/** Built again in the panel's new text settings (T-053). */

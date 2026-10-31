@@ -90,7 +90,10 @@ final class PerfProbe
 		CHART_DRAW("damage chart image"),
 		STRIP_DRAW("tick strip image"),
 		// T-046 follow-up: a Fight tab rebuilt because its structure changed (a section or a damage row came or went).
-		REBUILD("panel rebuild (structure changed)");
+		REBUILD("panel rebuild (structure changed)"),
+		// T-133: Swing's whole repaint pass after an apply (layout, paint and the copy to the window), timed only by the
+		// dev-only SidePanelRepaintTiming (-Dluckvsskill.repaintTiming=true); left out of the report when it didn't run.
+		REPAINT_PASS("Swing's repaint pass after an apply, whole (dev timing)");
 
 		final String label;
 
@@ -689,6 +692,7 @@ final class PerfProbe
 			Arrays.fill(slowAfterApply, 0);
 			layoutAskers.clear();
 			layoutPasses = 0;
+			repaintDirty.clear();
 			pendingAsker = null;
 			inputDelay.reset();
 			inputSlow = 0;
@@ -777,10 +781,21 @@ final class PerfProbe
 		{
 			for (SwingSlot s : SwingSlot.values())
 			{
+				if (s == SwingSlot.REPAINT_PASS && swingTimers[s.ordinal()].count() == 0)
+				{
+					continue;
+				}
 				swing.append(s == SwingSlot.APPLY ? " " : "; ").append(timerSummary(s.label, swingTimers[s.ordinal()]));
 			}
 		}
 		lines.add(swing.toString());
+		synchronized (swingLock)
+		{
+			if (!repaintDirty.isEmpty())
+			{
+				lines.add(repaintLine());
+			}
+		}
 		synchronized (swingLock)
 		{
 			// Behind only the panel's apply: the apply's repaint is queued while it runs, behind this probe (T-046 follow-up).
@@ -902,6 +917,48 @@ final class PerfProbe
 				+ "long frames %d%s", count, spanNanos <= 0 ? 0 : count / (spanNanos / 1e9), median / 1e3,
 			quantile(micros, kept, 0.95) / 1e3, quantile(micros, kept, 0.99) / 1e3, maxNanos / 1e6, hitches,
 			longFrames, kept < count ? " (of the first " + kept + ")" : "");
+	}
+
+	// T-133: what asked for the repaint passes after applies, by component class: {requests, area in px}.
+	private final Map<String, long[]> repaintDirty = new java.util.LinkedHashMap<>();
+
+	/**
+	 * T-133: one of Swing's repaint passes after an apply, from the dev-only {@link SidePanelRepaintTiming}: its whole
+	 * time, and what asked for it.
+	 */
+	void repaintPass(long nanos, Map<String, long[]> dirty)
+	{
+		if (!on)
+		{
+			return;
+		}
+		synchronized (swingLock)
+		{
+			if (swingTimers != null)
+			{
+				swingTimers[SwingSlot.REPAINT_PASS.ordinal()].add(nanos);
+			}
+			for (Map.Entry<String, long[]> e : dirty.entrySet())
+			{
+				final long[] sum = repaintDirty.computeIfAbsent(e.getKey(), k -> new long[2]);
+				sum[0] += e.getValue()[0];
+				sum[1] += e.getValue()[1];
+			}
+		}
+	}
+
+	/** {@code PERF repaint passes after applies (dev timing), asked by: SidePanelText 120x 0.2 Mpx; ...}, the most first. */
+	private String repaintLine()
+	{
+		final List<Map.Entry<String, long[]>> ranked = new ArrayList<>(repaintDirty.entrySet());
+		ranked.sort((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
+		final StringBuilder s = new StringBuilder("PERF repaint passes after applies (dev timing), asked by:");
+		for (int i = 0; i < ranked.size() && i < 10; i++)
+		{
+			s.append(i == 0 ? " " : "; ").append(ranked.get(i).getKey()).append(' ').append(ranked.get(i).getValue()[0])
+				.append(String.format("x %.2f Mpx", ranked.get(i).getValue()[1] / 1e6));
+		}
+		return s.toString();
 	}
 
 	static String timerSummary(String label, Timer t)
