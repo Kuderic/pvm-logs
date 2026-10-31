@@ -176,7 +176,9 @@ public class DamageTakenTest
 	public void anUnscoredFightTakesTheHitButTheTripDoesNot()
 	{
 		final DamageTaken taken = new DamageTaken();
-		final Fight judge = new Fight("Judge of Yama", NpcID.YAMA_JUDGE_OF_YAMA, 1, 400, 0L, null, 0);
+		// A Zulrah snakeling, unscored (T-084). (The Judge of Yama was the example until T-136 scored it.)
+		final Fight judge = new Fight("Snakeling", NpcID.SNAKEBOSS_MINION_MELEE, 1, 1, 0L, null, 0);
+		assertTrue(!judge.isScored());
 		final SessionTotals trip = new SessionTotals(0L);
 		taken.onSplat(HitsplatID.DAMAGE_ME, 25, 10, false, judge, trip, 600L);
 		taken.onSplat(HitsplatID.BURN, 3, 11, false, judge, trip, 1200L);

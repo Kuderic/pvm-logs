@@ -287,7 +287,9 @@ final class EncounterGroup
 			NpcID.NIGHTMARE_WEAK_PHASE_01, NpcID.NIGHTMARE_WEAK_PHASE_02,
 			NpcID.NIGHTMARE_WEAK_PHASE_03);
 
-		put(groups, "Yama", NpcID.YAMA, NpcID.YAMA_JUDGE_OF_YAMA, NpcID.LEAGUE6_JUDGE_OF_YAMA);
+		// T-136: and his Void Flares, or attacking one ended his room (Eric's first Yama log, 2026-10-31: kill 1 split, a
+		// 16-tick kill saved).
+		put(groups, "Yama", NpcID.YAMA, NpcID.YAMA_JUDGE_OF_YAMA, NpcID.LEAGUE6_JUDGE_OF_YAMA, NpcID.YAMA_VOIDFLARE);
 
 		// Tombs of Amascut. Zebak and Kephri change id mid-fight for the same fight; the monkey room's baboons are a room
 		// rather than a set of kills.
@@ -527,8 +529,8 @@ final class EncounterGroup
 			NpcID.ABYSSALSIRE_LUNG, NpcID.ABYSSALSIRE_LUNG_DYING,
 			NpcID.ABYSSALSIRE_SPAWN, NpcID.ABYSSALSIRE_SPAWN_DYING,
 			NpcID.ABYSSALSIRE_SCION, NpcID.ABYSSALSIRE_SCION_DYING,
-			// Yama's Judge.
-			NpcID.YAMA_JUDGE_OF_YAMA, NpcID.LEAGUE6_JUDGE_OF_YAMA,
+			// Yama's Judge, and his Void Flares (T-136).
+			NpcID.YAMA_JUDGE_OF_YAMA, NpcID.LEAGUE6_JUDGE_OF_YAMA, NpcID.YAMA_VOIDFLARE,
 			// The Kraken's tentacles (T-061): the Kraken's own drop is the kill.
 			NpcID.SLAYER_KRAKEN_BOSS_TENTACLE, NpcID.SLAYER_KRAKEN_BOSS_TENTACLE_WHIRLPOOL,
 			// The Royal Titans' elementals.
@@ -575,10 +577,8 @@ final class EncounterGroup
 			// lands on the arena" is "instantly killed" (wiki, Maggot King/Strategies). Eric's log of 2026-10-29 shows it:
 			// every bow shot at one is a 30, on maxes of 24 to 37, which read as luck. The shot's tick is the King's time.
 			NpcID.UR_MAGGOT_LARVAE,
-			// The Judge is Yama's own add. Grouped so killing it does not reset what is on screen, and unscored so it does not
-			// lend its figures to his. Ignoring it outright would have been worse than either: with nothing tracking the Judge,
-			// the time spent killing its 400 hitpoints would have been booked against Yama as ticks lost.
-			NpcID.YAMA_JUDGE_OF_YAMA, NpcID.LEAGUE6_JUDGE_OF_YAMA,
+			// The Judge of Yama was here (unscored) until T-136: a required phase with stats of its own (400 hitpoints), so
+			// a scored add of Yama's room, as Araxxor's araxytes are (T-091), its damage and luck under the room's adds.
 			// Phosani's adds, killed in one hit apiece. Grouped rather than ignored, or the time spent on them would be booked
 			// against her as ticks lost; unscored, or their guaranteed max hits would flatter whoever spent longest on them.
 			NpcID.NIGHTMARE_CHALLENGE_HUSK_MAGIC, NpcID.NIGHTMARE_CHALLENGE_HUSK_RANGED,
@@ -686,6 +686,9 @@ final class EncounterGroup
 		// The Maggot King drops no loot event: he dies, and a corpse is left to loot (Eric's four kills of 2026-10-29, no
 		// LOOT line in any). His death closes the room (T-086).
 		rules.put("Maggot King", new DeathClose(1, ids(NpcID.MAGGOT_KING), ids()));
+		// Yama drops no loot event either: none of his four kills in Eric's log of 2026-10-31 has a LOOT line, and each
+		// room ended only because a Void Flare split it (T-136). His room closes at his death.
+		rules.put("Yama", new DeathClose(1, ids(NpcID.YAMA), ids()));
 		// Araxxor drops no loot event: he is harvested or destroyed (wiki, Araxxor; no LOOT line for him in Eric's log of
 		// 2026-10-29). His room closes as he becomes his corpse, or at a dead despawn should that come first (T-091).
 		rules.put("Araxxor", new DeathClose(1, ids(NpcID.ARAXXOR), ids(NpcID.ARAXXOR_DEAD)));
