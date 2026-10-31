@@ -978,12 +978,61 @@ final class SidePanelHistory
 		final List<KillRow> out = new ArrayList<>();
 		for (Encounter room : allRooms(history))
 		{
-			if (room.getStartMillis() >= since && fought(room))
+			// T-123: only what started since the trip did.
+			final Encounter part = sinceTrip(room, since);
+			if (part != null && fought(part))
 			{
-				out.add(row(room, now, zone));
+				out.add(row(part, now, zone));
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * T-123: the part of a room that belongs to the trip started at {@code since}, as a trip holds only fights started at
+	 * or after its start. The whole room when its first fight started then or later. None of a boss's room that was
+	 * already running when New trip was clicked: it is the old trip's, the fights after the click in it too, as the kill
+	 * closing it. Of a run of monsters (T-089), which goes on across the click, the fights started since, as a run of their
+	 * own. Null for none.
+	 */
+	static Encounter sinceTrip(Encounter room, long since)
+	{
+		if (room == null || room.getFights().isEmpty())
+		{
+			return room;
+		}
+		if (firstStart(room) >= since)
+		{
+			return room;
+		}
+		if (!room.isMonsterRoom())
+		{
+			return null;
+		}
+		Encounter part = null;
+		for (Fight f : room.getFights())
+		{
+			if (f.getStartMillis() >= since)
+			{
+				if (part == null)
+				{
+					part = new Encounter(room.getName(), room.getRaid(), f.getStartMillis());
+				}
+				part.add(f);
+			}
+		}
+		return part;
+	}
+
+	/** T-123: when a room began, by its first fight: a live room can be opened a moment before its fight. */
+	static long firstStart(Encounter room)
+	{
+		long first = Long.MAX_VALUE;
+		for (Fight f : room.getFights())
+		{
+			first = Math.min(first, f.getStartMillis());
+		}
+		return first == Long.MAX_VALUE ? room.getStartMillis() : first;
 	}
 
 	/**

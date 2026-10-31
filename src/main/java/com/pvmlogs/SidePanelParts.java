@@ -244,16 +244,31 @@ final class SidePanelParts
 			left.set(row.left, row.hint.isEmpty() ? null : row.hint);
 			right.set(row.right);
 			// T-119: the value's short form, for where the full one would cut the label.
-			if (!java.util.Objects.equals(rightShort, row.rightShort))
+			setRightShort(row.rightShort);
+			// T-109: a row's tooltip on the whole line, both its texts.
+			setTip(row.tooltip);
+		}
+
+		/** T-119: the value's short forms, longest first; with any, the label is kept whole before they are used. */
+		void setRightShort(List<String> forms)
+		{
+			if (!java.util.Objects.equals(rightShort, forms))
 			{
-				rightShort = row.rightShort;
+				rightShort = forms;
 				right.setShort(rightShort);
 				relayout(this);
 			}
-			// T-109: a row's tooltip on the whole line, both its texts.
-			setToolTipText(row.tooltip);
-			left.setToolTipText(row.tooltip);
-			right.setToolTipText(row.tooltip);
+		}
+
+		/** T-109: a tooltip on the whole line, both its texts; set again only when it changes. */
+		void setTip(String tooltip)
+		{
+			if (!java.util.Objects.equals(tooltip, getToolTipText()))
+			{
+				setToolTipText(tooltip);
+				left.setToolTipText(tooltip);
+				right.setToolTipText(tooltip);
+			}
 		}
 
 		void set(PanelSnapshot.Text l, PanelSnapshot.Text lAfter, PanelSnapshot.Text r)

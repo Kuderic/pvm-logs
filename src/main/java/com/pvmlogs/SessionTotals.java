@@ -148,6 +148,15 @@ class SessionTotals
 		specLuckDamage = 0;
 	}
 
+	/**
+	 * T-123: whether a fight or room that began at {@code firstStartMillis} is this trip's: it began at or after the trip
+	 * did. One running when New trip was clicked stays the old trip's, so the plugin books nothing of it here.
+	 */
+	boolean holds(long firstStartMillis)
+	{
+		return firstStartMillis >= startMillis;
+	}
+
 	void recordFightEnded(boolean died, Fight fight, long now)
 	{
 		fights++;

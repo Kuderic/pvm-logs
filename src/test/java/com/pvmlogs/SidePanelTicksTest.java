@@ -14,8 +14,9 @@ import static org.junit.Assert.assertTrue;
 /**
  * T-118, to the brief's split (Eric, 2026-10-30 10:04): time spent not attacking reads in ticks (uptime, eating,
  * mechanics, unscored adds, the Execution total); luck and comparisons with a kill's time stay in seconds; the setup
- * costs (stat boost, prayer, gear) read in damage on the Execution card, from T-117's figures, and in Where the time
- * went's tooltips. Clocks stay clocks, and everything fits at 1× and 2× in Normal, Smooth and Larger text.
+ * costs (stat boost, prayer, gear) read in damage, from T-117's figures: on the Execution card, and since T-123 (Eric,
+ * 2026-10-31) in Where the time went too, with their ticks there on hover. Clocks stay clocks, and everything fits at 1×
+ * and 2× in Normal, Smooth and Larger text.
  */
 public class SidePanelTicksTest
 {
@@ -35,13 +36,14 @@ public class SidePanelTicksTest
 	public void whereTheTimeWentIsTicksForIdleTimeAndSecondsForLuck()
 	{
 		final PanelSnapshot.TimeBudget b = SidePanelModel.fight(SidePanelExamples.dead()).budget;
-		// The best play is a clock; the idle and setup parts are ticks; luck is seconds.
+		// The best play is a clock; the idle parts are ticks; the setup parts damage (T-123); luck is seconds.
 		assertTrue(b.rows.get(0).value.text, b.rows.get(0).value.text.matches("\\d+:\\d\\d"));
 		for (PanelSnapshot.BudgetRow r : b.rows.subList(1, b.rows.size()))
 		{
 			final boolean luck = r.label.text.startsWith("luck");
+			final boolean setup = SETUP.contains(r.label.text);
 			assertTrue(r.label.text + " " + r.value.text, r.value.text.matches(luck
-				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : "\\+\\d+ ticks?"));
+				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "\\+\\d+ ticks?"));
 		}
 		// "your average 1:54 … 23 s slower", "luck removed 2:02 … 5 s slower than 1:57": clocks, and seconds.
 		for (PanelSnapshot.Row r : b.average)
@@ -80,21 +82,34 @@ public class SidePanelTicksTest
 		assertTrue(rows.toString(), rows.stream().anyMatch(r -> r.startsWith("stat boost ") && r.endsWith(" dmg)")));
 	}
 
+	private static final List<String> SETUP = Arrays.asList(SidePanelModel.BOOST, SidePanelModel.PRAYER,
+		SidePanelModel.GEAR, "setup");
+
 	@Test
-	public void whereTheTimeWentsSetupPartsGiveTheirDamageOnHover()
+	public void whereTheTimeWentsSetupPartsReadTheirDamageAndGiveTheirTicksOnHover()
 	{
 		final SidePanelModel.Input in = SidePanelExamples.dead();
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
-		final PanelSnapshot.TimeBudget b = SidePanelModel.fight(in).budget;
+		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
+		final PanelSnapshot.TimeBudget b = t.budget;
 		boolean boost = false;
 		for (PanelSnapshot.BudgetRow r : b.rows)
 		{
 			if (r.label.text.equals(SidePanelModel.BOOST))
 			{
 				boost = true;
-				// "stat boost +4 ticks: 31 expected damage lost to a lower boost."
-				assertEquals("stat boost " + r.value.text + ": " + LedgerRows.number(LedgerRows.roundHalfAway(n.boostDamage))
-					+ " expected damage lost to a lower boost.", r.tooltip);
+				// T-123: "stat boost  -16 dmg", the Execution card's figure, and "-16" where it's narrow.
+				final long dmg = LedgerRows.roundHalfAway(n.boostDamage);
+				assertEquals("-" + dmg + " dmg", r.value.text);
+				assertEquals(Arrays.asList("-" + dmg), r.valueShort);
+				assertTrue(execution(t, SidePanelModel.BOOST), execution(t, SidePanelModel.BOOST).endsWith("(-" + dmg
+					+ " dmg)"));
+				// "stat boost: 16 expected damage lost to a lower boost, about 4 ticks of the kill."
+				assertEquals("stat boost: " + dmg + " expected damage lost to a lower boost, about "
+					+ LedgerRows.ticksWord(LedgerRows.ticks(n.boostCost)) + " of the kill.", r.tooltip);
+				// Coloured by its time, as before and as the Execution card's row.
+				assertEquals(LedgerRows.isCosting(n.boostCost, n.clock) ? SidePanelStyle.COST : SidePanelStyle.BODY,
+					r.value.colour);
 			}
 			if (r.label.text.equals("uptime") || r.label.text.equals("eating") || r.label.text.startsWith("luck"))
 			{
@@ -102,6 +117,18 @@ public class SidePanelTicksTest
 			}
 		}
 		assertTrue(boost);
+	}
+
+	private static String execution(PanelSnapshot.FightTab t, String label)
+	{
+		for (PanelSnapshot.Part p : t.execution.parts)
+		{
+			if (p.label.text.equals(label))
+			{
+				return p.value.text;
+			}
+		}
+		throw new AssertionError(label);
 	}
 
 	@Test
@@ -134,7 +161,7 @@ public class SidePanelTicksTest
 	public void aTickIsSaidOnceWhereTheFiguresAre()
 	{
 		assertEquals("Luck and comparisons with your average are in seconds; time spent not attacking is in ticks (1 tick is"
-			+ " 0.6 s).", SidePanelModel.TICK_NOTE);
+			+ " 0.6 s); setup costs are in damage.", SidePanelModel.TICK_NOTE);
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.dead())));
 		int noted = 0;
@@ -235,7 +262,7 @@ public class SidePanelTicksTest
 				final String shown = t.lastShown();
 				if (text != null && shown != null && (text.matches("(your average|luck removed) \\d+:\\d\\d")
 					|| text.equals(SidePanelModel.WORTH) || text.equals(SidePanelModel.SPEC_LUCK)
-					|| text.equals("expected dmg added") || text.equals("your specials' luck")))
+					|| text.equals("expected dmg added") || text.equals("your specials' luck") || SETUP.contains(text)))
 				{
 					// A clock or label beside a value in ticks stays whole: the value takes its short form first.
 					final String at = (larger ? "larger " : "") + (smooth ? "smooth " : "normal ") + scale + "×: ";
@@ -243,7 +270,7 @@ public class SidePanelTicksTest
 					clocks++;
 				}
 				if (text == null || shown == null || !(text.contains(" tick") || text.matches(".*\\d+t( .*)?")
-					|| text.endsWith(" dmg)") || text.matches(".*\\d+ s (faster|slower).*")))
+					|| text.endsWith(" dmg)") || text.matches("-\\d+ dmg") || text.matches(".*\\d+ s (faster|slower).*")))
 				{
 					continue;
 				}

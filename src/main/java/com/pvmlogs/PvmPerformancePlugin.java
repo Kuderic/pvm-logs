@@ -603,6 +603,8 @@ public class PvmPerformancePlugin extends Plugin
 
 	// Running totals for the trip, shown instead of the current fight when the overlay is set to whole-trip mode.
 	private final SessionTotals session = new SessionTotals(System.currentTimeMillis());
+	// T-123: where a fight's records go when it began before the trip did (New trip clicked during it): nowhere read.
+	private final SessionTotals oldTrip = new SessionTotals(0L);
 	// Every fight's attack-by-attack and tick-by-tick record this session, for the side panel's charts (T-035). Fed from
 	// Fight's own counting; the hooks below add what each attack was and whose each splat is.
 	private final FightTimeline.Store timelines = new FightTimeline.Store();
@@ -615,7 +617,7 @@ public class PvmPerformancePlugin extends Plugin
 	// bookings below and the drain tracker's events. The lambdas read the injected fields when called.
 	private final DrainLuck drainLuck = new DrainLuck(index -> drain.tracked(index),
 		(npcId, base, state) -> combatCalc.figuresAt(npcId, base, state),
-		(expected, variance) -> session.recordOutcomeShift(expected, variance), perf);
+		(expected, variance) -> trip(this.current).recordOutcomeShift(expected, variance), perf);
 	// Specials' splats still to come long after their hit: the ancient godsword's 25 (T-037).
 	private final AttackSplats.Delayed delayedSplats = new AttackSplats.Delayed();
 
@@ -1059,7 +1061,7 @@ public class PvmPerformancePlugin extends Plugin
 			maxHits.splat(npc.getIndex(), client.getTickCount(), hitsplat.getAmount());
 			if (current.isScored())
 			{
-				session.recordAttempt(hitsplat.getAmount(), landedAttack, now);
+				trip(current).recordAttempt(hitsplat.getAmount(), landedAttack, now);
 			}
 			// Melee, plus a projectile-less cast the animation route did not recognise; everything else is booked from its
 			// projectile. That route sees misses and this one cannot, so it books first and this is only here so an unknown cast
@@ -1149,7 +1151,7 @@ public class PvmPerformancePlugin extends Plugin
 		final String protection = protectionUp();
 		final boolean fighting = current != null && !current.isEnded();
 		final HitsplatKind kind = taken.onSplat(hitsplat.getHitsplatType(), hitsplat.getAmount(), tick,
-			protection != null, fighting ? current : null, session, now);
+			protection != null, fighting ? current : null, trip(current), now);
 		final String target = fighting ? targetSeen.describe(tick, current.getTargetIndex()) : "";
 		// Read before the splat lands (T-039: across 23 kills the field never fell further than the hits explain).
 		final int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
@@ -1325,7 +1327,7 @@ public class PvmPerformancePlugin extends Plugin
 		current.recordReflectDamage(amount);
 		if (current.isScored())
 		{
-			session.recordReflectDamage(amount);
+			trip(current).recordReflectDamage(amount);
 		}
 	}
 
@@ -1457,7 +1459,7 @@ public class PvmPerformancePlugin extends Plugin
 				fight.recordDotDamage(amount, type);
 				if (fight.isScored())
 				{
-					session.recordDotDamage(amount, type);
+					trip(fight).recordDotDamage(amount, type);
 				}
 				// A burn splat shows how many burn stacks the Maggot King carries, which take off its magic defence (T-087).
 				damageModifiers.onBossDot(npc, HitsplatKind.typeName(type), amount);
@@ -1644,7 +1646,7 @@ public class PvmPerformancePlugin extends Plugin
 			fight.recordThrallDamage(amount);
 			if (fight.isScored())
 			{
-				session.recordThrallDamage(amount);
+				trip(fight).recordThrallDamage(amount);
 			}
 		}
 	}
@@ -1962,7 +1964,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.recordThrallDamage(r.amount);
 			if (current.isScored())
 			{
-				session.recordThrallDamage(r.amount);
+				trip(current).recordThrallDamage(r.amount);
 			}
 		}
 		thralls.noteThrallSplat(r.npcIndex, tick);
@@ -1998,7 +2000,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.revokeDamageDealt(r.amount, hitTaken);
 			if (current.isScored())
 			{
-				session.revokeAttempt(r.amount, hitTaken);
+				trip(current).revokeAttempt(r.amount, hitTaken);
 			}
 		}
 		// Nothing else of the player's landed on that npc this tick, so there was no blow: its booking goes, and the
@@ -2062,7 +2064,7 @@ public class PvmPerformancePlugin extends Plugin
 				current.recordReflectDamage(r.amount);
 				if (current.isScored())
 				{
-					session.recordReflectDamage(r.amount);
+					trip(current).recordReflectDamage(r.amount);
 				}
 			}
 			debug.log("RE-JUDGED hitsplat %d on index %d (was player): REFLECT, %s%s", r.amount, r.npcIndex, match,
@@ -2665,7 +2667,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Gated as a landed hit is: an unscored NPC spends the tick but contributes no damage, accuracy or efficiency.
 		if (current.isScored())
 		{
-			session.recordAttempt(0, false, now);
+			trip(current).recordAttempt(0, false, now);
 		}
 	}
 
@@ -2940,7 +2942,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			current.recordAttackResolved(prayed, switched, actual, ideal, boostCost, switchCost);
 		}
-		session.recordAttackResolved(prayed, switched, actual, ideal, boostCost, switchCost);
+		trip(current).recordAttackResolved(prayed, switched, actual, ideal, boostCost, switchCost);
 	}
 
 	/**
@@ -2992,7 +2994,7 @@ public class PvmPerformancePlugin extends Plugin
 			// for it to land. It still went out: the attempt and its cooldown are counted, which is what uptime reads.
 			debug.log("  scored as a stun: nothing expected, it deals no damage");
 			fight.recordExpected(0, 0, 0, 0);
-			session.recordExpected(0, 0, 0);
+			trip(fight).recordExpected(0, 0, 0);
 			attackObservedNpcId = -1;
 			attackObservedAccuracy = -1;
 			attackObservedAverageHit = -1;
@@ -3133,7 +3135,7 @@ public class PvmPerformancePlugin extends Plugin
 			final double[] at = cappedAtLanding(maxHit, expectedChances, averageHit, variance, capThen,
 				fight.getTargetIndex());
 			fight.recordExpected(maxHit, expectedChances, at[0], at[1]);
-			session.recordExpected(expectedChances, at[0], at[1]);
+			trip(fight).recordExpected(expectedChances, at[0], at[1]);
 			drainLuck.booked(fight, figuresTick, client.getTickCount(), special, specWeapon, at[0], at[1]);
 		}
 		else
@@ -3398,7 +3400,7 @@ public class PvmPerformancePlugin extends Plugin
 				drainLuck.booked(sample.fight, sample.madeTick, client.getTickCount(), sample.special, sample.specWeapon,
 					averageHit, variance);
 			}
-			session.recordExpected(sample.accuracy, averageHit, variance);
+			trip(sample.fight).recordExpected(sample.accuracy, averageHit, variance);
 			return;
 		}
 	}
@@ -3430,7 +3432,7 @@ public class PvmPerformancePlugin extends Plugin
 				current.recordAttackNulled();
 				if (current.isScored())
 				{
-					session.recordAttackNulled();
+					trip(current).recordAttackNulled();
 				}
 			}
 		}
@@ -3477,7 +3479,7 @@ public class PvmPerformancePlugin extends Plugin
 		current.recordDamageDealt(amount, now, false);
 		if (current.isScored())
 		{
-			session.recordAttempt(amount, false, now);
+			trip(current).recordAttempt(amount, false, now);
 		}
 		damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
 		health.damage(npc.getIndex(), npc.getId(), amount, client.getTickCount());
@@ -3602,6 +3604,28 @@ public class PvmPerformancePlugin extends Plugin
 	void resetSession()
 	{
 		session.reset(System.currentTimeMillis());
+	}
+
+	/**
+	 * T-123: the trip a fight's records go into. The trip on now when the fight began at or after it did; otherwise
+	 * none, so a fight running when New trip was clicked (a boss dead but its fight or room not yet over) stays the old
+	 * trip's: its attacks, damage, ticks and its end with the kill. A boss's room goes by its first fight, so its fights
+	 * after the click stay out too; a run of monsters (T-089) by each fight. With no fight, the trip on now.
+	 */
+	private SessionTotals trip(Fight fight)
+	{
+		return tripFor(session, oldTrip, fight, currentEncounter);
+	}
+
+	/** T-123: {@link #trip(Fight)}, for tests: {@code room} is the room open now. */
+	static SessionTotals tripFor(SessionTotals trip, SessionTotals old, Fight fight, Encounter room)
+	{
+		if (fight == null)
+		{
+			return trip;
+		}
+		final boolean bossRoom = room != null && !room.isMonsterRoom() && room.getFights().contains(fight);
+		return trip.holds(bossRoom ? SidePanelHistory.firstStart(room) : fight.getStartMillis()) ? trip : old;
 	}
 
 	/**
@@ -4712,7 +4736,7 @@ public class PvmPerformancePlugin extends Plugin
 					// At one of the boss's adds (T-084): its tick is time in the boss's fight, as a tick on cooldown; nothing
 					// about it is scored.
 					current.recordTickSpent(false);
-					session.recordTickSpent(current.isScored());
+					trip(current).recordTickSpent(current.isScored());
 					debug.log("ATTACK thrown tick %d on an add of %s (npc %d): its tick counted in that fight, nothing scored",
 						attackTick, current.getTargetName(), attackObservedNpcId);
 				}
@@ -4790,7 +4814,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			if (attacker.isScored())
 			{
-				session.recordAttackMade(potted, boostShare, drained);
+				trip(attacker).recordAttackMade(potted, boostShare, drained);
 				// Decided here, at the attack. The damage this is measured against was worked out on this tick from this loadout,
 				// so the prayer has to be the one that went with it - read at the hitsplat it is measured at the LANDING, ticks
 				// after the server scored the attack.
@@ -4801,7 +4825,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			else
 			{
-				session.recordTickSpent(false);
+				trip(attacker).recordTickSpent(false);
 			}
 			// Last of all: everything above describes the attack that just went out, the cooldown included. Taken from the tick
 			// the attack went out on and with the speed in force then - this is the booking tick, which trails the attack, so
@@ -4895,7 +4919,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.recordTickSpent(roomEngaged);
 			if (counts)
 			{
-				session.recordTickSpent(current.isScored());
+				trip(current).recordTickSpent(current.isScored());
 			}
 			debug.log("tick SPENT: on cooldown, due %d + lag %d, attacking=%b", attackDueTick, lag, counts);
 			return;
@@ -4922,7 +4946,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (chasing && chase.excuse())
 		{
 			current.recordTickMechanic(roomEngaged);
-			session.recordTickMechanic(current.isScored());
+			trip(current).recordTickMechanic(current.isScored());
 			debug.log("tick MECHANIC: overdue since %d + lag %d, the run back to her (%d of %d)", attackDueTick, lag,
 				chase.excused, chase.allowance);
 			return;
@@ -4934,7 +4958,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (excused != null)
 		{
 			current.recordTickMechanic(roomEngaged);
-			session.recordTickMechanic(current.isScored());
+			trip(current).recordTickMechanic(current.isScored());
 			debug.log("tick MECHANIC: overdue since %d + lag %d, excused by %s (%d of %d)", attackDueTick, lag,
 				excused.allowance.state, excused.excused, excused.allowance.maxTicks);
 			return;
@@ -4942,7 +4966,7 @@ public class PvmPerformancePlugin extends Plugin
 		current.recordTickLost(eating, roomEngaged);
 		if (counts)
 		{
-			session.recordTickLost(eating, current.isScored());
+			trip(current).recordTickLost(eating, current.isScored());
 		}
 		// Only booked once the fight has an attack in it, so a lost tick that is NOT counted says so - that gap is what a
 		// safespot report looks like from here.
@@ -6347,7 +6371,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		if (current.isScored())
 		{
-			session.recordExtraTarget(damage, newTarget, landed, now);
+			trip(current).recordExtraTarget(damage, newTarget, landed, now);
 		}
 		if (newTarget)
 		{
@@ -6361,7 +6385,7 @@ public class PvmPerformancePlugin extends Plugin
 				final double chances = combatCalc.attackLandChance(accuracy, npc.getId());
 				final double variance = varianceOf(moments);
 				current.recordExpected(combatCalc.maxHit(npc.getId()), chances, average, variance);
-				session.recordExpected(chances, average, variance);
+				trip(current).recordExpected(chances, average, variance);
 			}
 		}
 		debug.log("AoE %d on %s (npc %d, index %d) joins the attack on %s: newTarget=%b landed=%b%s",
@@ -6826,7 +6850,7 @@ public class PvmPerformancePlugin extends Plugin
 					current.recordAttackNulled();
 					if (current.isScored())
 					{
-						session.recordAttackNulled();
+						trip(current).recordAttackNulled();
 					}
 				}
 			}
@@ -6845,7 +6869,7 @@ public class PvmPerformancePlugin extends Plugin
 			current = null;
 			return;
 		}
-		session.recordFightEnded(died, current, now);
+		trip(current).recordFightEnded(died, current, now);
 		// Each kind within its own budget (T-093): a slayer trip's fights never push a boss kill out.
 		HistoryBudget.add(history, current, monsterStats == null ? null : monsterStats.rules(), HistoryBudget.BOSS_FIGHTS,
 			HistoryBudget.MONSTER_FIGHTS);

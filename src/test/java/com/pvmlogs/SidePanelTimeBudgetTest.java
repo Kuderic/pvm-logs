@@ -177,7 +177,9 @@ public class SidePanelTimeBudgetTest
 		assertEquals("eating", rows.get(2).label.text);
 		assertEquals("+4 ticks", rows.get(2).value.text);
 		assertEquals("stat boost", rows.get(3).label.text);
-		assertEquals("+2 ticks", rows.get(3).value.text);
+		// T-123: a setup part reads the damage it cost, its 2 ticks on hover.
+		assertEquals("-8 dmg", rows.get(3).value.text);
+		assertTrue(rows.get(3).tooltip, rows.get(3).tooltip.endsWith(", about 2 ticks of the kill."));
 		double sum = 0;
 		for (PanelSnapshot.Segment s : b.segments)
 		{

@@ -2,6 +2,7 @@ package com.pvmlogs;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -445,8 +446,10 @@ final class PanelSnapshot
 		final Text label;
 		final Text hint;
 		final Text value;
-		/** T-118: what the part cost in damage, on hover (a setup part's); null for none. */
+		/** T-118: on hover, a setup part's other unit (T-123: its ticks, now it reads damage); null for none. */
 		final String tooltip;
+		/** T-123: the value's short forms, longest first, for where the whole one would cut the label: {@code -16}. */
+		final List<String> valueShort;
 
 		BudgetRow(Fill swatch, Text label, Text hint, Text value)
 		{
@@ -455,11 +458,23 @@ final class PanelSnapshot
 
 		BudgetRow(Fill swatch, Text label, Text hint, Text value, String tooltip)
 		{
+			this(swatch, label, hint, value, tooltip, Collections.emptyList());
+		}
+
+		private BudgetRow(Fill swatch, Text label, Text hint, Text value, String tooltip, List<String> valueShort)
+		{
 			this.swatch = swatch;
 			this.label = label;
 			this.hint = hint == null ? Text.NONE : hint;
 			this.value = value;
 			this.tooltip = tooltip;
+			this.valueShort = valueShort;
+		}
+
+		/** T-123: this row with the value's short forms. */
+		BudgetRow withValueShort(String... forms)
+		{
+			return new BudgetRow(swatch, label, hint, value, tooltip, Arrays.asList(forms));
 		}
 	}
 

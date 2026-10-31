@@ -658,6 +658,17 @@ class PvmPerformancePanel extends PluginPanel
 		return out;
 	}
 
+	/** T-123: the fights of the trip's saved rooms, newest room first. */
+	static List<Fight> tripFights(List<SidePanelHistory.KillRow> saved)
+	{
+		final List<Fight> out = new ArrayList<>();
+		for (SidePanelHistory.KillRow r : saved)
+		{
+			out.addAll(r.room.getFights());
+		}
+		return out;
+	}
+
 	/** The trip's figures and rooms (spec 3.3); client thread. The saved rooms are rebuilt only when the history or trip change. */
 	private SidePanelModel.Input readTrip(SessionTotals trip, List<Fight> history, Fight head, Encounter running)
 	{
@@ -673,8 +684,11 @@ class PvmPerformancePanel extends PluginPanel
 		// T-063: by kind; DoT booked before T-062 is the remainder.
 		in.scoredDotByKind = in.dotByKind = trip.getDotDamageByKind();
 		in.scoredReflect = in.reflect = Math.max(0, trip.getReflectDamage());
-		// T-044: the trip's avoidable figures sum its ended ruled fights, shown, as on the overlay, while no fight runs.
-		in.ended = running == null;
+		// T-123: the room on now is the trip's only if it started since; a run of monsters (T-089), its part since.
+		final Encounter mine = SidePanelHistory.sinceTrip(running, trip.getStartMillis());
+		// T-044: the trip's avoidable figures sum its ended ruled fights, shown, as on the overlay, while no fight of the
+		// trip runs.
+		in.ended = mine == null;
 		in.takenByAttack = trip.getDamageTakenByAttack();
 		// T-052: what the trip's drains added and the specials' share of luck (T-050's sums over its ended fights).
 		final SidePanelModel.Drain drains = new SidePanelModel.Drain();
@@ -689,14 +703,8 @@ class PvmPerformancePanel extends PluginPanel
 			tripSavedKey = key;
 			tripSaved = SidePanelHistory.tripSaved(history, trip.getStartMillis(), System.currentTimeMillis(),
 				java.time.ZoneId.systemDefault());
-			final List<Fight> tripFights = new ArrayList<>();
-			for (Fight f : history)
-			{
-				if (f.getStartMillis() >= trip.getStartMillis())
-				{
-					tripFights.add(f);
-				}
-			}
+			// T-123: the fights of the trip's rooms, so the avoidable names and the drain specials are the rows' own.
+			final List<Fight> tripFights = tripFights(tripSaved);
 			tripAvoidable = avoidableAttacks(tripFights);
 			// T-119: the trip's drain specials, thrown and landed, and what this session's timelines expected of them.
 			tripSpecs = tripSpecs(tripFights);
@@ -708,7 +716,7 @@ class PvmPerformancePanel extends PluginPanel
 		drains.specs = tripSpecs;
 		drains.specRows = tripSpecRows;
 		final List<PanelSnapshot.TripRow> rows = new ArrayList<>();
-		final List<SidePanelHistory.KillRow> rooms = SidePanelHistory.tripRooms(tripSaved, running);
+		final List<SidePanelHistory.KillRow> rooms = SidePanelHistory.tripRooms(tripSaved, mine);
 		for (SidePanelHistory.KillRow r : rooms)
 		{
 			rows.add(SidePanelModel.tripRow(r));
