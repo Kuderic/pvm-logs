@@ -691,6 +691,17 @@ class CombatCalc
 		return modifiers.magicDefenceChange(npc, weaponStyle(), landsInTicks(npc));
 	}
 
+	/** T-135: the flat change to the target's magic defence bonus (Yama, by his target's style). */
+	private int bossMagicDefenceFlat(int npcId)
+	{
+		final NPC npc = targetNpc;
+		if (modifiers == null || npc == null || npc.getId() != npcId || !modifiers.hasModifiers(npc))
+		{
+			return 0;
+		}
+		return modifiers.magicDefenceFlat(npc, weaponStyle(), landsInTicks(npc));
+	}
+
 	/**
 	 * The boss's damage modifiers an ordinary attack going out now lands with
 	 * (T-057): the Sire's halving while it walks, the Leviathan's stun cap, its
@@ -1524,7 +1535,8 @@ class CombatCalc
 		final int attRoll = ModifierTracker.attackRoll(mods, AttackType.MAGIC.name(), scaled(attackRoll(effMagic,
 			attackBonus(AttackType.MAGIC), gear * (1.0 + elementalWeakness(npcId) / 100.0)), spec));
 		// Burn stacks on the Maggot King take 20 each off its magic defence bonus (T-087).
-		final int bonus = Math.max(0, magicDefenceBonus(npc) + bossMagicDefenceChange(npcId));
+		// T-135: and the flat changes, which aren't floored (Yama's -30 while his target doesn't use magic).
+		final int bonus = Math.max(0, magicDefenceBonus(npc) + bossMagicDefenceChange(npcId)) + bossMagicDefenceFlat(npcId);
 		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.MAGIC.name(),
 			(magicDefenceLevel(npc) + 9) * (bonus + 64));
 		if (!hasConflictionGauntlets())

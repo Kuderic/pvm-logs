@@ -168,6 +168,17 @@ enum SpecialAttack
 
 	private static final Map<Integer, SpecialAttack> BY_ITEM = new HashMap<>();
 
+	/**
+	 * T-135: the special's own attack speed in ticks, where it has one; the weapon's otherwise. The Eye of Ayak's Soul
+	 * Rend (OSRS Wiki, read 2026-10-31: Eye of Ayak: it "has an attack speed of five ticks, compared to the staff's
+	 * standard attack speed of three ticks"). Eric's 14:02 log at Yama: his two Soul Rends thrown on [7608] and [7613],
+	 * five ticks apart, each booked "speed 3". The booking doesn't read this yet: T-136's (tick accounting).
+	 */
+	int speedTicks(int weaponTicks)
+	{
+		return this == EYE_OF_AYAK ? 5 : weaponTicks;
+	}
+
 	static
 	{
 		for (SpecialAttack spec : values())

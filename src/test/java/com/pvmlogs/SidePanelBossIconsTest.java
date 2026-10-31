@@ -113,6 +113,9 @@ public class SidePanelBossIconsTest
 		// T-098: a rules entry for Araxxor's araxytes, which are fought in his room (grouped "Araxxor") and name none of
 		// their own.
 		m.put("Araxytes", null);
+		// T-135: Yama's Void Flares and Judge, rules of their own; Yama's icon is Yama's.
+		m.put("Void Flare", null);
+		m.put("Judge of Yama", null);
 		m.put("Yama", HiscoreSkill.YAMA);
 		m.put("Abyssal Sire", HiscoreSkill.ABYSSAL_SIRE);
 		m.put("Bork", HiscoreSkill.FRACTURED_ARCHIVE);

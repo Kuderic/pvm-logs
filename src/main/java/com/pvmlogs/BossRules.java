@@ -229,12 +229,28 @@ class BossRules
 		ChaseRule chaseByDistance;
 		/** T-086: an attack on the tick of one of its animations that ignores the weapon's attack delay; null for none. */
 		MeleePunish meleePunish;
+		/** T-135: the hitpoints it spawns with while another boss is low (Yama's phase 3 flares, at half); null for full. */
+		SpawnHp spawnHp;
 		/**
 		 * T-106: damage the room deals the boss that isn't any player's (Araxxor's Ruptura araxytes exploding under him,
 		 * his own cleave once enraged), by what it looks like: for naming it in the log. Whether a splat is the room's at
 		 * all is decided by whether another player is there; see {@link RoomDamage}.
 		 */
 		List<RoomDamageRule> roomDamage;
+	}
+
+	/**
+	 * T-135: an npc that spawns damaged while another boss's hitpoints, as the boss bar (the HUD) shows them, are at most
+	 * a share of its full: Yama's Void Flares, at 71 of 140 in his phase 3.
+	 */
+	static final class SpawnHp
+	{
+		int hp;
+		/** The boss the HUD must name. */
+		int[] hudNpcIds;
+		/** Its hitpoints on the HUD as a share of its full, at most. */
+		double hudHpAtMost;
+		String source;
 	}
 
 	/** T-106: one source of the room's damage on a boss, as its splats show it. */
@@ -422,6 +438,19 @@ class BossRules
 		Boolean outOfMelee;
 		/** The {@link #state} judged on the attack's throw tick, not its landing (T-120: the titans' boost is rolled then). */
 		Boolean stateAtThrow;
+		/**
+		 * T-135: the boss's hitpoints left, as a share of its full, at most this or above this when the attack goes out
+		 * (Yama's phase 3 from a third); either if null, and neither when its hitpoints aren't known.
+		 */
+		Double hpAtMost;
+		Double hpAbove;
+		/**
+		 * T-135: the boss's target (the player it's interacting with, the tank) uses magic (true) or not (false); either
+		 * if null, and neither when it isn't known. The local player by their attack style, another by their weapon.
+		 */
+		Boolean tankMagic;
+		/** T-135: a flat change to the boss's magic defence bonus, not floored at 0 (Yama: +60 or -30 on the Normal's 0). */
+		Integer magicDefenceChange;
 		/**
 		 * While it applies, the boss's figures are this version's in the monster
 		 * data (T-087: the Maggot King "Nearby" while it slams); its usual version

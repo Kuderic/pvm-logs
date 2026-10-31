@@ -52,7 +52,8 @@ public class BossRulesTest
 		final BossRules rules = bundled();
 		// Araxxor's enrage is modelled since T-091 (AraxxorTest).
 		assertNull(rules.forNpc(13668).unmodelled);
-		assertNotNull(rules.forNpc(14176).unmodelled); // Yama
+		// Yama's magic defence by his target's style, and his phase 3, are modelled since T-135.
+		assertNull(rules.forNpc(14176).unmodelled);
 		assertNotNull(rules.forNpc(16640).unmodelled); // Bork
 		assertNull(rules.forNpc(NpcIds.GOBLIN));
 	}

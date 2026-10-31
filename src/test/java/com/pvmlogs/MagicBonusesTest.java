@@ -2,6 +2,7 @@ package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.lang.reflect.Proxy;
@@ -197,6 +198,66 @@ public class MagicBonusesTest
 		final GearBonus raw = GearBonusCalc.demonbaneSpellAccuracy(true, true);
 		assertEquals(1.56, GearBonusCalc.scaleByDemonbaneEffectiveness(raw, 70).getAccuracy(), DELTA);
 		assertEquals(2.6, GearBonusCalc.scaleByDemonbaneEffectiveness(raw, 200).getAccuracy(), DELTA);
+	}
+
+	/**
+	 * T-135: Yama with the Mark, as Eric cast on 2026-10-31 (pvm-debug-20261031-140202): Dark Demonbane from the purging
+	 * staff, scored at max 39 with the Mark unseen ([7588]), against hits of 60, 58 and a max-hit splat of 61 ([7591]-
+	 * [7606]). With the Mark at Yama's 120%: +50% x 1.2 = +60% damage.
+	 */
+	@Test
+	public void yamaWithTheMark()
+	{
+		final int yama = net.runelite.api.gameval.NpcID.YAMA;
+		wield(ItemID.PURGING_STAFF);
+		final MagicDamage bare = darkDemonbane();
+		bare.percent = 30;
+		calc.fillMagic(bare, gear(ItemID.PURGING_STAFF), monsters.get(yama), yama, Spell.DARK_DEMONBANE, false);
+		assertEquals(39, bare.maxHit());
+		markUp(ItemID.PURGING_STAFF);
+		final MagicDamage marked = darkDemonbane();
+		marked.percent = 30;
+		calc.fillMagic(marked, gear(ItemID.PURGING_STAFF), monsters.get(yama), yama, Spell.DARK_DEMONBANE, false);
+		assertEquals(120, marked.effectivenessPercent);
+		assertEquals(50, marked.markPercent);
+		// The 61 at [7606] is the max-hit splat (type 43): the Mark's max to the point.
+		assertEquals(61, marked.maxHit());
+	}
+
+	/**
+	 * T-135: a Void Flare with the Mark, at Eric's figures: max 39 bare ([7943]: "max 39, acc 0.870"), and his first hit
+	 * on each phase 1-2 flare a max-hit splat of 77 ([8095], [8240], [8248], [9797]), the DPS calc's guaranteed max
+	 * with the Mark: 39 + trunc(trunc(39 x 50%) x 200%) = 77.
+	 */
+	@Test
+	public void aVoidFlareWithTheMark()
+	{
+		wield(ItemID.PURGING_STAFF);
+		final MagicDamage bare = darkDemonbane();
+		bare.percent = 30;
+		calc.fillMagic(bare, gear(ItemID.PURGING_STAFF), monsters.get(VOID_FLARE), VOID_FLARE, Spell.DARK_DEMONBANE, false);
+		assertEquals(39, bare.maxHit());
+		markUp(ItemID.PURGING_STAFF);
+		final MagicDamage marked = darkDemonbane();
+		marked.percent = 30;
+		calc.fillMagic(marked, gear(ItemID.PURGING_STAFF), monsters.get(VOID_FLARE), VOID_FLARE, Spell.DARK_DEMONBANE,
+			false);
+		System.out.println("T-135 flare max with the Mark: " + marked.maxHit());
+		assertEquals(77, marked.maxHit());
+	}
+
+	/** T-135: the Mark read from its cast when no message said so; nothing while it is up already. */
+	@Test
+	public void theMarkFromItsCast()
+	{
+		wield(ItemID.PURGING_STAFF);
+		assertFalse(calc.hasMarkOfDarkness());
+		final String line = calc.markFromCast(7572, 7573);
+		assertNotNull(line);
+		assertTrue(line, line.startsWith("MARK up: cast on tick 7572"));
+		assertTrue(line, line.contains("from the +70 Magic cast on tick 7572 with no thrall"));
+		assertTrue(calc.hasMarkOfDarkness());
+		assertNull(calc.markFromCast(7600, 7601));
 	}
 
 	/** Not a demon, no demonbane: the Mark changes nothing. */
