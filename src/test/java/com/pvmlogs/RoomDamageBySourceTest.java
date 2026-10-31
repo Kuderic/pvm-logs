@@ -252,6 +252,14 @@ public class RoomDamageBySourceTest
 		final PanelSnapshot.FightTab oldView = SidePanelModel.fight(SidePanelMemberFight.decode(old.f));
 		assertEquals("90", row(oldView.details, SidePanelModel.ROOM_DMG).right.text);
 		assertNull(row(oldView.details, EXPLOSIONS));
+		// What the plugin sends at the room's end (SidePanelMemberFight.message, from the room and the rules).
+		final LuckVsSkillRoom fromPlugin = gson.fromJson(gson.toJson(SidePanelMemberFight.message(
+			kill(true, new int[] {80, 900}, new int[] {10, 500}), (FightTimeline.View) null, 0, rules)), LuckVsSkillRoom.class);
+		assertEquals(2, fromPlugin.f.rdx.size());
+		assertEquals(Arrays.asList(EXPLOSION, CLEAVE), fromPlugin.f.rds);
+		final PanelSnapshot.FightTab member = SidePanelModel.fight(SidePanelMemberFight.decode(fromPlugin.f));
+		assertEquals("80", row(member.details, EXPLOSIONS).right.text);
+		assertEquals("10", row(member.details, HIMSELF).right.text);
 		// Rows with nothing in them are dropped; none left is the total.
 		final LuckVsSkillRoom.RoomSource empty = new LuckVsSkillRoom.RoomSource();
 		assertNull(SidePanelMemberFight.roomSourcesFromWire(Collections.singletonList(empty)));

@@ -72,6 +72,8 @@ final class SidePanelMemberFight
 		in.avoidableAttacks = ended ? SidePanelModel.avoidableAttacks(rules, room.getFights())
 			: Collections.<String>emptySet();
 		in.version = rules == null ? null : SidePanelModel.versionName(rules, room.getFights(), in.maxHp);
+		// T-131: the room damage's sources and split, as the sender's own panel fills them (T-109 left them unsent).
+		SidePanelModel.fillRoomDamageSources(in, Collections.singletonList(room), rules);
 		if (view != null && view.states.length > 0)
 		{
 			in.view = view;
