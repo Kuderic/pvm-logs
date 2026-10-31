@@ -97,6 +97,11 @@ public final class SidePanelPictures
 			ticks(out);
 			return;
 		}
+		if (args.length > 1 && "reset".equals(args[1]))
+		{
+			setupDamageAndNewTrip(out);
+			return;
+		}
 		if (args.length > 1 && "bosses".equals(args[1]))
 		{
 			bossesAndMonsters(out);
@@ -1499,6 +1504,38 @@ public final class SidePanelPictures
 				write(dir, "d-trip", scale, renderTrip(SidePanelWordingExamples.ericsTrip(), scale));
 				write(dir, "e-monster-run", scale, render(SidePanelRunExamples.saved(), scale));
 				write(dir, "f-luck-saved-a-lot", scale, render(SidePanelExamples.luckSaved(60), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-123: Where the time went's setup parts in damage (a kill; one saved before T-117, which keeps its ticks; the card
+	 * alone), and the Trip tab after New trip right after a kill and across a run of monsters. Normal, Smooth and Larger,
+	 * at 1× and 2×.
+	 */
+	private static void setupDamageAndNewTrip(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-kill", scale, render(SidePanelExamples.dead(), scale));
+				write(dir, "b-time-budget", scale, card(SidePanelExamples.dead(), scale, "budget"));
+				write(dir, "c-time-budget-ruled", scale, card(SidePanelExamples.ruledKill(true), scale, "budget"));
+				final SidePanelModel.Input before = SidePanelExamples.dead();
+				((LedgerExamples.FakeScope) before.scope).idealSetupDamage = 0;
+				write(dir, "d-time-budget-saved-before-T-117", scale, card(before, scale, "budget"));
+				write(dir, "e-trip-new-trip-right-after-a-kill", scale,
+					renderTrip(SidePanelTripResetTest.newTripRightAfterAKill(), scale));
+				write(dir, "f-trip-run-across-new-trip", scale, renderTrip(SidePanelTripResetTest.runAcrossNewTrip(), scale));
 			}
 		}
 		smooth = false;

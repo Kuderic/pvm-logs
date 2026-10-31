@@ -496,7 +496,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel card = SidePanelParts.card(6);
-		// T-118: the parts are in ticks; once, here, what a tick is.
+		// T-118, T-123: the parts are in ticks, luck in seconds and the setup costs in damage: once, here, the units.
 		card.setToolTipText(SidePanelModel.TICK_NOTE);
 		final SidePanelTimeBudgetBar bar = new SidePanelTimeBudgetBar(tab.budget);
 		card.add(bar);
@@ -509,8 +509,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			final SidePanelParts.Swatch sw = new SidePanelParts.Swatch(r.swatch);
 			final SidePanelParts.Line line = new SidePanelParts.Line(r.label, r.value);
 			line.left.cutSuffixFirst();
-			// T-118: a setup part's damage on hover; the others fall back to the card's note on ticks.
-			line.setToolTipText(r.tooltip);
+			// T-123: a setup part's damage gives up width before its label does, "-16"; its ticks on hover. The others
+			// fall back to the card's note on the units.
+			line.setRightShort(r.valueShort);
+			line.setTip(r.tooltip);
 			row.add(sw, BorderLayout.WEST);
 			row.add(line, BorderLayout.CENTER);
 			swatches.add(sw);
@@ -546,10 +548,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				swatches.get(i).set(r.swatch, r.swatch == PanelSnapshot.Fill.LUCK_FASTER ? t.budget.luckSavedColour : null);
 				lines.get(i).set(r.label, r.hint.isEmpty() ? null : new Text(" " + r.hint.text, r.hint.colour,
 					r.hint.type), r.value);
-				if (!java.util.Objects.equals(r.tooltip, lines.get(i).getToolTipText()))
-				{
-					lines.get(i).setToolTipText(r.tooltip);
-				}
+				lines.get(i).setRightShort(r.valueShort);
+				lines.get(i).setTip(r.tooltip);
 			}
 			for (int i = 0; i < average.size(); i++)
 			{

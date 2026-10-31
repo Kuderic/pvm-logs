@@ -58,9 +58,12 @@ final class SidePanelModel
 	static final String NO_CURVE_TEXT = "No curve: kills saved before 27 Oct didn't keep the spread of their hits, so "
 		+ "their luck is in seconds only.";
 	static final String NOT_A_KILL = "not a kill, so no average to compare";
-	/** T-118: the units, said once (Eric, 2026-10-30 10:04): luck in seconds, time spent not attacking in ticks. */
+	/**
+	 * T-118: the units, said once (Eric, 2026-10-30 10:04): luck in seconds, time spent not attacking in ticks; T-123
+	 * (2026-10-31): the setup costs in damage.
+	 */
 	static final String TICK_NOTE = "Luck and comparisons with your average are in seconds; time spent not attacking is in"
-		+ " ticks (1 tick is 0.6 s).";
+		+ " ticks (1 tick is 0.6 s); setup costs are in damage.";
 	static final String RAID_NO_AVERAGE = "no average yet: raid level isn't recorded";
 	/** T-042: the time budget bar's end when luck saved time, after its clock. */
 	static final String AT_AVERAGE_LUCK = " at average luck";
@@ -1573,17 +1576,28 @@ final class SidePanelModel
 		}
 	}
 
-	/** T-118: a setup part's damage for Where the time went's tooltip, or null when unknown or none. */
-	static String setupTip(String label, long ticks, double damage)
+	/** T-123: a setup part's damage rounded as the Execution card rounds it; 0 when unknown. */
+	static long setupDamageRounded(double damage)
 	{
-		if (Double.isNaN(damage) || LedgerRows.roundHalfAway(damage) < 1)
-		{
-			return null;
-		}
+		return Double.isNaN(damage) ? 0 : LedgerRows.roundHalfAway(damage);
+	}
+
+	/** T-123: Where the time went's value for a setup part: {@code -16 dmg}, the figure in the Execution card's bracket. */
+	static String damageLost(long damage)
+	{
+		return "-" + LedgerRows.number(damage) + LedgerRows.DMG;
+	}
+
+	/**
+	 * T-123: a setup part's tooltip in Where the time went, its time now it reads damage: {@code stat boost: 16 expected
+	 * damage lost to a lower boost, about 8 ticks of the kill.} The ticks are left out under one.
+	 */
+	static String setupTip(String label, long ticks, long damage)
+	{
 		final String why = BOOST.equals(label) ? "a lower boost" : PRAYER.equals(label) ? "your offensive prayer"
 			: GEAR.equals(label) ? "your gear" : "your setup";
-		return label + " +" + LedgerRows.ticksWord(ticks) + ": " + LedgerRows.number(LedgerRows.roundHalfAway(damage))
-			+ " expected damage lost to " + why + ".";
+		return label + ": " + LedgerRows.number(damage) + " expected damage lost to " + why
+			+ (ticks >= 1 ? ", about " + LedgerRows.ticksWord(ticks) + " of the kill." : ".");
 	}
 
 	private static Part part(String label, double share, double cost, LedgerRows.Numbers n)
@@ -1671,15 +1685,24 @@ final class SidePanelModel
 			Text.small(bestKnown ? SidePanelStyle.roundedDuration(best) : LedgerRows.UNKNOWN, SidePanelStyle.VALUE)));
 		for (int i = 0; i < costs.length; i++)
 		{
-			// T-118 (Eric, 2026-10-30): each part in ticks, "+25 ticks", once it rounds to a tick.
-			if (LedgerRows.ticks(costs[i]) >= 1)
+			final boolean costing = LedgerRows.isCosting(costs[i], n.clock);
+			final Fill fill = costing ? Fill.COST : Fill.MINOR_COST;
+			final Color colour = costing ? SidePanelStyle.COST : SidePanelStyle.BODY;
+			// T-123 (Eric, 2026-10-31): a setup part reads the damage it cost, "stat boost  -16 dmg", as the Execution card
+			// and the overlay have it, its ticks on hover; its stretch of the bar stays its time. Without the damage (a kill
+			// saved before T-117) it keeps its ticks.
+			final long damage = i == 0 ? 0 : setupDamageRounded(setupDamage(n, labels[i]));
+			if (damage >= 1)
 			{
-				final boolean costing = LedgerRows.isCosting(costs[i], n.clock);
-				// T-118: a setup part's damage on hover; the bar and rows stay in ticks so they add up to the clock.
-				rows.add(new BudgetRow(costing ? Fill.COST : Fill.MINOR_COST, Text.small(labels[i], SidePanelStyle.BODY),
-					null, Text.small("+" + SidePanelStyle.ticks(costs[i]), costing ? SidePanelStyle.COST
-						: SidePanelStyle.BODY), i == 0 ? null : setupTip(labels[i], LedgerRows.ticks(costs[i]),
-					setupDamage(n, labels[i]))));
+				rows.add(new BudgetRow(fill, Text.small(labels[i], SidePanelStyle.BODY), null,
+					Text.small(damageLost(damage), colour), setupTip(labels[i], LedgerRows.ticks(costs[i]), damage))
+					.withValueShort("-" + LedgerRows.number(damage)));
+			}
+			// T-118 (Eric, 2026-10-30): the time parts in ticks, "+25 ticks", once it rounds to a tick.
+			else if (LedgerRows.ticks(costs[i]) >= 1)
+			{
+				rows.add(new BudgetRow(fill, Text.small(labels[i], SidePanelStyle.BODY), null,
+					Text.small("+" + SidePanelStyle.ticks(costs[i]), colour)));
 			}
 			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
 			if (i == 0 && LedgerRows.ticks(ca) >= 1)
