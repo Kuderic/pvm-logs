@@ -62,6 +62,12 @@ final class SidePanelPartyChart extends JComponent
 		repaint();
 	}
 
+	/** T-130: the member drawn bright, the others faded; Long.MIN_VALUE for none. */
+	long focus()
+	{
+		return focus;
+	}
+
 	/** For tests and renders: the tick hovered; whether it changed. */
 	boolean setHover(int tick)
 	{

@@ -303,4 +303,15 @@ final class SidePanelPartyExamples
 		in.members.add(echo);
 		return in;
 	}
+
+	/** T-130: the ToA room with your own Fight panels (the Fight tab's) and Brindle's from her room message. */
+	static SidePanelParty.Input toaYouAndBrindle()
+	{
+		final SidePanelParty.Input in = toaBrindleAfter();
+		final SidePanelModel.Input yours = SidePanelExamples.dead();
+		yours.name = "Zebak";
+		in.members.get(0).fight = SidePanelModel.fight(yours);
+		in.partyKey = 7;
+		return in;
+	}
 }

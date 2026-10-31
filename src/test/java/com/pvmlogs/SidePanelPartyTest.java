@@ -41,7 +41,8 @@ public class SidePanelPartyTest
 	{
 		final PanelSnapshot.PartyTab nobody = SidePanelParty.party(SidePanelPartyExamples.nobody());
 		assertFalse(nobody.sharing);
-		assertEquals(SidePanelParty.NOBODY, nobody.empty);
+		// T-129: in a party before anyone else has shared, it says so plainly.
+		assertEquals(SidePanelParty.waiting(0), nobody.empty);
 		assertNull(SidePanelParty.fightLine(nobody));
 		assertEquals(SidePanelParty.NOT_IN_PARTY, SidePanelParty.party(SidePanelPartyExamples.notInParty()).empty);
 		final PanelSnapshot.PartyTab toa = SidePanelParty.party(SidePanelPartyExamples.toa());
@@ -224,29 +225,32 @@ public class SidePanelPartyTest
 		}
 	}
 
+	/** T-130: one page; clicking a member selects them, again or your own row back to you. */
 	@Test
-	public void clickingAMemberOpensTheirBreakdownAndBackReturns()
+	public void clickingAMemberSelectsThemAndAgainGoesBackToYou()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toa());
 		final SidePanelPartyTab tab = p.partyTab();
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
+		tab.select(22);
+		assertEquals(22, tab.selected());
+		// One page: the meter and the chart stay, the member's part under them.
 		assertNotNull(tab.meter());
-		tab.open(22);
-		assertEquals(22, tab.opened());
-		assertNull(tab.meter());
-		assertNotNull(SidePanelPictures.sectionOf(tab, "partyMember"));
-		// The chart stays, the opened member bright.
 		assertNotNull(tab.chart());
-		tab.back();
-		assertEquals(SidePanelPartyTab.NONE, tab.opened());
-		assertNotNull(tab.meter());
-		// Others can't be opened; a member who's gone from the board closes.
-		tab.open(PanelSnapshot.PartyRow.OTHERS_ID);
-		assertEquals(SidePanelPartyTab.NONE, tab.opened());
-		tab.open(22);
+		assertEquals(22, tab.meter().selected());
+		tab.select(22);
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
+		tab.select(21);
+		tab.select(SidePanelParty.YOU_ID);
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
+		// Others can't be selected; a member gone from the board puts it back on you.
+		tab.select(PanelSnapshot.PartyRow.OTHERS_ID);
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
+		tab.select(22);
 		final SidePanelParty.Input without = SidePanelPartyExamples.toa();
 		without.members.remove(2);
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(without)));
-		assertEquals(SidePanelPartyTab.NONE, tab.opened());
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
 	}
 
 	@Test
@@ -312,7 +316,7 @@ public class SidePanelPartyTest
 								p.tabs().select(p.tabs().getTab(3));
 								if (open != null)
 								{
-									p.partyTab().open(open);
+									p.partyTab().select(open);
 								}
 								SidePanelPictures.draw(p.tabs(), p.partyTab(), scale);
 								final String at = (larger ? "larger " : "") + (smooth ? "smooth " : "normal ") + scale

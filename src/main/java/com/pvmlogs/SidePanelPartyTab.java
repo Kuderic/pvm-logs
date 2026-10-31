@@ -20,22 +20,38 @@ import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 
 /**
- * T-125: the Party tab (Eric's pick, option B). The meter fills the tab, with Damage over time under it; clicking a
- * member swaps the tab to their breakdown, with {@code ‹ Party} to come back, as loa-logs does. In a raid the room/raid
- * switch is the Fight tab's own. Components are built only when the structure changes (the rows' number, the switches,
- * a member opened or closed); otherwise the meter and the chart repaint and the texts are set in place.
+ * T-125, T-130: the Party tab, one page (Eric, 2026-10-31 10:38: "it should show those fight panel tabs under damage
+ * over time graph, so the user doesnt have to click back and forth"). Top to bottom: the room/raid switch, the meter,
+ * the party's Damage over time, then a heading naming whose panels follow and that member's Fight panels, by the Fight
+ * tab's own component (T-128), you by default. Clicking a member's row selects them; clicking it again, or your own,
+ * goes back to you.
+ *
+ * <p>The top (switch, meter, chart) is built only when its structure changes; the member's part only when the selection
+ * or its own structure does, never the meter's; otherwise the meter and the chart repaint and texts are set in place.
  */
 final class SidePanelPartyTab extends JPanel
 {
+	/** T-130: the heading's hint. */
+	static final String SWITCH_HINT = "click a member above to switch";
+	static final String FIGHT_PANELS = " · Fight panels";
+
 	private final SidePanelFightTab.Actions actions;
 	private final SidePanelSection.Folds folds;
+	/** T-128: the item and spell icons for the Fight panels. */
+	private final SidePanelIcons icons;
+	/** T-130: told which member is selected, so the panel builds their Fight panels and only theirs. */
+	private final java.util.function.LongConsumer onSelected;
 
 	private PanelSnapshot.PartyTab shown;
 	private String builtFor;
-	/** The member opened, or none. Swing's thread. */
-	private long opened = NONE;
+	private String memberBuiltFor;
+	/** The member whose Fight panels show: you by default. Swing's thread. */
+	private long selected = SidePanelParty.YOU_ID;
+	/** The party the selection was made in: a new party puts it back on you. */
+	private long partyKey;
 	private SidePanelParty.Metric metric = SidePanelParty.Metric.DMG;
 	private int rebuilds;
+	private int memberRebuilds;
 
 	static final long NONE = Long.MIN_VALUE;
 
@@ -44,18 +60,16 @@ final class SidePanelPartyTab extends JPanel
 	private SidePanelPartyMeter meter;
 	private SidePanelPartyChart chart;
 	private MetricSwitch words;
-	private SidePanelParts.Line place;
-	private Attacks attacks;
-	private SidePanelParts.RowsCard summary;
 	private SidePanelFightTab.Segment roomSegment;
 	private SidePanelFightTab.Segment raidSegment;
-
-	/** T-128: the item and spell icons for a member's Fight tab, and who's told which member is open. */
-	private final SidePanelIcons icons;
-	private final java.util.function.LongConsumer onOpened;
-	/** T-128: a member's Fight tab, drawn by the Fight tab's own component; null unless one is open with it in. */
+	/** T-130: the selected member's part: the heading and their panels. */
+	private JPanel memberArea;
+	private Picture headingPicture;
+	private SidePanelParts.Line heading;
+	private SidePanelParts.Paragraph headingSub;
 	private SidePanelFightTab memberFight;
-	private Picture title;
+	private Attacks attacks;
+	private SidePanelParts.RowsCard summary;
 
 	SidePanelPartyTab(SidePanelFightTab.Actions actions, SidePanelSection.Folds folds)
 	{
@@ -65,13 +79,13 @@ final class SidePanelPartyTab extends JPanel
 	}
 
 	SidePanelPartyTab(SidePanelFightTab.Actions actions, SidePanelSection.Folds folds, SidePanelIcons icons,
-		java.util.function.LongConsumer onOpened)
+		java.util.function.LongConsumer onSelected)
 	{
 		super(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
 		this.actions = actions;
 		this.folds = folds;
 		this.icons = icons == null ? SidePanelIcons.NONE : icons;
-		this.onOpened = onOpened;
+		this.onSelected = onSelected;
 		setBackground(SidePanelStyle.PANEL);
 		setBorder(new EmptyBorder(SidePanelStyle.BLOCK_GAP, SidePanelStyle.SIDE_BORDER, 10, SidePanelStyle.SIDE_BORDER));
 	}
@@ -84,17 +98,21 @@ final class SidePanelPartyTab extends JPanel
 			return;
 		}
 		shown = t;
-		// A member who's no longer on the board can't stay open.
-		if (opened != NONE && t.row(opened) == null)
+		// A new party, or the selected member gone from the board: back to you.
+		if (t.partyKey != partyKey)
 		{
-			opened = NONE;
-			onOpened.accept(NONE);
+			partyKey = t.partyKey;
+			setSelected(SidePanelParty.YOU_ID);
+		}
+		if (selected != SidePanelParty.YOU_ID && t.row(selected) == null)
+		{
+			setSelected(SidePanelParty.YOU_ID);
 		}
 		if (!t.after)
 		{
 			metric = SidePanelParty.Metric.DMG;
 		}
-		final String structure = structure(t);
+		final String structure = t.structure();
 		if (!structure.equals(builtFor))
 		{
 			build(t);
@@ -110,49 +128,63 @@ final class SidePanelPartyTab extends JPanel
 	void restyle()
 	{
 		builtFor = null;
+		memberBuiltFor = null;
 		if (shown != null)
 		{
 			apply(shown);
 		}
 	}
 
-	private String structure(PanelSnapshot.PartyTab t)
+	private void setSelected(long id)
 	{
-		if (opened == NONE)
+		if (selected != id)
 		{
-			return t.structure();
-		}
-		final PanelSnapshot.PartyRow r = t.row(opened);
-		if (r.fight != null)
-		{
-			// T-128: their Fight tab rebuilds itself as its own structure changes; here only live or after.
-			return t.structure() + "|open" + opened + (r.fightLive ? "|live" : "|fight");
-		}
-		final PanelSnapshot.PartyBreakdown b = r.breakdown;
-		return t.structure() + "|open" + opened + "." + b.attacks.size() + "." + b.summary.size();
-	}
-
-	/** Opens a member's breakdown: the click on the meter. */
-	void open(long id)
-	{
-		if (shown != null && shown.row(id) != null && opened != id)
-		{
-			opened = id;
-			// T-128: the panel builds the member's Fight tab from now on, starting at once.
-			onOpened.accept(id);
-			apply(shown);
+			selected = id;
+			onSelected.accept(id);
 		}
 	}
 
-	/** Back to the meter: {@code ‹ Party}. */
-	void back()
+	/**
+	 * T-130: a click on a member's row. It selects them; on the selected row again, or on your own, back to you. Only
+	 * the member's part is built again; the meter and the chart repaint.
+	 */
+	void select(long id)
 	{
-		if (opened != NONE)
+		final PanelSnapshot.PartyRow r = shown == null ? null : shown.row(id);
+		if (r == null)
 		{
-			opened = NONE;
-			onOpened.accept(NONE);
-			apply(shown);
+			return;
 		}
+		final long to = r.you || id == selected ? SidePanelParty.YOU_ID : id;
+		if (to == selected)
+		{
+			return;
+		}
+		setSelected(to);
+		if (meter != null)
+		{
+			meter.setSelected(selected);
+		}
+		if (chart != null)
+		{
+			chart.set(shown, focus());
+		}
+		if (memberArea != null)
+		{
+			member(shown, true);
+		}
+	}
+
+	/** The member whose panels show. */
+	long selected()
+	{
+		return selected;
+	}
+
+	/** The chart's bright line: a member selected, with the others faded; none for you, as the party is. */
+	private long focus()
+	{
+		return selected == SidePanelParty.YOU_ID ? NONE : selected;
 	}
 
 	void pick(SidePanelParty.Metric m)
@@ -168,20 +200,20 @@ final class SidePanelPartyTab extends JPanel
 		}
 	}
 
-	long opened()
-	{
-		return opened;
-	}
-
 	SidePanelParty.Metric metric()
 	{
 		return metric;
 	}
 
-	/** For tests (T-046): how many times the components were built. */
+	/** For tests (T-046): how many times the whole tab, and the member's part alone, were built. */
 	int rebuilds()
 	{
 		return rebuilds;
+	}
+
+	int memberRebuilds()
+	{
+		return memberRebuilds;
 	}
 
 	SidePanelPartyMeter meter()
@@ -194,6 +226,18 @@ final class SidePanelPartyTab extends JPanel
 		return chart;
 	}
 
+	/** T-128, T-130: the selected member's Fight panels; null while they show the compact breakdown, or none. */
+	SidePanelFightTab memberFight()
+	{
+		return memberFight;
+	}
+
+	/** T-130: the heading naming whose panels follow. */
+	SidePanelParts.Line heading()
+	{
+		return heading;
+	}
+
 	private void build(PanelSnapshot.PartyTab t)
 	{
 		rebuilds++;
@@ -202,13 +246,11 @@ final class SidePanelPartyTab extends JPanel
 		meter = null;
 		chart = null;
 		words = null;
-		place = null;
-		attacks = null;
-		summary = null;
-		memberFight = null;
-		title = null;
 		roomSegment = null;
 		raidSegment = null;
+		memberArea = null;
+		memberBuiltFor = null;
+		clearMember();
 		if (!t.sharing)
 		{
 			final JPanel card = SidePanelParts.card(0);
@@ -223,35 +265,29 @@ final class SidePanelPartyTab extends JPanel
 		{
 			raidSwitch(t.wholeRaid);
 		}
-		if (opened == NONE)
-		{
-			meterSection(t);
-		}
-		else if (t.row(opened).fight != null)
-		{
-			// T-128: their Fight tab, by the Fight tab's own component.
-			fightSection(t.row(opened));
-			if (!t.row(opened).fightLive)
-			{
-				// After their room, their own Damage over time is in it: no party chart under it.
-				chart = null;
-				revalidate();
-				repaint();
-				return;
-			}
-		}
-		else
-		{
-			memberSection(t.row(opened));
-		}
+		meterSection(t);
 		chart = new SidePanelPartyChart();
-		chart.set(t, opened);
+		chart.set(t, focus());
 		final JPanel card = SidePanelParts.card(4);
 		card.add(chart);
 		// No hint beside the title: in Larger and Smooth text the title takes the width.
 		add(new SidePanelSection("partyChart", "Damage over time", PanelSnapshot.Text.NONE, card, folds));
+		memberArea = new JPanel(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
+		memberArea.setOpaque(false);
+		add(memberArea);
+		member(t, true);
 		revalidate();
 		repaint();
+	}
+
+	private void clearMember()
+	{
+		headingPicture = null;
+		heading = null;
+		headingSub = null;
+		memberFight = null;
+		attacks = null;
+		summary = null;
 	}
 
 	private void raidSwitch(boolean whole)
@@ -277,9 +313,10 @@ final class SidePanelPartyTab extends JPanel
 		header.setRightShort(headerShort(t));
 		header.setTip(t.where + " · " + headerRight(t));
 		card.add(header);
-		meter = new SidePanelPartyMeter(this::open);
+		meter = new SidePanelPartyMeter(this::select);
 		meter.setMetric(metric);
 		meter.set(t.rows);
+		meter.setSelected(selected);
 		card.add(meter);
 		if (t.othersNote != null)
 		{
@@ -295,64 +332,146 @@ final class SidePanelPartyTab extends JPanel
 		add(section);
 	}
 
-	/** The back control, and the member's picture or swatch, name and place: the head of their view. */
-	private JPanel memberHead(PanelSnapshot.PartyRow r)
+	/** The selected member's row; you when they're gone. */
+	private PanelSnapshot.PartyRow selectedRow(PanelSnapshot.PartyTab t)
 	{
-		final PanelSnapshot.PartyBreakdown b = r.breakdown;
-		final JPanel card = SidePanelParts.card(6);
-		final SidePanelParts.Line backLine = new SidePanelParts.Line(PanelSnapshot.Text.small("‹ Party",
-			SidePanelStyle.SECONDARY), PanelSnapshot.Text.NONE);
-		backLine.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		backLine.setToolTipText("Back to the party");
-		backLine.addMouseListener(new MouseAdapter()
+		final PanelSnapshot.PartyRow r = t.row(selected);
+		return r != null ? r : t.row(SidePanelParty.YOU_ID);
+	}
+
+	private String memberStructure(PanelSnapshot.PartyTab t)
+	{
+		final PanelSnapshot.PartyRow r = selectedRow(t);
+		if (r == null)
 		{
-			@Override
-			public void mouseClicked(MouseEvent e)
+			return "none";
+		}
+		if (r.fight != null)
+		{
+			// Their Fight panels rebuild themselves as their own structure changes; here only live or after.
+			return r.id + (r.fightLive ? "|live" : "|fight");
+		}
+		return r.id + "|b" + r.breakdown.attacks.size() + "." + r.breakdown.summary.size();
+	}
+
+	/** T-130: the member's part, built again when its structure differs from what's built (or {@code force}). */
+	private void member(PanelSnapshot.PartyTab t, boolean force)
+	{
+		final String structure = memberStructure(t);
+		if (!force && structure.equals(memberBuiltFor))
+		{
+			updateMember(t);
+			return;
+		}
+		memberRebuilds++;
+		memberBuiltFor = structure;
+		memberArea.removeAll();
+		clearMember();
+		final PanelSnapshot.PartyRow r = selectedRow(t);
+		if (r != null)
+		{
+			memberArea.add(headingCard(r, t));
+			if (r.fight != null)
 			{
-				back();
+				memberFight = new SidePanelFightTab(actions, folds, true, icons);
+				memberFight.apply(r.fight);
+				memberArea.add(memberFight);
 			}
-		});
-		card.add(backLine);
-		final JPanel head = new JPanel(new BorderLayout(5, 0));
-		head.setOpaque(false);
-		title = new Picture(r.avatar, r.colour, 12);
-		head.add(title, BorderLayout.WEST);
-		place = new SidePanelParts.Line(PanelSnapshot.Text.title(b.title, SidePanelStyle.VALUE),
-			PanelSnapshot.Text.small(b.place, SidePanelStyle.SECONDARY));
-		// The name stays whole: the place drops its DPS, then its share, first.
-		place.setRightShort(placeShort(b.place));
-		head.add(place, BorderLayout.CENTER);
-		card.add(head);
+			else
+			{
+				// T-125's compact breakdown, where their room's message isn't in yet (or from an older sender).
+				final JPanel card = SidePanelParts.card(6);
+				attacks = new Attacks();
+				attacks.set(r.breakdown.attacks, r.colour);
+				card.add(attacks);
+				summary = new SidePanelParts.RowsCard(r.breakdown.summary, 3);
+				summary.setOpaque(false);
+				summary.setBorder(new EmptyBorder(0, 0, 0, 0));
+				card.add(summary);
+				memberArea.add(card);
+			}
+		}
+		memberArea.revalidate();
+		memberArea.repaint();
+		revalidate();
+	}
+
+	/**
+	 * T-130: whose panels follow: their picture or colour, {@code Brindle · Fight panels}, their place on the right,
+	 * and the hint under it; live, a line on what comes after their room.
+	 */
+	private JPanel headingCard(PanelSnapshot.PartyRow r, PanelSnapshot.PartyTab t)
+	{
+		final JPanel card = SidePanelParts.card(3);
+		final JPanel line = new JPanel(new BorderLayout(5, 0));
+		line.setOpaque(false);
+		headingPicture = new Picture(r.avatar, r.colour, 12);
+		line.add(headingPicture, BorderLayout.WEST);
+		heading = new SidePanelParts.Line(PanelSnapshot.Text.title(headingTitle(r), SidePanelStyle.VALUE),
+			PanelSnapshot.Text.NONE);
+		line.add(heading, BorderLayout.CENTER);
+		card.add(line);
+		// Their place and the hint on a line of their own, so the name is never cut for them.
+		headingSub = new SidePanelParts.Paragraph(headingSub(r, t), SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL,
+			SidePanelStyle.CONTENT_WIDTH - 14);
+		card.add(headingSub);
+		if (r.fight != null && r.fightLive)
+		{
+			card.add(new SidePanelParts.Paragraph(SidePanelMemberFight.LATER_LIVE, SidePanelStyle.MUTED,
+				SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14));
+		}
 		return card;
 	}
 
-	/** T-128: their Fight tab, the Fight tab's own component; live, a line on what comes after their room. */
-	private void fightSection(PanelSnapshot.PartyRow r)
+	/** {@code 3rd of 5 · click a member above to switch}; the place alone for a party of one sharer. */
+	static String headingSub(PanelSnapshot.PartyRow r, PanelSnapshot.PartyTab t)
 	{
-		final JPanel head = memberHead(r);
-		if (r.fightLive)
-		{
-			head.add(new SidePanelParts.Paragraph(SidePanelMemberFight.LATER_LIVE, SidePanelStyle.MUTED,
-				SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14));
-		}
-		add(new SidePanelSection("partyMember", "Party", PanelSnapshot.Text.NONE, head, folds));
-		memberFight = new SidePanelFightTab(actions, folds, true, icons);
-		memberFight.apply(r.fight);
-		add(memberFight);
+		final String place = place(r);
+		return members(t) > 1 ? place + " · " + SWITCH_HINT : place;
 	}
 
-	private void memberSection(PanelSnapshot.PartyRow r)
+	static String headingTitle(PanelSnapshot.PartyRow r)
 	{
-		final PanelSnapshot.PartyBreakdown b = r.breakdown;
-		final JPanel card = memberHead(r);
-		attacks = new Attacks();
-		attacks.set(b.attacks, r.colour);
-		card.add(attacks);
-		summary = new SidePanelParts.RowsCard(b.summary, 3);
-		summary.setOpaque(false);
-		summary.setBorder(new EmptyBorder(0, 0, 0, 0));
-		card.add(summary);
-		add(new SidePanelSection("partyMember", "Party", PanelSnapshot.Text.NONE, card, folds));
+		return r.name + FIGHT_PANELS;
+	}
+
+	/** {@code 3rd of 5}: the first of the breakdown's place. */
+	static String place(PanelSnapshot.PartyRow r)
+	{
+		final String p = r.breakdown == null ? "" : r.breakdown.place;
+		final int dot = p.indexOf(" · ");
+		return dot < 0 ? p : p.substring(0, dot);
+	}
+
+	private static int members(PanelSnapshot.PartyTab t)
+	{
+		int n = 0;
+		for (PanelSnapshot.PartyRow r : t.rows)
+		{
+			n += r.others ? 0 : 1;
+		}
+		return n;
+	}
+
+	private void updateMember(PanelSnapshot.PartyTab t)
+	{
+		final PanelSnapshot.PartyRow r = selectedRow(t);
+		if (r == null || heading == null)
+		{
+			return;
+		}
+		headingPicture.set(r.avatar, r.colour);
+		heading.set(PanelSnapshot.Text.title(headingTitle(r), SidePanelStyle.VALUE), null, PanelSnapshot.Text.NONE);
+		headingSub.set(headingSub(r, t), SidePanelStyle.MUTED);
+		if (memberFight != null)
+		{
+			memberFight.apply(r.fight);
+		}
+		else if (attacks != null)
+		{
+			attacks.set(r.breakdown.attacks, r.colour);
+			summary.set(r.breakdown.summary);
+		}
 	}
 
 	private void update(PanelSnapshot.PartyTab t)
@@ -376,53 +495,16 @@ final class SidePanelPartyTab extends JPanel
 		if (meter != null)
 		{
 			meter.set(t.rows);
-		}
-		if (opened != NONE)
-		{
-			final PanelSnapshot.PartyRow r = t.row(opened);
-			if (title != null)
-			{
-				title.set(r.avatar, r.colour);
-			}
-			if (memberFight != null)
-			{
-				place.set(PanelSnapshot.Text.title(r.breakdown.title, SidePanelStyle.VALUE), null,
-					PanelSnapshot.Text.small(r.breakdown.place, SidePanelStyle.SECONDARY));
-				place.setRightShort(placeShort(r.breakdown.place));
-				memberFight.apply(r.fight);
-				if (chart != null)
-				{
-					chart.set(t, opened);
-				}
-				return;
-			}
-			place.set(PanelSnapshot.Text.title(r.breakdown.title, SidePanelStyle.VALUE), null,
-				PanelSnapshot.Text.small(r.breakdown.place, SidePanelStyle.SECONDARY));
-			place.setRightShort(placeShort(r.breakdown.place));
-			attacks.set(r.breakdown.attacks, r.colour);
-			summary.set(r.breakdown.summary);
+			meter.setSelected(selected);
 		}
 		if (chart != null)
 		{
-			chart.set(t, opened);
+			chart.set(t, focus());
 		}
-	}
-
-	/** T-128: their Fight tab, when one is open; for tests and renders. */
-	SidePanelFightTab memberFight()
-	{
-		return memberFight;
-	}
-
-	/** {@code 3rd of 3 · 20% · 15.4 dps}'s short forms: {@code 3rd of 3 · 20%}, then {@code 3rd of 3}. */
-	static List<String> placeShort(String place)
-	{
-		final String[] parts = place.split(" · ");
-		if (parts.length < 3)
+		if (memberArea != null)
 		{
-			return Collections.emptyList();
+			member(t, false);
 		}
-		return java.util.Arrays.asList(parts[0] + " · " + parts[1], parts[0]);
 	}
 
 	/** The header's right: the clock and the party's DPS, {@code 2:09 · party 79.1 dps}. */

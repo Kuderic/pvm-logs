@@ -1624,35 +1624,28 @@ public final class SidePanelPictures
 			Files.createDirectories(dir);
 			for (double scale : new double[]{1, 2})
 			{
-				write(dir, "a-duo-after-the-kill", scale, party(SidePanelPartyExamples.duo(), null, -1, null, scale));
-				write(dir, "b-toa-room", scale, party(SidePanelPartyExamples.toa(), null, -1, null, scale));
-				write(dir, "c-toa-member-opened", scale, party(SidePanelPartyExamples.toa(), 22L, -1, null, scale));
-				write(dir, "d-you-opened", scale, party(SidePanelPartyExamples.toa(), SidePanelParty.YOU_ID, -1, null,
-					scale));
-				write(dir, "e-tob-mid-fight-hovered", scale, party(SidePanelPartyExamples.tobLive(), null, 120, null, scale));
-				write(dir, "f-tob-whole-raid-luck-member-left", scale, party(SidePanelPartyExamples.tobRaid(), null, -1,
-					SidePanelParty.Metric.LUCK, scale));
-				write(dir, "g-cox-8", scale, party(SidePanelPartyExamples.cox(), null, -1, null, scale));
-				write(dir, "h-cox-8-exec", scale, party(SidePanelPartyExamples.cox(), null, -1, SidePanelParty.Metric.EXEC,
-					scale));
-				write(dir, "i-nobody-sharing", scale, party(SidePanelPartyExamples.nobody(), null, -1, null, scale));
-				write(dir, "j-not-in-a-party", scale, party(SidePanelPartyExamples.notInParty(), null, -1, null, scale));
-				final SidePanelModel.Input kill = SidePanelExamples.dead();
-				kill.partyLine = SidePanelParty.fightLine(SidePanelParty.party(SidePanelPartyExamples.toa()));
-				write(dir, "k-fight-tab-line", scale, render(kill, scale));
-				// T-128.
-				kill.partyAvatar = SidePanelPartyExamples.picture(1, 'Y');
-				write(dir, "k2-fight-tab-line-with-your-picture", scale, render(kill, scale));
-				write(dir, "l-chart-you-and-your-echo", scale, party(SidePanelPartyExamples.withEcho(), null, 120, null,
-					scale));
-				write(dir, "m-member-after-their-room", scale, party(SidePanelPartyExamples.toaBrindleAfter(), 22L, -1,
+				// T-130: one page, your Fight panels under the party by default.
+				write(dir, "a-you-selected-by-default", scale, party(SidePanelPartyExamples.toaYouAndBrindle(), null, -1,
 					null, scale));
-				write(dir, "n-member-mid-fight", scale, party(SidePanelPartyExamples.tobQuillonLive(), 31L, -1, null,
-					scale));
-				write(dir, "o-meter-with-pictures", scale, party(SidePanelPartyExamples.toaWithPictures(), null, -1, null,
-					scale));
-				write(dir, "p-you-opened-with-your-picture", scale, party(SidePanelPartyExamples.toaWithPictures(),
+				write(dir, "b-member-selected-after-their-room", scale, party(SidePanelPartyExamples.toaYouAndBrindle(),
 					22L, -1, null, scale));
+				write(dir, "c-member-selected-mid-fight", scale, party(SidePanelPartyExamples.tobQuillonLive(), 31L, 120,
+					null, scale));
+				write(dir, "d-cox-8-one-selected", scale, party(SidePanelPartyExamples.cox(), 51L, -1, null, scale));
+				write(dir, "e-no-room-message-yet-compact", scale, party(SidePanelPartyExamples.toa(), 22L, -1, null,
+					scale));
+				write(dir, "f-meter-with-pictures", scale, party(SidePanelPartyExamples.toaWithPictures(), null, -1, null,
+					scale));
+				write(dir, "g-chart-you-and-your-echo", scale, party(SidePanelPartyExamples.withEcho(), null, 120, null,
+					scale));
+				write(dir, "h-whole-raid-luck", scale, party(SidePanelPartyExamples.tobRaid(), null, -1,
+					SidePanelParty.Metric.LUCK, scale));
+				// T-129: the empty states.
+				final SidePanelParty.Input waiting = new SidePanelParty.Input();
+				waiting.inParty = true;
+				waiting.partySize = 3;
+				write(dir, "i-in-a-party-before-anyone-shares", scale, party(waiting, null, -1, null, scale));
+				write(dir, "j-not-in-a-party", scale, party(SidePanelPartyExamples.notInParty(), null, -1, null, scale));
 			}
 		}
 		smooth = false;
@@ -1670,7 +1663,7 @@ public final class SidePanelPictures
 		final SidePanelPartyTab tab = panel.partyTab();
 		if (open != null)
 		{
-			tab.open(open);
+			tab.select(open);
 		}
 		if (metric != null)
 		{
