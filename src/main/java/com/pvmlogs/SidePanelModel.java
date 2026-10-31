@@ -218,6 +218,11 @@ final class SidePanelModel
 		Input addsOnly;
 		/** T-099: in {@link #bossOnly} and {@link #addsOnly}, the fights they stand for, as one room. */
 		Encounter part;
+		/**
+		 * T-132: one side of the switch read back from a party member's room message: its chart's axis ends at its own
+		 * span, as {@link #part}'s does.
+		 */
+		boolean side;
 		/** T-099: in {@link #bossOnly} and {@link #addsOnly}, none of its fights scored (Zulrah's snakelings). */
 		boolean noneScored;
 		/** T-102: the room ended because the player died in it (T-100): {@code (died)} where {@code (ended)} goes. */
@@ -246,6 +251,12 @@ final class SidePanelModel
 		int maxHp;
 		/** Null when unknown (no fights yet). */
 		Boolean solo;
+		/**
+		 * T-132: in a RuneLite party while the room ran (any of its fights, kept with the kill), or a party member's own
+		 * panels: the label reads {@code party} instead of {@code solo} or {@code group}. "Kills like this" still go by
+		 * {@link #solo} (others' damage).
+		 */
+		boolean inParty;
 		long startMillis;
 		long endMillis;
 		/** A raid's rooms so far. */
@@ -332,6 +343,7 @@ final class SidePanelModel
 		final List<Fight> fights = room.getFights();
 		in.maxHp = maxHp(fights);
 		in.solo = fights.isEmpty() ? null : solo(fights);
+		in.inParty = inParty(fights);
 		in.startMillis = room.getStartMillis();
 		in.unscored = anyUnscored(fights);
 		in.hitsTaken = room.getHitsTaken();
@@ -718,6 +730,19 @@ final class SidePanelModel
 		return hp;
 	}
 
+	/** T-132: whether any of the fights was fought in a RuneLite party. */
+	static boolean inParty(List<Fight> fights)
+	{
+		for (Fight f : fights)
+		{
+			if (f.isInParty())
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static boolean solo(List<Fight> fights)
 	{
 		for (Fight f : fights)
@@ -1040,6 +1065,9 @@ final class SidePanelModel
 		return tiles;
 	}
 
+	/** T-132: the header's label in a RuneLite party. */
+	static final String PARTY = "party";
+
 	private static PanelSnapshot.Header header(Input in, LedgerRows.Scope s)
 	{
 		final List<String> sub = new ArrayList<>();
@@ -1072,9 +1100,10 @@ final class SidePanelModel
 			{
 				sub.add(in.version != null ? in.version : hp(in.maxHp));
 			}
-			if (in.solo != null)
+			if (in.inParty || in.solo != null)
 			{
-				sub.add(in.solo ? "solo" : "group");
+				// T-132 (Eric, 2026-10-31): "it should say party" in a RuneLite party, even with only the loopback echo.
+				sub.add(in.inParty ? PARTY : in.solo ? "solo" : "group");
 				soloAt = sub.size() - 1;
 			}
 			if (in.ended)
@@ -2638,7 +2667,7 @@ final class SidePanelModel
 		final boolean rangeKnown = s.damageVariance() > 0 && v.variance[length - 1] > 0;
 		// T-099: one side of the switch spans from its first fight to its last, the other side's time between, so its
 		// axis ends at that span, not at its own fighting time.
-		final int ticks = in.part != null ? length : s.combatTicks();
+		final int ticks = in.part != null || in.side ? length : s.combatTicks();
 		return new PanelSnapshot.Chart(from, length, Arrays.copyOfRange(v.damage, from, length),
 			Arrays.copyOfRange(v.expected, from, length), Arrays.copyOfRange(v.variance, from, length),
 			states, styles,

@@ -31,9 +31,29 @@ import javax.swing.border.EmptyBorder;
  */
 final class SidePanelPartyTab extends JPanel
 {
-	/** T-130: the heading's hint. */
-	static final String SWITCH_HINT = "click a member above to switch";
-	static final String FIGHT_PANELS = " · Fight panels";
+	/** T-130, T-132: the meter's tooltip; the heading names whose panels follow and nothing else. */
+	static final String SWITCH_HINT = "Click a member to show their Fight panels below; click again, or your own row, "
+		+ "for yours.";
+	/** T-132: the heading's picture, at 1× (Eric, 2026-10-31: "Just the Picture made larger and the person's name"). */
+	static final int HEADING_PICTURE = 24;
+
+	/**
+	 * T-132: how the selected member's part is marked as theirs: the area behind their heading and panels blended toward
+	 * their colour, or their cards' backgrounds; and whether your own part is tinted too (your colour is white) or plain.
+	 * Set on a selection change, never per tick. Static for the renders' options.
+	 */
+	enum Tint
+	{
+		AREA, CARDS, NONE
+	}
+
+	static Tint tint = Tint.AREA;
+	static boolean tintYours = false;
+	/** How far toward the member's colour: the area's background, and the cards' with {@link Tint#CARDS}. */
+	static final double AREA_TINT = 0.10;
+	static final double CARD_TINT = 0.12;
+	/** The tinted area's inset around the heading and panels, the same with the tint or without, so nothing moves. */
+	static final int AREA_PAD = 4;
 
 	/**
 	 * T-130 review: the tab paints in software and reaches the screen as one image, as the other tabs have since T-046
@@ -89,6 +109,9 @@ final class SidePanelPartyTab extends JPanel
 
 	// The current components, for updates in place.
 	private SidePanelParts.Line header;
+	/** T-132: the room's title block (the Fight tab's own, your room or raid on show), on top of the tab. */
+	private SidePanelFightTab title;
+	private PanelSnapshot.FightTab titleApplied;
 	private SidePanelPartyMeter meter;
 	private SidePanelPartyChart chart;
 	private MetricSwitch words;
@@ -98,8 +121,10 @@ final class SidePanelPartyTab extends JPanel
 	private JPanel memberArea;
 	private Picture headingPicture;
 	private SidePanelParts.Line heading;
-	private SidePanelParts.Paragraph headingSub;
 	private SidePanelFightTab memberFight;
+	/** T-132: the colour the member's part is tinted toward, null for none; and the builds of their panels it was set on. */
+	private Color tinted;
+	private int tintedBuilds = -1;
 	/** The snapshot {@link #memberFight} last had, so the same one (a member's room, built once) isn't applied again. */
 	private PanelSnapshot.FightTab memberApplied;
 	/**
@@ -145,6 +170,8 @@ final class SidePanelPartyTab extends JPanel
 			if (yourPanels == null)
 			{
 				yourPanels = new SidePanelFightTab(actions, folds, true, icons);
+				// T-132: from the tiles on; the title block is the tab's own, on top.
+				yourPanels.setParts(SidePanelFightTab.Parts.BODY);
 			}
 			yourLast = you.fight;
 			yourPanels.apply(yourLast);
@@ -187,6 +214,8 @@ final class SidePanelPartyTab extends JPanel
 		buffer.drop();
 		builtFor = null;
 		memberBuiltFor = null;
+		titleApplied = null;
+		tinted = null;
 		if (yourPanels != null)
 		{
 			yourPanels.restyle(yourLast);
@@ -314,6 +343,8 @@ final class SidePanelPartyTab extends JPanel
 		rebuilds++;
 		removeAll();
 		header = null;
+		title = null;
+		titleApplied = null;
 		meter = null;
 		chart = null;
 		words = null;
@@ -336,6 +367,12 @@ final class SidePanelPartyTab extends JPanel
 		{
 			raidSwitch(t.wholeRaid);
 		}
+		// T-132 (Eric, 2026-10-31: "move the boss name to the top of the panel alongside its hp and the time of the
+		// fight"): the Fight tab's own title block for the room or raid on show, from your panels' snapshot.
+		title = new SidePanelFightTab(actions, folds, true, icons);
+		title.setParts(SidePanelFightTab.Parts.TITLE);
+		add(title);
+		applyTitle();
 		meterSection(t);
 		chart = new SidePanelPartyChart();
 		chart.set(t, focus());
@@ -351,11 +388,26 @@ final class SidePanelPartyTab extends JPanel
 		repaint();
 	}
 
+	/** T-132: the title block with your panels' latest snapshot, the clock set in place. */
+	private void applyTitle()
+	{
+		if (title != null && yourLast != null && yourLast != titleApplied)
+		{
+			titleApplied = yourLast;
+			title.apply(yourLast);
+		}
+	}
+
+	/** T-132: the title block on top; null before your panels' first snapshot or with nobody sharing. */
+	SidePanelFightTab title()
+	{
+		return title;
+	}
+
 	private void clearMember()
 	{
 		headingPicture = null;
 		heading = null;
-		headingSub = null;
 		memberFight = null;
 		memberApplied = null;
 		attacks = null;
@@ -378,14 +430,13 @@ final class SidePanelPartyTab extends JPanel
 	private void meterSection(PanelSnapshot.PartyTab t)
 	{
 		final JPanel card = SidePanelParts.card(5);
-		header = new SidePanelParts.Line(PanelSnapshot.Text.small(t.where, SidePanelStyle.SECONDARY),
-			PanelSnapshot.Text.small(headerRight(t), SidePanelStyle.SECONDARY));
-		// The room's or raid's name stays whole: the party's DPS drops its word, then goes, then the clock, all of it in
-		// the tooltip.
-		header.setRightShort(headerShort(t));
+		// T-132: the room's name and clock are the title block's, on top: the party's DPS alone here.
+		header = new SidePanelParts.Line(PanelSnapshot.Text.small(t.partyDps, SidePanelStyle.SECONDARY),
+			PanelSnapshot.Text.NONE);
 		header.setTip(t.where + " · " + headerRight(t));
 		card.add(header);
 		meter = new SidePanelPartyMeter(this::select);
+		meter.setToolTipText(SWITCH_HINT);
 		meter.setMetric(metric);
 		meter.set(t.rows);
 		meter.setSelected(selected);
@@ -442,7 +493,7 @@ final class SidePanelPartyTab extends JPanel
 		final PanelSnapshot.PartyRow r = selectedRow(t);
 		if (r != null)
 		{
-			memberArea.add(headingCard(r, t));
+			memberArea.add(headingCard(r));
 			if (r.you && yourLast != null)
 			{
 				memberFight = yourPanels;
@@ -451,6 +502,7 @@ final class SidePanelPartyTab extends JPanel
 			else if (r.fight != null)
 			{
 				memberFight = new SidePanelFightTab(actions, folds, true, icons);
+				memberFight.setParts(SidePanelFightTab.Parts.BODY);
 				memberApplied = r.fight;
 				memberFight.apply(r.fight);
 				memberArea.add(memberFight);
@@ -469,30 +521,117 @@ final class SidePanelPartyTab extends JPanel
 				memberArea.add(card);
 			}
 		}
+		// A new part: the tint is set again, whatever it was.
+		tintedBuilds = Integer.MIN_VALUE;
+		tint(r);
 		memberArea.revalidate();
 		memberArea.repaint();
 		revalidate();
 	}
 
 	/**
-	 * T-130: whose panels follow: their picture or colour, {@code Brindle · Fight panels}, their place on the right,
-	 * and the hint under it; live, a line on what comes after their room.
+	 * T-132 (Eric, 2026-10-31: "some sort of UI color change to indicate which player you are on"): the member's part
+	 * tinted toward their colour, as {@link #tint} says. Set when the member's part is built, and again only when their
+	 * panels rebuild themselves (new cards), never per tick.
 	 */
-	private JPanel headingCard(PanelSnapshot.PartyRow r, PanelSnapshot.PartyTab t)
+	private void tint(PanelSnapshot.PartyRow r)
+	{
+		final Color c = r == null || tint == Tint.NONE || r.you && !tintYours ? null : r.colour;
+		final int builds = memberFight == null ? -1 : memberFight.builds();
+		if (java.util.Objects.equals(c, tinted) && builds == tintedBuilds && memberArea.getBorder() != null)
+		{
+			return;
+		}
+		tinted = c;
+		tintedBuilds = builds;
+		tints++;
+		memberArea.setBorder(new EmptyBorder(AREA_PAD, AREA_PAD, AREA_PAD, AREA_PAD));
+		final boolean area = c != null && tint == Tint.AREA;
+		memberArea.setOpaque(area);
+		memberArea.setBackground(area ? tinted(SidePanelStyle.PANEL, c, AREA_TINT) : SidePanelStyle.PANEL);
+		cards(memberArea, c != null && tint == Tint.CARDS ? tinted(SidePanelStyle.CARD, c, CARD_TINT) : SidePanelStyle.CARD);
+		memberArea.repaint();
+	}
+
+	/** {@code base} blended {@code amount} of the way toward {@code toward}. */
+	static Color tinted(Color base, Color toward, double amount)
+	{
+		return new Color((int) Math.round(base.getRed() + (toward.getRed() - base.getRed()) * amount),
+			(int) Math.round(base.getGreen() + (toward.getGreen() - base.getGreen()) * amount),
+			(int) Math.round(base.getBlue() + (toward.getBlue() - base.getBlue()) * amount));
+	}
+
+	/** Every card in {@code c} (an opaque panel in a card's colour, tinted or not) to {@code to}. */
+	private static void cards(java.awt.Container c, Color to)
+	{
+		for (java.awt.Component k : c.getComponents())
+		{
+			if (k instanceof JComponent && k.isOpaque() && isCard(k.getBackground()))
+			{
+				k.setBackground(to);
+			}
+			if (k instanceof java.awt.Container)
+			{
+				cards((java.awt.Container) k, to);
+			}
+		}
+	}
+
+	/** A card's background: the plain one, or one tinted from it toward any member's colour. */
+	private static boolean isCard(Color bg)
+	{
+		if (bg == null)
+		{
+			return false;
+		}
+		if (bg.equals(SidePanelStyle.CARD))
+		{
+			return true;
+		}
+		for (Color m : SidePanelParty.COLOURS)
+		{
+			if (bg.equals(tinted(SidePanelStyle.CARD, m, CARD_TINT)))
+			{
+				return true;
+			}
+		}
+		return bg.equals(tinted(SidePanelStyle.CARD, SidePanelParty.YOU, CARD_TINT));
+	}
+
+	/** For tests: the colour the member's part is tinted toward; null for none. */
+	Color tintedToward()
+	{
+		return tinted;
+	}
+
+	/** For tests: how many times the tint was set (on selection changes and the member's panels rebuilding only). */
+	int tints()
+	{
+		return tints;
+	}
+
+	private int tints;
+
+	JPanel memberArea()
+	{
+		return memberArea;
+	}
+
+	/**
+	 * T-132: whose panels follow: their picture (or their colour, round) at {@link #HEADING_PICTURE} and their name in the
+	 * title font, nothing else; live, a line on what comes after their room.
+	 */
+	private JPanel headingCard(PanelSnapshot.PartyRow r)
 	{
 		final JPanel card = SidePanelParts.card(3);
-		final JPanel line = new JPanel(new BorderLayout(5, 0));
+		final JPanel line = new JPanel(new BorderLayout(7, 0));
 		line.setOpaque(false);
-		headingPicture = new Picture(r.avatar, r.colour, 12);
+		headingPicture = new Picture(r.avatar, r.colour, HEADING_PICTURE);
 		line.add(headingPicture, BorderLayout.WEST);
 		heading = new SidePanelParts.Line(PanelSnapshot.Text.title(headingTitle(r), SidePanelStyle.VALUE),
 			PanelSnapshot.Text.NONE);
 		line.add(heading, BorderLayout.CENTER);
 		card.add(line);
-		// Their place and the hint on a line of their own, so the name is never cut for them.
-		headingSub = new SidePanelParts.Paragraph(headingSub(r, t), SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL,
-			SidePanelStyle.CONTENT_WIDTH - 14);
-		card.add(headingSub);
 		if (!r.you && r.fight != null && r.fightLive)
 		{
 			card.add(new SidePanelParts.Paragraph(SidePanelMemberFight.LATER_LIVE, SidePanelStyle.MUTED,
@@ -501,34 +640,10 @@ final class SidePanelPartyTab extends JPanel
 		return card;
 	}
 
-	/** {@code 3rd of 5 · click a member above to switch}; the place alone for a party of one sharer. */
-	static String headingSub(PanelSnapshot.PartyRow r, PanelSnapshot.PartyTab t)
-	{
-		final String place = place(r);
-		return members(t) > 1 ? place + " · " + SWITCH_HINT : place;
-	}
-
+	/** T-132: the member's name, as the meter has it ({@code you} for yours). */
 	static String headingTitle(PanelSnapshot.PartyRow r)
 	{
-		return r.name + FIGHT_PANELS;
-	}
-
-	/** {@code 3rd of 5}: the first of the breakdown's place. */
-	static String place(PanelSnapshot.PartyRow r)
-	{
-		final String p = r.breakdown == null ? "" : r.breakdown.place;
-		final int dot = p.indexOf(" · ");
-		return dot < 0 ? p : p.substring(0, dot);
-	}
-
-	private static int members(PanelSnapshot.PartyTab t)
-	{
-		int n = 0;
-		for (PanelSnapshot.PartyRow r : t.rows)
-		{
-			n += r.others ? 0 : 1;
-		}
-		return n;
+		return r.name;
 	}
 
 	private void updateMember(PanelSnapshot.PartyTab t)
@@ -540,17 +655,18 @@ final class SidePanelPartyTab extends JPanel
 		}
 		headingPicture.set(r.avatar, r.colour);
 		heading.set(PanelSnapshot.Text.title(headingTitle(r), SidePanelStyle.VALUE), null, PanelSnapshot.Text.NONE);
-		headingSub.set(headingSub(r, t), SidePanelStyle.MUTED);
 		if (memberFight != null && memberFight != yourPanels && r.fight != null && r.fight != memberApplied)
 		{
 			memberApplied = r.fight;
 			memberFight.apply(r.fight);
 		}
-		else if (attacks != null)
+		else if (memberFight == null && attacks != null)
 		{
 			attacks.set(r.breakdown.attacks, r.colour);
 			summary.set(r.breakdown.summary);
 		}
+		// Their panels rebuilt themselves (new cards): the tint again; otherwise nothing.
+		tint(r);
 	}
 
 	private void update(PanelSnapshot.PartyTab t)
@@ -564,11 +680,10 @@ final class SidePanelPartyTab extends JPanel
 			roomSegment.select(!t.wholeRaid);
 			raidSegment.select(t.wholeRaid);
 		}
+		applyTitle();
 		if (header != null)
 		{
-			header.set(PanelSnapshot.Text.small(t.where, SidePanelStyle.SECONDARY), null,
-				PanelSnapshot.Text.small(headerRight(t), SidePanelStyle.SECONDARY));
-			header.setRightShort(headerShort(t));
+			header.set(PanelSnapshot.Text.small(t.partyDps, SidePanelStyle.SECONDARY), null, PanelSnapshot.Text.NONE);
 			header.setTip(t.where + " · " + headerRight(t));
 		}
 		if (meter != null)
@@ -590,18 +705,6 @@ final class SidePanelPartyTab extends JPanel
 	static String headerRight(PanelSnapshot.PartyTab t)
 	{
 		return t.clock + " · " + t.partyDps;
-	}
-
-	/** Its shorter forms, where the room's name needs the line: {@code 2:09 · 79.1 dps}, {@code 2:09}, then nothing. */
-	static List<String> headerShort(PanelSnapshot.PartyTab t)
-	{
-		return java.util.Arrays.asList(t.clock + " · " + shortDps(t.partyDps), t.clock, "");
-	}
-
-	/** {@code party 66.1 dps} without its first word, where the room's name would be cut. */
-	static String shortDps(String partyDps)
-	{
-		return partyDps.startsWith("party ") ? partyDps.substring("party ".length()) : partyDps;
 	}
 
 	/** The meter's {@code dmg · luck · exec}, as the Damage card's switch: the picked word bright, a click picks. */

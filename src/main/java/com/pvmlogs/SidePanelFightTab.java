@@ -141,6 +141,27 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private int builds;
 	/** Whether this build's values have reserved their widest digits (T-046). */
 	private boolean reserved;
+
+	/**
+	 * T-132: which of the tab's parts this one shows. The Party tab puts the room's title block on top of the tab
+	 * ({@link #TITLE}) and each member's panels below, from the four tiles on ({@link #BODY}).
+	 */
+	enum Parts
+	{
+		ALL, TITLE, BODY
+	}
+
+	private Parts parts = Parts.ALL;
+
+	/** T-132: shows only these parts from the next snapshot on. */
+	void setParts(Parts p)
+	{
+		if (p != parts)
+		{
+			parts = p;
+			structure = null;
+		}
+	}
 	/** The status line under the empty state's tools ("Exported 12 fights"), kept across rebuilds. */
 	private String status = "";
 	private SidePanelText statusLine;
@@ -288,11 +309,21 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				}
 				break;
 			default:
+				// T-132: the Party tab's top: the room's title block alone.
+				if (parts == Parts.TITLE)
+				{
+					header(tab);
+					break;
+				}
 				// One order for both: the live order, with the after-fight sections slotted in (spec 3.1).
 				// T-112 (Eric, 2026-10-30): the tiles, then Damage and Luck, then where the time went and Execution, then
 				// the rest. One order live and after: a section that only exists after the fight just isn't there live.
-				raidSwitch(tab);
-				header(tab);
+				// T-132: a member's panels on the Party tab start at the tiles: the title is the tab's, on top.
+				if (parts == Parts.ALL)
+				{
+					raidSwitch(tab);
+					header(tab);
+				}
 				banner(tab);
 				unscored(tab);
 				// The tiles under the header, the at-a-glance summary (Eric's pick, 07:45).

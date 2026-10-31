@@ -43,7 +43,7 @@ public class SidePanelPartyMemberViewTest
 		assertEquals(SidePanelParty.YOU_ID, tab.selected());
 		assertNotNull(tab.meter());
 		assertNotNull(tab.chart());
-		assertEquals("you · Fight panels", tab.heading().left.getText());
+		assertEquals("you", tab.heading().left.getText());
 		assertNotNull(tab.memberFight());
 		assertNotNull(SidePanelPictures.sectionOf(tab.memberFight(), "budget"));
 		// No line faded for you.
@@ -72,7 +72,7 @@ public class SidePanelPartyMemberViewTest
 		// Their row outlined, their line bright, their name above their panels.
 		assertEquals(22, meter.selected());
 		assertEquals(22, tab.chart().focus());
-		assertEquals("Brindle · Fight panels", tab.heading().left.getText());
+		assertEquals("Brindle", tab.heading().left.getText());
 		final SidePanelFightTab fight = tab.memberFight();
 		assertNotNull(fight);
 		for (String id : new String[]{"damage", "curve", "budget", "execution", "chart", "ticks"})
@@ -83,7 +83,7 @@ public class SidePanelPartyMemberViewTest
 		tab.select(22);
 		assertEquals(SidePanelParty.YOU_ID, tab.selected());
 		assertEquals(SidePanelPartyTab.NONE, tab.chart().focus());
-		assertEquals("you · Fight panels", tab.heading().left.getText());
+		assertEquals("you", tab.heading().left.getText());
 		assertEquals(built, tab.rebuilds());
 	}
 
@@ -119,7 +119,7 @@ public class SidePanelPartyMemberViewTest
 		tab.select(22);
 		assertEquals(members + 2, tab.memberRebuilds());
 		assertSame("your kept panels at once", yours, tab.memberFight());
-		assertEquals("you · Fight panels", tab.heading().left.getText());
+		assertEquals("you", tab.heading().left.getText());
 		// And the snapshot built for you again: in place.
 		final int built = yours.builds();
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(asThePanelBuilds(true, panels, hersSent))));
@@ -275,7 +275,7 @@ public class SidePanelPartyMemberViewTest
 		final SidePanelPartyTab tab = p.partyTab();
 		tab.select(22);
 		assertNull(tab.memberFight());
-		assertEquals("Brindle · Fight panels", tab.heading().left.getText());
+		assertEquals("Brindle", tab.heading().left.getText());
 		assertNotNull(tab.meter());
 		assertNotNull(tab.chart());
 	}

@@ -182,7 +182,7 @@ class PvmPerformancePanel extends PluginPanel
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
 			: new HistorySource(), actions, folds);
 		tripTab = new SidePanelTripTab(actions, folds);
-		// T-130: your own Fight panels are built for the Party tab only while you're the one selected.
+		// T-130: the member selected on the Party tab.
 		partyTab = new SidePanelPartyTab(actions, folds, icons, id ->
 		{
 			partySelected = id;
@@ -826,11 +826,11 @@ class PvmPerformancePanel extends PluginPanel
 			raidScope ? SidePanelParty.sum(mine) : mine.get(0));
 		final net.runelite.client.party.PartyMember me = localMember(party);
 		you.avatar = me == null ? null : me.getAvatar();
-		final long opened = partySelected;
-		if (!light && opened == SidePanelParty.YOU_ID)
+		if (!light)
 		{
 			// T-130: your Fight panels under the party, the Fight tab's own build for the room or raid on show. Built
-			// here only while the Party tab shows (the Fight tab builds only while it shows), so never twice.
+			// here only while the Party tab shows (the Fight tab builds only while it shows), so never twice. T-132: built
+			// whoever is selected: the tab's title block on top is theirs, and your panels stay current for a click back.
 			you.fight = yourFightPanels(fight, display, room, raid, whole);
 		}
 		if (!light)

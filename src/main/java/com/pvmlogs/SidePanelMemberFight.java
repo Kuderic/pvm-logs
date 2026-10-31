@@ -32,7 +32,22 @@ final class SidePanelMemberFight
 	/** The room-end message for {@code room}: its Fight tab, as the sender's own panel would build it. */
 	static LuckVsSkillRoom message(Encounter room, FightTimeline.View view, int raidNumber, BossRules rules)
 	{
-		final SidePanelModel.Input in = input(room, view, rules, true);
+		return message(room, r -> r == room ? view : null, raidNumber, rules);
+	}
+
+	/**
+	 * T-132: the same, with {@code views} giving each part of the room its timeline (the boss-only and adds-only rooms of
+	 * the Damage card's switch, as {@code PvmPerformancePanel.read} gives them), so the member's card has the switch.
+	 */
+	static LuckVsSkillRoom message(Encounter room, java.util.function.Function<Encounter, FightTimeline.View> views,
+		int raidNumber, BossRules rules)
+	{
+		final SidePanelModel.Input in = input(room, views.apply(room), rules, true);
+		if (in.view != null && in.bossOnly != null && in.addsOnly != null)
+		{
+			in.bossOnly.view = views.apply(in.bossOnly.part);
+			in.addsOnly.view = views.apply(in.addsOnly.part);
+		}
 		final LuckVsSkillRoom m = new LuckVsSkillRoom();
 		m.r = room.getName();
 		m.rs = room.getStartMillis();
@@ -105,6 +120,33 @@ final class SidePanelMemberFight
 		{
 			f.w = weapons(in.weaponRows != null ? in.weaponRows : SidePanelModel.weaponRows(in.view));
 			f.c = chart(in.view);
+		}
+		// T-132: the Damage card's switch, where the room has adds and their own timelines came with it.
+		if (!in.run && in.bossOnly != null && in.addsOnly != null && in.bossOnly.view != null && in.addsOnly.view != null)
+		{
+			f.b = part(in.bossOnly);
+			f.a = part(in.addsOnly);
+		}
+		return f;
+	}
+
+	/** T-132: one side of the switch: its figures, its other damage, its weapon rows and chart. */
+	private static LuckVsSkillRoom.Fight part(SidePanelModel.Input p)
+	{
+		final LuckVsSkillRoom.Fight f = new LuckVsSkillRoom.Fight();
+		f.s = values(p.scope);
+		f.n = p.name;
+		f.sn = p.scoredName;
+		f.unscored = p.unscored;
+		f.ns = p.noneScored;
+		f.sth = p.scoredThrall;
+		f.sdt = p.scoredDot;
+		f.sdk = p.scoredDotByKind.isEmpty() ? null : new LinkedHashMap<>(p.scoredDotByKind);
+		f.srf = p.scoredReflect;
+		if (!p.noneScored && p.view != null && p.view.states.length > 0)
+		{
+			f.w = weapons(SidePanelModel.weaponRows(p.view));
+			f.c = chart(p.view);
 		}
 		return f;
 	}
@@ -325,6 +367,8 @@ final class SidePanelMemberFight
 		in.warning = f.warn;
 		in.version = f.ver;
 		in.drain = drain(f.dr);
+		// A party member's own panels: they're sending, so they're in a party (T-132).
+		in.inParty = true;
 		if (f.c != null && f.c.n > 0)
 		{
 			in.view = view(f.c);
@@ -334,7 +378,36 @@ final class SidePanelMemberFight
 		{
 			in.charts = false;
 		}
+		// T-132: the Damage card's switch, from a sender that sent both sides.
+		if (f.b != null && f.a != null && in.view != null)
+		{
+			in.bossOnly = side(f.b, in.name);
+			in.addsOnly = side(f.a, in.name);
+		}
 		return in;
+	}
+
+	/** T-132: one side of the switch read back: as {@code SidePanelModel.part} makes it from the room's fights. */
+	private static SidePanelModel.Input side(LuckVsSkillRoom.Fight f, String room)
+	{
+		final SidePanelModel.Input p = new SidePanelModel.Input();
+		p.kind = SidePanelModel.Kind.ROOM;
+		p.side = true;
+		p.scope = scope(f.s == null ? new LuckVsSkillRoom.Values() : f.s);
+		p.name = f.n == null ? room : f.n;
+		p.scoredName = f.sn == null ? "" : f.sn;
+		p.unscored = f.unscored;
+		p.noneScored = f.ns;
+		p.scoredThrall = f.sth;
+		p.scoredDot = f.sdt;
+		p.scoredDotByKind = f.sdk == null ? Collections.<String, Integer>emptyMap() : f.sdk;
+		p.scoredReflect = f.srf;
+		if (f.c != null && f.c.n > 0)
+		{
+			p.view = view(f.c);
+			p.weaponRows = weaponRows(f.w);
+		}
+		return p;
 	}
 
 	/** Mid-fight: the input a member's live update can fill. The Fight tab draws it live, without its chart or strip. */
@@ -347,6 +420,7 @@ final class SidePanelMemberFight
 		in.scoredName = in.name;
 		in.scope = scope(liveValues(u));
 		in.hitsTaken = u.th;
+		in.inParty = true;
 		in.charts = false;
 		in.later = null;
 		in.weaponRows = liveRows(u, itemNames);

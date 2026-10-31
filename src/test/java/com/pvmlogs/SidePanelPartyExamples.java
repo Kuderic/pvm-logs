@@ -324,8 +324,13 @@ final class SidePanelPartyExamples
 	static SidePanelParty.Member row(long id, String name, boolean you, int slot, SidePanelTimelineExamples.Built b,
 		boolean live)
 	{
-		final FightTimeline.View v = b.view();
-		final LuckVsSkillUpdate u = PartyShare.build(live ? LuckVsSkillUpdate.LIVE : LuckVsSkillUpdate.ROOM_END, b.room,
+		return row(id, name, you, slot, b.room, b.view(), live);
+	}
+
+	static SidePanelParty.Member row(long id, String name, boolean you, int slot, Encounter room, FightTimeline.View v,
+		boolean live)
+	{
+		final LuckVsSkillUpdate u = PartyShare.build(live ? LuckVsSkillUpdate.LIVE : LuckVsSkillUpdate.ROOM_END, room,
 			v.attacks, 0);
 		final SidePanelParty.Member m = new SidePanelParty.Member(id, name, you, u);
 		m.slot = slot;
@@ -346,6 +351,8 @@ final class SidePanelPartyExamples
 		in.weaponRows = new SidePanelWeaponRows().rows(b.room, in.view);
 		in.ended = ended;
 		in.killed = ended;
+		// In a party: the label reads "party" (T-132).
+		in.inParty = true;
 		return SidePanelModel.fight(in);
 	}
 
@@ -358,6 +365,39 @@ final class SidePanelPartyExamples
 		final SidePanelModel.Input in = SidePanelMemberFight.decode(sent.f);
 		in.whose = name;
 		return SidePanelModel.fight(in);
+	}
+
+	/**
+	 * T-132: an Araxxor kill with araxytes, you and Brindle, each played (the same plan): her panels from her room message
+	 * with the boss-only and adds-only parts, so her Damage card has the switch.
+	 */
+	static SidePanelParty.Input araxxorWithAdds()
+	{
+		final SidePanelTargetExamples.Room mine = SidePanelTargetExamples.araxxor();
+		final SidePanelTargetExamples.Room hers = SidePanelTargetExamples.araxxor();
+		final SidePanelParty.Input in = input("Araxxor", new LedgerRows.Numbers(LedgerRows.of(mine.room)).clock, false,
+			null, 0);
+		in.members.add(row(SidePanelParty.YOU_ID, "you", true, 0, mine.room, FightTimeline.room(mine.room, mine.store),
+			false));
+		in.members.add(row(22, "Brindle", false, 1, hers.room, FightTimeline.room(hers.room, hers.store), false));
+		final SidePanelModel.Input yours = SidePanelTargetExamples.input(mine);
+		yours.inParty = true;
+		in.members.get(0).fight = SidePanelModel.fight(yours);
+		in.members.get(1).fight = SidePanelModel.fight(araxxorDecoded(hers, "Brindle"));
+		in.members.get(0).avatar = picture(1, 'Y');
+		in.partyKey = 11;
+		return in;
+	}
+
+	/** A room's message with its parts' timelines, through JSON, read back as a member's input. */
+	static SidePanelModel.Input araxxorDecoded(SidePanelTargetExamples.Room r, String name)
+	{
+		final com.google.gson.Gson gson = new com.google.gson.Gson();
+		final LuckVsSkillRoom sent = gson.fromJson(gson.toJson(SidePanelMemberFight.message(r.room,
+			e -> FightTimeline.room(e, r.store), 0, null)), LuckVsSkillRoom.class);
+		final SidePanelModel.Input in = SidePanelMemberFight.decode(sent.f);
+		in.whose = name;
+		return in;
 	}
 
 	/**
