@@ -650,8 +650,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		final SidePanelModel.Input in = SidePanelHistory.savedKill(history, room, source.sessionStart(), source.now(),
 			source.zone(), source.versions(), known ? openView : null, known ? openPartViews : null);
 		// T-109: the room damage's sources, named by the boss rules.
-		in.roomDamageSources = SidePanelModel.roomDamageSources(java.util.Collections.singletonList(room),
-			source.rules());
+		SidePanelModel.fillRoomDamageSources(in, java.util.Collections.singletonList(room), source.rules());
 		view.apply(SidePanelModel.fight(in));
 		content.add(view);
 		if (!known && SidePanelHistory.fromThisSession(room, source.sessionStart()))

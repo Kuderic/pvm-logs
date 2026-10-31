@@ -1523,7 +1523,8 @@ public class PvmPerformancePlugin extends Plugin
 				fight.recordOthersDamage(amount);
 				break;
 			case ROOM:
-				fight.recordRoomDamage(amount);
+				// T-131: under the rule that names it, for Details' rows.
+				fight.recordRoomDamage(amount, roomSourceName(npc, amount, leftBefore));
 				break;
 			case UNCLASSIFIED:
 				fight.recordUnclassifiedDamage(amount);
@@ -1610,6 +1611,24 @@ public class PvmPerformancePlugin extends Plugin
 			}
 		}
 		return null;
+	}
+
+	/** T-131: RECONCILE's room term's split by source, {@code  (hit himself 90, araxyte explosions 47)}; empty for none. */
+	private String reconcileRoomSplit(Fight fight)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final BossRules.Boss boss = rules == null ? null : rules.forNpc(fight.getTargetId());
+		return RoomDamage.reconcileSplit(fight.getRoomDamageBySource(), boss == null ? null : boss.roomDamage);
+	}
+
+	/** T-131: the name of the roomDamage rule a room splat on this npc fits, as RoomDamage.ruleFor picks it; null for none. */
+	private String roomSourceName(NPC npc, int amount, int leftBefore)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final BossRules.Boss boss = rules == null ? null : rules.forNpc(npc.getId());
+		final BossRules.RoomDamageRule rule = boss == null ? null
+			: RoomDamage.ruleFor(boss.roomDamage, amount, leftBefore, state -> damageModifiers.isOpen(npc, state));
+		return rule == null ? null : rule.name;
 	}
 
 	/** The players in the scene besides the local player (T-106): whether another's splat can be another player's. */
@@ -6832,12 +6851,12 @@ public class PvmPerformancePlugin extends Plugin
 		final int net = counted - healed;
 		// T-108: what the room's boss took while the player was on an add, booked to its fight before, so in no line's terms.
 		final int onAnAdd = whileOnAnAdd.getOrDefault(index, 0);
-		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + room %d "
+		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + room %s "
 				+ "+ others %d + unclassified %d, healed %d%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
 				+ "read %d, now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
 			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),
-			current.getDotDamage(), current.getRoomDamage(), current.getOthersDamage(),
+			current.getDotDamage(), current.getRoomDamage() + reconcileRoomSplit(current), current.getOthersDamage(),
 			current.getUnclassifiedDamage(), current.getHealed(),
 			onAnAdd == 0 ? "" : String.format(" (the room so far, taken while the player was on another target: %d)",
 				onAnAdd),

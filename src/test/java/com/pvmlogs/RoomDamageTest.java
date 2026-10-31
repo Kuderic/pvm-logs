@@ -85,12 +85,14 @@ public class RoomDamageTest
 		return h;
 	}
 
-	/** The fight as saved, less the room's total: what is left is the player's numbers and the others'. */
+	/** The fight as saved, less the room's total and its split: what is left is the player's numbers and the others'. */
 	private static JsonObject withoutRoom(Fight f)
 	{
 		final Gson gson = new Gson();
 		final JsonObject o = gson.toJsonTree(f).getAsJsonObject();
 		o.remove("roomDamage");
+		// T-131: and its split by source.
+		o.remove("roomDamageBySource");
 		return o;
 	}
 

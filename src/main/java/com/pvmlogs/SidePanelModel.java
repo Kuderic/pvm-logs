@@ -234,6 +234,8 @@ final class SidePanelModel
 		 */
 		int roomDamage;
 		List<String> roomDamageSources = Collections.emptyList();
+		/** T-131: the room damage by source as Details' rows ({@link RoomDamage#split}); null for one total (old kills). */
+		List<RoomDamage.Source> roomDamageSplit;
 		/** The room's name, the target's before the first attack, or the raid's. */
 		String name;
 		/** The raid the room or scope is in, or null: a raid's rooms show its icon (T-054). */
@@ -379,8 +381,20 @@ final class SidePanelModel
 			}
 		}
 		in.roomDamage = total;
-		in.roomDamageSources = roomDamageSources(rooms, rules);
+		fillRoomDamageSources(in, rooms, rules);
 		in.name = bosses.size() == 1 ? bosses.iterator().next() : "the bosses";
+	}
+
+	/** T-109's sources and T-131's split of the room damage over these rooms, from the boss rules. */
+	static void fillRoomDamageSources(Input in, List<Encounter> rooms, BossRules rules)
+	{
+		in.roomDamageSources = roomDamageSources(rooms, rules);
+		final List<Fight> fights = new ArrayList<>();
+		for (Encounter room : rooms)
+		{
+			fights.addAll(room.getFights());
+		}
+		in.roomDamageSplit = RoomDamage.split(fights, rules);
 	}
 
 	/** T-109: T-106's room damage over these fights. */
@@ -447,6 +461,40 @@ final class SidePanelModel
 	{
 		return new Row(Text.small(ROOM_DMG, SidePanelStyle.BODY), Text.NONE, Text.small(LedgerRows.number(damage),
 			SidePanelStyle.BODY), roomDamageTip(boss, sources));
+	}
+
+	/**
+	 * T-131: the room damage as rows: one a source ({@code hit himself 137}, {@code araxyte explosions 47}), largest
+	 * first, when it's split; else T-109's one {@code room dmg} row.
+	 */
+	static void addRoomDamageRows(List<Row> rows, int damage, String boss, List<String> sources,
+		List<RoomDamage.Source> split)
+	{
+		if (split == null || split.isEmpty())
+		{
+			rows.add(roomDamageRow(damage, boss, sources));
+			return;
+		}
+		for (RoomDamage.Source s : split)
+		{
+			rows.add(new Row(Text.small(s.label, SidePanelStyle.BODY), Text.NONE,
+				Text.small(LedgerRows.number(s.damage), SidePanelStyle.BODY), roomSourceTip(boss, sources, s)));
+		}
+	}
+
+	/** T-131: a source row's tooltip: the rule's, or what no rule names, or T-109's for a total from an old kill. */
+	static String roomSourceTip(String boss, List<String> sources, RoomDamage.Source s)
+	{
+		final String who = boss == null || boss.isEmpty() ? "the boss" : boss;
+		if (s.tip != null)
+		{
+			return s.tip + ": damage " + who + " took from the room. Not yours, and not part of your luck.";
+		}
+		if (RoomDamage.OTHER_LABEL.equals(s.label))
+		{
+			return "Damage " + who + " took from the room that no rule names. Not yours, and not part of your luck.";
+		}
+		return roomDamageTip(boss, sources);
 	}
 
 	// ---- T-102: a room the player died in ----
@@ -982,7 +1030,7 @@ final class SidePanelModel
 		if (after)
 		{
 			b.details = details(s, avoidable, run, in.kind == Kind.ROOM ? in.roomDamage : 0, in.name,
-				in.roomDamageSources);
+				in.roomDamageSources, in.roomDamageSplit);
 			if (!raid && !run && in.drain != null)
 			{
 				// T-119: with what each drain special was expected to do, from the room's timeline where it has one.
@@ -1249,7 +1297,8 @@ final class SidePanelModel
 		// T-109: the bosses' rooms' damage over the trip's saved kills, while no fight runs (the own-output guardrail).
 		if (in.ended && in.roomDamage > 0)
 		{
-			other.add(roomDamageRow(in.roomDamage, in.name, in.roomDamageSources));
+			// T-131: summed per label over the trip's kills.
+			addRoomDamageRows(other, in.roomDamage, in.name, in.roomDamageSources, in.roomDamageSplit);
 		}
 		return new PanelSnapshot.TripTab(header, tiles, execution, Text.small(hint, SidePanelStyle.SECONDARY), in.tripRows,
 			taken, other.isEmpty() ? null : new PanelSnapshot.Rows(null, other), tripDrains(in.drain));
@@ -2737,6 +2786,13 @@ final class SidePanelModel
 	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run, int roomDamage, String boss,
 		List<String> sources)
 	{
+		return details(s, avoidable, run, roomDamage, boss, sources, null);
+	}
+
+	/** T-131: with the room damage {@code split} by source, a row each in place of {@code room dmg}; null for the total. */
+	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run, int roomDamage, String boss,
+		List<String> sources, List<RoomDamage.Source> split)
+	{
 		// T-112: in two groups, your damage and the boss's own; see grouped().
 		final List<Row> yours = new ArrayList<>();
 		final List<Row> theBoss = new ArrayList<>();
@@ -2762,7 +2818,7 @@ final class SidePanelModel
 		// T-109: the boss's room's doing too (Araxxor's Ruptura explosions, his own cleave), so after the fight only.
 		if (roomDamage > 0 && !run)
 		{
-			theBoss.add(roomDamageRow(roomDamage, boss, sources));
+			addRoomDamageRows(theBoss, roomDamage, boss, sources, split);
 		}
 		// T-112 (Eric's pick, 07:45): no eating or mechanics here: Where the time went has them.
 		final List<Row> rows = grouped(new String[]{YOUR_DAMAGE, THE_BOSS}, yours, theBoss);

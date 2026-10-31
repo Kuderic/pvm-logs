@@ -70,6 +70,9 @@ class Fight
 	// player's; not another player's either, so the solo tests stay solo. 0 on a fight saved before, whose room damage
 	// is in othersDamage.
 	private int roomDamage;
+	// T-131: roomDamage by the roomDamage rule that named each splat (RoomDamage.ruleFor), "other" for none. Optional:
+	// null on a fight saved before, which Details shows as one "room dmg" total.
+	private java.util.Map<String, Integer> roomDamageBySource;
 	// T-132: the player was in a RuneLite party at some tick of this fight, so the side panel's label reads "party"
 	// rather than "solo" or "group". Being in a party isn't fighting together: "kills like this" still go by othersDamage
 	// (LedgerHistory.Like). False on a fight saved before.
@@ -400,7 +403,23 @@ class Fight
 	/** The room's damage on the target (T-106). See roomDamage. */
 	void recordRoomDamage(int amount)
 	{
-		roomDamage += Math.max(0, amount);
+		recordRoomDamage(amount, null);
+	}
+
+	/** T-131: under the roomDamage rule that named it, by its name; null for none ({@link RoomDamage#OTHER}). */
+	void recordRoomDamage(int amount, String source)
+	{
+		final int d = Math.max(0, amount);
+		if (d == 0)
+		{
+			return;
+		}
+		roomDamage += d;
+		if (roomDamageBySource == null)
+		{
+			roomDamageBySource = new java.util.LinkedHashMap<>();
+		}
+		roomDamageBySource.merge(source == null ? RoomDamage.OTHER : source, d, Integer::sum);
 	}
 
 	/** A splat of a type not known here. See unclassifiedDamage. */
