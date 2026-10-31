@@ -84,8 +84,8 @@ public class RoyalTitansTest
 		assertEquals(0.339, rangedChance(next), 0.0005);
 		// Where the player stood unknown: no boost.
 		assertTrue(applying(tracker, BRANDA_INDEX, BRANDA, "RANGED", 7168, null).isEmpty());
-		// Never live (the Jagex rule).
-		assertTrue(ModifierTracker.shownLive(away).isEmpty());
+		// Live (D-2): the player's own position, so the overlay follows it too.
+		assertEquals(away, ModifierTracker.shownLive(away));
 	}
 
 	@Test
@@ -100,6 +100,8 @@ public class RoyalTitansTest
 			final List<BossRules.ModifierRule> next = applying(tracker, ELDRIC_INDEX, ELDRIC, "RANGED", thrown, true);
 			assertEquals(1, next.size());
 			assertEquals("elemental blast", next.get(0).name);
+			// Live (D-2): it opens on the animation the player sees.
+			assertEquals(next, ModifierTracker.shownLive(next));
 			assertEquals(0.877, rangedChance(next), 0.001);
 			// Out of melee distance as well: x6 once, not x36.
 			final List<BossRules.ModifierRule> away = applying(tracker, ELDRIC_INDEX, ELDRIC, "RANGED", thrown, false);
