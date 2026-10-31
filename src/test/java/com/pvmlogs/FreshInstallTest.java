@@ -45,6 +45,8 @@ public class FreshInstallTest
 		d.put("panelCharts", "true");
 		d.put("panelLargerText", "false");
 		d.put("panelSmoothFont", "false");
+		// T-124: on by default, as RuneLite's DPS Counter shares when enabled (flagged for Eric in the brief).
+		d.put("shareWithParty", "true");
 		// Data & debugging: no debug file is written until the player turns it on.
 		d.put("debugLogging", "false");
 		return d;

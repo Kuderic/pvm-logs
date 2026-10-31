@@ -1,6 +1,6 @@
 # Luck vs Skill
 
-A RuneLite plugin for bossing. After every kill it tells you how much of your time was luck and how much was you, for any boss. There's no account to make, and nothing about you is uploaded (see [What it sends](#what-it-sends)).
+A RuneLite plugin for bossing. After every kill it tells you how much of your time was luck and how much was you, for any boss. There's no account to make, and nothing about you is uploaded; in a RuneLite party, only your own numbers go to its members (see [What it sends](#what-it-sends)).
 
 It works out what each of your attacks should have done, from your gear, levels, boosts and prayers against the boss's defence, and compares that with what you actually hit. The gap between your kill and a perfect one splits into two parts: **Luck** (the dice) and **Execution** (the time you weren't attacking, or were attacking without the right setup).
 
@@ -39,6 +39,7 @@ Your current weapon's DPS, max hit and accuracy against the monster it names, an
 - **Fight:** where the time went, Luck, the Defence your specials took, Execution, damage by weapon and source, damage over time, a tick strip, and damage taken.
 - **History:** your saved kills, and your usual time and execution at each boss.
 - **Trip:** the session's kills together.
+- **Party:** in a RuneLite party, each member's damage, DPS and share, and after a room their Luck and Execution, from members who have Luck vs Skill too.
 
 <table>
 <tr>
@@ -64,8 +65,9 @@ Nothing about the boss's attacks, and no comparison with your own average while 
 All the pictures here are drawn by the plugin's own code (see Developing) from made-up example fights, over a plain dark backdrop: the overlays are see-through in game. The panel's boss icons are the game's own and don't show in these pictures.
 
 ## What it sends
-One download, and nothing uploaded.
+One download, your own numbers to your RuneLite party if you're in one, and nothing uploaded anywhere else.
 - **Monster stats:** when the plugin starts and its copy is missing or more than 7 days old, it downloads `monsters.json`, the monster data of the [OSRS Wiki's DPS calculator](https://github.com/weirdgloop/osrs-dps-calc), from GitHub (`raw.githubusercontent.com`). It uses RuneLite's own web client and identifies itself only as `RuneLite plugin luck-vs-skill`. Like any download, GitHub sees your IP address; nothing about your account goes with it. The copy is kept in your data folder; if the download fails, the plugin uses the copy it has.
+- **Your RuneLite party:** while you're in one, your own damage, expected damage, Luck, Execution and attacks go to its members through RuneLite's party service, at most every 5 ticks, so members with this plugin can compare. Never your name, gear, location or history. Turn off **Share with my RuneLite party** and nothing is sent; others' numbers still show.
 - **Everything else stays on your computer:** your fight history (`history.json`), CSV exports, debug logs and a random id for this install (`install-id`, not tied to your account and not sent anywhere), in `~/.runelite/plugin-data/luck-vs-skill/`. Boss icons come from the game client itself.
 
 ## Known limits

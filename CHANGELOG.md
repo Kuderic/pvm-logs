@@ -34,4 +34,5 @@ Luck vs Skill is its own Plugin Hub entry. It began as a fork of Arodab's PvM Pe
 - Builds against current RuneLite (1.13.4).
 - Save debug log on the side panel, for reporting a figure that looks wrong. Every debug log names the release, or the commit it was built from.
 - A random id for this install is kept in the data folder for later. Nothing is sent anywhere, and it isn't tied to your account.
+- A Party tab: in a RuneLite party, members who have the plugin share their own damage, DPS, Luck and Execution (on by default; a setting turns sending off).
 - With Debug logging on, a Calibration report checks your saved kills against the plugin's expectations and says in plain words where it's off.
