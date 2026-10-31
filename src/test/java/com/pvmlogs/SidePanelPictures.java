@@ -97,6 +97,11 @@ public final class SidePanelPictures
 			ticks(out);
 			return;
 		}
+		if (args.length > 1 && "party".equals(args[1]))
+		{
+			partyTab(out);
+			return;
+		}
 		if (args.length > 1 && "reset".equals(args[1]))
 		{
 			setupDamageAndNewTrip(out);
@@ -1602,6 +1607,69 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-125: the Party tab (Eric's pick, option B) on the example boards, in Normal, Smooth and Larger at 1× and 2×: the
+	 * meter on each board and switch, a member opened, the chart hovered, the empty states, and the Fight tab's line.
+	 */
+	private static void partyTab(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-duo-after-the-kill", scale, party(SidePanelPartyExamples.duo(), null, -1, null, scale));
+				write(dir, "b-toa-room", scale, party(SidePanelPartyExamples.toa(), null, -1, null, scale));
+				write(dir, "c-toa-member-opened", scale, party(SidePanelPartyExamples.toa(), 22L, -1, null, scale));
+				write(dir, "d-you-opened", scale, party(SidePanelPartyExamples.toa(), SidePanelParty.YOU_ID, -1, null,
+					scale));
+				write(dir, "e-tob-mid-fight-hovered", scale, party(SidePanelPartyExamples.tobLive(), null, 120, null, scale));
+				write(dir, "f-tob-whole-raid-luck-member-left", scale, party(SidePanelPartyExamples.tobRaid(), null, -1,
+					SidePanelParty.Metric.LUCK, scale));
+				write(dir, "g-cox-8", scale, party(SidePanelPartyExamples.cox(), null, -1, null, scale));
+				write(dir, "h-cox-8-exec", scale, party(SidePanelPartyExamples.cox(), null, -1, SidePanelParty.Metric.EXEC,
+					scale));
+				write(dir, "i-nobody-sharing", scale, party(SidePanelPartyExamples.nobody(), null, -1, null, scale));
+				write(dir, "j-not-in-a-party", scale, party(SidePanelPartyExamples.notInParty(), null, -1, null, scale));
+				final SidePanelModel.Input kill = SidePanelExamples.dead();
+				kill.partyLine = SidePanelParty.fightLine(SidePanelParty.party(SidePanelPartyExamples.toa()));
+				write(dir, "k-fight-tab-line", scale, render(kill, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** The Party tab on {@code in}: {@code open} a member's breakdown, {@code hover} a tick of the chart, a metric picked. */
+	static BufferedImage party(SidePanelParty.Input in, Long open, int hover, SidePanelParty.Metric metric, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, SidePanelParty.party(in)));
+		panel.tabs().select(panel.tabs().getTab(3));
+		final SidePanelPartyTab tab = panel.partyTab();
+		if (open != null)
+		{
+			tab.open(open);
+		}
+		if (metric != null)
+		{
+			tab.pick(metric);
+		}
+		final BufferedImage first = draw(panel.tabs(), tab, scale);
+		if (hover < 0 || tab.chart() == null)
+		{
+			return first;
+		}
+		tab.chart().setHover(hover);
+		return draw(panel.tabs(), tab, scale);
 	}
 
 	/** One section of the Fight tab, cut out of its render: its header and card. */

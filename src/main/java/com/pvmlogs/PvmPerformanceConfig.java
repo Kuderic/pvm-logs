@@ -206,7 +206,7 @@ public interface PvmPerformanceConfig extends Config
 	// list.
 	@ConfigSection(
 		name = "Side panel",
-		description = "The side panel's Fight, History and Trip tabs",
+		description = "The side panel's Fight, History, Trip and Party tabs",
 		position = 2
 	)
 	String SIDE_PANEL_SECTION = "sidePanel";
@@ -263,6 +263,28 @@ public interface PvmPerformanceConfig extends Config
 		return false;
 	}
 
+	/**
+	 * T-124: send the player's own figures to their RuneLite party, for the
+	 * side panel's Party tab. On by default, as RuneLite's DPS Counter shares
+	 * when it's on. Off, nothing is sent; others' figures are still shown.
+	 * T-125 (Orchestrator, 2026-10-31): in the Side panel section, beside the
+	 * tab it feeds, rather than in Data &amp; debugging, which is closed by
+	 * default. The key stays.
+	 */
+	@ConfigItem(
+		keyName = "shareWithParty",
+		name = "Share with my RuneLite party",
+		description = "While you're in a RuneLite party, send your own damage, expected damage, Luck, Execution and attacks "
+			+ "to the party, so members with this plugin can compare. Only through RuneLite's party, never anywhere else, "
+			+ "and never your name, gear, location or history. Off: nothing is sent; others' numbers are still shown",
+		position = 5,
+		section = SIDE_PANEL_SECTION
+	)
+	default boolean shareWithParty()
+	{
+		return true;
+	}
+
 	// ---- Data & debugging ----
 
 	@ConfigSection(
@@ -286,24 +308,5 @@ public interface PvmPerformanceConfig extends Config
 	default boolean debugLogging()
 	{
 		return false;
-	}
-
-	/**
-	 * T-124: send the player's own figures to their RuneLite party, for the
-	 * side panel's Party card. On by default, as RuneLite's DPS Counter shares
-	 * when it's on. Off, nothing is sent; others' figures are still shown.
-	 */
-	@ConfigItem(
-		keyName = "shareWithParty",
-		name = "Share with my RuneLite party",
-		description = "While you're in a RuneLite party, send your own damage, expected damage, Luck, Execution and attacks "
-			+ "to the party, so members with this plugin can compare. Only through RuneLite's party, never anywhere else, "
-			+ "and never your name, gear, location or history. Off: nothing is sent; others' numbers are still shown",
-		position = 2,
-		section = DATA_SECTION
-	)
-	default boolean shareWithParty()
-	{
-		return true;
 	}
 }
