@@ -360,6 +360,8 @@ public class PvmPerformancePlugin extends Plugin
 	private int lastMeleeTick = Integer.MIN_VALUE;
 	// How far behind the attack the observation that proved it was.
 	private int attackObservedLag = MELEE_BOOKING_LAG;
+	// T-136: the attack observed is a splash booked from its XP: nothing will land, so its expectation is booked at once.
+	private boolean attackObservedSplash;
 	// The last tick a cast was booked from its animation, so the hitsplat does not book the same cast a second time.
 	private int lastCastBookedTick = Integer.MIN_VALUE;
 	// Expected figures for attacks that have gone out but not yet landed.
@@ -404,6 +406,8 @@ public class PvmPerformancePlugin extends Plugin
 	// spell click that never cast, so it went out at the weapon's speed, not the spell's.
 	private boolean attackResetsDelay;
 	private int delayResetTick = Integer.MIN_VALUE;
+	// T-136: the last tick an XP drop proved an attack, so the ticks before its booking arrives aren't counted lost.
+	private int xpThrowTick = Integer.MIN_VALUE;
 	// T-121: the Royal Titans' elementals the player's splats killed, by the tick each went down, and their indices so each
 	// counts once. Each brings the next attack a tick sooner (wiki, Royal Titans/Strategies: "For each elemental killed, the
 	// player receives a 1-tick reduction to their attack delay"): at [7239] of the 10:30 log a Fire Wave killed three ice
@@ -1124,13 +1128,16 @@ public class PvmPerformancePlugin extends Plugin
 			// hitsplats reach here, so widening this cannot claim a ranged attack.
 			final boolean meleeRecently = combatCalc.isMeleeEquipped()
 				|| withinTicks(client.getTickCount(), lastMeleeTick, MELEE_SWAP_GRACE_TICKS);
-			final boolean melee = meleeRecently || unbookedCast;
-			final boolean firstOfBurst = !burstBooked.contains(npc.getIndex());
 			// A ranged or magic splat that arrived as no projectile of mine: one whose projectile was not taken as mine, which
 			// target switching causes (T-021: the Abyssal Sire's respiratory systems on 78, 82 and 100, each paid for by a
 			// Ranged drop four ticks before). Booked from the drop's tick when the experience paid for it.
-			final int unseenShot = melee || arrivedFromFlight ? Integer.MIN_VALUE
-				: unseenShotThrown(npc.getIndex(), tick, paidOnTick);
+			final int shot = arrivedFromFlight ? Integer.MIN_VALUE : unseenShotThrown(npc.getIndex(), tick, paidOnTick);
+			// Paid for by Ranged or Magic, it was a shot or a cast whatever is in hand now (T-136: a Purging staff cast at the
+			// Judge of Yama, landing with the Emberlight back in hand, was booked as a melee blow two ticks after its throw).
+			final boolean paidAsShot = shot != Integer.MIN_VALUE && xpLedger.paidAsShot(hitsplat.getAmount(), tick);
+			final boolean melee = (meleeRecently || unbookedCast) && !paidAsShot;
+			final boolean firstOfBurst = !burstBooked.contains(npc.getIndex());
+			final int unseenShot = melee ? Integer.MIN_VALUE : shot;
 			final boolean booked = !arrivedFromFlight && (melee || unseenShot != Integer.MIN_VALUE)
 				&& burstBooked.add(npc.getIndex());
 			// A melee blow seen after switching off the melee weapon is still a melee blow, a tick old (T-065); only a cast the
@@ -1884,6 +1891,9 @@ public class PvmPerformancePlugin extends Plugin
 		if (award != null)
 		{
 			debug.log("xp award %s against npc %d", award, targetId);
+			// T-136: the drop is on the attack's tick, so it proves a throw before its booking arrives.
+			xpThrowTick = tick;
+			bookSplash(award, tick);
 			// The drop is on the attack tick, so it proves an attack thrown now. If the last booking says the weapon was still
 			// busy, that booking was not the player's - most likely a thrall's splat taken for a blow. Not undone here: a
 			// booking touches the fight, the room and the session, and re-scoring belongs in the analyzer (workstream 03).
@@ -2995,6 +3005,59 @@ public class PvmPerformancePlugin extends Plugin
 		return 2 + (1 + Math.max(0, distance)) / 3;
 	}
 
+	/**
+	 * T-136: a cast that splashed, booked from its XP drop. The game shows no
+	 * hitsplat for a splash, so a cast the plugin doesn't see go out (the Purging
+	 * staff's, at Yama: no projectile, no cast animation it knows) was never
+	 * booked: the attack missing, its expectation dropped with its unresolved
+	 * sample, and the ticks after it read as idle. Booked now, on the drop's
+	 * tick, at the npc aimed at, expected at once and landing nothing. Not when
+	 * the cast route booked this cast already.
+	 */
+	private void bookSplash(XpLedger.Award award, int tick)
+	{
+		if (!award.splash() || current == null || current.isEnded() || withinTicks(tick, lastCastBookedTick, 1))
+		{
+			return;
+		}
+		final Player me = client.getLocalPlayer();
+		final Actor aimed = me == null ? null : me.getInteracting();
+		if (!(aimed instanceof NPC) || ((NPC) aimed).getIndex() != current.getTargetIndex())
+		{
+			return;
+		}
+		recordAttackObserved(false, (NPC) aimed, 0);
+		attackObservedSplash = true;
+		debug.log("SPLASH on %s (npc %d, index %d): a cast that dealt nothing, booked from its XP on %d", current.getTargetName(),
+			current.getTargetId(), current.getTargetIndex(), tick);
+	}
+
+	/**
+	 * T-136: whether a target despawning died: flagged dead by the game, or
+	 * with nothing left, by the boss bar or by every splat counted on it. A
+	 * boss that burrows or a player who leaves on a trip (T-088) leaves it with
+	 * hitpoints, so they are still held.
+	 */
+	static boolean diedOnDespawn(boolean flaggedDead, int hitpointsLeft)
+	{
+		return flaggedDead || hitpointsLeft == 0;
+	}
+
+	/**
+	 * T-136: whether an XP drop on {@code xpTick} proves an attack thrown since
+	 * the weapon came free whose booking hasn't arrived: then the ticks after it
+	 * are the weapon's cooldown, not lost. A Purging staff cast at Yama is booked
+	 * from its splat 3 ticks after the throw, against a booking lag of 2, so every
+	 * cast lost a tick the tick before its splat (89 of 99 attacks in Eric's
+	 * first Yama log). Only for as long as the weapon's speed from the drop, so a
+	 * throw never booked (a splash with no splat) can't hide idle time past it.
+	 */
+	static boolean throwProvenByXp(int now, int dueTick, int xpTick, int speed)
+	{
+		return xpTick != Integer.MIN_VALUE && dueTick != Integer.MIN_VALUE && xpTick >= dueTick - 1 && xpTick <= now
+			&& now < xpTick + Math.max(1, speed);
+	}
+
 	static boolean attackOverdue(int now, int dueTick, int bookingLag)
 	{
 		return now >= dueTick + bookingLag;
@@ -3201,7 +3264,7 @@ public class PvmPerformancePlugin extends Plugin
 		final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon = special
 			? DrainLuck.weaponFor(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick),
 				combatCalc.equippedWeaponId())) : null;
-		if (attackObservedLag == MELEE_BOOKING_LAG)
+		if (attackObservedLag == MELEE_BOOKING_LAG || attackObservedSplash)
 		{
 			maxHits.scored(fight, fight.getTargetIndex(), client.getTickCount(), maxHit, checkable,
 				combatCalc.wornNow());
@@ -4863,7 +4926,13 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
-		if (current.getTargetIndex() == npc.getIndex() && !npc.isDead() && PlayerDeath.holdsOnDespawn(playerDeath.isDead()))
+		// T-136: gone with nothing left is a death, whatever the npc's dead flag says. The Judge of Yama took its last
+		// hitpoints at [7712] of Eric's first Yama log (Eric's 199 and the partner's 201 of its 400), played 9042, and
+		// despawned at [7717] not flagged dead: held as gone alive (T-088), its eleven ticks went uncounted and Yama's fight
+		// waited for a target switch.
+		final boolean dead = diedOnDespawn(npc.isDead(), current.getTargetIndex() == npc.getIndex()
+			? health.remaining(npc.getIndex(), client.getTickCount()) : -1);
+		if (current.getTargetIndex() == npc.getIndex() && !dead && PlayerDeath.holdsOnDespawn(playerDeath.isDead()))
 		{
 			// Gone alive (T-088): a burrow, or the player leaving on a trip. Held, not finished. Never after a death (T-100):
 			// the fight ended there, and the respawn's loading screen is not a trip.
@@ -4874,8 +4943,8 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// An add of the room dying is the room going on (T-021): what the boss and the other adds have left is kept. So is
 			// a monster of the run (T-089).
-			finalizeFight(npc.isDead(), System.currentTimeMillis(), npc.isDead() ? "target died" : "target despawned",
-				npc.isDead() && (roomGoesOnAtDeath(currentEncounter, current, npc.getId())
+			finalizeFight(dead, System.currentTimeMillis(), dead ? "target died" : "target despawned",
+				dead && (roomGoesOnAtDeath(currentEncounter, current, npc.getId())
 					|| separatePartGoesOn(currentEncounter, current, npc.getId(), npc.getIndex(), false)));
 			return;
 		}
@@ -5161,14 +5230,26 @@ public class PvmPerformancePlugin extends Plugin
 		// Eats the bookings can no longer change - on or before the attack tick this one judges - are logged with what they
 		// did to the due tick.
 		logEats(foodDelay.settle(client.getTickCount() - lag, attackDueTick));
-		if (!attackOverdue(client.getTickCount(), attackDueTick, lag))
+		final Integer xpSpeed = speedByTick.get(xpThrowTick);
+		final boolean provenByXp = attackOverdue(client.getTickCount(), attackDueTick, lag)
+			&& throwProvenByXp(client.getTickCount(), attackDueTick, xpThrowTick,
+			xpSpeed != null ? xpSpeed : combatCalc.attackSpeedTicks());
+		if (!attackOverdue(client.getTickCount(), attackDueTick, lag) || provenByXp)
 		{
 			current.recordTickSpent(roomEngaged);
 			if (counts)
 			{
 				trip(current).recordTickSpent(current.isScored());
 			}
-			debug.log("tick SPENT: on cooldown, due %d + lag %d, attacking=%b", attackDueTick, lag, counts);
+			if (provenByXp)
+			{
+				debug.log("tick SPENT: on cooldown, the throw on %d proven by its XP, its booking still to come, attacking=%b",
+					xpThrowTick, counts);
+			}
+			else
+			{
+				debug.log("tick SPENT: on cooldown, due %d + lag %d, attacking=%b", attackDueTick, lag, counts);
+			}
 			return;
 		}
 		// Overdue against the weapon's own due tick, so lost either way; the eat's while it is inside the delay the eats
@@ -5371,6 +5452,7 @@ public class PvmPerformancePlugin extends Plugin
 		attackObservedTick = client.getTickCount();
 		attackObservedFromProjectile = fromProjectile;
 		attackObservedFromCast = false;
+		attackObservedSplash = false;
 		attackIsMechanic = false;
 		attackResetsDelay = false;
 		delayResetTick = Integer.MIN_VALUE;
@@ -7180,7 +7262,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
-		final Fight onto = killMessageFight(lastFinished, current, System.currentTimeMillis());
+		final Fight onto = killMessageFight(lastFinished, current, System.currentTimeMillis(), roomBossForMessage());
 		if (onto == null)
 		{
 			return;
@@ -7214,17 +7296,53 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	static Fight killMessageFight(Fight lastFinished, Fight current, long now)
 	{
+		return killMessageFight(lastFinished, current, now, null);
+	}
+
+	/**
+	 * As above, and never an add's fight while the room has a boss fight
+	 * (T-136): {@code roomBoss}, the room's latest fight on its boss, takes a
+	 * kill message that would otherwise land on an add. At Yama a Void Flare
+	 * killed last took the kill count and the kill's duration.
+	 */
+	static Fight killMessageFight(Fight lastFinished, Fight current, long now, Fight roomBoss)
+	{
 		final boolean recent = lastFinished != null && lastFinished.isEnded()
 			&& now - lastFinished.getEndMillis() <= KILL_MESSAGE_MILLIS;
+		final Fight picked;
 		if (recent && (lastFinished.isTargetDied() && lastFinished.getGroupName() == null || lastFinished.isClosedRoom()))
 		{
-			return lastFinished;
+			picked = lastFinished;
 		}
-		if (current != null && !current.isEnded() && current.getAttempts() > 0)
+		else if (current != null && !current.isEnded() && current.getAttempts() > 0)
 		{
-			return current;
+			picked = current;
 		}
-		return recent && lastFinished.isTargetDied() ? lastFinished : null;
+		else
+		{
+			picked = recent && lastFinished.isTargetDied() ? lastFinished : null;
+		}
+		return picked != null && roomBoss != null && !EncounterGroup.lootIsTheKill(picked.getTargetId()) ? roomBoss : picked;
+	}
+
+	/** The open (or last) room's latest fight on its boss rather than an add, with an attack in it (T-136); null when none. */
+	private Fight roomBossForMessage()
+	{
+		final Encounter room = currentEncounter;
+		if (room == null)
+		{
+			return null;
+		}
+		final List<Fight> fights = room.getFights();
+		for (int i = fights.size() - 1; i >= 0; i--)
+		{
+			final Fight f = fights.get(i);
+			if (f.getAttempts() > 0 && EncounterGroup.lootIsTheKill(f.getTargetId()))
+			{
+				return f;
+			}
+		}
+		return null;
 	}
 
 	/** How long after a kill its messages may still come (T-110): the loot and the messages follow within a few ticks. */

@@ -145,6 +145,16 @@ class XpLedger
 			return lowest >= 0;
 		}
 
+		/**
+		 * T-136: a cast that dealt nothing - Magic paid, the damage decoded to 0 -
+		 * which in the game shows no hitsplat at all when it splashes, so nothing
+		 * else will ever book it.
+		 */
+		boolean splash()
+		{
+			return decoded() && highest == 0 && gains[MAGIC] > 0;
+		}
+
 		/** Whether what landed is what the drops say, at the current multiplier. */
 		boolean matches()
 		{
@@ -472,6 +482,42 @@ class XpLedger
 	 * recent attack paid for. Read-only; asked before the splat is spent (T-021:
 	 * the throw of a shot whose projectile was never taken as mine).
 	 */
+	/**
+	 * T-136: whether the award {@link #attackTickFor} picks for this splat paid
+	 * Ranged or Magic: a shot or a cast, whatever is in hand when it lands. At
+	 * the Judge of Yama a Purging staff cast landed three ticks after its Magic
+	 * drop, the Emberlight back in hand by then, and was booked as a melee blow
+	 * thrown the tick before.
+	 */
+	boolean paidAsShot(int amount, int tick)
+	{
+		final Award a = awardFor(amount, tick);
+		return a != null && (a.gains[RANGED] > 0 || a.gains[MAGIC] > 0);
+	}
+
+	private Award awardFor(int amount, int tick)
+	{
+		if (amount <= 0)
+		{
+			return null;
+		}
+		for (Award a : awards)
+		{
+			if (eligible(a, tick) && a.decoded() && amount >= a.remainingLow && amount <= a.remainingHigh)
+			{
+				return a;
+			}
+		}
+		for (Award a : awards)
+		{
+			if (eligible(a, tick) && a.decoded())
+			{
+				return a;
+			}
+		}
+		return null;
+	}
+
 	int attackTickFor(int amount, int tick)
 	{
 		if (amount <= 0)
