@@ -91,6 +91,19 @@ final class EncounterGroup
 	}
 
 	/**
+	 * Whether {@code npcId} is another part of a SEPARATE group whose part
+	 * {@code targetId} is (T-122): one group, each fought to its own end, neither an
+	 * add, and {@code npcId} not in a beaten form. While the player is on Branda,
+	 * Eldric's burn goes on ticking.
+	 */
+	static boolean isPartnerPart(int npcId, int targetId)
+	{
+		final Falls rule = falls(npcId);
+		return rule != null && rule.kind == FallKind.SEPARATE && sameGroup(npcId, targetId) && !ADDS.contains(npcId)
+			&& !ADDS.contains(targetId) && !isDefeated(npcId) && !UNATTACKABLE.contains(npcId);
+	}
+
+	/**
 	 * What closes the room of a boss that drops no loot event (T-061): this
 	 * many of its parts going down, each counted once. A part goes down by
 	 * despawning dead while wearing one of {@link #live}, or by changing into one

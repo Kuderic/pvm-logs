@@ -1546,8 +1546,10 @@ public class PvmPerformancePlugin extends Plugin
 	/** {@link #roomBossFight(NPC)} on its parts, for the tests. */
 	static Fight roomBossFight(Encounter room, Fight current, int npcIndex, int npcId)
 	{
+		// The boss while the player is on its add (T-108), or another part of a SEPARATE group, the other titan (T-122).
 		if (current == null || current.isEnded() || room == null || room.isEnded()
-			|| !EncounterGroup.isBossOfAdd(npcId, current.getTargetId()))
+			|| !(EncounterGroup.isBossOfAdd(npcId, current.getTargetId())
+			|| EncounterGroup.isPartnerPart(npcId, current.getTargetId())))
 		{
 			return null;
 		}
@@ -6574,7 +6576,8 @@ public class PvmPerformancePlugin extends Plugin
 			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),
 			current.getDotDamage(), current.getRoomDamage(), current.getOthersDamage(),
 			current.getUnclassifiedDamage(), current.getHealed(),
-			onAnAdd == 0 ? "" : String.format(" (the room so far, taken while the player was on an add: %d)", onAnAdd),
+			onAnAdd == 0 ? "" : String.format(" (the room so far, taken while the player was on another target: %d)",
+				onAnAdd),
 			counted, healed, net, full, fullFrom,
 			died && full > 0 ? String.format(", diff %+d (%.1f%%)", net - full, 100.0 * (net - full) / full) : "",
 			health.lastHudHp(index), health.remaining(index, tick), health.source(index, tick));
