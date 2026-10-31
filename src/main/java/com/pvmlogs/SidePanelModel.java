@@ -1073,6 +1073,8 @@ final class SidePanelModel
 		final List<String> sub = new ArrayList<>();
 		// T-072: where "solo" or "group" is, for the short form that leaves it out when the time doesn't fit beside it.
 		int soloAt = -1;
+		// T-132 review: where the time of day is, which goes first when the line doesn't fit, so the label stays.
+		int timeAt = -1;
 		Text suffix = Text.NONE;
 		if (in.kind == Kind.RAID)
 		{
@@ -1113,6 +1115,7 @@ final class SidePanelModel
 				if (in.endMillis > 0)
 				{
 					sub.add((in.run ? "ended " : "") + time(in.endMillis, in.zone));
+					timeAt = sub.size() - 1;
 				}
 				else if (in.run)
 				{
@@ -1123,9 +1126,21 @@ final class SidePanelModel
 		List<String> subShort = null;
 		if (soloAt >= 0 && sub.size() > 2)
 		{
+			// T-132 review (Eric's Araxxor at 1,020 HP read "1,020 HP · 2:06 pm", no "party"): the time of day goes first,
+			// then the label.
+			final List<String> forms = new ArrayList<>(2);
 			final List<String> shorter = new ArrayList<>(sub);
-			shorter.remove(soloAt);
-			subShort = Collections.singletonList(String.join(DOT, shorter));
+			if (timeAt >= 0)
+			{
+				shorter.remove(timeAt);
+				forms.add(String.join(DOT, shorter));
+			}
+			if (shorter.size() > 1 || timeAt < 0)
+			{
+				shorter.remove(soloAt < shorter.size() && (timeAt < 0 || soloAt < timeAt) ? soloAt : soloAt - 1);
+				forms.add(String.join(DOT, shorter));
+			}
+			subShort = forms;
 		}
 		return new PanelSnapshot.Header(Text.title(in.run && in.kind == Kind.ROOM ? runName(in.name, in.kills) : in.name,
 			SidePanelStyle.VALUE), suffix, Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY),

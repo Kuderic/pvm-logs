@@ -286,6 +286,86 @@ public class SidePanelPartyTitleTest
 			"B").inParty);
 	}
 
+	/**
+	 * T-132 review: where the title's line doesn't fit, the time of day goes first and the label stays: Eric's Araxxor
+	 * at 1,020 HP, Normal text at 1×, reads "1,020 HP · party", not "1,020 HP · 2:06 pm".
+	 */
+	@Test
+	public void theTimeOfDayGoesBeforeTheLabel()
+	{
+		final SidePanelModel.Input in = SidePanelExamples.dead();
+		in.name = "Araxxor";
+		in.maxHp = 1_020;
+		in.inParty = true;
+		in.endMillis = SidePanelExamples.at(14, 6);
+		final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
+		assertTrue(tab.header.sub.text, tab.header.sub.text.contains("1,020 HP · party · "));
+		assertEquals(Arrays.asList("1,020 HP · party", "1,020 HP"), tab.header.subShort);
+		for (boolean party : new boolean[]{true, false})
+		{
+			final SidePanelModel.Input k = SidePanelExamples.dead();
+			k.name = "Araxxor";
+			k.maxHp = 1_020;
+			k.inParty = party;
+			k.endMillis = SidePanelExamples.at(14, 6);
+			final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
+			p.apply(new PanelSnapshot(SidePanelModel.fight(k)));
+			SidePanelPictures.draw(p.tabs(), p.fightTab(), 1);
+			String shown = null;
+			for (Component c : all(p.fightTab()))
+			{
+				if (c instanceof SidePanelText && ((SidePanelText) c).getText().startsWith("1,020 HP"))
+				{
+					shown = ((SidePanelText) c).lastShown();
+				}
+			}
+			assertNotNull(shown);
+			assertTrue(shown, shown.contains(party ? "party" : "solo"));
+			assertFalse(shown, shown.contains(LedgerRows.CUT));
+		}
+	}
+
+	/** T-132 review: muted text on the tint is drawn lighter, for the plain panel's contrast; nowhere else. */
+	@Test
+	public void mutedTextOnTheTintIsLifted()
+	{
+		for (Color m : SidePanelParty.COLOURS)
+		{
+			final double lifted = contrast(SidePanelStyle.MUTED_ON_TINT, SidePanelPartyTab.tinted(SidePanelStyle.PANEL, m,
+				SidePanelPartyTab.AREA_TINT));
+			assertTrue(m + " " + lifted, lifted >= 4.6);
+		}
+		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
+		final SidePanelPartyTab tab = p.partyTab();
+		assertEquals(0, lifted(tab.memberArea()));
+		tab.select(22);
+		final int onTint = lifted(tab.memberArea());
+		assertTrue("muted section hints on the tinted area", onTint > 0);
+		// Inside the cards (not tinted by default) nothing is lifted.
+		for (Component c : all(tab.memberArea()))
+		{
+			if (c instanceof SidePanelText && ((SidePanelText) c).isLifted())
+			{
+				for (Component a = c.getParent(); a != tab.memberArea(); a = a.getParent())
+				{
+					assertFalse(a.isOpaque() && SidePanelStyle.CARD.equals(a.getBackground()));
+				}
+			}
+		}
+		tab.select(22);
+		assertEquals(0, lifted(tab.memberArea()));
+	}
+
+	private static int lifted(Container c)
+	{
+		int n = 0;
+		for (Component k : all(c))
+		{
+			n += k instanceof SidePanelText && ((SidePanelText) k).isLifted() ? 1 : 0;
+		}
+		return n;
+	}
+
 	@Test
 	public void outOfAPartySoloAndGroupAreAsBefore()
 	{

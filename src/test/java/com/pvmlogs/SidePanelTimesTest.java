@@ -69,7 +69,8 @@ public class SidePanelTimesTest
 	{
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.dead());
 		assertEquals("700 HP · solo · 3:31 pm", tab.header.sub.text);
-		assertEquals(java.util.Collections.singletonList("700 HP · 3:31 pm"), tab.header.subShort);
+		// T-132 review: the time of day goes first and the label stays, then the label.
+		assertEquals(java.util.Arrays.asList("700 HP · solo", "700 HP"), tab.header.subShort);
 		// The kill's clock is a duration: unchanged.
 		assertEquals("2:16", tab.header.clock.text);
 		assertEquals("12:00 am", lastPart(SidePanelModel.fight(SidePanelExamples.deadAt(0, 0)).header.sub.text));
@@ -96,9 +97,10 @@ public class SidePanelTimesTest
 		{
 			panel.setText(true, false);
 			SidePanelPictures.draw(panel.tabs(), panel.fightTab(), 1);
-			// Larger text: "700 HP · solo · 3:31 pm" is wider than the header's room beside the clock.
+			// Larger text: "700 HP · solo · 3:31 pm" is wider than the header's room beside the clock. T-132 review: the
+			// time of day goes first, so the label stays.
 			final SidePanelText sub = find(panel.fightTab(), "700 HP");
-			assertEquals("700 HP · 3:31 pm", sub.lastShown());
+			assertEquals("700 HP · solo", sub.lastShown());
 		}
 		finally
 		{

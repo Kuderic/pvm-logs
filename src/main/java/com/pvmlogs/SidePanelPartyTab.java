@@ -550,7 +550,34 @@ final class SidePanelPartyTab extends JPanel
 		memberArea.setOpaque(area);
 		memberArea.setBackground(area ? tinted(SidePanelStyle.PANEL, c, AREA_TINT) : SidePanelStyle.PANEL);
 		cards(memberArea, c != null && tint == Tint.CARDS ? tinted(SidePanelStyle.CARD, c, CARD_TINT) : SidePanelStyle.CARD);
+		final java.util.Set<Color> tints = new java.util.HashSet<>();
+		if (c != null)
+		{
+			tints.add(tint == Tint.AREA ? tinted(SidePanelStyle.PANEL, c, AREA_TINT) : tinted(SidePanelStyle.CARD, c,
+				CARD_TINT));
+		}
+		lift(memberArea, memberArea.isOpaque() ? memberArea.getBackground() : SidePanelStyle.PANEL, tints);
 		memberArea.repaint();
+	}
+
+	/**
+	 * T-132 review: muted text drawn on a tinted background (its nearest opaque ancestor's), a little lighter, for the
+	 * contrast it has on the plain panel; back to plain where the background isn't tinted.
+	 */
+	private static void lift(java.awt.Container c, Color behind, java.util.Set<Color> tints)
+	{
+		for (java.awt.Component k : c.getComponents())
+		{
+			final Color bg = k.isOpaque() && k.getBackground() != null ? k.getBackground() : behind;
+			if (k instanceof SidePanelText)
+			{
+				((SidePanelText) k).setLifted(tints.contains(bg));
+			}
+			if (k instanceof java.awt.Container)
+			{
+				lift((java.awt.Container) k, bg, tints);
+			}
+		}
 	}
 
 	/** {@code base} blended {@code amount} of the way toward {@code toward}. */

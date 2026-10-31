@@ -4351,6 +4351,10 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final PartyMember me = partyService.getLocalMember();
 		final boolean own = me != null && me.getMemberId() == room.getMemberId();
+		// T-132: the room message's size as it arrives, so the loopback shows it gets through the party server (whose
+		// limit isn't public). No name: "a member".
+		debug.log("PARTY got room fight %s: %d bytes, from %s", room.r, gson.toJson(room).length(),
+			!own ? "a member" : partyEcho ? "the echo" : "yourself (not shown)");
 		if (!PartyShare.keep(own, partyEcho))
 		{
 			return;

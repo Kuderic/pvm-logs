@@ -118,6 +118,31 @@ final class SidePanelText extends JComponent
 	}
 
 	/** The width the text and its second run take. */
+	/**
+	 * T-132: on a tinted background (the Party tab's selected member), muted text is drawn a little lighter, so it keeps
+	 * the contrast it has on the plain panel. Set with the tint, never per tick.
+	 */
+	private boolean lifted;
+
+	void setLifted(boolean on)
+	{
+		if (on != lifted)
+		{
+			lifted = on;
+			repaint();
+		}
+	}
+
+	boolean isLifted()
+	{
+		return lifted;
+	}
+
+	private Color lifted(Color c)
+	{
+		return lifted && SidePanelStyle.MUTED.equals(c) ? SidePanelStyle.MUTED_ON_TINT : c;
+	}
+
 	/** T-119: its full text's width in its fonts, both runs. */
 	int naturalWidth()
 	{
@@ -402,11 +427,11 @@ final class SidePanelText extends JComponent
 		final int width = fm.stringWidth(shown) + suffixWidth;
 		final int x = right ? Math.max(0, getWidth() - width) : 0;
 		final int baseline = getHeight() - fm.getDescent();
-		g.setColor(colour);
+		g.setColor(lifted(colour));
 		g.drawString(shown, x, baseline);
 		if (!after.isEmpty())
 		{
-			g.setColor(suffixColour);
+			g.setColor(lifted(suffixColour));
 			g.setFont(suffixFont());
 			g.drawString(after, x + fm.stringWidth(shown), baseline);
 		}
