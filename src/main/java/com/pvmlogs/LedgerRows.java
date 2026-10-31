@@ -1330,6 +1330,13 @@ final class LedgerRows
 		final boolean split;
 		/** More than half the attacks were made below base (T-016): the stat boost row says so in words. */
 		final boolean drained;
+		/**
+		 * T-126 (Eric, 2026-10-31, option C): the share of the ideal setup's damage
+		 * the boost kept, 1 − {@link #boostDamage} ÷ ideal, like prayer's and gear's.
+		 * Before, it was T-016's share of a full boost held, a different kind of
+		 * number (a 97% that cost 5 damage). The held share is still each scope's
+		 * {@code boostShare()}, which the CSV's boost column and the split's test read.
+		 */
 		final double boostShare;
 		final double boostCost;
 		final double prayerShare;
@@ -1416,7 +1423,8 @@ final class LedgerRows
 				boostDamage = inDamage ? boost * ideal : Double.NaN;
 				gearDamage = inDamage ? gear * ideal : Double.NaN;
 				prayerDamage = inDamage ? prayer * ideal : Double.NaN;
-				boostShare = Math.min(1, s.boostShare());
+				// T-126: the damage kept, as prayer and gear below. The scaled share is exactly boostDamage ÷ ideal.
+				boostShare = Math.max(0, 1 - boost);
 				// Like gear, the damage the setup kept against what the best prayer you can use would have dealt (Eric,
 				// 2026-10-26), not the share of attacks with it up: a weaker prayer (Chivalry with Piety unlocked) counted
 				// as none at all. It's the same remainder of the setup loss its seconds are.
@@ -1435,6 +1443,113 @@ final class LedgerRows
 				drained = false;
 			}
 		}
+	}
+
+	/** T-126: one of Execution's parts and what it took off it, as a share (0.006 is 0.6 points). */
+	static final class Loss
+	{
+		final String label;
+		final double points;
+
+		Loss(String label, double points)
+		{
+			this.label = label;
+			this.points = points;
+		}
+
+		@Override
+		public String toString()
+		{
+			return label + " " + points;
+		}
+	}
+
+	/**
+	 * T-126 (Eric, 2026-10-31: "It doesn't make sense that execution % is lower
+	 * than the average of its parts"): what each part took off Execution, in the
+	 * rows' order, so that 1 minus them all is Execution exactly. Execution is
+	 * uptime × setup efficiency (× the avoidable eating share after a ruled kill),
+	 * so:
+	 * <ul>
+	 * <li>uptime: 1 − uptime;</li>
+	 * <li>avoidable eating, with {@code avoidable}: executionLive × (1 − its share);</li>
+	 * <li>each setup part: uptime × (its damage ÷ the ideal setup's), which is
+	 * uptime × (1 − its share), as the shares are of the ideal setup's damage. The
+	 * three add up to the setup's loss, so they need neither the damage figures
+	 * nor the seconds: a scope without the damage figures has the same shares (the
+	 * seconds' split is in the same proportion);</li>
+	 * <li>a kill from before T-010, with one {@code setup} row: uptime × (1 − efficiency).</li>
+	 * </ul>
+	 * Empty when Execution is unknown.
+	 */
+	static List<Loss> executionLosses(Numbers n, boolean avoidable)
+	{
+		final List<Loss> losses = new ArrayList<>(5);
+		if (Double.isNaN(n.executionLive))
+		{
+			return losses;
+		}
+		losses.add(new Loss("uptime", 1 - n.uptime));
+		if (avoidable && !Double.isNaN(n.avoidableEatingShare))
+		{
+			losses.add(new Loss(AVOIDABLE_EATING.trim(), n.executionLive * (1 - n.avoidableEatingShare)));
+		}
+		if (n.split)
+		{
+			losses.add(new Loss("prayer", n.uptime * (1 - n.prayerShare)));
+			losses.add(new Loss("gear", n.uptime * (1 - n.gearShare)));
+			losses.add(new Loss("stat boost", n.uptime * (1 - n.boostShare)));
+		}
+		else
+		{
+			losses.add(new Loss("setup", n.uptime * (1 - n.efficiency)));
+		}
+		return losses;
+	}
+
+	/** {@link #executionLosses(Numbers, boolean)}, with avoidable eating once the scope knows it, as the after-kill view. */
+	static List<Loss> executionLosses(Numbers n)
+	{
+		return executionLosses(n, !Double.isNaN(n.avoidableEatingShare));
+	}
+
+	/**
+	 * T-126: Execution as its sum, {@code 100% − uptime 0.6% − gear 2.9% − stat
+	 * boost 0.9% − prayer 0.4% = 95%}: each loss in points, one decimal under 10
+	 * and whole from 10, the parts that cost nothing (or round to none) left out,
+	 * and the total as the Execution figure is shown ({@link #partPercent}). Null
+	 * when Execution is unknown.
+	 */
+	static String executionSum(Numbers n, boolean avoidable)
+	{
+		final List<Loss> losses = executionLosses(n, avoidable);
+		if (losses.isEmpty())
+		{
+			return null;
+		}
+		final double execution = avoidable && !Double.isNaN(n.avoidableEatingShare) ? n.execution : n.executionLive;
+		final StringBuilder sum = new StringBuilder("100%");
+		for (Loss loss : losses)
+		{
+			final String points = points(loss.points);
+			if (points != null)
+			{
+				sum.append(" \u2212 ").append(loss.label).append(' ').append(points);
+			}
+		}
+		return sum.append(" = ").append(partPercent(execution)).toString();
+	}
+
+	/** {@code 0.6%}, {@code 12%}; null for a loss that rounds to none. */
+	private static String points(double share)
+	{
+		final double p = share * 100;
+		if (p < 10)
+		{
+			final long tenths = Math.round(p * 10);
+			return tenths <= 0 ? null : String.format(Locale.ENGLISH, "%.1f%%", tenths / 10.0);
+		}
+		return Math.round(p) + "%";
 	}
 
 	/** Builds the rows for one frame. */

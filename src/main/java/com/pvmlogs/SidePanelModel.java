@@ -1531,7 +1531,17 @@ final class SidePanelModel
 		}
 		final double execution = shownExecution(n, avoidable);
 		return new PanelSnapshot.Parts(Text.title(Double.isNaN(execution) ? LedgerRows.UNKNOWN
-			: LedgerRows.partPercent(execution), SidePanelStyle.VALUE), parts);
+			: LedgerRows.partPercent(execution), SidePanelStyle.VALUE), parts, executionTooltip(n, avoidable));
+	}
+
+	/**
+	 * T-126 (Eric, 2026-10-31): the Execution tile's and card's tooltip, its sum from {@link LedgerRows#executionSum},
+	 * then the units note; the note alone when Execution is unknown.
+	 */
+	static String executionTooltip(LedgerRows.Numbers n, boolean avoidable)
+	{
+		final String sum = LedgerRows.executionSum(n, avoidable);
+		return sum == null ? TICK_NOTE : "<html>" + sum + "<br>" + TICK_NOTE + "</html>";
 	}
 
 	static final String PRAYER = "prayer";

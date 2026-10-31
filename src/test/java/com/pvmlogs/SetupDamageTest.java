@@ -94,8 +94,8 @@ public class SetupDamageTest
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(kill);
 		final List<LedgerRows.Row> rows = LedgerRows.build(kill, LedgerRows.State.fight("Vardorvis", true, true, false),
 			new LedgerRows.Settings());
-		assertEquals("85% (-" + Math.round(n.boostDamage) + " dmg)", row(rows, " stat boost").right);
-		assertEquals("85% (-" + Math.round(n.boostDamage) + ")", row(rows, " stat boost").shortRight);
+		assertEquals("98% (-" + Math.round(n.boostDamage) + " dmg)", row(rows, " stat boost").right);
+		assertEquals("98% (-" + Math.round(n.boostDamage) + ")", row(rows, " stat boost").shortRight);
 		// Uptime and eating in ticks.
 		assertEquals("89% (-25 ticks)", row(rows, " uptime").right);
 		assertEquals("7 ticks", row(rows, LedgerRows.EATING).right);

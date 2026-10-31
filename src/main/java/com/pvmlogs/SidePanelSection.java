@@ -54,6 +54,8 @@ final class SidePanelSection extends JPanel
 	private final String id;
 	/** T-102: its title, for tests. */
 	private final String title;
+	/** The header's own tooltip. */
+	static final String FOLD_TIP = "Click to fold or open";
 	private final Folds folds;
 	private final SidePanelParts.Line header;
 	private final JComponent body;
@@ -72,7 +74,7 @@ final class SidePanelSection extends JPanel
 		header = new SidePanelParts.Line(PanelSnapshot.Text.title(title, SidePanelStyle.VALUE), hint);
 		header.setBorder(new EmptyBorder(4, 0, 0, 0));
 		header.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		header.setToolTipText("Click to fold or open");
+		header.setToolTipText(FOLD_TIP);
 		header.addMouseListener(new MouseAdapter()
 		{
 			@Override
@@ -110,6 +112,20 @@ final class SidePanelSection extends JPanel
 		setHint(hint);
 		revalidate();
 		repaint();
+	}
+
+	/**
+	 * T-126: a tooltip for the header, before its "Click to fold or open"; null for that alone. Text only: set only
+	 * when it changes, and never a layout.
+	 */
+	void setTooltip(String tooltip)
+	{
+		final String text = tooltip == null ? FOLD_TIP : tooltip.startsWith("<html>")
+			? tooltip.replace("</html>", "<br>" + FOLD_TIP + "</html>") : "<html>" + tooltip + "<br>" + FOLD_TIP + "</html>";
+		if (!text.equals(header.getToolTipText()))
+		{
+			header.setToolTipText(text);
+		}
 	}
 
 	void setHint(PanelSnapshot.Text h)

@@ -112,6 +112,11 @@ public final class SidePanelPictures
 			targets(out);
 			return;
 		}
+		if (args.length > 1 && "execution".equals(args[1]))
+		{
+			executionCards(out);
+			return;
+		}
 		if (args.length > 1 && "runs".equals(args[1]))
 		{
 			runs(out);
@@ -976,6 +981,62 @@ public final class SidePanelPictures
 	}
 
 	/** T-109: section {@code id}'s card with the tooltip of its row labelled {@code label} under it. */
+	/**
+	 * T-126: the Execution card on a kill like Eric's (00:37: about 600 ideal, 2 damage to prayer, 17 to gear and 5 to
+	 * the boost, a tick idle) and on Eric's 2:17 kill, each with its header's tooltip under it.
+	 */
+	static void executionCards(Path out) throws IOException
+	{
+		final LedgerExamples.FakeScope erics = LedgerExamples.kill();
+		erics.ticksLost = 2;
+		erics.ticksLostEating = 0;
+		erics.idealSetupDamage = 600;
+		erics.efficiency = 1 - 24 / 600.0;
+		erics.boostShare = 0.97;
+		erics.boostCostShare = 5 / 600.0;
+		erics.switchCostShare = 17 / 600.0;
+		final SidePanelModel.Input likeErics = SidePanelExamples.dead();
+		likeErics.scope = erics;
+		for (int scale = 1; scale <= 2; scale++)
+		{
+			write(out, "26a-execution-like-erics", scale, headerTooltip(likeErics, scale, "execution"));
+			write(out, "26b-execution-kill", scale, headerTooltip(SidePanelExamples.dead(), scale, "execution"));
+		}
+	}
+
+	/** T-126: section {@code id}'s card with its header's tooltip under it, as Swing draws it. */
+	static BufferedImage headerTooltip(SidePanelModel.Input in, double scale, String id)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection section = sectionOf(panel.fightTab(), id);
+		final javax.swing.JComponent header = (javax.swing.JComponent) section.getComponent(0);
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height) * scale));
+		final BufferedImage card = whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+		final javax.swing.JToolTip tip = header.createToolTip();
+		tip.setTipText(header.getToolTipText());
+		tip.setSize(tip.getPreferredSize());
+		layout(tip);
+		final int w = Math.max(card.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
+		final BufferedImage img = new BufferedImage(w, card.getHeight() + (int) Math.ceil((tip.getHeight() + 8) * scale),
+			BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		g.drawImage(card, 0, 0, null);
+		g.translate(0, card.getHeight() + 4 * scale);
+		g.scale(scale, scale);
+		tip.printAll(g);
+		g.dispose();
+		return img;
+	}
+
 	static BufferedImage rowTooltip(SidePanelModel.Input in, double scale, String id, String label)
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
