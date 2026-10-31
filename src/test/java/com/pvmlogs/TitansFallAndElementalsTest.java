@@ -119,7 +119,35 @@ public class TitansFallAndElementalsTest
 		vard.recordAttackMade(false);
 		vard.end(true, 1_000L);
 		assertSame(vard, PvmPerformancePlugin.killMessageFight(vard, null, 2_000L));
-		assertNull(PvmPerformancePlugin.killMessageFight(r.eldric, null, 15_400L));
+		// With nothing open, the last fight to end on its target's death takes it, grouped or not.
+		assertSame(r.eldric, PvmPerformancePlugin.killMessageFight(r.eldric, null, 15_400L));
+		assertNull(PvmPerformancePlugin.killMessageFight(r.eldric, null, 10_000L + PvmPerformancePlugin.KILL_MESSAGE_MILLIS
+			+ 1));
+	}
+
+	@Test
+	public void aGroupedBossKeepsAKillMessageThatComesBeforeItsLoot()
+	{
+		// The Abyssal Sire's room closes on its loot (T-055): between the death and the drop its fight has ended on the
+		// death, the room is still open, and no fight is open. A kill message in that gap is the Sire's.
+		final Encounter room = new Encounter("Abyssal Sire", null, 0L);
+		final Fight sire = new Fight("Abyssal Sire", NpcID.ABYSSALSIRE_SIRE_APOCALYPSE, 7, 400, 0L, null, 0);
+		sire.recordAttackMade(false);
+		sire.recordDamageDealt(400, 1L, true);
+		room.add(sire);
+		sire.end(true, 20_000L);
+		assertTrue(sire.getGroupName() != null);
+		assertFalse(sire.isClosedRoom());
+		assertSame(sire, PvmPerformancePlugin.killMessageFight(sire, null, 21_200L));
+		// A fight on a spawn opened after the death and still open takes it instead: the death was an add's for all we know.
+		final Fight spawn = new Fight("Spawn", NpcID.ABYSSALSIRE_SPAWN, 8, 10, 20_500L, null, 0);
+		spawn.recordAttackMade(false);
+		assertSame(spawn, PvmPerformancePlugin.killMessageFight(sire, spawn, 21_200L));
+		// A fight that ended without its target dying never takes it.
+		final Fight left = new Fight("Abyssal Sire", NpcID.ABYSSALSIRE_SIRE_APOCALYPSE, 7, 400, 0L, null, 0);
+		left.recordAttackMade(false);
+		left.end(false, 20_000L);
+		assertNull(PvmPerformancePlugin.killMessageFight(left, null, 21_200L));
 	}
 
 	@Test

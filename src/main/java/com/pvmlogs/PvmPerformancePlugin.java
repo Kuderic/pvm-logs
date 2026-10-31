@@ -6916,18 +6916,27 @@ public class PvmPerformancePlugin extends Plugin
 	 * Which fight the game's kill message belongs to (T-110): the last fight to
 	 * end, if it ended in the last {@link #KILL_MESSAGE_MILLIS} and closed its
 	 * room, or killed a boss that stands alone; else the one still open (a
-	 * message ahead of the death). A grouped part's death isn't the kill
-	 * (T-121): the 10:30 log's kill count came as Branda fell, onto Eldric's
-	 * fight, which had ended at his fall 9 ticks before.
+	 * message ahead of the death); else, with none open, the last to end on its
+	 * target's death in that time, grouped or not. A grouped part's death isn't
+	 * the kill while another fight of the room is open (T-121): the 10:30 log's
+	 * kill count came as Branda fell, onto Eldric's fight, which had ended at
+	 * his fall 9 ticks before. But a grouped boss whose room closes on its loot
+	 * (the Sire, the Kraken, the Guardians) has no fight open between its death
+	 * and the loot, so a message in that gap is its own.
 	 */
 	static Fight killMessageFight(Fight lastFinished, Fight current, long now)
 	{
-		if (lastFinished != null && lastFinished.isEnded() && now - lastFinished.getEndMillis() <= KILL_MESSAGE_MILLIS
-			&& (lastFinished.isTargetDied() && lastFinished.getGroupName() == null || lastFinished.isClosedRoom()))
+		final boolean recent = lastFinished != null && lastFinished.isEnded()
+			&& now - lastFinished.getEndMillis() <= KILL_MESSAGE_MILLIS;
+		if (recent && (lastFinished.isTargetDied() && lastFinished.getGroupName() == null || lastFinished.isClosedRoom()))
 		{
 			return lastFinished;
 		}
-		return current != null && !current.isEnded() && current.getAttempts() > 0 ? current : null;
+		if (current != null && !current.isEnded() && current.getAttempts() > 0)
+		{
+			return current;
+		}
+		return recent && lastFinished.isTargetDied() ? lastFinished : null;
 	}
 
 	/** How long after a kill its messages may still come (T-110): the loot and the messages follow within a few ticks. */
