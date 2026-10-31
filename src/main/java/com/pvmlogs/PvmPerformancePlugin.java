@@ -961,6 +961,16 @@ public class PvmPerformancePlugin extends Plugin
 			lastMineHitsplatTick = client.getTickCount();
 			if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
 			{
+				if (!playerDeath.opensFights(client.getTickCount()))
+				{
+					// The swing thrown on the death tick lands after the death closed its fight, its room and the history
+					// with it (T-127). Booking it onto that fight would reopen a reconciled, saved fight: dropped, as an
+					// attack still in the air at any fight's end is (dropPendingSamples).
+					debug.log("DEATH TICK attack dropped: a %d on %s (npc %d, index %d), after the player died on %d; the fight "
+						+ "it belongs to is closed", hitsplat.getAmount(), npc.getName(), npc.getId(), npc.getIndex(),
+						playerDeath.tick());
+					return;
+				}
 				if (!isFightable(npc))
 				{
 					debug.log("hitsplat %d on %s (npc %d) IGNORED: not something that can be fought",
@@ -2606,10 +2616,17 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		// The player's hitpoints reaching 0 is one of the two death signals (T-100); back above 0 is the respawn. Only once
 		// the stats are loaded: a first reading at login is not a death.
+		final boolean wasDead = playerDeath.isDead();
 		if (client.getGameState() == GameState.LOGGED_IN && client.getRealSkillLevel(Skill.HITPOINTS) > 0
 			&& playerDeath.hitpoints(event.getBoostedLevel(), client.getTickCount()))
 		{
 			playerDied("hitpoints 0");
+		}
+		else if (wasDead && !playerDeath.isDead())
+		{
+			// T-127: the respawn, when fights may open again. Logged so a death shows how long it takes.
+			debug.log("PLAYER RESPAWNED at tick %d (hitpoints %d), %d ticks after the death", client.getTickCount(),
+				event.getBoostedLevel(), client.getTickCount() - playerDeath.tick());
 		}
 		// Only a rise in experience counts: this event also fires for a level change, and hitpoints has one every time the
 		// player regenerates or eats.
@@ -4645,9 +4662,18 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final int tick = client.getTickCount();
 		final long now = System.currentTimeMillis();
-		final PlayerDeath.Outcome outcome = PlayerDeath.outcome(raidType != null, currentEncounter);
+		final boolean targetDead = current != null && !current.isEnded() && targetNpc != null && targetNpc.isDead()
+			&& targetNpc.getIndex() == current.getTargetIndex();
+		final PlayerDeath.Outcome outcome = PlayerDeath.outcome(raidType != null, currentEncounter, targetDead);
 		debug.log("PLAYER DIED at tick %d (signal %s)%s", tick, signal, outcome == PlayerDeath.Outcome.RAID_GOES_ON
-			? ": in a raid, the room goes on and the player's ticks count as nothing until they attack again" : "");
+			? ": in a raid, the room goes on and the player's ticks count as nothing until they attack again"
+			: outcome == PlayerDeath.Outcome.KILL_STANDS
+				? ": the target died on this tick too, so the kill stands and its own death ends the fight" : "");
+		if (outcome == PlayerDeath.Outcome.KILL_STANDS)
+		{
+			current.markPlayerDied();
+			return;
+		}
 		if (outcome == PlayerDeath.Outcome.RAID_GOES_ON)
 		{
 			final Fight marked = current != null && !current.isEnded() ? current
@@ -6406,6 +6432,11 @@ public class PvmPerformancePlugin extends Plugin
 	private boolean isFightable(NPC npc)
 	{
 		if (npc == null || EncounterGroup.isIgnored(npc.getId()))
+		{
+			return false;
+		}
+		// Nothing opens while the player is dead (T-127): every way a fight opens asks here.
+		if (!playerDeath.opensFights(client.getTickCount()))
 		{
 			return false;
 		}
