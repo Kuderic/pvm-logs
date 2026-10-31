@@ -1151,7 +1151,7 @@ public class PvmPerformancePlugin extends Plugin
 		final String protection = protectionUp();
 		final boolean fighting = current != null && !current.isEnded();
 		final HitsplatKind kind = taken.onSplat(hitsplat.getHitsplatType(), hitsplat.getAmount(), tick,
-			protection != null, fighting ? current : null, session, now);
+			protection != null, fighting ? current : null, trip(current), now);
 		final String target = fighting ? targetSeen.describe(tick, current.getTargetIndex()) : "";
 		// Read before the splat lands (T-039: across 23 kills the field never fell further than the hits explain).
 		final int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);

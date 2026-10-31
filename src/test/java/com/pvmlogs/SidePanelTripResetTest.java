@@ -135,6 +135,42 @@ public class SidePanelTripResetTest
 		assertEquals(0, trip.getDamageDealt());
 		assertEquals(0, trip.getAttempts());
 		assertEquals(0, trip.getExpectedSamples());
+		assertEquals(0, trip.getDamageTaken());
+		assertEquals(0, trip.getHitsTaken());
+		assertEquals(0, trip.getDotTaken());
+	}
+
+	@Test
+	public void damageTakenInAFightFromBeforeTheClickStaysOut()
+	{
+		// The Orchestrator's review of #144: the plugin's onSplatOnMe hands DamageTaken the trip the fight goes to.
+		final SessionTotals trip = new SessionTotals(KILL_START - 60_000L);
+		final SessionTotals old = new SessionTotals(0L);
+		final Encounter room = new Encounter("Vardorvis", null, KILL_START);
+		final Fight a = fight(trip, old, KILL_START, room);
+		final DamageTaken taken = new DamageTaken();
+		taken.onSplat(net.runelite.api.HitsplatID.DAMAGE_ME, 25, 10, false, a, PvmPerformancePlugin.tripFor(trip, old, a, room),
+			KILL_START + 20_000L);
+		assertEquals(25, trip.getDamageTaken());
+		trip.reset(KILL_START + 40_000L);
+		// After the click: a hit and venom on the player, in the fight that began before it.
+		taken.onSplat(net.runelite.api.HitsplatID.DAMAGE_ME, 31, 80, false, a, PvmPerformancePlugin.tripFor(trip, old, a, room),
+			KILL_START + 48_000L);
+		taken.onSplat(net.runelite.api.HitsplatID.VENOM, 6, 90, false, a, PvmPerformancePlugin.tripFor(trip, old, a, room),
+			KILL_START + 54_000L);
+		assertEquals(0, trip.getDamageTaken());
+		assertEquals(0, trip.getHitsTaken());
+		assertEquals(0, trip.getDotTaken());
+		assertEquals(31, old.getDamageTaken());
+		assertEquals(6, old.getDotTaken());
+		// The next fight's hits are the trip's.
+		final long next = FIGHT_END + 30_000L;
+		final Encounter second = new Encounter("Vardorvis", null, next);
+		final Fight b = fight(trip, old, next, second);
+		taken.onSplat(net.runelite.api.HitsplatID.DAMAGE_ME, 12, 300, false, b,
+			PvmPerformancePlugin.tripFor(trip, old, b, second), next + 5_000L);
+		assertEquals(12, trip.getDamageTaken());
+		assertEquals(1, trip.getHitsTaken());
 	}
 
 	@Test
