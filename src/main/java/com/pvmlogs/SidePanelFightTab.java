@@ -621,7 +621,14 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final JPanel card = SidePanelParts.card(0);
 		final SidePanelParts.Line line = new SidePanelParts.Line(Text.title("Party", SidePanelStyle.VALUE),
 			Text.small(tab.partyLine + "  ›", SidePanelStyle.SECONDARY));
-		card.add(line);
+		// T-128: your Discord picture before it, when RuneLite has one; nothing otherwise.
+		final SidePanelPartyTab.Picture picture = new SidePanelPartyTab.Picture(tab.partyAvatar, SidePanelStyle.CARD, 12);
+		picture.setVisible(tab.partyAvatar != null);
+		final JPanel row = new JPanel(new java.awt.BorderLayout(5, 0));
+		row.setOpaque(false);
+		row.add(picture, java.awt.BorderLayout.WEST);
+		row.add(line, java.awt.BorderLayout.CENTER);
+		card.add(row);
 		card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		card.setToolTipText("Your party's damage beside yours, on the Party tab");
 		card.addMouseListener(new MouseAdapter()
@@ -633,8 +640,17 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			}
 		});
 		add(card);
-		updaters.add(t -> line.set(Text.title("Party", SidePanelStyle.VALUE), null, Text.small(t.partyLine + "  ›",
-			SidePanelStyle.SECONDARY)));
+		updaters.add(t ->
+		{
+			line.set(Text.title("Party", SidePanelStyle.VALUE), null, Text.small(t.partyLine + "  ›",
+				SidePanelStyle.SECONDARY));
+			picture.set(t.partyAvatar, SidePanelStyle.CARD);
+			if (picture.isVisible() != (t.partyAvatar != null))
+			{
+				picture.setVisible(t.partyAvatar != null);
+				row.revalidate();
+			}
+		});
 	}
 
 	private void curve(FightTab tab)

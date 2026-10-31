@@ -186,6 +186,8 @@ final class SidePanelModel
 	{
 		/** T-125: the Party tab's line, {@code you 2nd of 5 · 38%}; null with no one in the party sharing. */
 		String partyLine;
+		/** T-128: your Discord picture beside it; null for none. */
+		java.awt.image.BufferedImage partyAvatar;
 		Kind kind = Kind.EMPTY;
 		/**
 		 * T-095: the room is a run of monsters of one kind (T-089's {@code isMonsterRoom()}), and its kills. A run has no
@@ -874,6 +876,7 @@ final class SidePanelModel
 		b.wholeRaid = in.wholeRaid;
 		// T-125: the Party tab's line under the tiles, with someone in the party sharing.
 		b.partyLine = in.partyLine;
+		b.partyAvatar = in.partyAvatar;
 		final LedgerRows.Scope s = in.scope;
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
 		final boolean warning = in.warning != null;

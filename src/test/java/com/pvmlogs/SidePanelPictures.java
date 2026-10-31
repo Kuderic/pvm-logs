@@ -1640,6 +1640,19 @@ public final class SidePanelPictures
 				final SidePanelModel.Input kill = SidePanelExamples.dead();
 				kill.partyLine = SidePanelParty.fightLine(SidePanelParty.party(SidePanelPartyExamples.toa()));
 				write(dir, "k-fight-tab-line", scale, render(kill, scale));
+				// T-128.
+				kill.partyAvatar = SidePanelPartyExamples.picture(1, 'Y');
+				write(dir, "k2-fight-tab-line-with-your-picture", scale, render(kill, scale));
+				write(dir, "l-chart-you-and-your-echo", scale, party(SidePanelPartyExamples.withEcho(), null, 120, null,
+					scale));
+				write(dir, "m-member-after-their-room", scale, party(SidePanelPartyExamples.toaBrindleAfter(), 22L, -1,
+					null, scale));
+				write(dir, "n-member-mid-fight", scale, party(SidePanelPartyExamples.tobQuillonLive(), 31L, -1, null,
+					scale));
+				write(dir, "o-meter-with-pictures", scale, party(SidePanelPartyExamples.toaWithPictures(), null, -1, null,
+					scale));
+				write(dir, "p-you-opened-with-your-picture", scale, party(SidePanelPartyExamples.toaWithPictures(),
+					22L, -1, null, scale));
 			}
 		}
 		smooth = false;

@@ -121,6 +121,19 @@ final class PanelSnapshot
 				+ (after ? "|after" : "") + (othersNote == null ? "" : "|n");
 		}
 
+		/** T-128: whether any member has a Discord picture, so the meter keeps a picture's room on every row. */
+		boolean avatars()
+		{
+			for (PartyRow r : rows)
+			{
+				if (r.avatar != null)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		PartyRow row(long id)
 		{
 			for (PartyRow r : rows)
@@ -155,6 +168,21 @@ final class PanelSnapshot
 		final int[] seriesDamage;
 		/** The click-in view; null for others. */
 		final PartyBreakdown breakdown;
+		/** T-128: their Discord picture; null for none, when the colour swatch stands in. */
+		java.awt.image.BufferedImage avatar;
+		/** T-128: their Fight tab, for the member opened; null otherwise. */
+		FightTab fight;
+		/** T-128: {@link #fight} is live: the rest after their room. */
+		boolean fightLive;
+
+		/** T-128: this row with its picture and Fight tab. */
+		PartyRow with(java.awt.image.BufferedImage avatar, FightTab fight, boolean fightLive)
+		{
+			this.avatar = avatar;
+			this.fight = fight;
+			this.fightLive = fightLive;
+			return this;
+		}
 
 		PartyRow(long id, String name, boolean you, boolean left, Color colour, double fill, String[] dmg, String[] luck,
 			String[] exec, Color luckColour, int[] seriesTicks, int[] seriesDamage, PartyBreakdown breakdown)
@@ -1016,6 +1044,8 @@ final class PanelSnapshot
 		final Empty empty;
 		/** T-125: the Party tab's line under the tiles, {@code you 2nd of 5 · 38%}; null with no one sharing. */
 		final String partyLine;
+		/** T-128: your Discord picture beside it; null for none. */
+		final java.awt.image.BufferedImage partyAvatar;
 		/**
 		 * T-099: the Damage card's Boss, Adds and All views, in that order, in a room with a boss and adds that took
 		 * damage; null for no switch. {@link #damage} and {@link #chart} are All's until {@link #showing} picks one.
@@ -1049,6 +1079,7 @@ final class PanelSnapshot
 			lastFight = b.lastFight;
 			empty = b.empty;
 			partyLine = b.partyLine;
+			partyAvatar = b.partyAvatar;
 			byTarget = b.byTarget == null ? null : list(b.byTarget);
 			target = -1;
 		}
@@ -1079,6 +1110,7 @@ final class PanelSnapshot
 			lastFight = t.lastFight;
 			empty = t.empty;
 			partyLine = t.partyLine;
+			partyAvatar = t.partyAvatar;
 			byTarget = t.byTarget;
 			target = i;
 		}
@@ -1289,6 +1321,7 @@ final class PanelSnapshot
 		Empty empty;
 		List<TargetView> byTarget;
 		String partyLine;
+		java.awt.image.BufferedImage partyAvatar;
 
 		FightTab build()
 		{

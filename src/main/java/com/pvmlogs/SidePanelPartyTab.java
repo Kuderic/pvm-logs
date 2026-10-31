@@ -50,11 +50,28 @@ final class SidePanelPartyTab extends JPanel
 	private SidePanelFightTab.Segment roomSegment;
 	private SidePanelFightTab.Segment raidSegment;
 
+	/** T-128: the item and spell icons for a member's Fight tab, and who's told which member is open. */
+	private final SidePanelIcons icons;
+	private final java.util.function.LongConsumer onOpened;
+	/** T-128: a member's Fight tab, drawn by the Fight tab's own component; null unless one is open with it in. */
+	private SidePanelFightTab memberFight;
+	private Picture title;
+
 	SidePanelPartyTab(SidePanelFightTab.Actions actions, SidePanelSection.Folds folds)
+	{
+		this(actions, folds, SidePanelIcons.NONE, id ->
+		{
+		});
+	}
+
+	SidePanelPartyTab(SidePanelFightTab.Actions actions, SidePanelSection.Folds folds, SidePanelIcons icons,
+		java.util.function.LongConsumer onOpened)
 	{
 		super(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
 		this.actions = actions;
 		this.folds = folds;
+		this.icons = icons == null ? SidePanelIcons.NONE : icons;
+		this.onOpened = onOpened;
 		setBackground(SidePanelStyle.PANEL);
 		setBorder(new EmptyBorder(SidePanelStyle.BLOCK_GAP, SidePanelStyle.SIDE_BORDER, 10, SidePanelStyle.SIDE_BORDER));
 	}
@@ -71,6 +88,7 @@ final class SidePanelPartyTab extends JPanel
 		if (opened != NONE && t.row(opened) == null)
 		{
 			opened = NONE;
+			onOpened.accept(NONE);
 		}
 		if (!t.after)
 		{
@@ -104,7 +122,13 @@ final class SidePanelPartyTab extends JPanel
 		{
 			return t.structure();
 		}
-		final PanelSnapshot.PartyBreakdown b = t.row(opened).breakdown;
+		final PanelSnapshot.PartyRow r = t.row(opened);
+		if (r.fight != null)
+		{
+			// T-128: their Fight tab rebuilds itself as its own structure changes; here only live or after.
+			return t.structure() + "|open" + opened + (r.fightLive ? "|live" : "|fight");
+		}
+		final PanelSnapshot.PartyBreakdown b = r.breakdown;
 		return t.structure() + "|open" + opened + "." + b.attacks.size() + "." + b.summary.size();
 	}
 
@@ -114,6 +138,8 @@ final class SidePanelPartyTab extends JPanel
 		if (shown != null && shown.row(id) != null && opened != id)
 		{
 			opened = id;
+			// T-128: the panel builds the member's Fight tab from now on, starting at once.
+			onOpened.accept(id);
 			apply(shown);
 		}
 	}
@@ -124,6 +150,7 @@ final class SidePanelPartyTab extends JPanel
 		if (opened != NONE)
 		{
 			opened = NONE;
+			onOpened.accept(NONE);
 			apply(shown);
 		}
 	}
@@ -178,6 +205,8 @@ final class SidePanelPartyTab extends JPanel
 		place = null;
 		attacks = null;
 		summary = null;
+		memberFight = null;
+		title = null;
 		roomSegment = null;
 		raidSegment = null;
 		if (!t.sharing)
@@ -197,6 +226,19 @@ final class SidePanelPartyTab extends JPanel
 		if (opened == NONE)
 		{
 			meterSection(t);
+		}
+		else if (t.row(opened).fight != null)
+		{
+			// T-128: their Fight tab, by the Fight tab's own component.
+			fightSection(t.row(opened));
+			if (!t.row(opened).fightLive)
+			{
+				// After their room, their own Damage over time is in it: no party chart under it.
+				chart = null;
+				revalidate();
+				repaint();
+				return;
+			}
 		}
 		else
 		{
@@ -253,7 +295,8 @@ final class SidePanelPartyTab extends JPanel
 		add(section);
 	}
 
-	private void memberSection(PanelSnapshot.PartyRow r)
+	/** The back control, and the member's picture or swatch, name and place: the head of their view. */
+	private JPanel memberHead(PanelSnapshot.PartyRow r)
 	{
 		final PanelSnapshot.PartyBreakdown b = r.breakdown;
 		final JPanel card = SidePanelParts.card(6);
@@ -270,15 +313,38 @@ final class SidePanelPartyTab extends JPanel
 			}
 		});
 		card.add(backLine);
-		final JPanel title = new JPanel(new BorderLayout(5, 0));
-		title.setOpaque(false);
-		title.add(new Swatch(r.colour), BorderLayout.WEST);
+		final JPanel head = new JPanel(new BorderLayout(5, 0));
+		head.setOpaque(false);
+		title = new Picture(r.avatar, r.colour, 12);
+		head.add(title, BorderLayout.WEST);
 		place = new SidePanelParts.Line(PanelSnapshot.Text.title(b.title, SidePanelStyle.VALUE),
 			PanelSnapshot.Text.small(b.place, SidePanelStyle.SECONDARY));
 		// The name stays whole: the place drops its DPS, then its share, first.
 		place.setRightShort(placeShort(b.place));
-		title.add(place, BorderLayout.CENTER);
-		card.add(title);
+		head.add(place, BorderLayout.CENTER);
+		card.add(head);
+		return card;
+	}
+
+	/** T-128: their Fight tab, the Fight tab's own component; live, a line on what comes after their room. */
+	private void fightSection(PanelSnapshot.PartyRow r)
+	{
+		final JPanel head = memberHead(r);
+		if (r.fightLive)
+		{
+			head.add(new SidePanelParts.Paragraph(SidePanelMemberFight.LATER_LIVE, SidePanelStyle.MUTED,
+				SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14));
+		}
+		add(new SidePanelSection("partyMember", "Party", PanelSnapshot.Text.NONE, head, folds));
+		memberFight = new SidePanelFightTab(actions, folds, true, icons);
+		memberFight.apply(r.fight);
+		add(memberFight);
+	}
+
+	private void memberSection(PanelSnapshot.PartyRow r)
+	{
+		final PanelSnapshot.PartyBreakdown b = r.breakdown;
+		final JPanel card = memberHead(r);
 		attacks = new Attacks();
 		attacks.set(b.attacks, r.colour);
 		card.add(attacks);
@@ -314,13 +380,38 @@ final class SidePanelPartyTab extends JPanel
 		if (opened != NONE)
 		{
 			final PanelSnapshot.PartyRow r = t.row(opened);
+			if (title != null)
+			{
+				title.set(r.avatar, r.colour);
+			}
+			if (memberFight != null)
+			{
+				place.set(PanelSnapshot.Text.title(r.breakdown.title, SidePanelStyle.VALUE), null,
+					PanelSnapshot.Text.small(r.breakdown.place, SidePanelStyle.SECONDARY));
+				place.setRightShort(placeShort(r.breakdown.place));
+				memberFight.apply(r.fight);
+				if (chart != null)
+				{
+					chart.set(t, opened);
+				}
+				return;
+			}
 			place.set(PanelSnapshot.Text.title(r.breakdown.title, SidePanelStyle.VALUE), null,
 				PanelSnapshot.Text.small(r.breakdown.place, SidePanelStyle.SECONDARY));
 			place.setRightShort(placeShort(r.breakdown.place));
 			attacks.set(r.breakdown.attacks, r.colour);
 			summary.set(r.breakdown.summary);
 		}
-		chart.set(t, opened);
+		if (chart != null)
+		{
+			chart.set(t, opened);
+		}
+	}
+
+	/** T-128: their Fight tab, when one is open; for tests and renders. */
+	SidePanelFightTab memberFight()
+	{
+		return memberFight;
 	}
 
 	/** {@code 3rd of 3 · 20% · 15.4 dps}'s short forms: {@code 3rd of 3 · 20%}, then {@code 3rd of 3}. */
@@ -403,6 +494,68 @@ final class SidePanelPartyTab extends JPanel
 				words.get(i).set(PanelSnapshot.Text.small(all[i].word(), all[i] == m ? SidePanelStyle.VALUE
 					: SidePanelStyle.MUTED));
 			}
+		}
+	}
+
+	/**
+	 * T-128: a member's Discord picture in a circle, or their colour as a round swatch without one: beside their name in
+	 * their view's head and on the Fight tab's line. Scaled once per picture and size; a new picture is a repaint.
+	 */
+	static final class Picture extends JComponent
+	{
+		private java.awt.image.BufferedImage avatar;
+		private Color colour;
+		private final int size;
+		private java.awt.image.BufferedImage scaled;
+		private int scaledPx;
+
+		Picture(java.awt.image.BufferedImage avatar, Color colour, int size)
+		{
+			this.avatar = avatar;
+			this.colour = colour;
+			this.size = size;
+		}
+
+		void set(java.awt.image.BufferedImage avatar, Color colour)
+		{
+			if (avatar != this.avatar || !Objects.equals(colour, this.colour))
+			{
+				this.avatar = avatar;
+				this.colour = colour;
+				scaled = null;
+				repaint();
+			}
+		}
+
+		@Override
+		public Dimension getPreferredSize()
+		{
+			return new Dimension(size, size);
+		}
+
+		@Override
+		protected void paintComponent(Graphics g0)
+		{
+			final Graphics2D g = (Graphics2D) g0.create();
+			g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+			final int y = (getHeight() - size) / 2;
+			if (avatar == null)
+			{
+				g.setColor(colour);
+				g.fillOval(0, y, size, size);
+			}
+			else
+			{
+				final int px = (int) Math.round(size * Math.max(1, g.getTransform().getScaleX()));
+				if (scaled == null || scaledPx != px)
+				{
+					scaled = SidePanelPartyMeter.scale(avatar, px);
+					scaledPx = px;
+				}
+				g.setClip(new java.awt.geom.Ellipse2D.Double(0, y, size, size));
+				g.drawImage(scaled, 0, y, size, size, null);
+			}
+			g.dispose();
 		}
 	}
 

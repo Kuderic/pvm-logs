@@ -52,6 +52,8 @@ class PvmPerformancePanel extends PluginPanel
 	// Swing's thread writes these, the client thread reads them.
 	private volatile boolean active;
 	private volatile boolean dirty = true;
+	/** T-128: the Party tab's member opened (Swing writes, the client thread reads), or none. */
+	private volatile long partyOpened = SidePanelPartyTab.NONE;
 	/** The room/raid switch as the player left it; null until they touch it, so the overlay's setting decides. */
 	private volatile Boolean wholeRaid;
 	/** A room picked in the whole raid's list, by index, and the raid's room count when it was picked; -1 for none. */
@@ -176,7 +178,12 @@ class PvmPerformancePanel extends PluginPanel
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
 			: new HistorySource(), actions, folds);
 		tripTab = new SidePanelTripTab(actions, folds);
-		partyTab = new SidePanelPartyTab(actions, folds);
+		// T-128: the member opened is built for, from the click on.
+		partyTab = new SidePanelPartyTab(actions, folds, icons, id ->
+		{
+			partyOpened = id;
+			requestUpdate();
+		});
 		// T-114: the Calibration report button only with Debug logging on.
 		historyTab.setDebug(config != null && config.debugLogging());
 		fightTab.setPerf(perf);
@@ -381,7 +388,8 @@ class PvmPerformancePanel extends PluginPanel
 		// T-125: the party's board changes whatever the player is doing.
 		final PartyBoard board = plugin.getPartyBoard();
 		final List<Object> shape = Arrays.asList(fight, over, pre, room, raid, whole,
-			history.size(), head, trip.getStartMillis(), tab, board == null ? 0L : board.revision());
+			history.size(), head, trip.getStartMillis(), tab, board == null ? 0L : board.revision(), partyOpened,
+			board == null || board.isEmpty() ? null : avatars());
 		final boolean force = dirty;
 		final boolean fighting = fight != null && !over && !pre;
 		final boolean sameShape = shape.equals(lastShape);
@@ -417,8 +425,10 @@ class PvmPerformancePanel extends PluginPanel
 			// T-125: the Party tab's line under the tiles, with someone in the party sharing.
 			if (board != null && !board.isEmpty())
 			{
-				in.partyLine = SidePanelParty.fightLine(SidePanelParty.party(readParty(fight, display, room, raid, whole, pre,
-					true)));
+				final SidePanelParty.Input party = readParty(fight, display, room, raid, whole, pre, true);
+				in.partyLine = SidePanelParty.fightLine(SidePanelParty.party(party));
+				// T-128: your own picture beside it.
+				in.partyAvatar = party.members.isEmpty() ? null : party.members.get(0).avatar;
 			}
 			snapshot = new PanelSnapshot(SidePanelModel.fight(in), null);
 		}
@@ -774,6 +784,15 @@ class PvmPerformancePanel extends PluginPanel
 		// The player's own row has an id of its own: the dev loopback's echo is a member with the player's party id.
 		final SidePanelParty.Member you = new SidePanelParty.Member(SidePanelParty.YOU_ID, SidePanelParty.YOU_NAME, true,
 			raidScope ? SidePanelParty.sum(mine) : mine.get(0));
+		final net.runelite.client.party.PartyMember me = party == null ? null : party.getLocalMember();
+		you.avatar = me == null ? null : me.getAvatar();
+		final long opened = partyOpened;
+		if (!light && !raidScope && opened == SidePanelParty.YOU_ID)
+		{
+			// T-128: your own row opens your own Fight tab for the room, as the sender's side builds it.
+			you.fight = SidePanelModel.fight(SidePanelMemberFight.input(room, FightTimeline.room(room, plugin.getTimelines()),
+				rules(), !in.live));
+		}
 		if (!light)
 		{
 			final int[][] series = SidePanelParty.series((raidScope ? FightTimeline.raid(raid, plugin.getTimelines())
@@ -799,6 +818,12 @@ class PvmPerformancePanel extends PluginPanel
 				continue;
 			}
 			m.slot = partySlots.getOrDefault(v.memberId, 0);
+			final net.runelite.client.party.PartyMember pm = party == null ? null : party.getMemberById(v.memberId);
+			m.avatar = pm == null ? null : pm.getAvatar();
+			if (!light && !raidScope && opened == v.memberId)
+			{
+				memberFight(m, v, in.itemNames);
+			}
 			in.members.add(m);
 			present.add(v.memberId);
 			partySeen.put(v.memberId, m);
@@ -813,6 +838,50 @@ class PvmPerformancePanel extends PluginPanel
 			}
 		}
 		return in;
+	}
+
+	/** T-128: member Fight tabs from their room messages, built once each. Client thread. */
+	private final java.util.Map<LuckVsSkillRoom, PanelSnapshot.FightTab> memberFights = new java.util.IdentityHashMap<>();
+
+	/**
+	 * T-128: the opened member's Fight tab: from their room-end message once their room has ended, the Fight tab's own
+	 * model on what they sent; mid-fight, what their live update can fill. Without either (their room's message still
+	 * on its way, or a sender from before T-128), none, and the compact breakdown shows.
+	 */
+	private void memberFight(SidePanelParty.Member m, PartyBoard.View v, java.util.function.IntFunction<String> names)
+	{
+		if (m.figures.isLive())
+		{
+			m.fight = SidePanelModel.fight(SidePanelMemberFight.live(m.figures, names));
+			m.fightLive = true;
+			return;
+		}
+		final LuckVsSkillRoom sent = v.fights.get(m.figures.roomKey());
+		if (sent == null)
+		{
+			return;
+		}
+		if (memberFights.size() > 64)
+		{
+			memberFights.clear();
+		}
+		m.fight = memberFights.computeIfAbsent(sent, r -> SidePanelModel.fight(SidePanelMemberFight.decode(r.f)));
+	}
+
+	/** T-128: the party's pictures as they stand, so one arriving later is a new build. */
+	private List<Object> avatars()
+	{
+		final net.runelite.client.party.PartyService party = instance(plugin, net.runelite.client.party.PartyService.class);
+		if (party == null)
+		{
+			return null;
+		}
+		final List<Object> out = new ArrayList<>();
+		for (net.runelite.client.party.PartyMember m : party.getMembers())
+		{
+			out.add(m.getAvatar() == null ? 0 : System.identityHashCode(m.getAvatar()));
+		}
+		return out;
 	}
 
 	/** T-125: a member's figures for the scope on show; null when they have none for it. */

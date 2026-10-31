@@ -74,6 +74,12 @@ final class SidePanelParty
 		/** Cumulative damage over ticks, a point at a time; empty for none. */
 		int[] ticks = new int[0];
 		int[] damage = new int[0];
+		/** T-128: their Discord picture, from RuneLite's party (its Discord plugin sets it); null for none. */
+		java.awt.image.BufferedImage avatar;
+		/** T-128: their Fight tab, built for the member opened only; null otherwise or while it isn't in. */
+		PanelSnapshot.FightTab fight;
+		/** T-128: {@link #fight} is from their live update: the rest comes when their room ends. */
+		boolean fightLive;
 
 		Member(long id, String name, boolean you, LuckVsSkillUpdate figures)
 		{
@@ -162,7 +168,7 @@ final class SidePanelParty
 		final PanelSnapshot.PartyBreakdown breakdown = new PanelSnapshot.PartyBreakdown(m.you ? "You" : m.name, place,
 			attacks(f, seconds, in.itemNames), summary(f, !in.live));
 		return new PanelSnapshot.PartyRow(m.id, name, m.you, m.left, m.colour(), fill(f.d, top), dmg, luck, exec,
-			luckColour, m.ticks, m.damage, breakdown);
+			luckColour, m.ticks, m.damage, breakdown).with(m.avatar, m.fight, m.fightLive);
 	}
 
 	/** The members, biggest damage first; the player first among equals. */
@@ -407,9 +413,10 @@ final class SidePanelParty
 			int lastDamage = 0;
 			for (PartyBoard.Point p : r)
 			{
-				ticks[i] = tickBase + p.scoredTicks;
+				// T-128: by the room's clock, as the player's own line is.
+				ticks[i] = tickBase + p.x();
 				damage[i] = damageBase + p.damage;
-				lastTicks = p.scoredTicks;
+				lastTicks = p.x();
 				lastDamage = p.damage;
 				i++;
 			}
@@ -425,18 +432,20 @@ final class SidePanelParty
 		return concat(Collections.singletonList(points == null ? Collections.<PartyBoard.Point>emptyList() : points));
 	}
 
-	/** The player's own series from their timeline: cumulative damage a tick at a time. */
-	static int[][] series(float[] perTick)
+	/**
+	 * The player's own series from their timeline: its damage is already cumulative, the weapon damage up to and
+	 * including each tick ({@link FightTimeline.View#damage}), on the room's clock. T-128: T-125 summed it again, so the
+	 * line climbed far past the members' (Eric, 2026-10-31: "The damage over time graph is bugged").
+	 */
+	static int[][] series(float[] cumulative)
 	{
-		final int n = perTick == null ? 0 : perTick.length;
+		final int n = cumulative == null ? 0 : cumulative.length;
 		final int[] ticks = new int[n + 1];
 		final int[] damage = new int[n + 1];
-		double sum = 0;
 		for (int t = 0; t < n; t++)
 		{
-			sum += perTick[t];
 			ticks[t + 1] = t + 1;
-			damage[t + 1] = (int) Math.round(sum);
+			damage[t + 1] = Math.round(cumulative[t]);
 		}
 		return new int[][]{ticks, damage};
 	}

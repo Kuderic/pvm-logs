@@ -193,7 +193,11 @@ final class SidePanelPartyMeter extends JComponent
 			longest = Math.max(longest, SidePanelStyle.metrics(g, r.you ? bold : body).stringWidth(r.name
 				+ (r.left ? " (left)" : "")));
 		}
-		if (columns == 3 && w - NAME_X - right(cw, show) - 2 < longest)
+		// T-128: with any Discord picture on the board, every member's row keeps a picture's room, so names line up.
+		final boolean pictures = anyPicture();
+		final int picture = pictures ? pictureSize() : 0;
+		final int nameX = NAME_X + (pictures ? picture + 4 : 0);
+		if (columns == 3 && w - nameX - right(cw, show) - 2 < longest)
 		{
 			show[1] = false;
 		}
@@ -202,7 +206,7 @@ final class SidePanelPartyMeter extends JComponent
 		{
 			shownColumns += s ? 1 : 0;
 		}
-		final int nameRoom = w - NAME_X - right(cw, show) - 2;
+		final int nameRoom = w - nameX - right(cw, show) - 2;
 		cutNames = 0;
 		final int smallBase = (rh + fs.getAscent() - fs.getDescent()) / 2;
 		final int bodyBase = (rh + fb.getAscent() - fb.getDescent()) / 2;
@@ -227,7 +231,11 @@ final class SidePanelPartyMeter extends JComponent
 			final String name = r.name + (r.left ? " (left)" : "");
 			final String shown = cut(name, fn, nameRoom);
 			cutNames += shown.equals(name) ? 0 : 1;
-			g.drawString(shown, NAME_X, y + bodyBase);
+			g.drawString(shown, nameX, y + bodyBase);
+			if (pictures && !r.others)
+			{
+				picture(g, r, NAME_X - 1, y + (rh - picture) / 2, picture);
+			}
 			g.setFont(small);
 			final String[] v = r.values(metric);
 			int x = w - 3;
@@ -257,6 +265,75 @@ final class SidePanelPartyMeter extends JComponent
 			return r.luckColour;
 		}
 		return c == columns - 1 && metric == SidePanelParty.Metric.DMG ? SidePanelStyle.SECONDARY : SidePanelStyle.VALUE;
+	}
+
+	/** T-128: a round picture beside the name, its height a row's less a margin. */
+	static int pictureSize()
+	{
+		return Math.max(8, rowHeight() - 6);
+	}
+
+	private boolean anyPicture()
+	{
+		for (PanelSnapshot.PartyRow r : rows)
+		{
+			if (r.avatar != null)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** T-128: pictures scaled to the size drawn at, once per picture and size (the Discord plugin's are 256 px or so). */
+	private final java.util.Map<java.awt.image.BufferedImage, java.awt.image.BufferedImage> scaled =
+		new java.util.WeakHashMap<>();
+	private int scaledFor;
+
+	/** The member's picture in a circle, or their colour as a round swatch without one. */
+	private void picture(Graphics2D g, PanelSnapshot.PartyRow r, int x, int y, int size)
+	{
+		final Graphics2D c = (Graphics2D) g.create();
+		c.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+		if (r.avatar == null)
+		{
+			c.setColor(r.left ? SidePanelStyle.alpha(r.colour, 0.5) : r.colour);
+			c.fillOval(x, y, size, size);
+			c.dispose();
+			return;
+		}
+		// Scaled to the pixels it lands on, so it's sharp at 2× too.
+		final int px = (int) Math.round(size * Math.max(1, g.getTransform().getScaleX()));
+		if (px != scaledFor)
+		{
+			scaled.clear();
+			scaledFor = px;
+		}
+		final java.awt.image.BufferedImage img = scaled.computeIfAbsent(r.avatar, a -> scale(a, px));
+		c.setClip(new java.awt.geom.Ellipse2D.Double(x, y, size, size));
+		c.drawImage(img, x, y, size, size, null);
+		c.setClip(null);
+		c.dispose();
+	}
+
+	/** A picture scaled to {@code px} square, smoothly. */
+	static java.awt.image.BufferedImage scale(java.awt.image.BufferedImage src, int px)
+	{
+		final java.awt.image.BufferedImage out = new java.awt.image.BufferedImage(px, px,
+			java.awt.image.BufferedImage.TYPE_INT_ARGB);
+		final Graphics2D g = out.createGraphics();
+		g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+			java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+		g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+		g.drawImage(src, 0, 0, px, px, null);
+		g.dispose();
+		return out;
+	}
+
+	/** For tests: pictures scaled so far. */
+	int scaledPictures()
+	{
+		return scaled.size();
 	}
 
 	private static int right(int[] cw, boolean[] show)
