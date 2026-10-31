@@ -264,29 +264,210 @@ final class SidePanelPartyExamples
 
 	private static final int ItemID_BONE_CLAWS = net.runelite.api.gameval.ItemID.BONE_CLAWS;
 
-	/** The ToA room with Brindle opened after the room: her Fight tab from her room message, round-tripped. */
-	static SidePanelParty.Input toaBrindleAfter()
+	// ---- T-130 review: each row's panels from the same played fight as its meter row ----
+
+	/**
+	 * A member's fight played through the plugin's own calls ({@link SidePanelTimelineExamples#plan}): {@code attacks}
+	 * with {@code item} every {@code speed} ticks, about three in four landing, dealing {@code damage} against
+	 * {@code expected}, then {@code specs} specials with {@code specItem} dealing {@code specDamage}, and {@code idle}
+	 * idle ticks spread through it. Everything a row shows of them (the meter's figures, the chart's line, the Fight
+	 * panels) is worked out from it, so they agree.
+	 */
+	static SidePanelTimelineExamples.Built played(String boss, long seed, int item, String name, int speed, int attacks,
+		int damage, double expected, int maxHit, int specItem, String specName, int specs, int specDamage, int idle)
 	{
-		final SidePanelParty.Input in = toaWithPictures();
-		final SidePanelTimelineExamples.Built b = longRoom();
+		final Random r = new Random(seed);
+		final int[] hits = spread(r, attacks, damage, 0.75);
+		for (int h : hits)
+		{
+			maxHit = Math.max(maxHit, h);
+		}
+		final List<SidePanelTimelineExamples.Stretch> plan = new ArrayList<>();
+		// The idle ticks in three gaps: after a third, two thirds and all of the main weapon's attacks.
+		final int third = attacks / 3;
+		final int[][] parts = {Arrays.copyOfRange(hits, 0, third), Arrays.copyOfRange(hits, third, 2 * third),
+			Arrays.copyOfRange(hits, 2 * third, attacks)};
+		for (int i = 0; i < parts.length; i++)
+		{
+			plan.add(new SidePanelTimelineExamples.Stretch(name, item, FightTimeline.Style.RANGED, false, speed, parts[i],
+				expected / attacks, maxHit, 0.75, idle / 3 + (i == 2 ? idle % 3 : 0)));
+		}
+		if (specs > 0)
+		{
+			plan.add(new SidePanelTimelineExamples.Stretch(specName, specItem, FightTimeline.Style.RANGED, true, 5,
+				spread(r, specs, specDamage, 0.9), specDamage * 0.95 / specs, specDamage / specs * 2, 0.9, 0));
+		}
+		return SidePanelTimelineExamples.plan(boss, 1_000L, plan.toArray(new SidePanelTimelineExamples.Stretch[0]));
+	}
+
+	/** {@code n} hits adding to {@code total}, about {@code landing} of them landing. */
+	private static int[] spread(Random r, int n, int total, double landing)
+	{
+		final double[] w = new double[n];
+		double sum = 0;
+		for (int i = 0; i < n; i++)
+		{
+			w[i] = r.nextDouble() < landing ? 0.3 + r.nextDouble() : 0;
+			sum += w[i];
+		}
+		final int[] out = new int[n];
+		int left = total;
+		for (int i = 0; i < n; i++)
+		{
+			out[i] = i == n - 1 ? Math.max(0, left) : (int) Math.round(w[i] / Math.max(1e-9, sum) * total);
+			left -= out[i];
+		}
+		return out;
+	}
+
+	/** The row for a played fight: the figures as {@link PartyShare#build} sends them, and its line on the chart. */
+	static SidePanelParty.Member row(long id, String name, boolean you, int slot, SidePanelTimelineExamples.Built b,
+		boolean live)
+	{
+		final FightTimeline.View v = b.view();
+		final LuckVsSkillUpdate u = PartyShare.build(live ? LuckVsSkillUpdate.LIVE : LuckVsSkillUpdate.ROOM_END, b.room,
+			v.attacks, 0);
+		final SidePanelParty.Member m = new SidePanelParty.Member(id, name, you, u);
+		m.slot = slot;
+		final int[][] series = SidePanelParty.series(v.damage);
+		m.ticks = series[0];
+		m.damage = series[1];
+		return m;
+	}
+
+	/** Your own Fight panels for a played fight: the Fight tab's model on it, as the panel builds them. */
+	static PanelSnapshot.FightTab yourPanels(SidePanelTimelineExamples.Built b, boolean ended)
+	{
+		final SidePanelModel.Input in = new SidePanelModel.Input();
+		in.zone = SidePanelExamples.ZONE;
+		in.kind = SidePanelModel.Kind.ROOM;
+		SidePanelModel.fillRoom(in, b.room);
+		in.view = b.view();
+		in.weaponRows = new SidePanelWeaponRows().rows(b.room, in.view);
+		in.ended = ended;
+		in.killed = ended;
+		return SidePanelModel.fight(in);
+	}
+
+	/** A member's Fight panels from their room message for a played fight, round-tripped through JSON, named. */
+	static PanelSnapshot.FightTab theirPanels(SidePanelTimelineExamples.Built b, String name)
+	{
 		final com.google.gson.Gson gson = new com.google.gson.Gson();
 		final LuckVsSkillRoom sent = gson.fromJson(gson.toJson(SidePanelMemberFight.message(b.room, b.view(), 0, null)),
 			LuckVsSkillRoom.class);
-		in.members.get(2).fight = SidePanelModel.fight(SidePanelMemberFight.decode(sent.f));
+		final SidePanelModel.Input in = SidePanelMemberFight.decode(sent.f);
+		in.whose = name;
+		return SidePanelModel.fight(in);
+	}
+
+	/**
+	 * The ToA room at Zebak: you, Moss Pike and Brindle, each played over the same 215 ticks (2:09) and killed; one more
+	 * member not sharing, in others.
+	 */
+	private static SidePanelTimelineExamples.Built[] zebak()
+	{
+		final SidePanelTimelineExamples.Built[] b = {
+			played("Zebak", 1, TWISTED_BOW, "Twisted bow", 5, 38, 2_410, 2_290, 81, ZARYTE_CROSSBOW, "Zaryte crossbow", 4,
+				550, 5),
+			played("Zebak", 2, TWISTED_BOW, "Twisted bow", 5, 42, 3_420, 3_150, 81, 0, null, 0, 0, 5),
+			played("Zebak", 3, BOWFA, "Bow of faerdhinen", 4, 49, 1_990, 2_310, 52, 0, null, 0, 0, 19)};
+		for (SidePanelTimelineExamples.Built x : b)
+		{
+			x.fight.recordKill();
+			x.fight.end(true, 1_000L + 129_000L);
+		}
+		return b;
+	}
+
+	private static SidePanelParty.Input zebakBoard(SidePanelTimelineExamples.Built[] b)
+	{
+		final SidePanelParty.Input in = input("Zebak", new LedgerRows.Numbers(LedgerRows.of(b[0].room)).clock, false,
+			false, 3_420 + 1_990 + 1_830);
+		in.members.add(row(SidePanelParty.YOU_ID, "you", true, 0, b[0], false));
+		in.members.add(row(21, "Moss Pike", false, 0, b[1], false));
+		in.members.add(row(22, "Brindle", false, 1, b[2], false));
+		in.partyKey = 7;
 		return in;
 	}
 
-	/** The ToB room mid-fight with Quillon opened: his Fight tab from his live update. */
+	/** T-130 review: the ToA board's rows alone, with pictures, as the board gives them before any panels are attached. */
+	static SidePanelParty.Input toaRows()
+	{
+		final SidePanelParty.Input in = zebakBoard(zebak());
+		in.members.get(0).avatar = picture(1, 'Y');
+		in.members.get(1).avatar = picture(4, 'M');
+		return in;
+	}
+
+	/** Your Fight panels in that room, as the panel builds them while you're selected. */
+	static PanelSnapshot.FightTab toaYourPanels()
+	{
+		return yourPanels(zebak()[0], true);
+	}
+
+	/** Brindle's room message for that room, as it arrives (through JSON). */
+	static LuckVsSkillRoom brindlesMessage()
+	{
+		final SidePanelTimelineExamples.Built b = zebak()[2];
+		final com.google.gson.Gson gson = new com.google.gson.Gson();
+		return gson.fromJson(gson.toJson(SidePanelMemberFight.message(b.room, b.view(), 0, null)), LuckVsSkillRoom.class);
+	}
+
+	/** The ToA room with Brindle's Fight panels from her room message, and pictures for you and Moss Pike. */
+	static SidePanelParty.Input toaBrindleAfter()
+	{
+		final SidePanelTimelineExamples.Built[] b = zebak();
+		final SidePanelParty.Input in = zebakBoard(b);
+		in.members.get(0).avatar = picture(1, 'Y');
+		in.members.get(1).avatar = picture(4, 'M');
+		in.members.get(2).fight = theirPanels(b[2], "Brindle");
+		return in;
+	}
+
+	/**
+	 * T-130: the ToA room with your own Fight panels (the Fight tab's) and Brindle's from her room message; Moss Pike's
+	 * message isn't in, so his are the compact breakdown. Every row's figures, line and panels from its own fight.
+	 */
+	static SidePanelParty.Input toaYouAndBrindle()
+	{
+		final SidePanelTimelineExamples.Built[] b = zebak();
+		final SidePanelParty.Input in = zebakBoard(b);
+		in.members.get(0).avatar = picture(1, 'Y');
+		in.members.get(1).avatar = picture(4, 'M');
+		in.members.get(0).fight = yourPanels(b[0], true);
+		in.members.get(2).fight = theirPanels(b[2], "Brindle");
+		return in;
+	}
+
+	/** The ToB room mid-fight at Verzik, five sharing, each played; Quillon's panels from his live update. */
 	static SidePanelParty.Input tobQuillonLive()
 	{
-		final SidePanelParty.Input in = tobLive();
-		final SidePanelTimelineExamples.Built b = longRoom();
-		final LuckVsSkillUpdate u = PartyShare.build(LuckVsSkillUpdate.LIVE, b.room, b.view().attacks, 0);
-		u.r = "Verzik Vitur";
+		final String[] names = {"you", "Quillon", "Vey", "Old Tam", "Corvane"};
+		final int[] dmg = {1_610, 1_880, 1_290, 1_545, 1_120};
+		final int[] items = {TWISTED_BOW, TWISTED_BOW, SCYTHE, TWISTED_BOW, BOWFA};
+		final SidePanelTimelineExamples.Built[] b = new SidePanelTimelineExamples.Built[names.length];
+		for (int i = 0; i < names.length; i++)
+		{
+			final int speed = items[i] == BOWFA ? 4 : 5;
+			// Every one 163 ticks into the room (1:38), their idle ticks what their attacks leave.
+			final int attacks = (163 - 8 - 3 * i) / speed;
+			b[i] = played("Verzik Vitur", 30 + i, items[i], itemName(items[i]), speed, attacks, dmg[i], dmg[i] * 0.96, 70,
+				0, null, 0, 0, 163 - attacks * speed);
+		}
+		final SidePanelParty.Input in = input("Verzik Vitur", new LedgerRows.Numbers(LedgerRows.of(b[0].room)).clock,
+			true, false, 1_880 + 1_290 + 1_545 + 1_120);
+		for (int i = 0; i < names.length; i++)
+		{
+			in.members.add(row(i == 0 ? SidePanelParty.YOU_ID : 30 + i, names[i], i == 0, i - 1, b[i], true));
+		}
 		final SidePanelParty.Member q = in.members.get(1);
-		q.fight = SidePanelModel.fight(SidePanelMemberFight.live(u, SidePanelPartyExamples::itemName));
+		final SidePanelModel.Input live = SidePanelMemberFight.live(q.figures, SidePanelPartyExamples::itemName);
+		live.whose = q.name;
+		q.fight = SidePanelModel.fight(live);
 		q.fightLive = true;
 		q.avatar = picture(7, 'Q');
+		in.members.get(0).fight = yourPanels(b[0], false);
+		in.partyKey = 9;
 		return in;
 	}
 
@@ -301,17 +482,6 @@ final class SidePanelPartyExamples
 		echo.ticks = you.ticks;
 		echo.damage = you.damage;
 		in.members.add(echo);
-		return in;
-	}
-
-	/** T-130: the ToA room with your own Fight panels (the Fight tab's) and Brindle's from her room message. */
-	static SidePanelParty.Input toaYouAndBrindle()
-	{
-		final SidePanelParty.Input in = toaBrindleAfter();
-		final SidePanelModel.Input yours = SidePanelExamples.dead();
-		yours.name = "Zebak";
-		in.members.get(0).fight = SidePanelModel.fight(yours);
-		in.partyKey = 7;
 		return in;
 	}
 }

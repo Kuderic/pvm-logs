@@ -814,4 +814,52 @@ final class SidePanelMemberFight
 		}
 		return v == 0 ? 0 : new java.math.BigDecimal(v).round(new java.math.MathContext(7)).doubleValue();
 	}
+
+	/**
+	 * T-128, T-130 review: party members' Fight panels for the Party tab, every member's (not only the one selected), so a
+	 * click shows theirs at once and never the compact breakdown first. Once their room has ended, the Fight tab's own
+	 * model on their room message, built once per message; mid-fight, what their live update can fill (a few cards, built
+	 * each time). Without either (their room's message still on its way, or a sender from before T-128), none, and the
+	 * compact breakdown shows. Their name stands where the Fight tab says "you" and "yours". Client thread.
+	 */
+	static final class Panels
+	{
+		private final java.util.Map<LuckVsSkillRoom, PanelSnapshot.FightTab> built = new java.util.IdentityHashMap<>();
+		private int builds;
+
+		void attach(SidePanelParty.Member m, java.util.Map<String, LuckVsSkillRoom> fights,
+			java.util.function.IntFunction<String> names)
+		{
+			if (m.figures.isLive())
+			{
+				final SidePanelModel.Input in = live(m.figures, names);
+				in.whose = m.name;
+				m.fight = SidePanelModel.fight(in);
+				m.fightLive = true;
+				return;
+			}
+			final LuckVsSkillRoom sent = fights == null ? null : fights.get(m.figures.roomKey());
+			if (sent == null || sent.f == null)
+			{
+				return;
+			}
+			if (built.size() > 64)
+			{
+				built.clear();
+			}
+			m.fight = built.computeIfAbsent(sent, r ->
+			{
+				builds++;
+				final SidePanelModel.Input in = decode(r.f);
+				in.whose = m.name;
+				return SidePanelModel.fight(in);
+			});
+		}
+
+		/** For tests: how many room messages were made into panels. */
+		int builds()
+		{
+			return builds;
+		}
+	}
 }

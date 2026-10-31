@@ -252,11 +252,19 @@ final class SidePanelParts
 		/** T-119: the value's short forms, longest first; with any, the label is kept whole before they are used. */
 		void setRightShort(List<String> forms)
 		{
-			if (!java.util.Objects.equals(rightShort, forms))
+			final List<String> now = forms == null ? java.util.Collections.<String>emptyList() : forms;
+			if (!rightShort.equals(now))
 			{
-				rightShort = forms;
+				// The layout reads only whether there are short forms and the shortest one's width; a clock ticking inside
+				// the longer ones is the text's own repaint (T-130 review: a relayout every apply on the Party tab's header).
+				final boolean layout = rightShort.isEmpty() != now.isEmpty() || !now.isEmpty()
+					&& right.widthOf(now.get(now.size() - 1)) != right.widthOf(rightShort.get(rightShort.size() - 1));
+				rightShort = now;
 				right.setShort(rightShort);
-				relayout(this);
+				if (layout)
+				{
+					relayout(this);
+				}
 			}
 		}
 

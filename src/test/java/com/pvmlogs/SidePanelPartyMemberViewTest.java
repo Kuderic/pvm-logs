@@ -14,6 +14,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -84,6 +85,149 @@ public class SidePanelPartyMemberViewTest
 		assertEquals(SidePanelPartyTab.NONE, tab.chart().focus());
 		assertEquals("you · Fight panels", tab.heading().left.getText());
 		assertEquals(built, tab.rebuilds());
+	}
+
+	/**
+	 * T-130 review: the real flow. The panel builds every member's panels (a room's once per message) and yours only while
+	 * you're selected. Built for you, a click on Brindle shows hers at once, and the snapshot built for her (yours left
+	 * out) changes nothing; a click back shows your kept panels at once, and the next snapshot updates them in place. One
+	 * member rebuild per click, and never the compact breakdown in between.
+	 */
+	@Test
+	public void aClickShowsTheirPanelsAtOnceNeverTheBreakdownFirst()
+	{
+		final SidePanelMemberFight.Panels panels = new SidePanelMemberFight.Panels();
+		final LuckVsSkillRoom hersSent = SidePanelPartyExamples.brindlesMessage();
+		final PvmPerformancePanel p = panel(asThePanelBuilds(true, panels, hersSent));
+		final SidePanelPartyTab tab = p.partyTab();
+		final SidePanelFightTab yours = tab.memberFight();
+		assertNotNull(yours);
+		final int members = tab.memberRebuilds();
+
+		tab.select(22);
+		assertEquals(members + 1, tab.memberRebuilds());
+		final SidePanelFightTab hers = tab.memberFight();
+		assertNotNull("no compact breakdown after the click", hers);
+		assertNotSame(yours, hers);
+		// The snapshot the click asked for: built for Brindle, so yours aren't in it; hers are the same panels.
+		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(asThePanelBuilds(false, panels, hersSent))));
+		assertEquals(members + 1, tab.memberRebuilds());
+		assertSame(hers, tab.memberFight());
+		// Her room message made into panels once, however many snapshots carried it.
+		assertEquals(1, panels.builds());
+
+		tab.select(22);
+		assertEquals(members + 2, tab.memberRebuilds());
+		assertSame("your kept panels at once", yours, tab.memberFight());
+		assertEquals("you · Fight panels", tab.heading().left.getText());
+		// And the snapshot built for you again: in place.
+		final int built = yours.builds();
+		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(asThePanelBuilds(true, panels, hersSent))));
+		assertEquals(members + 2, tab.memberRebuilds());
+		assertSame(yours, tab.memberFight());
+		assertEquals(built, yours.builds());
+		assertEquals(1, panels.builds());
+	}
+
+	/**
+	 * The board's rows with panels attached as {@code PvmPerformancePanel.readParty} attaches them: yours only while
+	 * you're selected ({@code forYou}), every member's from what the board holds for them (Brindle's room message; Moss
+	 * Pike's isn't in).
+	 */
+	private static SidePanelParty.Input asThePanelBuilds(boolean forYou, SidePanelMemberFight.Panels panels,
+		LuckVsSkillRoom hersSent)
+	{
+		final SidePanelParty.Input in = SidePanelPartyExamples.toaRows();
+		if (forYou)
+		{
+			in.members.get(0).fight = SidePanelPartyExamples.toaYourPanels();
+		}
+		for (SidePanelParty.Member m : in.members)
+		{
+			if (!m.you)
+			{
+				panels.attach(m, m.id == 22 ? java.util.Collections.singletonMap(m.figures.roomKey(), hersSent)
+					: java.util.Collections.<String, LuckVsSkillRoom>emptyMap(), SidePanelPartyExamples::itemName);
+			}
+		}
+		return in;
+	}
+
+	/** T-130 review: a member's panels name them where yours say "you" and "yours". */
+	@Test
+	public void aMembersPanelsNameThem()
+	{
+		final PanelSnapshot.FightTab hers = SidePanelPartyExamples.toaYouAndBrindle().members.get(2).fight;
+		assertTrue(hers.damage.hint.text, hers.damage.hint.text.endsWith(" Brindle's"));
+		assertTrue(hers.chart.youLegend, hers.chart.youLegend.startsWith("Brindle "));
+		final PanelSnapshot.FightTab mine = SidePanelPartyExamples.toaYouAndBrindle().members.get(0).fight;
+		assertTrue(mine.damage.hint.text, mine.damage.hint.text.endsWith(" yours"));
+		assertTrue(mine.chart.youLegend, mine.chart.youLegend.startsWith("you "));
+		assertEquals("Jess'", SidePanelModel.possessive("Jess"));
+		assertEquals("Brindle's", SidePanelModel.possessive("Brindle"));
+		// Mid-fight too: the Damage card of Quillon's live panels.
+		final PanelSnapshot.FightTab his = SidePanelPartyExamples.tobQuillonLive().members.get(1).fight;
+		assertTrue(his.damage.hint.text, his.damage.hint.text.endsWith(" Quillon's"));
+		// Nothing on show in their panels says "you" or "yours" (the units note's tooltip speaks to the reader).
+		for (Object[] c : new Object[][]{{SidePanelPartyExamples.toaYouAndBrindle(), 22L},
+			{SidePanelPartyExamples.tobQuillonLive(), 31L}})
+		{
+			final PvmPerformancePanel p = panel((SidePanelParty.Input) c[0]);
+			p.partyTab().select((Long) c[1]);
+			SidePanelPictures.draw(p.tabs(), p.partyTab(), 1);
+			for (Component k : all(p.partyTab().memberFight()))
+			{
+				final String text = k instanceof SidePanelText ? ((SidePanelText) k).getText()
+					: k instanceof SidePanelParts.Paragraph ? ((SidePanelParts.Paragraph) k).text() : "";
+				assertFalse(text, text.toLowerCase().matches(".*\\byours?\\b.*"));
+			}
+		}
+		final SidePanelModel.WeaponRow w = new SidePanelModel.WeaponRow();
+		w.name = "Bow of faerdhinen";
+		w.attacks = 10;
+		w.damage = 200;
+		assertTrue(SidePanelModel.weaponTooltip(w, "100%", null, null, false, "Brindle").contains("of Brindle's damage"));
+	}
+
+	/** T-130 review: each row's panels are its own fight's, as its meter row (the renders had them disagree). */
+	@Test
+	public void eachRowsPanelsAreItsOwnFight()
+	{
+		for (SidePanelParty.Input in : new SidePanelParty.Input[]{SidePanelPartyExamples.toaYouAndBrindle(),
+			SidePanelPartyExamples.tobQuillonLive()})
+		{
+			for (SidePanelParty.Member m : in.members)
+			{
+				if (m.fight == null)
+				{
+					continue;
+				}
+				final String damage = LedgerRows.number(m.figures.d);
+				assertTrue(m.name + ": " + m.fight.damage.hint.text + " against " + damage,
+					m.fight.damage.hint.text.startsWith(damage + " "));
+				assertEquals(m.name, in.scope, m.figures.r);
+			}
+		}
+	}
+
+	/** T-130 review: the member list changing under the read is a change, never an exception. */
+	@Test
+	public void aMemberListChangingMidReadIsAChange()
+	{
+		final List<Integer> members = new ArrayList<Integer>(Arrays.asList(1, 2, 3))
+		{
+			@Override
+			public java.util.Iterator<Integer> iterator()
+			{
+				final java.util.Iterator<Integer> it = super.iterator();
+				// As onUserJoin adds a member on OkHttp's thread while the client thread walks the list.
+				add(4);
+				return it;
+			}
+		};
+		assertNull(PvmPerformancePanel.copy(members));
+		assertEquals(Arrays.asList(1, 2), PvmPerformancePanel.copy(new ArrayList<>(Arrays.asList(1, 2))));
+		assertFalse(PvmPerformancePanel.changing().equals(PvmPerformancePanel.changing()));
 	}
 
 	@Test
