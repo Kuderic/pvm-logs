@@ -68,9 +68,11 @@ class PvmPerformancePanel extends PluginPanel
 	private Fight averageHistoryHead;
 	private LedgerHistory.Average average;
 	private LedgerHistory.Spread luckRemoved;
-	// The chart's scope and how much of its series the last snapshot sent (spec 5.1): the next sends from a few ticks back.
-	private Object chartScope;
-	private int chartSent;
+	/** T-130 review: where each copy of the chart was last sent to: the Fight tab's, and the Party tab's copy of yours. */
+	private final ChartBook fightChart = new ChartBook();
+	private final ChartBook partyChart = new ChartBook();
+	/** The one {@link #charts} goes by: the Fight tab's, but for while your panels for the Party tab are read. */
+	private ChartBook chartBook = fightChart;
 	/** The Damage rows' sums, kept between snapshots so a long fight's build costs what a short one's does (T-046). */
 	private final SidePanelWeaponRows weaponRows = new SidePanelWeaponRows();
 	/** T-095: the trip's rooms less its runs, as one room, and what it was built from. */
@@ -178,7 +180,7 @@ class PvmPerformancePanel extends PluginPanel
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
 			: new HistorySource(), actions, folds);
 		tripTab = new SidePanelTripTab(actions, folds);
-		// T-128: the member opened is built for, from the click on.
+		// T-130: your own Fight panels are built for the Party tab only while you're the one selected.
 		partyTab = new SidePanelPartyTab(actions, folds, icons, id ->
 		{
 			partySelected = id;
@@ -189,6 +191,7 @@ class PvmPerformancePanel extends PluginPanel
 		fightTab.setPerf(perf);
 		historyTab.setPerf(perf);
 		tripTab.setPerf(perf);
+		partyTab.setPerf(perf);
 
 		final JPanel display = new JPanel(new BorderLayout());
 		display.setBackground(SidePanelStyle.PANEL);
@@ -387,14 +390,17 @@ class PvmPerformancePanel extends PluginPanel
 		final boolean over = PvmPerformanceOverlay.isOver(fight, display);
 		// T-125: the party's board changes whatever the player is doing.
 		final PartyBoard board = plugin.getPartyBoard();
+		final boolean fighting = fight != null && !over && !pre;
 		final List<Object> shape = Arrays.asList(fight, over, pre, room, raid, whole,
-			history.size(), head, trip.getStartMillis(), tab, board == null ? 0L : board.revision(), partySelected,
+			history.size(), head, trip.getStartMillis(), tab,
+			// T-130 review: during your fight, a member's update waits for the next snapshot (every 5 ticks), as your own
+			// figures do: members' updates come at their own ticks, so a 4-man party's would build nearly every tick.
+			board == null || fighting ? 0L : board.revision(), partySelected,
 			// T-129: joining or leaving a party, or a member coming or going, rebuilds the Party tab at once, in or out of
 			// a fight; on the other tabs, nothing.
 			tab == PARTY_TAB ? partyState() : null,
 			board == null || board.isEmpty() ? null : avatars());
 		final boolean force = dirty;
-		final boolean fighting = fight != null && !over && !pre;
 		final boolean sameShape = shape.equals(lastShape);
 		if (!due(force, fighting, sameShape, config == null || config.panelLive(), ticks - builtAt))
 		{
@@ -615,16 +621,39 @@ class PvmPerformancePanel extends PluginPanel
 		if (!in.charts || view.states.length == 0)
 		{
 			in.view = null;
-			chartScope = null;
-			chartSent = 0;
+			chartBook.reset();
 			return;
 		}
 		in.view = view;
 		final Object key = Arrays.asList(scope, view.startTick);
 		in.weaponRows = weaponRows.rows(key, view);
-		in.chartFrom = key.equals(chartScope) ? Math.max(0, Math.min(chartSent, view.states.length) - CHART_RESEND) : 0;
-		chartScope = key;
-		chartSent = view.states.length;
+		in.chartFrom = chartBook.from(key, view.states.length);
+	}
+
+	/**
+	 * T-036: a copy of the chart on Swing's side, and what it has been sent: each snapshot sends the series from a few
+	 * ticks behind the last one's end on the same scope, else from 0, which starts the copy over. T-130 review: one per
+	 * copy, as the Fight tab's chart and the Party tab's copy of your panels each keep their own. Client thread.
+	 */
+	static final class ChartBook
+	{
+		private Object scope;
+		private int sent;
+
+		/** The index this snapshot sends from, for a scope {@code key} whose series is {@code length} long now. */
+		int from(Object key, int length)
+		{
+			final int from = key.equals(scope) ? Math.max(0, Math.min(sent, length) - CHART_RESEND) : 0;
+			scope = key;
+			sent = length;
+			return from;
+		}
+
+		void reset()
+		{
+			scope = null;
+			sent = 0;
+		}
 	}
 
 	/** RuneLite's item images and spell sprites, delivered on Swing's thread; none without a plugin. */
@@ -739,7 +768,7 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		final List<PartyBoard.View> views = board.view(id ->
 		{
-			final net.runelite.client.party.PartyMember m = party == null ? null : party.getMemberById(id);
+			final net.runelite.client.party.PartyMember m = memberById(party, id);
 			return m == null ? null : m.getDisplayName();
 		});
 		in.shared = views.size();
@@ -791,7 +820,7 @@ class PvmPerformancePanel extends PluginPanel
 		// The player's own row has an id of its own: the dev loopback's echo is a member with the player's party id.
 		final SidePanelParty.Member you = new SidePanelParty.Member(SidePanelParty.YOU_ID, SidePanelParty.YOU_NAME, true,
 			raidScope ? SidePanelParty.sum(mine) : mine.get(0));
-		final net.runelite.client.party.PartyMember me = party == null ? null : party.getLocalMember();
+		final net.runelite.client.party.PartyMember me = localMember(party);
 		you.avatar = me == null ? null : me.getAvatar();
 		final long opened = partySelected;
 		if (!light && opened == SidePanelParty.YOU_ID)
@@ -825,11 +854,13 @@ class PvmPerformancePanel extends PluginPanel
 				continue;
 			}
 			m.slot = partySlots.getOrDefault(v.memberId, 0);
-			final net.runelite.client.party.PartyMember pm = party == null ? null : party.getMemberById(v.memberId);
+			final net.runelite.client.party.PartyMember pm = memberById(party, v.memberId);
 			m.avatar = pm == null ? null : pm.getAvatar();
-			if (!light && !raidScope && opened == v.memberId)
+			if (!light && !raidScope)
 			{
-				memberFight(m, v, in.itemNames);
+				// T-130 review: every member's, so a click shows theirs at once, never the compact breakdown first.
+				// A room's are built once per message; a live member's are the live update's few cards.
+				memberPanels.attach(m, v.fights, in.itemNames);
 			}
 			in.members.add(m);
 			present.add(v.memberId);
@@ -848,18 +879,24 @@ class PvmPerformancePanel extends PluginPanel
 	}
 
 	/**
-	 * T-130: the Fight tab's own input and model for the scope on show, whole: its chart sent from the start, and the
-	 * Fight tab's incremental chart bookkeeping left as it was, so its next build sends it what it hasn't had.
+	 * T-130: the Fight tab's own input and model for the scope on show. T-130 review: with the Party tab's own incremental
+	 * chart bookkeeping, as the Fight tab's: each build sends the chart only from a few ticks behind what the Party tab's
+	 * copy of your panels last had (they're kept for the tab's life, and every snapshot reaches them), and the Fight tab's
+	 * bookkeeping is left as it was, so its next build sends it what it hasn't had.
 	 */
 	private PanelSnapshot.FightTab yourFightPanels(Fight fight, Encounter display, Encounter room, Raid raid,
 		boolean whole)
 	{
-		final Object scope = chartScope;
-		final int sent = chartSent;
-		final SidePanelModel.Input in = read(fight, display, room, raid, whole, false, plugin.getHistory());
-		chartScope = scope;
-		chartSent = sent;
-		in.chartFrom = 0;
+		chartBook = partyChart;
+		final SidePanelModel.Input in;
+		try
+		{
+			in = read(fight, display, room, raid, whole, false, plugin.getHistory());
+		}
+		finally
+		{
+			chartBook = fightChart;
+		}
 		return SidePanelModel.fight(in);
 	}
 
@@ -871,12 +908,73 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			return partyState(false, 0, java.util.Collections.<Long>emptyList());
 		}
-		final List<Long> ids = new ArrayList<>();
-		for (net.runelite.client.party.PartyMember m : party.getMembers())
+		final List<net.runelite.client.party.PartyMember> members = copy(party.getMembers());
+		if (members == null)
+		{
+			// A member came or went mid-read: a change, so the tab builds now and reads them again next tick.
+			return changing();
+		}
+		final List<Long> ids = new ArrayList<>(members.size());
+		for (net.runelite.client.party.PartyMember m : members)
 		{
 			ids.add(m.getMemberId());
 		}
 		return partyState(true, party.getPartyId(), ids);
+	}
+
+	/**
+	 * T-130 review: the party's members as they stand, or null when the list changed while it was read. In RuneLite
+	 * 1.13.4 {@code getMembers()} is a plain ArrayList, which {@code onUserJoin} and {@code onUserPart} change on OkHttp's
+	 * thread (WSClient posts there), so walking it from the client thread can throw.
+	 */
+	static <T> List<T> copy(List<T> members)
+	{
+		try
+		{
+			final List<T> out = new ArrayList<>(members.size());
+			for (T m : members)
+			{
+				out.add(m);
+			}
+			return out;
+		}
+		catch (java.util.ConcurrentModificationException e)
+		{
+			return null;
+		}
+	}
+
+	/** T-130 review: PartyService's lookups walk the same list: null on a clash, and the next tick builds again. */
+	private net.runelite.client.party.PartyMember memberById(net.runelite.client.party.PartyService party, long id)
+	{
+		try
+		{
+			return party == null ? null : party.getMemberById(id);
+		}
+		catch (java.util.ConcurrentModificationException e)
+		{
+			dirty = true;
+			return null;
+		}
+	}
+
+	private net.runelite.client.party.PartyMember localMember(net.runelite.client.party.PartyService party)
+	{
+		try
+		{
+			return party == null ? null : party.getLocalMember();
+		}
+		catch (java.util.ConcurrentModificationException e)
+		{
+			dirty = true;
+			return null;
+		}
+	}
+
+	/** T-130 review: a party key equal to no other, so the tick that hit a member list mid-change builds. */
+	static List<Object> changing()
+	{
+		return java.util.Collections.<Object>singletonList(new Object());
 	}
 
 	/** T-129: the Party tab's party key: whether in one, which, and who's in it; equal while none of those changed. */
@@ -892,33 +990,8 @@ class PvmPerformancePanel extends PluginPanel
 		return out;
 	}
 
-	/** T-128: member Fight tabs from their room messages, built once each. Client thread. */
-	private final java.util.Map<LuckVsSkillRoom, PanelSnapshot.FightTab> memberFights = new java.util.IdentityHashMap<>();
-
-	/**
-	 * T-128: the opened member's Fight tab: from their room-end message once their room has ended, the Fight tab's own
-	 * model on what they sent; mid-fight, what their live update can fill. Without either (their room's message still
-	 * on its way, or a sender from before T-128), none, and the compact breakdown shows.
-	 */
-	private void memberFight(SidePanelParty.Member m, PartyBoard.View v, java.util.function.IntFunction<String> names)
-	{
-		if (m.figures.isLive())
-		{
-			m.fight = SidePanelModel.fight(SidePanelMemberFight.live(m.figures, names));
-			m.fightLive = true;
-			return;
-		}
-		final LuckVsSkillRoom sent = v.fights.get(m.figures.roomKey());
-		if (sent == null)
-		{
-			return;
-		}
-		if (memberFights.size() > 64)
-		{
-			memberFights.clear();
-		}
-		m.fight = memberFights.computeIfAbsent(sent, r -> SidePanelModel.fight(SidePanelMemberFight.decode(r.f)));
-	}
+	/** T-128, T-130 review: members' Fight panels, a room's built once per message. Client thread. */
+	private final SidePanelMemberFight.Panels memberPanels = new SidePanelMemberFight.Panels();
 
 	/** T-128: the party's pictures as they stand, so one arriving later is a new build. */
 	private List<Object> avatars()
@@ -928,8 +1001,13 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			return null;
 		}
-		final List<Object> out = new ArrayList<>();
-		for (net.runelite.client.party.PartyMember m : party.getMembers())
+		final List<net.runelite.client.party.PartyMember> members = copy(party.getMembers());
+		if (members == null)
+		{
+			return changing();
+		}
+		final List<Object> out = new ArrayList<>(members.size());
+		for (net.runelite.client.party.PartyMember m : members)
 		{
 			out.add(m.getAvatar() == null ? 0 : System.identityHashCode(m.getAvatar()));
 		}
@@ -1206,7 +1284,7 @@ class PvmPerformancePanel extends PluginPanel
 	 */
 	int perfState()
 	{
-		final int tab = fightButton.isSelected() ? 0 : historyButton.isSelected() ? 1 : 2;
+		final int tab = fightButton.isSelected() ? 0 : historyButton.isSelected() ? 1 : partyButton.isSelected() ? 3 : 2;
 		return PerfProbe.panelState(active, tab, config == null || config.panelLive(),
 			config == null || config.panelCharts());
 	}

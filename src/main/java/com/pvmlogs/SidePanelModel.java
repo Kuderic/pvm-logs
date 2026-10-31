@@ -188,6 +188,11 @@ final class SidePanelModel
 		String partyLine;
 		/** T-128: your Discord picture beside it; null for none. */
 		java.awt.image.BufferedImage partyAvatar;
+		/**
+		 * T-130 review: whose figures these are, for a party member's Fight panels on the Party tab ({@code Brindle}):
+		 * the Damage card reads {@code 2,400 Brindle's}, the chart's legend {@code Brindle 2,400}. Null for your own.
+		 */
+		String whose;
 		Kind kind = Kind.EMPTY;
 		/**
 		 * T-095: the room is a run of monsters of one kind (T-089's {@code isMonsterRoom()}), and its kills. A run has no
@@ -2298,7 +2303,7 @@ final class SidePanelModel
 				final String sub = landing ? landingForms(w, count, warning).get(0) : warning || !w.expectedKnown ? count
 					: count + " (expected " + LedgerRows.number(Math.round(w.expected)) + " dmg)";
 				final int sprite = SidePanelIcons.spellSprite(w.spell);
-				rows.add(weaponSource(w, count, sub, share, warning, sprite));
+				rows.add(weaponSource(w, count, sub, share, warning, sprite, in.whose));
 			}
 			// What no attack holds: damage waiting for its attack's booking, or from a fight the timeline didn't record;
 			// expectations that arrived before any attack of their fight was booked (a held sample after a target switch).
@@ -2334,8 +2339,15 @@ final class SidePanelModel
 		{
 			return null;
 		}
-		final String where = in.unscored && in.kind == Kind.ROOM ? " on the " + in.scoredName : " yours";
+		final String where = in.unscored && in.kind == Kind.ROOM ? " on the " + in.scoredName
+			: in.whose == null ? " yours" : " " + possessive(in.whose);
 		return new PanelSnapshot.Sources(Text.small(LedgerRows.number(whole) + where, SidePanelStyle.SECONDARY), rows);
+	}
+
+	/** T-130 review: {@code Brindle's}; {@code Jess'} for a name ending in s. */
+	static String possessive(String name)
+	{
+		return name.endsWith("s") || name.endsWith("S") ? name + "'" : name + "'s";
 	}
 
 	/**
@@ -2358,13 +2370,13 @@ final class SidePanelModel
 	 * expected, nor with no ticks (a row read without its view).
 	 */
 	private static PanelSnapshot.Source weaponSource(WeaponRow w, String count, String sub, double share,
-		boolean warning, int sprite)
+		boolean warning, int sprite, String whose)
 	{
 		final String shareText = Math.round(100 * share) + "%";
 		final double seconds = w.ticks * LedgerRows.SECONDS_PER_TICK;
 		final String dps = !w.special && w.ticks > 0 ? LedgerRows.oneDecimal(Math.max(0, w.damage) / seconds) : null;
 		final String exp = dps != null && w.expectedKnown && !warning ? LedgerRows.oneDecimal(w.expected / seconds) : null;
-		final String tooltip = weaponTooltip(w, shareText, dps, exp, warning);
+		final String tooltip = weaponTooltip(w, shareText, dps, exp, warning, whose);
 		final int item = sprite >= 0 ? -1 : w.itemId;
 		final Color colour = styleColour(w.style, w.special);
 		final String damage = LedgerRows.number(w.damage);
@@ -2439,6 +2451,12 @@ final class SidePanelModel
 	 */
 	static String weaponTooltip(WeaponRow w, String share, String dps, String exp, boolean warning)
 	{
+		return weaponTooltip(w, share, dps, exp, warning, null);
+	}
+
+	/** T-130 review: {@code whose}, a party member's name, for their panels ({@code of Brindle's damage}); null for yours. */
+	static String weaponTooltip(WeaponRow w, String share, String dps, String exp, boolean warning, String whose)
+	{
 		final StringBuilder s = new StringBuilder("<html><b>").append(escape(w.name)).append("</b>");
 		s.append("<br>").append(w.attacks).append(w.special ? (w.attacks == 1 ? " special" : " specials")
 			: (w.attacks == 1 ? " attack" : " attacks")).append(", ").append(w.landed).append(" landed");
@@ -2468,7 +2486,7 @@ final class SidePanelModel
 		{
 			s.append(", expected ").append(LedgerRows.number(Math.round(w.expected)));
 		}
-		s.append(" (").append(share).append(" of your damage)");
+		s.append(" (").append(share).append(" of ").append(whose == null ? "your" : possessive(whose)).append(" damage)");
 		if (dps != null)
 		{
 			s.append("<br>").append(dps).append(" DPS");
@@ -2626,7 +2644,8 @@ final class SidePanelModel
 			states, styles,
 			luckColour == LedgerRows.Colour.NEUTRAL || warning || (in.run && in.kind == Kind.ROOM) ? SidePanelStyle.VALUE
 				: SidePanelStyle.of(luckColour),
-			!warning, !warning && rangeKnown, LedgerRows.clock(ticks), "you " + LedgerRows.number(Math.round(last)),
+			!warning, !warning && rangeKnown, LedgerRows.clock(ticks),
+			(in.whose == null ? "you" : in.whose) + " " + LedgerRows.number(Math.round(last)),
 			expectedLegend(lastExpected, s), lost, eating, mechanics,
 			styleColour(FightTimeline.Style.values()[main], false));
 	}

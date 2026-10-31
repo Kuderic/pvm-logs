@@ -247,6 +247,12 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		return builds;
 	}
 
+	/** For tests: Swing's copy of the chart's series. */
+	SidePanelChartData chartData()
+	{
+		return chartData;
+	}
+
 	void setStatus(String text)
 	{
 		status = text == null ? "" : text;

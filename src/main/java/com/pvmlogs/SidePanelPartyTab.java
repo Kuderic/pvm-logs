@@ -35,6 +35,38 @@ final class SidePanelPartyTab extends JPanel
 	static final String SWITCH_HINT = "click a member above to switch";
 	static final String FIGHT_PANELS = " · Fight panels";
 
+	/**
+	 * T-130 review: the tab paints in software and reaches the screen as one image, as the other tabs have since T-046
+	 * (see {@link SidePanelBuffer}). Without it every repaint went straight to the screen: the 10:35 log's ~29 ms of
+	 * "panel repaint after apply" on this tab against the Fight tab's ~6 ms, with "panel software render" none.
+	 */
+	private final SidePanelBuffer buffer = new SidePanelBuffer();
+
+	/** For tests: the tab's cached image. */
+	SidePanelBuffer buffer()
+	{
+		return buffer;
+	}
+
+	/** The strain probe's timers for the buffer; null in tests. */
+	void setPerf(PerfProbe perf)
+	{
+		buffer.setPerf(perf);
+	}
+
+	/** Its children's repaints come through {@link #paint}, so they're buffered too. */
+	@Override
+	public boolean isPaintingOrigin()
+	{
+		return isOpaque();
+	}
+
+	@Override
+	public void paint(Graphics g)
+	{
+		buffer.paint(this, g, super::paint);
+	}
+
 	private final SidePanelFightTab.Actions actions;
 	private final SidePanelSection.Folds folds;
 	/** T-128: the item and spell icons for the Fight panels. */
@@ -68,6 +100,15 @@ final class SidePanelPartyTab extends JPanel
 	private SidePanelParts.Line heading;
 	private SidePanelParts.Paragraph headingSub;
 	private SidePanelFightTab memberFight;
+	/** The snapshot {@link #memberFight} last had, so the same one (a member's room, built once) isn't applied again. */
+	private PanelSnapshot.FightTab memberApplied;
+	/**
+	 * T-130 review: your own Fight panels, kept for the tab's life. Every snapshot that carries them is applied here,
+	 * shown or not, so their chart can be sent incrementally (as the Fight tab's is), and a click back to you shows the
+	 * last ones at once while the panel builds new ones.
+	 */
+	private SidePanelFightTab yourPanels;
+	private PanelSnapshot.FightTab yourLast;
 	private Attacks attacks;
 	private SidePanelParts.RowsCard summary;
 
@@ -98,6 +139,16 @@ final class SidePanelPartyTab extends JPanel
 			return;
 		}
 		shown = t;
+		final PanelSnapshot.PartyRow you = t.row(SidePanelParty.YOU_ID);
+		if (you != null && you.fight != null && you.fight != yourLast)
+		{
+			if (yourPanels == null)
+			{
+				yourPanels = new SidePanelFightTab(actions, folds, true, icons);
+			}
+			yourLast = you.fight;
+			yourPanels.apply(yourLast);
+		}
 		// A new party, or the selected member gone from the board: back to you.
 		if (t.partyKey != partyKey)
 		{
@@ -127,8 +178,13 @@ final class SidePanelPartyTab extends JPanel
 	/** Built again in the panel's new text settings (T-053). */
 	void restyle()
 	{
+		buffer.drop();
 		builtFor = null;
 		memberBuiltFor = null;
+		if (yourPanels != null)
+		{
+			yourPanels.restyle(yourLast);
+		}
 		if (shown != null)
 		{
 			apply(shown);
@@ -226,6 +282,15 @@ final class SidePanelPartyTab extends JPanel
 		return chart;
 	}
 
+	/**
+	 * The Fight panels to show for this row: yours are the kept ones (the last built, while the panel builds for someone
+	 * else); a member's are what their row carries. Null for the compact breakdown.
+	 */
+	private PanelSnapshot.FightTab panelsOf(PanelSnapshot.PartyRow r)
+	{
+		return r.you ? yourLast : r.fight;
+	}
+
 	/** T-128, T-130: the selected member's Fight panels; null while they show the compact breakdown, or none. */
 	SidePanelFightTab memberFight()
 	{
@@ -286,6 +351,7 @@ final class SidePanelPartyTab extends JPanel
 		heading = null;
 		headingSub = null;
 		memberFight = null;
+		memberApplied = null;
 		attacks = null;
 		summary = null;
 	}
@@ -346,10 +412,10 @@ final class SidePanelPartyTab extends JPanel
 		{
 			return "none";
 		}
-		if (r.fight != null)
+		if (panelsOf(r) != null)
 		{
 			// Their Fight panels rebuild themselves as their own structure changes; here only live or after.
-			return r.id + (r.fightLive ? "|live" : "|fight");
+			return r.id + (!r.you && r.fightLive ? "|live" : "|fight");
 		}
 		return r.id + "|b" + r.breakdown.attacks.size() + "." + r.breakdown.summary.size();
 	}
@@ -371,9 +437,15 @@ final class SidePanelPartyTab extends JPanel
 		if (r != null)
 		{
 			memberArea.add(headingCard(r, t));
-			if (r.fight != null)
+			if (r.you && yourLast != null)
+			{
+				memberFight = yourPanels;
+				memberArea.add(memberFight);
+			}
+			else if (r.fight != null)
 			{
 				memberFight = new SidePanelFightTab(actions, folds, true, icons);
+				memberApplied = r.fight;
 				memberFight.apply(r.fight);
 				memberArea.add(memberFight);
 			}
@@ -415,7 +487,7 @@ final class SidePanelPartyTab extends JPanel
 		headingSub = new SidePanelParts.Paragraph(headingSub(r, t), SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL,
 			SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(headingSub);
-		if (r.fight != null && r.fightLive)
+		if (!r.you && r.fight != null && r.fightLive)
 		{
 			card.add(new SidePanelParts.Paragraph(SidePanelMemberFight.LATER_LIVE, SidePanelStyle.MUTED,
 				SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14));
@@ -463,8 +535,9 @@ final class SidePanelPartyTab extends JPanel
 		headingPicture.set(r.avatar, r.colour);
 		heading.set(PanelSnapshot.Text.title(headingTitle(r), SidePanelStyle.VALUE), null, PanelSnapshot.Text.NONE);
 		headingSub.set(headingSub(r, t), SidePanelStyle.MUTED);
-		if (memberFight != null)
+		if (memberFight != null && memberFight != yourPanels && r.fight != null && r.fight != memberApplied)
 		{
+			memberApplied = r.fight;
 			memberFight.apply(r.fight);
 		}
 		else if (attacks != null)
