@@ -745,7 +745,6 @@ public class PvmPerformancePlugin extends Plugin
 		// Turned off and on again, the plugin cannot know what happened in between: Mark of Darkness and Charge read down
 		// until their messages say otherwise (T-026).
 		gearBonuses.resetBuffs("the plugin has just started");
-		markMessageLogged = false;
 		maxHits = new MaxHitCheck(line -> debug.log("%s", line));
 		timelines.setClock(client::getTickCount);
 		// T-135: a boss's hitpoints for its modifiers (Yama's phase 3 from a third), as counted here.
@@ -5750,7 +5749,7 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void handleChatMessage(ChatMessage event)
 	{
-		logMarkMessageOnce(event.getType(), event.getMessage());
+
 		// T-135: the buffs' messages come as SPAM too, as RuneLite's Timers & Buffs takes them: the Mark of Darkness was
 		// never seen at Yama (Eric's 14:02 log, [7572]), so its +50% and accuracy were missing.
 		final boolean game = event.getType() == ChatMessageType.GAMEMESSAGE;
@@ -5770,30 +5769,6 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("%s", buff);
 			combatCalc.invalidateGear();
 		}
-	}
-
-	// T-137: whether this session has logged a message naming the Mark of Darkness.
-	private boolean markMessageLogged;
-
-	/**
-	 * T-137: the first message of the game's (not a player's chat) naming the Mark of Darkness, logged once a session as
-	 * the game sent it: its type and raw text. The Mark was set by T-135's fallback in Eric's 18:00 log ([735], "no
-	 * message seen") with SPAM accepted, so the next log should show what the game sends.
-	 */
-	private void logMarkMessageOnce(ChatMessageType type, String raw)
-	{
-		if (markMessageLogged || !isMarkMessage(type, raw))
-		{
-			return;
-		}
-		markMessageLogged = true;
-		debug.log("MARK MESSAGE (once a session) type %s: \"%s\"", type, raw);
-	}
-
-	static boolean isMarkMessage(ChatMessageType type, String raw)
-	{
-		return raw != null && raw.contains("Mark of Darkness") && (type == ChatMessageType.GAMEMESSAGE
-			|| type == ChatMessageType.SPAM || type == ChatMessageType.ENGINE || type == ChatMessageType.MESBOX);
 	}
 
 	@Subscribe
@@ -6023,7 +5998,10 @@ public class PvmPerformancePlugin extends Plugin
 					final Player self = client.getLocalPlayer();
 					final boolean sameRoom = self != null && self.getInteracting() instanceof NPC
 						&& switchesWithinRoom(current, ((NPC) self.getInteracting()).getId());
-					finalizeFight(false, System.currentTimeMillis(), "looked away before attacking", sameRoom);
+					finalizeFight(false, System.currentTimeMillis(), "looked away before attacking",
+						keepsCountsOnLookAway(sameRoom, currentEncounter != null && !currentEncounter.isEnded()
+							&& currentEncounter.getFights().contains(current), current.getGroupName() != null,
+							current.isMonsterRoom()));
 				}
 			}
 			else
@@ -7308,6 +7286,18 @@ public class PvmPerformancePlugin extends Plugin
 			fight.getSumExpectedAverageHit(), variance < 0 ? "unknown" : String.format("%.1f", Math.sqrt(variance)),
 			Double.isNaN(z) ? "unknown" : String.format("%+.2f", z),
 			Double.isNaN(z) ? "unknown" : String.format("%.1f%%", 100 * DamageMoments.phi(z)));
+	}
+
+	/**
+	 * T-137: whether an unfought fight ended by looking away keeps what the room's targets have left. Yes when the player
+	 * is already aimed at another of the room's targets (T-021), and now also while it is a part of a boss's room that
+	 * is still open: its boss's count is the room's. In Eric's 18:00 log (KC 353) a Void Flare killed by a cast that
+	 * booked nothing ended this way twice with nothing aimed at ([1980], [2407]), and each time Yama's count started
+	 * again: his kill reconciled 124 of 2500. A monster run (T-089) is left as it was.
+	 */
+	static boolean keepsCountsOnLookAway(boolean aimedInRoom, boolean inOpenRoom, boolean grouped, boolean monsterRun)
+	{
+		return aimedInRoom || inOpenRoom && grouped && !monsterRun;
 	}
 
 	private void finalizeFight(boolean died, long now, String reason)

@@ -2,7 +2,6 @@ package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -12,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
-import net.runelite.api.ChatMessageType;
 import net.runelite.api.Skill;
 import net.runelite.api.gameval.NpcID;
 import org.junit.Test;
@@ -153,41 +151,20 @@ public class YamaFollowUpsTest
 		assertEquals(14, excused);
 	}
 
-	// ---- 5. The MOD line and the Mark's message ----
+	// ---- 6d. Yama's count across a flare looked away from ----
 
 	@Test
-	public void theModLineComesWhenWhatAppliesChanges()
+	public void aFlareLookedAwayFromKeepsYamasCount()
 	{
-		final List<BossRules.ModifierRule> notMagic = new ArrayList<>();
-		final BossRules.ModifierRule rule = new BossRules.ModifierRule();
-		rule.name = "tank not using magic";
-		rule.tankMagic = false;
-		rule.magicDefenceChange = -30;
-		notMagic.add(rule);
-		final ModifierTracker.Situation at99 = new ModifierTracker.Situation(0.99, false);
-		final ModifierTracker.Situation at98 = new ModifierTracker.Situation(0.98, false);
-		// [762] and [766]: the same modifier at 99% and 98%, printed twice.
-		assertEquals(DamageModifiers.situationKey("you", at99, notMagic), DamageModifiers.situationKey("you", at98, notMagic));
-		assertNotEquals(DamageModifiers.situationKey("you", at99, notMagic),
-			DamageModifiers.situationKey("you", new ModifierTracker.Situation(0.99, true), notMagic));
-		assertNotEquals(DamageModifiers.situationKey("you", at99, notMagic),
-			DamageModifiers.situationKey("no player", at99, notMagic));
-		assertNotEquals(DamageModifiers.situationKey("you", at99, notMagic),
-			DamageModifiers.situationKey("you", at99, Collections.emptyList()));
-		// The share stays in the line.
-		assertEquals("MOD Yama: targeting you (not magic), 98% of its hitpoints left: tank not using magic (magic defence -30)",
-			DamageModifiers.situationLine("Yama", "you", at98, notMagic));
-	}
-
-	@Test
-	public void theMarksMessageIsLoggedFromTheGameNotFromChat()
-	{
-		assertTrue(PvmPerformancePlugin.isMarkMessage(ChatMessageType.GAMEMESSAGE,
-			"You have placed a Mark of Darkness upon yourself."));
-		assertTrue(PvmPerformancePlugin.isMarkMessage(ChatMessageType.SPAM, "<col=ef1020>Mark of Darkness</col>"));
-		assertFalse(PvmPerformancePlugin.isMarkMessage(ChatMessageType.PUBLICCHAT, "Mark of Darkness?"));
-		assertFalse(PvmPerformancePlugin.isMarkMessage(ChatMessageType.GAMEMESSAGE, "Oh dear, you are dead!"));
-		assertFalse(PvmPerformancePlugin.isMarkMessage(ChatMessageType.GAMEMESSAGE, null));
+		// KC 353 of the 18:00 log: a flare killed by a cast that booked nothing ended "looked away before attacking" with
+		// nothing aimed at ([1980], [2407]), and Yama's count started again each time: his kill reconciled 124 of 2500.
+		assertTrue(PvmPerformancePlugin.keepsCountsOnLookAway(false, true, true, false));
+		// Aimed at another of the room's targets: kept, as before (T-021).
+		assertTrue(PvmPerformancePlugin.keepsCountsOnLookAway(true, false, false, false));
+		// A boss standing alone, a room already over, or a monster run: wiped, as before.
+		assertFalse(PvmPerformancePlugin.keepsCountsOnLookAway(false, true, false, false));
+		assertFalse(PvmPerformancePlugin.keepsCountsOnLookAway(false, false, true, false));
+		assertFalse(PvmPerformancePlugin.keepsCountsOnLookAway(false, true, true, true));
 	}
 
 	// ---- 6a. The Judge's casts ----

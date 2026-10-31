@@ -320,31 +320,14 @@ class DamageModifiers
 		final net.runelite.api.Actor target = npc.getInteracting();
 		final String who = !(target instanceof Player) ? "no player" : target == client.getLocalPlayer() ? "you"
 			: "another player";
-		// T-137: printed when what applies changes - who it targets, the tank's style, the modifiers - not as its hitpoints
-		// move: at Yama the line came on nearly every attack (161 in Eric's 18:00 log). The share stays in the line.
-		final String key = situationKey(who, s, mods);
-		if (!key.equals(situationSeen.put(npc.getIndex(), key)))
+		final String line = situationLine(npc.getName(), who, s, mods);
+		if (!line.equals(situationSeen.put(npc.getIndex(), line)))
 		{
-			log.accept(situationLine(npc.getName(), who, s, mods) + " at tick " + client.getTickCount());
+			log.accept(line + " at tick " + client.getTickCount());
 		}
 	}
 
-	/** T-137: what decides whether the MOD line is printed again: the line less its hitpoints share. */
-	static String situationKey(String who, ModifierTracker.Situation s, List<BossRules.ModifierRule> mods)
-	{
-		return who + "|" + s.tankMagic + "|" + applied(mods);
-	}
-
 	static String situationLine(String boss, String who, ModifierTracker.Situation s, List<BossRules.ModifierRule> mods)
-	{
-		final String applied = applied(mods);
-		return String.format("MOD %s: targeting %s%s, %s: %s", boss, who,
-			s.tankMagic == null ? "" : s.tankMagic ? " (magic)" : " (not magic)",
-			s.hpShare < 0 ? "hitpoints unknown" : String.format("%.0f%% of its hitpoints left", 100 * s.hpShare),
-			applied.isEmpty() ? "none" : applied);
-	}
-
-	private static String applied(List<BossRules.ModifierRule> mods)
 	{
 		final StringBuilder applied = new StringBuilder();
 		for (BossRules.ModifierRule m : mods)
@@ -362,7 +345,10 @@ class DamageModifiers
 				}
 			}
 		}
-		return applied.toString();
+		return String.format("MOD %s: targeting %s%s, %s: %s", boss, who,
+			s.tankMagic == null ? "" : s.tankMagic ? " (magic)" : " (not magic)",
+			s.hpShare < 0 ? "hitpoints unknown" : String.format("%.0f%% of its hitpoints left", 100 * s.hpShare),
+			applied.length() == 0 ? "none" : applied.toString());
 	}
 
 	// What the player's melee distance from a boss with an outOfMelee rule was on each recent tick, and the modifiers it
