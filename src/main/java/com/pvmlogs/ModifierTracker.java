@@ -381,6 +381,17 @@ final class ModifierTracker
 	List<BossRules.ModifierRule> applying(int npcIndex, BossRules.DamageModifierRules rules, int npcId, String style,
 		int throwTick, int landTick, boolean behind, InsideCheck insideNpc)
 	{
+		return applying(npcIndex, rules, npcId, style, throwTick, landTick, behind, insideNpc, null);
+	}
+
+	/**
+	 * As above, with whether the player stands in the boss's melee distance
+	 * (T-120); null when unknown, and then no modifier with an
+	 * {@code outOfMelee} condition applies.
+	 */
+	List<BossRules.ModifierRule> applying(int npcIndex, BossRules.DamageModifierRules rules, int npcId, String style,
+		int throwTick, int landTick, boolean behind, InsideCheck insideNpc, Boolean inMelee)
+	{
 		final List<BossRules.ModifierRule> out = new ArrayList<>(2);
 		for (BossRules.ModifierRule m : modifiers(rules))
 		{
@@ -388,7 +399,8 @@ final class ModifierTracker
 			{
 				continue;
 			}
-			if (m.state != null && !takes(npcIndex, m.state, throwTick, landTick))
+			if (m.state != null && !(Boolean.TRUE.equals(m.stateAtThrow) ? isOpen(npcIndex, m.state, throwTick)
+				: takes(npcIndex, m.state, throwTick, landTick)))
 			{
 				continue;
 			}
@@ -401,6 +413,10 @@ final class ModifierTracker
 				continue;
 			}
 			if (m.insideNpc != null && !anyInside(m.insideNpc, insideNpc))
+			{
+				continue;
+			}
+			if (m.outOfMelee != null && (inMelee == null || m.outOfMelee == inMelee))
 			{
 				continue;
 			}
@@ -539,6 +555,25 @@ final class ModifierTracker
 			}
 		}
 		return (int) Math.max(0, r);
+	}
+
+	/**
+	 * The player's attack roll after the modifiers (T-120): each {@code attackRoll}
+	 * whose {@code attackTypes} take this one multiplies it, rounded down, as the
+	 * DPS calc multiplies the ranged roll against the Royal Titans, last.
+	 */
+	static int attackRoll(List<BossRules.ModifierRule> mods, String attackType, int roll)
+	{
+		long r = roll;
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.attackRoll != null && m.attackRoll.length == 2 && m.attackRoll[1] > 0
+				&& (m.attackTypes == null || attackType != null && m.attackTypes.contains(attackType)))
+			{
+				r = r * m.attackRoll[0] / m.attackRoll[1];
+			}
+		}
+		return (int) Math.max(0, Math.min(Integer.MAX_VALUE, r));
 	}
 
 	/** The modifiers the live figures may show (T-087): all but those marked {@code hiddenLive}. */
