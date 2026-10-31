@@ -287,4 +287,23 @@ public interface PvmPerformanceConfig extends Config
 	{
 		return false;
 	}
+
+	/**
+	 * T-124: send the player's own figures to their RuneLite party, for the
+	 * side panel's Party card. On by default, as RuneLite's DPS Counter shares
+	 * when it's on. Off, nothing is sent; others' figures are still shown.
+	 */
+	@ConfigItem(
+		keyName = "shareWithParty",
+		name = "Share with my RuneLite party",
+		description = "While you're in a RuneLite party, send your own damage, expected damage, Luck, Execution and attacks "
+			+ "to the party, so members with this plugin can compare. Only through RuneLite's party, never anywhere else, "
+			+ "and never your name, gear, location or history. Off: nothing is sent; others' numbers are still shown",
+		position = 2,
+		section = DATA_SECTION
+	)
+	default boolean shareWithParty()
+	{
+		return true;
+	}
 }

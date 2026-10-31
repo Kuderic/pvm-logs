@@ -107,7 +107,7 @@ public class SettingsLayoutTest
 			"overlayHoldSeconds",
 			"overlayCovers", "overlayLuck", "overlayParts", "overlayDetails",
 			"panelLive", "panelCharts", "panelLargerText", "panelSmoothFont",
-			"debugLogging"), keys());
+			"debugLogging", "shareWithParty"), keys());
 	}
 
 	@Test
@@ -138,6 +138,8 @@ public class SettingsLayoutTest
 		assertEquals("Larger text", names.get("panelLargerText"));
 		assertEquals("Smooth font", names.get("panelSmoothFont"));
 		assertEquals("Debug logging", names.get("debugLogging"));
+		// T-124.
+		assertEquals("Share with my RuneLite party", names.get("shareWithParty"));
 		// Eric's standing rule: no "exp" in a label.
 		for (String name : names.values())
 		{
@@ -169,6 +171,8 @@ public class SettingsLayoutTest
 		assertFalse(d.panelLargerText());
 		assertFalse(d.panelSmoothFont());
 		assertFalse(d.debugLogging());
+		// T-124: on, as RuneLite's DPS Counter shares when it's on (flagged for Eric).
+		assertTrue(d.shareWithParty());
 	}
 
 	@Test
