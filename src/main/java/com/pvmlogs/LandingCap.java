@@ -29,11 +29,21 @@ final class LandingCap
 	 * The attack's expected mean and variance capped at {@code capNow}, the
 	 * hitpoints left just before it landed, from figures capped at
 	 * {@code capThen}, those left when it was thrown; null when nothing changes:
-	 * either is unknown (0 or less), or no less is left now.
+	 * either is unknown (less than 0, or {@code capThen} 0), or no less is left
+	 * now. {@code capNow} 0, nothing left, caps it at nothing (T-115).
 	 */
 	static double[] recap(int maxHit, double chances, double mean, double variance, int capThen, int capNow)
 	{
-		if (capThen <= 0 || capNow <= 0 || capNow >= capThen || mean < 0)
+		if (mean < 0)
+		{
+			return null;
+		}
+		if (capNow == 0)
+		{
+			// Nothing left (T-115): dead before it landed, so it can deal nothing, whatever its figures were read at.
+			return mean > 0 || variance > 0 ? new double[]{0, 0} : null;
+		}
+		if (capThen <= 0 || capNow < 0 || capNow >= capThen)
 		{
 			return null;
 		}

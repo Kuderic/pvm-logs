@@ -456,6 +456,10 @@ public class PvmPerformancePlugin extends Plugin
 	// The hitpoints each npc had just before the first of my splats on it this tick (T-103): {tick, left}. A melee blow is
 	// booked after its splat has been counted, and a shot resolved at the tick's end too.
 	private final Map<Integer, int[]> capBeforeLanding = new HashMap<>();
+	// T-115: the first tick the game showed each npc dead ({@code isDead()}), so an attack landing on a later tick is capped
+	// at nothing: a thrall's 2 took an araxyte's last hitpoints, and the axe swing that landed the tick after was expected
+	// at 23 (06:38 log, [4230]). Cleared as the npc goes and its index can be reused.
+	private final Map<Integer, Integer> deadSince = new HashMap<>();
 	private final Map<Integer, double[]> expectedByTick = new HashMap<>();
 	// T-107: the same figures, each tick, for the npc the player is attacking when it isn't the shown fight's target - the
 	// first shot at an add before its fight opens. The npc's index rides in the slot after the row's own.
@@ -3213,11 +3217,51 @@ public class PvmPerformancePlugin extends Plugin
 		}
 	}
 
-	/** What this npc has left, for capping an attack (T-103): as the calculator's overkill cap reads it; -1 unknown. */
+	/**
+	 * What this npc has left, for capping an attack (T-103): as the calculator's overkill cap reads it; -1 unknown. 0
+	 * only when the count is at 0 and the game showed it dead on an earlier tick (T-115).
+	 */
 	private int capLeft(int npcIndex)
 	{
-		final int left = npcIndex < 0 ? -1 : health.capRemaining(npcIndex, client.getTickCount());
-		return left > 0 ? left : -1;
+		final int tick = client.getTickCount();
+		if (npcIndex < 0)
+		{
+			return -1;
+		}
+		noteDead(client.getTopLevelWorldView().npcs().byIndex(npcIndex), tick);
+		return capLeft(health.capRemaining(npcIndex, tick), deadSince.get(npcIndex), tick);
+	}
+
+	/**
+	 * What is left for a cap, from the count and when the game first showed the
+	 * npc dead (T-115). Above 0, the count. At 0, nothing - but only once it was
+	 * dead before this tick: the game shows an npc dead on its killing hit's
+	 * tick (T-100), and a splat of mine landing that same tick may be the
+	 * killing hit, or one the game applied before the thrall's that the count
+	 * saw first. Otherwise unknown, as the calculator's overkill cap reads a
+	 * count that has run out: something it didn't see may have been at work.
+	 */
+	static int capLeft(int counted, Integer deadTick, int tick)
+	{
+		if (counted > 0)
+		{
+			return counted;
+		}
+		return counted == 0 && deadTick != null && deadTick < tick ? 0 : -1;
+	}
+
+	/** Notes the first tick an npc is seen dead (T-115). */
+	private void noteDead(NPC npc, int tick)
+	{
+		if (npc == null || !npc.isDead())
+		{
+			return;
+		}
+		deadSince.putIfAbsent(npc.getIndex(), tick);
+		if (deadSince.size() > 64)
+		{
+			deadSince.values().removeIf(t -> tick - t > 100);
+		}
 	}
 
 	/** Notes what this npc had just before the first of my splats on it this tick (T-103). */
@@ -4447,6 +4491,7 @@ public class PvmPerformancePlugin extends Plugin
 				client.getTickCount()));
 		}
 		closeOnDespawn(npc);
+		deadSince.remove(npc.getIndex());
 		// After the fight on it is closed. Whatever was fighting it: a death a party member landed counts as well.
 		if (npc.isDead())
 		{
@@ -5300,6 +5345,8 @@ public class PvmPerformancePlugin extends Plugin
 		// Before anything asks for the target's stats: the bar decides which version of a boss this is, and what it has left
 		// moves Vardorvis's defence.
 		readHealthBar();
+		// The target seen dead by the tick's end, for a blow landing next tick (T-115).
+		noteDead(targetNpc, client.getTickCount());
 		logTaskMismatch(combatCalc.onSlayerTick(client.getTickCount()));
 		// First: the tick's experience has all arrived by now, and none of the splats it pays for can have.
 		trackThrallAndXp();
@@ -5484,6 +5531,7 @@ public class PvmPerformancePlugin extends Plugin
 			lastPlayerPoint = null;
 			countedProjectiles.clear();
 			capBeforeLanding.clear();
+			deadSince.clear();
 			taken.clear();
 			targetSeen.clear();
 			recentTiles.clear();
