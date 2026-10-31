@@ -127,6 +127,22 @@ class Encounter
 	 */
 	boolean closesOnDeathOf(int npcId, int npcIndex, boolean fell)
 	{
+		final boolean closes = wouldCloseOnDeathOf(npcId, npcIndex, fell);
+		final EncounterGroup.DeathClose rule = EncounterGroup.deathClose(npcId);
+		if (!isEnded() && holds(npcId) && rule != null && rule.counts(npcId, fell))
+		{
+			partsDown.add(npcIndex);
+		}
+		return closes;
+	}
+
+	/**
+	 * Whether {@link #closesOnDeathOf} would close the room for this part going
+	 * down, without counting it (T-121): asked before the fight on it is closed,
+	 * to know whether the room goes on and the other parts' counts with it.
+	 */
+	boolean wouldCloseOnDeathOf(int npcId, int npcIndex, boolean fell)
+	{
 		if (isEnded() || !holds(npcId))
 		{
 			return false;
@@ -136,8 +152,7 @@ class Encounter
 		{
 			return false;
 		}
-		partsDown.add(npcIndex);
-		return partsDown.size() >= rule.deaths;
+		return partsDown.size() + (partsDown.contains(npcIndex) ? 0 : 1) >= rule.deaths;
 	}
 
 	boolean isEnded()
