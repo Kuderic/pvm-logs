@@ -62,6 +62,11 @@ import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.events.PartyChanged;
+import net.runelite.client.party.PartyMember;
+import net.runelite.client.party.PartyService;
+import net.runelite.client.party.WSClient;
+import net.runelite.client.party.events.UserPart;
 import net.runelite.api.events.NpcChanged;
 import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.events.OverheadTextChanged;
@@ -271,6 +276,13 @@ public class PvmPerformancePlugin extends Plugin
 	// and MonsterStatsProvider's choice of version and hitpoints-scaled defence. See TargetHealth.
 	@Inject
 	private TargetHealth health;
+
+	// T-124: the RuneLite party, for sharing the player's own figures with it and reading the others'.
+	@Inject
+	private PartyService partyService;
+
+	@Inject
+	private WSClient wsClient;
 
 	// The boss health bar as last read, so a change is logged once rather than every tick.
 	private long lastHealthBarReading = Long.MIN_VALUE;
@@ -623,6 +635,15 @@ public class PvmPerformancePlugin extends Plugin
 	// The room the fights add up to, and the raid the rooms add up to. Both are views over the fights, so the three widths
 	// cannot disagree.
 	private Encounter currentEncounter;
+	// T-124: what the party's Luck vs Skill players have shared (the side panel's Party card, T-125); the room last shared
+	// live, whether its summary has gone, the tick the last live update went, and the dev loopback's state.
+	private final PartyBoard partyBoard = new PartyBoard();
+	private Encounter partyRoom;
+	private boolean partyRoomEndSent;
+	private int partyLastSent = Integer.MIN_VALUE;
+	private boolean partyEcho;
+	private volatile boolean partyEchoSeen;
+	private int partySent;
 	// The last room with something in it, kept so a finished kill stays readable while the next room is still empty. See
 	// getDisplayEncounter.
 	private Encounter lastFinishedEncounter;
@@ -737,6 +758,14 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			debug.start();
 		}
+		// T-124: the party message, and the dev loopback when the dev launcher asks for it (never on a hub build).
+		wsClient.registerMessage(LuckVsSkillUpdate.class);
+		partyEcho = PartyShare.echoEnabled(System.getProperty(PartyShare.ECHO_PROPERTY), BuildInfo.describe());
+		if (partyEcho)
+		{
+			debug.log("PARTY loopback on (%s): your own updates are shown back as \"%s\"", PartyShare.ECHO_PROPERTY,
+				PartyBoard.ECHO_NAME);
+		}
 	}
 
 	/**
@@ -759,6 +788,9 @@ public class PvmPerformancePlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		wsClient.unregisterMessage(LuckVsSkillUpdate.class);
+		partyBoard.clear();
+		partyRoom = null;
 		overlayManager.remove(overlay);
 		overlayManager.remove(loadoutOverlay);
 		clientToolbar.removeNavigation(navButton);
@@ -4148,6 +4180,133 @@ public class PvmPerformancePlugin extends Plugin
 	 * so the weapon's own next attack is due when it was, or on the next tick
 	 * where it was already free.
 	 */
+	/**
+	 * T-124: the player's own figures to the party, once a tick at most: a live
+	 * update every {@link PartyShare#INTERVAL_TICKS} ticks while a fight in a
+	 * boss's room runs, and the room's summary once it has ended. Only in a
+	 * party and with the setting on; a monster run isn't shared (it has no Luck
+	 * or Execution).
+	 */
+	private void shareWithParty()
+	{
+		if (!PartyShare.mayShare(config.shareWithParty(), partyService.isInParty()))
+		{
+			return;
+		}
+		if (partyRoom != null && partyRoom.isEnded() && !partyRoomEndSent)
+		{
+			partyRoomEndSent = true;
+			sendToParty(PartyShare.build(LuckVsSkillUpdate.ROOM_END, partyRoom, roomAttacks(partyRoom), raidNumber(partyRoom)));
+		}
+		final Encounter room = currentEncounter;
+		final int tick = client.getTickCount();
+		if (room == null || room.isEnded() || room.isMonsterRoom() || !room.hasAttempts() || current == null
+			|| current.isEnded() || !PartyShare.due(tick, partyLastSent))
+		{
+			return;
+		}
+		if (room != partyRoom)
+		{
+			partyRoom = room;
+			partyRoomEndSent = false;
+		}
+		partyLastSent = tick;
+		sendToParty(PartyShare.build(LuckVsSkillUpdate.LIVE, room, roomAttacks(room), raidNumber(room)));
+	}
+
+	private void sendToParty(LuckVsSkillUpdate update)
+	{
+		partyService.send(update);
+		partySent++;
+		if (debug.isOn())
+		{
+			debug.log("PARTY sent %s %s: %d bytes, %d rows", update.isLive() ? "live" : "room end", update.r,
+				gson.toJson(update).length(), update.rows().size());
+		}
+		// The loopback, when the server sends nothing back: your own update, fed to the board here.
+		if (partyEcho && !partyEchoSeen && partySent > PartyShare.ECHO_WAIT)
+		{
+			final PartyMember me = partyService.getLocalMember();
+			if (partySent == PartyShare.ECHO_WAIT + 1)
+			{
+				debug.log("PARTY loopback: no echo from the party server after %d updates, so a local copy instead",
+					PartyShare.ECHO_WAIT);
+			}
+			partyBoard.accept(me == null ? -1 : me.getMemberId(), update, PartyBoard.LOCAL_NAME, System.currentTimeMillis());
+		}
+	}
+
+	// Every attack of the room's fights, as their timelines have them (none with Charts off).
+	private List<FightTimeline.Attack> roomAttacks(Encounter room)
+	{
+		final List<FightTimeline.Attack> attacks = new ArrayList<>();
+		for (Fight fight : room.getFights())
+		{
+			final FightTimeline line = timelines.of(fight);
+			if (line != null)
+			{
+				attacks.addAll(line.attacks());
+			}
+		}
+		return attacks;
+	}
+
+	// The plugin's own number for the room's raid, grouping its rooms on the board; 0 outside a raid.
+	private static int raidNumber(Encounter room)
+	{
+		return room.getFights().isEmpty() ? 0 : room.getFights().get(0).getRaidId();
+	}
+
+	/**
+	 * T-124: another member's update, from RuneLite's websocket thread (the
+	 * board is synchronized). Your own echo is ignored, as RuneLite's DPS
+	 * Counter ignores it, unless the dev loopback is on.
+	 */
+	@Subscribe
+	public void onLuckVsSkillUpdate(LuckVsSkillUpdate update)
+	{
+		final PartyMember me = partyService.getLocalMember();
+		final boolean own = me != null && me.getMemberId() == update.getMemberId();
+		if (!PartyShare.keep(own, partyEcho))
+		{
+			return;
+		}
+		if (own && !partyEchoSeen)
+		{
+			partyEchoSeen = true;
+			debug.log("PARTY loopback: the party server echoes your own updates");
+		}
+		partyBoard.accept(update.getMemberId(), update, own ? PartyBoard.ECHO_NAME : null, System.currentTimeMillis());
+	}
+
+	@Subscribe
+	public void onPartyChanged(PartyChanged event)
+	{
+		partyBoard.clear();
+		partyRoom = null;
+		partyEchoSeen = false;
+		partySent = 0;
+	}
+
+	@Subscribe
+	public void onUserPart(UserPart event)
+	{
+		partyBoard.part(event.getMemberId());
+	}
+
+	/** T-124: what the party has shared, for the side panel's Party card (T-125). Safe from any thread. */
+	PartyBoard getPartyBoard()
+	{
+		return partyBoard;
+	}
+
+	/** T-124: the party's display name for a member, or null when the party hasn't said. */
+	String partyMemberName(long memberId)
+	{
+		final PartyMember member = partyService.getMemberById(memberId);
+		return member == null ? null : member.getDisplayName();
+	}
+
 	/** The Royal Titans' elementals, each of whose deaths to the player brings the next attack a tick sooner (T-121). */
 	static final Set<Integer> HASTENS_ON_KILL = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
 		NpcID.RT_SUMMON_ELEMENTAL_FIRE, NpcID.RT_SUMMON_ELEMENTAL_ICE)));
@@ -5534,6 +5693,9 @@ public class PvmPerformancePlugin extends Plugin
 				}
 			}
 		}
+
+		// After the tick's bookings, before the panel reads the board (T-124).
+		shareWithParty();
 
 		// Last, after the tick's bookings (T-033): the side panel builds its snapshot here, only while it's open.
 		if (panel != null)
