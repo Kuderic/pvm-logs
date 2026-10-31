@@ -70,6 +70,10 @@ class Fight
 	// player's; not another player's either, so the solo tests stay solo. 0 on a fight saved before, whose room damage
 	// is in othersDamage.
 	private int roomDamage;
+	// T-132: the player was in a RuneLite party at some tick of this fight, so the side panel's label reads "party"
+	// rather than "solo" or "group". Being in a party isn't fighting together: "kills like this" still go by othersDamage
+	// (LedgerHistory.Like). False on a fight saved before.
+	private boolean inParty;
 	// Splats of a type this plugin does not know, counted against the target's health and logged by type so they can be
 	// identified. Never the player's.
 	private int unclassifiedDamage;
@@ -379,6 +383,12 @@ class Fight
 	void recordHeal(int amount)
 	{
 		healed += Math.max(0, amount);
+	}
+
+	/** T-132: the player is in a RuneLite party this tick. */
+	void markInParty()
+	{
+		inParty = true;
 	}
 
 	/** Another player's hit on the target. */

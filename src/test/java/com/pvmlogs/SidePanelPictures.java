@@ -1629,6 +1629,24 @@ public final class SidePanelPictures
 					null, scale));
 				write(dir, "b-member-selected-after-their-room", scale, party(SidePanelPartyExamples.toaYouAndBrindle(),
 					22L, -1, null, scale));
+				// T-132: the tint options. The default: the area behind the member's part toward their colour, yours plain.
+				SidePanelPartyTab.tintYours = true;
+				write(dir, "a2-option-yours-tinted-too", scale, party(SidePanelPartyExamples.toaYouAndBrindle(), null, -1,
+					null, scale));
+				SidePanelPartyTab.tintYours = false;
+				SidePanelPartyTab.tint = SidePanelPartyTab.Tint.CARDS;
+				write(dir, "b2-option-cards-tinted", scale, party(SidePanelPartyExamples.toaYouAndBrindle(), 22L, -1, null,
+					scale));
+				SidePanelPartyTab.tintYours = true;
+				write(dir, "a3-option-cards-tinted-yours-too", scale, party(SidePanelPartyExamples.toaYouAndBrindle(), null,
+					-1, null, scale));
+				SidePanelPartyTab.tintYours = false;
+				SidePanelPartyTab.tint = SidePanelPartyTab.Tint.AREA;
+				// T-132: a member's Damage card on adds, from her room message.
+				SidePanelFightTab.useTarget(1);
+				write(dir, "k-member-damage-on-adds", scale, party(SidePanelPartyExamples.araxxorWithAdds(), 22L, -1, null,
+					scale));
+				SidePanelFightTab.resetTarget();
 				write(dir, "c-member-selected-mid-fight", scale, party(SidePanelPartyExamples.tobQuillonLive(), 31L, 120,
 					null, scale));
 				write(dir, "d-cox-8-one-selected", scale, party(SidePanelPartyExamples.cox(), 51L, -1, null, scale));

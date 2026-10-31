@@ -82,6 +82,15 @@ public final class LuckVsSkillRoom extends PartyMemberMessage
 		Drain dr;
 		List<Weapon> w;
 		Chart c;
+		/**
+		 * T-132: the Damage card's {@code boss · adds · all} switch: the boss-only and adds-only parts, each as a Fight of
+		 * its own (its figures, other damage, weapon rows and chart). Add-only: both null on a room without adds, and from
+		 * a sender before T-132, which shows no switch.
+		 */
+		Fight b;
+		Fight a;
+		/** T-132, in a part: none of its fights scored (Zulrah's snakelings). */
+		boolean ns;
 
 		Fight()
 		{

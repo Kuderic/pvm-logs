@@ -4244,7 +4244,8 @@ public class PvmPerformancePlugin extends Plugin
 			partyRoomEndSent = true;
 			sendToParty(PartyShare.build(LuckVsSkillUpdate.ROOM_END, partyRoom, roomAttacks(partyRoom), raidNumber(partyRoom)));
 			// T-128: the room's Fight tab, as this player's own panel draws it.
-			sendRoomToParty(SidePanelMemberFight.message(partyRoom, FightTimeline.room(partyRoom, timelines),
+			// T-132: each part's timeline too, for the Damage card's boss · adds · all switch.
+			sendRoomToParty(SidePanelMemberFight.message(partyRoom, r -> FightTimeline.room(r, timelines),
 				raidNumber(partyRoom), monsterStats == null ? null : monsterStats.rules()));
 		}
 		final Encounter room = currentEncounter;
@@ -4350,6 +4351,10 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final PartyMember me = partyService.getLocalMember();
 		final boolean own = me != null && me.getMemberId() == room.getMemberId();
+		// T-132: the room message's size as it arrives, so the loopback shows it gets through the party server (whose
+		// limit isn't public). No name: "a member".
+		debug.log("PARTY got room fight %s: %d bytes, from %s", room.r, gson.toJson(room).length(),
+			!own ? "a member" : partyEcho ? "the echo" : "yourself (not shown)");
 		if (!PartyShare.keep(own, partyEcho))
 		{
 			return;
@@ -5779,6 +5784,12 @@ public class PvmPerformancePlugin extends Plugin
 						"idle " + (idle / 600L) + " ticks with no damage either way");
 				}
 			}
+		}
+
+		// T-132: the fight was fought in a RuneLite party (the side panel's "party" label), kept with the kill.
+		if (current != null && !current.isEnded() && partyService != null && partyService.isInParty())
+		{
+			current.markInParty();
 		}
 
 		// After the tick's bookings, before the panel reads the board (T-124).

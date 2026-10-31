@@ -32,6 +32,8 @@ final class SidePanelStyle
 	static final Color SECONDARY = ColorScheme.LIGHT_GRAY_COLOR;
 	/** New (spec): the least important hints. Not on selected rows: use Secondary there. */
 	static final Color MUTED = new Color(0x909090);
+	/** T-132: muted text on a tinted background (the Party tab's selected member), for the plain panel's contrast. */
+	static final Color MUTED_ON_TINT = new Color(0x9C9C9C);
 	static final Color BETTER = new Color(LedgerRows.Colour.BETTER.rgb);
 	static final Color COST = new Color(LedgerRows.Colour.COST.rgb);
 	static final Color WARNING = new Color(LedgerRows.Colour.WARNING.rgb);
