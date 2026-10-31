@@ -72,6 +72,8 @@ final class SidePanelMemberFight
 		in.avoidableAttacks = ended ? SidePanelModel.avoidableAttacks(rules, room.getFights())
 			: Collections.<String>emptySet();
 		in.version = rules == null ? null : SidePanelModel.versionName(rules, room.getFights(), in.maxHp);
+		// T-131: the room damage's sources and split, as the sender's own panel fills them (T-109 left them unsent).
+		SidePanelModel.fillRoomDamageSources(in, Collections.singletonList(room), rules);
 		if (view != null && view.states.length > 0)
 		{
 			in.view = view;
@@ -97,6 +99,7 @@ final class SidePanelMemberFight
 		f.killed = in.killed;
 		f.rd = in.roomDamage;
 		f.rds = in.roomDamageSources.isEmpty() ? null : new ArrayList<>(in.roomDamageSources);
+		f.rdx = roomSourcesToWire(in.roomDamageSplit);
 		f.hp = in.maxHp;
 		f.solo = in.solo;
 		f.unscored = in.unscored;
@@ -128,6 +131,43 @@ final class SidePanelMemberFight
 			f.a = part(in.addsOnly);
 		}
 		return f;
+	}
+
+	/** T-131: the room damage's rows, for the wire; null for one total. */
+	static List<LuckVsSkillRoom.RoomSource> roomSourcesToWire(List<RoomDamage.Source> split)
+	{
+		if (split == null || split.isEmpty())
+		{
+			return null;
+		}
+		final List<LuckVsSkillRoom.RoomSource> out = new ArrayList<>(split.size());
+		for (RoomDamage.Source s : split)
+		{
+			final LuckVsSkillRoom.RoomSource r = new LuckVsSkillRoom.RoomSource();
+			r.l = s.label;
+			r.d = s.damage;
+			r.t = s.tip;
+			out.add(r);
+		}
+		return out;
+	}
+
+	/** T-131: and back; a row without a label is dropped, and none at all is one total. */
+	static List<RoomDamage.Source> roomSourcesFromWire(List<LuckVsSkillRoom.RoomSource> sent)
+	{
+		if (sent == null)
+		{
+			return null;
+		}
+		final List<RoomDamage.Source> out = new ArrayList<>(sent.size());
+		for (LuckVsSkillRoom.RoomSource r : sent)
+		{
+			if (r != null && r.l != null && !r.l.isEmpty() && r.d > 0)
+			{
+				out.add(new RoomDamage.Source(r.l, r.d, r.t));
+			}
+		}
+		return out.isEmpty() ? null : out;
 	}
 
 	/** T-132: one side of the switch: its figures, its other damage, its weapon rows and chart. */
@@ -347,6 +387,7 @@ final class SidePanelMemberFight
 		in.killed = f.killed;
 		in.roomDamage = f.rd;
 		in.roomDamageSources = f.rds == null ? Collections.<String>emptyList() : f.rds;
+		in.roomDamageSplit = roomSourcesFromWire(f.rdx);
 		in.maxHp = f.hp;
 		in.solo = f.solo;
 		in.unscored = f.unscored;

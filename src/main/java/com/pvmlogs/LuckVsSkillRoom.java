@@ -58,6 +58,11 @@ public final class LuckVsSkillRoom extends PartyMemberMessage
 		/** T-106's room damage on the boss, and its sources' names. */
 		int rd;
 		List<String> rds;
+		/**
+		 * T-131: the room damage by source, Details' rows: label, damage and tooltip each. Add-only: null on a room
+		 * with one total, and from a sender before T-131, whose {@link #rd} shows as one {@code room dmg} row.
+		 */
+		List<RoomSource> rdx;
 		int hp;
 		/** Solo: null for unknown. */
 		Boolean solo;
@@ -93,6 +98,18 @@ public final class LuckVsSkillRoom extends PartyMemberMessage
 		boolean ns;
 
 		Fight()
+		{
+		}
+	}
+
+	/** T-131: one room-damage source's row: its label, its damage and its tooltip (null for the generic one). */
+	static final class RoomSource
+	{
+		String l;
+		int d;
+		String t;
+
+		RoomSource()
 		{
 		}
 	}

@@ -571,7 +571,7 @@ class PvmPerformancePanel extends PluginPanel
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
 		// T-109: what the room's damage was, named by the boss rules.
-		in.roomDamageSources = SidePanelModel.roomDamageSources(java.util.Collections.singletonList(room), rules());
+		SidePanelModel.fillRoomDamageSources(in, java.util.Collections.singletonList(room), rules());
 		if (in.run)
 		{
 			// T-095: the run's own clock, the overlay's title's.

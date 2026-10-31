@@ -246,6 +246,9 @@ class BossRules
 		/** A damage-modifier state that must be open on the boss (T-087's states: Araxxor's "enraged"); any when left out. */
 		String state;
 		String source;
+		/** T-131: its row's short name in Details ({@code hit himself}), and the row's tooltip. */
+		String label;
+		String tip;
 	}
 
 	/**
