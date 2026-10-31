@@ -495,6 +495,12 @@ class XpLedger
 		return a != null && (a.gains[RANGED] > 0 || a.gains[MAGIC] > 0);
 	}
 
+	/**
+	 * The award a splat of {@code amount} landing on {@code tick} was paid by: one whose range still left takes it; else
+	 * one that paid at least this much (T-137: a landing capped below what was paid - at Yama a cast paid 63 on a Void
+	 * Flare a thrall's 1 had brought to 62, and the oldest award still open, an earlier cast's leftover 0-1, took it and
+	 * left the cast unbooked); else the oldest open one.
+	 */
 	private Award awardFor(int amount, int tick)
 	{
 		if (amount <= 0)
@@ -504,6 +510,13 @@ class XpLedger
 		for (Award a : awards)
 		{
 			if (eligible(a, tick) && a.decoded() && amount >= a.remainingLow && amount <= a.remainingHigh)
+			{
+				return a;
+			}
+		}
+		for (Award a : awards)
+		{
+			if (eligible(a, tick) && a.decoded() && amount < a.remainingLow)
 			{
 				return a;
 			}
@@ -520,25 +533,8 @@ class XpLedger
 
 	int attackTickFor(int amount, int tick)
 	{
-		if (amount <= 0)
-		{
-			return Integer.MIN_VALUE;
-		}
-		for (Award a : awards)
-		{
-			if (eligible(a, tick) && a.decoded() && amount >= a.remainingLow && amount <= a.remainingHigh)
-			{
-				return a.tick;
-			}
-		}
-		for (Award a : awards)
-		{
-			if (eligible(a, tick) && a.decoded())
-			{
-				return a.tick;
-			}
-		}
-		return Integer.MIN_VALUE;
+		final Award a = awardFor(amount, tick);
+		return a == null ? Integer.MIN_VALUE : a.tick;
 	}
 
 	/**

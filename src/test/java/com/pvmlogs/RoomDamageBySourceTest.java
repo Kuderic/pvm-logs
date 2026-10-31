@@ -126,7 +126,8 @@ public class RoomDamageBySourceTest
 				n++;
 			}
 		}
-		assertEquals(2, n);
+		// Araxxor's two (T-131) and the Judge of Yama's fireball on itself (T-137).
+		assertEquals(3, n);
 	}
 
 	// ---- Details ----

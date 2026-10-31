@@ -164,8 +164,14 @@
             "magicDefenceChange": -30,
             "source": "T-135. OSRS Wiki, read 2026-10-31: Yama/Strategies: 'If his primary target attacks him with magic, his magic defence will significantly increase from -30 to +60'; 'If the player currently targeted by Yama is using magic during phase 1 and 2, his magic defence raises to 60'; phase 3: 'Yama will position himself in the centre of the arena and increase his defence bonuses' ('+81 magic defence'); the phases end 'Upon reaching 66.6% and 33.3% of his health (not a hard cap)', phase 3 beginning once the Judge is killed. The DPS calc (c1f7737): scaling/Phases.ts sets Yama's magic defence to 60 for 'Tank using magic' and -30 otherwise, outside its 'Phase 3' version (monsters.json: Normal magic +0; Phase 3 magic +81, crush 449, stab 135, slash 108, ranged 297/449). As 'tank uses magic', the other way."
           }
+        ],
+        "states": [
+          {"name": "phase change", "startOnBossAnim": [12147], "ticks": 18, "source": "T-137, from T-136's measure. Yama's intermission: the animation 12147 at about two-thirds and a third of his hitpoints, until the Judge of Yama can be attacked. Eric, 2026-10-31: Yama can't be attacked between it and the Judge ('No you cannot'). Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f), 12 windows in 6 kills: 12147 at 1,597-1,634 and 688-813 hitpoints left, no splat landing on him inside 11 of them, Eric's first throw at the Judge 15-18 ticks after it. 18 ticks is the most. No damage modifier rides on it: it is the window for its uptime allowance."}
         ]
-      }
+      },
+      "uptimeAllowances": [
+        {"state": "phase change", "from": "open", "maxTicks": 14, "afterTicks": 0, "source": "T-137, approved by Eric 2026-10-31 (T-136's proposal). Yama can't be attacked from 12147 until the Judge comes. Measured over the same log's 12 windows, the ticks still lost in each from the animation to the first throw at the Judge once T-136's booking fixes are in: 10, 10, 11, 11, 13, 13, 13, 14, 14, 14, 15, 15 (median 13, 75th percentile 14). The cap is the 75th percentile, as T-074 and T-084 set theirs."}
+      ]
     },
     {
       "name": "Void Flare",
@@ -211,6 +217,9 @@
         14180
       ],
       "notes": "T-135. Its fights are unscored (T-136's call): this is its expected for when they are.",
+      "roomDamage": [
+        {"name": "its own fireball", "label": "hit itself", "tip": "the Judge's fireball hitting itself when you stand under it (Eric's read)", "amounts": [13, 18], "source": "T-137. Eric, 2026-10-31: 'If you step under the judge it hits itself with a fireball.' Its attack animation is 69, every 5 ticks. Eric's solo log of 2026-10-31 18:00 (pvm-debug-20261031-180053, build 4c6b379): 21 type-17 or type-13 splats on the Judge with no other player there, 14-18 (and two 0s), 5 ticks apart, 19 of them on a tick the Judge started 69. His duo log of 14:02 (pvm-debug-20261031-140202): 36 splats not his on the Judge on a tick it started 69, 30 of them 13-18 (the rest, 42-54, the partner's). The amounts are the logs' range; the wiki doesn't give the fireball's damage."}
+      ],
       "damageModifiers": {
         "modifiers": [
           {

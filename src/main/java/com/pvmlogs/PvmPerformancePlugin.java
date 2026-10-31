@@ -335,6 +335,9 @@ public class PvmPerformancePlugin extends Plugin
 	// the tick it was booked: from the booking it measures the gap between bookings, which is a tick longer whenever the
 	// style changes from melee to a projectile one.
 	private int attackDueTick = Integer.MIN_VALUE;
+	// T-137: the tick the attack booked last was thrown on. An attack paid on a later tick is a new one, whatever the due
+	// tick says (unseenShotThrown).
+	private int lastBookedThrowTick = Integer.MIN_VALUE;
 	// Whether the last attack was proven by a projectile, and so booked two ticks after it went out rather than one. A
 	// switch can leave one weapon's attack in flight while another is in hand.
 	private boolean lastAttackFromProjectile;
@@ -494,7 +497,10 @@ public class PvmPerformancePlugin extends Plugin
 	// rather than at the sample: the varp can arrive after the tick's onGameTick has already run. How long after the
 	// energy falls an attack may still be that special's.
 	private static final int SPEC_BOOKING_WINDOW_TICKS = 1;
-	private int specFiredTick = Integer.MIN_VALUE;
+	// T-137: every fall not yet spent by a booking, oldest first. One tick held only the latest: the Eye of Ayak's Soul
+	// Rend lands five ticks after its throw, so a second Soul Rend fired before the first was booked took its place, and
+	// the first was scored as an ordinary attack (Eric's 14:02 Yama log, the throw on [7608]).
+	private final java.util.Deque<Integer> unspentSpecDrops = new java.util.ArrayDeque<>();
 	private int specEnergy = -1;
 	// Where I stood on each of the last few ticks, in scene coordinates: a projectile names the tile it left, which is
 	// where the player was when it was fired, not where they are when the event arrives.
@@ -512,7 +518,7 @@ public class PvmPerformancePlugin extends Plugin
 	// what the attack deals is not its own: a tentacle hits once, so a second splat on its tick was the zombie's (19:34,
 	// tick 439). Kept for projectile attacks too, which burstBooked is not: a dark bow's second arrow is its own.
 	private final Map<Integer, AttackSplats.Burst> bursts = new HashMap<>();
-	// The ticks the special energy fell on lately. Unlike specFiredTick, never spent by a booking: how many splats an attack
+	// The ticks the special energy fell on lately. Unlike unspentSpecDrops, never spent by a booking: how many splats an attack
 	// puts down turns on whether it was a special, and its last splats are judged after the booking has spent that.
 	private final java.util.Deque<Integer> recentSpecDrops = new java.util.ArrayDeque<>();
 	private static final int SPEC_DROPS_KEPT = 8;
@@ -739,6 +745,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Turned off and on again, the plugin cannot know what happened in between: Mark of Darkness and Charge read down
 		// until their messages say otherwise (T-026).
 		gearBonuses.resetBuffs("the plugin has just started");
+		markMessageLogged = false;
 		maxHits = new MaxHitCheck(line -> debug.log("%s", line));
 		timelines.setClock(client::getTickCount);
 		// T-135: a boss's hitpoints for its modifiers (Yama's phase 3 from a third), as counted here.
@@ -825,7 +832,7 @@ public class PvmPerformancePlugin extends Plugin
 		aimedByTick.clear();
 		// Both re-read from scratch: a stale energy reading across a reset would look like a special the moment the bar came
 		// back lower than it was.
-		specFiredTick = Integer.MIN_VALUE;
+		unspentSpecDrops.clear();
 		specEnergy = -1;
 		recentSpecDrops.clear();
 		weaponByTick.clear();
@@ -927,6 +934,9 @@ public class PvmPerformancePlugin extends Plugin
 			// The tick the attack this splat finishes was thrown on, from the experience it paid: asked before the splat spends
 			// it. What books a shot whose projectile was never taken as mine (T-021).
 			final int paidOnTick = xpLedger.attackTickFor(hitsplat.getAmount(), client.getTickCount());
+			// Whether Ranged or Magic paid it (T-136), asked here for the same reason: once the splat is spent below, the award
+			// that paid it is used up and no longer answers (T-137: the Judge's casts kept booking as Emberlight blows).
+			final boolean paidByShot = xpLedger.paidAsShot(hitsplat.getAmount(), client.getTickCount());
 			if (couldBeReflected && !xpExact)
 			{
 				final Reflect.Match match = reflect.claim(client.getTickCount(), hitsplat.getAmount(), this::hitsTakenOn,
@@ -1136,7 +1146,7 @@ public class PvmPerformancePlugin extends Plugin
 			final int shot = arrivedFromFlight ? Integer.MIN_VALUE : unseenShotThrown(npc.getIndex(), tick, paidOnTick);
 			// Paid for by Ranged or Magic, it was a shot or a cast whatever is in hand now (T-136: a Purging staff cast at the
 			// Judge of Yama, landing with the Emberlight back in hand, was booked as a melee blow two ticks after its throw).
-			final boolean paidAsShot = shot != Integer.MIN_VALUE && xpLedger.paidAsShot(hitsplat.getAmount(), tick);
+			final boolean paidAsShot = shot != Integer.MIN_VALUE && paidByShot;
 			final boolean melee = (meleeRecently || unbookedCast) && !paidAsShot;
 			final boolean firstOfBurst = !burstBooked.contains(npc.getIndex());
 			final int unseenShot = melee ? Integer.MIN_VALUE : shot;
@@ -3117,6 +3127,40 @@ public class PvmPerformancePlugin extends Plugin
 		return attackOriginTick - specFiredTick <= SPEC_BOOKING_WINDOW_TICKS;
 	}
 
+	/**
+	 * T-137: the oldest unspent fall of the special energy that threw the attack which left on {@code attackOriginTick}
+	 * ({@link #specialWentOutFor}); {@link Integer#MIN_VALUE} when none.
+	 */
+	static int unspentSpecialFor(Iterable<Integer> unspent, int attackOriginTick)
+	{
+		for (int drop : unspent)
+		{
+			if (specialWentOutFor(attackOriginTick, drop))
+			{
+				return drop;
+			}
+		}
+		return Integer.MIN_VALUE;
+	}
+
+	/** T-137: the speed Scatter ashes leaves the Purging staff at after killing a demon (OSRS Wiki, Purging staff). */
+	static final int SCATTER_ASHES_KILL_SPEED = 3;
+
+	/** T-137: whether this attack was the Purging staff's Scatter ashes, landing on a demon and leaving it with nothing. */
+	static boolean scatterAshesKill(SpecialAttack thrownSpecial, boolean demon, int hitpointsLeft)
+	{
+		return thrownSpecial == SpecialAttack.PURGING_STAFF && demon && hitpointsLeft == 0;
+	}
+
+	/**
+	 * T-137: the speed an attack starts its cooldown with: a special's own where it has one (the Eye of Ayak's Soul Rend,
+	 * 5 ticks against the staff's 3, {@link SpecialAttack#speedTicks}), the weapon's otherwise. A stun's reset wins.
+	 */
+	static int speedAfter(int weaponSpeed, SpecialAttack thrownSpecial, boolean resetsDelay)
+	{
+		return thrownSpecial == null || resetsDelay ? weaponSpeed : thrownSpecial.speedTicks(weaponSpeed);
+	}
+
 	// The expected average and its variance from one working (T-028); -1 for each where the target has no stats.
 	private static double meanOf(DamageMoments moments)
 	{
@@ -3241,7 +3285,7 @@ public class PvmPerformancePlugin extends Plugin
 		// on Verzik's first phase, its own exemption from the cap. Decided HERE rather than when the figures were sampled
 		// because the energy varp can arrive after that tick's onGameTick has already run, so whether the attack was a
 		// special is only reliably known by the time it is booked.
-		final boolean special = specialWentOutFor(attackOriginTick, specFiredTick)
+		final boolean special = unspentSpecialFor(unspentSpecDrops, attackOriginTick) != Integer.MIN_VALUE
 			&& specAverageHit >= 0;
 		double expectedChances =
 			combatCalc.attackLandChance(accuracy, targetId);
@@ -3251,7 +3295,7 @@ public class PvmPerformancePlugin extends Plugin
 			fight.context().specWeapons = FightContext.addOnce(fight.context().specWeapons, combatCalc.itemLabel(
 				weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick), combatCalc.equippedWeaponId())));
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
-			specFiredTick = Integer.MIN_VALUE;
+			unspentSpecDrops.remove(unspentSpecialFor(unspentSpecDrops, attackOriginTick));
 			expectDelayedSplat(fight, attackTick);
 			final FightTimeline line = timelines.of(fight);
 			if (line != null)
@@ -4990,6 +5034,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (current == null || current.isEnded())
 		{
 			attackDueTick = Integer.MIN_VALUE;
+			lastBookedThrowTick = Integer.MIN_VALUE;
 			lastAttackFromProjectile = false;
 			// Nothing pending to hold back, so nothing eaten out of a fight carries into the next one.
 			foodDelay.reset();
@@ -5059,6 +5104,7 @@ public class PvmPerformancePlugin extends Plugin
 				final Integer threwAt = onAdd ? speedByTick.get(heldTick(attackSwitchTick, attackTick)) : null;
 				attackDueTick = attackTick + (threwAt != null ? threwAt : combatCalc.attackSpeedTicks())
 					- hasteSince(elementalKills, attackTick);
+				lastBookedThrowTick = attackTick;
 				lastAttackFromProjectile = attackObservedFromProjectile;
 				combatCalc.noteAttackKind(true);
 				if (onAdd)
@@ -5094,6 +5140,10 @@ public class PvmPerformancePlugin extends Plugin
 			final boolean potted = mechanic || attackObservedPotted;
 			final double boostShare = mechanic ? 1 : attackObservedBoostShare;
 			final boolean drained = !mechanic && attackObservedDrained;
+			// T-137: whether a special threw it, asked before the scoring below spends its energy fall.
+			final SpecialAttack thrownSpecial = unspentSpecialFor(unspentSpecDrops, attackOriginTick) == Integer.MIN_VALUE ? null
+				: SpecialAttack.forItem(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackTick),
+				combatCalc.equippedWeaponId()));
 			// Worked out both ways while the loadout and boost are the ones that threw the attack. Which applies is decided by
 			// the prayer, and for a projectile that is not known until it lands.
 			final double ifPrayed = combatCalc.actualAverageHit(targetId, true);
@@ -5161,16 +5211,28 @@ public class PvmPerformancePlugin extends Plugin
 			// the attack went out on and with the speed in force then - this is the booking tick, which trails the attack, so
 			// reading the speed here reads it off whatever is held now.
 			final Integer threwAt = speedByTick.get(heldTick(attackSwitchTick, attackTick));
-			final int speed = bookedSpeed(attackResetsDelay, attackDroppedCast && attackSwitchTick == Integer.MIN_VALUE,
-				threwAt, combatCalc.attackSpeedTicks());
+			final int speed = speedAfter(bookedSpeed(attackResetsDelay, attackDroppedCast && attackSwitchTick == Integer.MIN_VALUE,
+				threwAt, combatCalc.attackSpeedTicks()), thrownSpecial, attackResetsDelay);
 			final boolean punished = punishedAttack();
 			attackDueTick = dueAfter(punished, attackDueTick, attackTick, speed);
+			lastBookedThrowTick = Math.max(lastBookedThrowTick, attackTick);
 			// Elementals its own splats killed before it was booked, as a projectile's are on the tick it is seen (T-121).
 			final int haste = punished ? 0 : hasteSince(elementalKills, attackTick);
 			if (haste > 0)
 			{
 				attackDueTick -= haste;
 				debug.log("  ELEMENTALS: %d killed since it was thrown, so the next attack is due on %d", haste, attackDueTick);
+			}
+			// T-137: Scatter ashes that killed a demon. OSRS Wiki, read 2026-10-31: Purging staff: "if the demonic creature
+			// targeted dies from Scatter ashes ... the player's next attack can be used three ticks earlier"; "will effectively
+			// change the player's attack speed from 5 down to 3". Eric's 14:02 Yama log: the special thrown on 8242 killed a
+			// Void Flare (a demon in the monster data) as it landed on 8245, and the next cast went out on 8245.
+			final MonsterStatsProvider.MonsterStats targetStats = monsterStats == null ? null : monsterStats.get(targetId);
+			if (!punished && scatterAshesKill(thrownSpecial, targetStats != null && targetStats.hasAttribute("demon"),
+				health.remaining(attacker.getTargetIndex(), client.getTickCount())))
+			{
+				attackDueTick = Math.min(attackDueTick, attackTick + SCATTER_ASHES_KILL_SPEED);
+				debug.log("  SCATTER ASHES killed a demon: the next attack is due on %d", attackDueTick);
 			}
 			if (punished)
 			{
@@ -5245,9 +5307,13 @@ public class PvmPerformancePlugin extends Plugin
 		// did to the due tick.
 		logEats(foodDelay.settle(client.getTickCount() - lag, attackDueTick));
 		final Integer xpSpeed = speedByTick.get(xpThrowTick);
+		// T-137: a special's XP proves its own speed's worth (a Soul Rend's 5 against the staff's 3).
+		final SpecialAttack xpSpecial = xpThrowTick == Integer.MIN_VALUE
+			|| unspentSpecialFor(unspentSpecDrops, xpThrowTick) == Integer.MIN_VALUE ? null
+			: SpecialAttack.forItem(weaponByTick.getOrDefault(xpThrowTick, combatCalc.equippedWeaponId()));
 		final boolean provenByXp = attackOverdue(client.getTickCount(), attackDueTick, lag)
 			&& throwProvenByXp(client.getTickCount(), attackDueTick, xpThrowTick,
-			xpSpeed != null ? xpSpeed : combatCalc.attackSpeedTicks());
+			speedAfter(xpSpeed != null ? xpSpeed : combatCalc.attackSpeedTicks(), xpSpecial, false));
 		if (!attackOverdue(client.getTickCount(), attackDueTick, lag) || provenByXp)
 		{
 			current.recordTickSpent(roomEngaged);
@@ -5684,6 +5750,7 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void handleChatMessage(ChatMessage event)
 	{
+		logMarkMessageOnce(event.getType(), event.getMessage());
 		// T-135: the buffs' messages come as SPAM too, as RuneLite's Timers & Buffs takes them: the Mark of Darkness was
 		// never seen at Yama (Eric's 14:02 log, [7572]), so its +50% and accuracy were missing.
 		final boolean game = event.getType() == ChatMessageType.GAMEMESSAGE;
@@ -5703,6 +5770,30 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("%s", buff);
 			combatCalc.invalidateGear();
 		}
+	}
+
+	// T-137: whether this session has logged a message naming the Mark of Darkness.
+	private boolean markMessageLogged;
+
+	/**
+	 * T-137: the first message of the game's (not a player's chat) naming the Mark of Darkness, logged once a session as
+	 * the game sent it: its type and raw text. The Mark was set by T-135's fallback in Eric's 18:00 log ([735], "no
+	 * message seen") with SPAM accepted, so the next log should show what the game sends.
+	 */
+	private void logMarkMessageOnce(ChatMessageType type, String raw)
+	{
+		if (markMessageLogged || !isMarkMessage(type, raw))
+		{
+			return;
+		}
+		markMessageLogged = true;
+		debug.log("MARK MESSAGE (once a session) type %s: \"%s\"", type, raw);
+	}
+
+	static boolean isMarkMessage(ChatMessageType type, String raw)
+	{
+		return raw != null && raw.contains("Mark of Darkness") && (type == ChatMessageType.GAMEMESSAGE
+			|| type == ChatMessageType.SPAM || type == ChatMessageType.ENGINE || type == ChatMessageType.MESBOX);
 	}
 
 	@Subscribe
@@ -5790,7 +5881,12 @@ public class PvmPerformancePlugin extends Plugin
 		// A first reading cannot be compared against anything, and energy that went up is regeneration rather than a special.
 		if (previous >= 0 && energy < previous)
 		{
-			specFiredTick = client.getTickCount();
+			final int specFiredTick = client.getTickCount();
+			unspentSpecDrops.addLast(specFiredTick);
+			while (unspentSpecDrops.size() > SPEC_DROPS_KEPT)
+			{
+				unspentSpecDrops.removeFirst();
+			}
 			recentSpecDrops.addLast(specFiredTick);
 			while (recentSpecDrops.size() > SPEC_DROPS_KEPT)
 			{
@@ -6587,14 +6683,29 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return Integer.MIN_VALUE;
 		}
-		return shotThrownOn(tick, paidOnTick, attackDueTick);
+		return shotThrownOn(tick, paidOnTick, attackDueTick, lastBookedThrowTick);
 	}
 
 	static int shotThrownOn(int tick, int paidOnTick, int attackDueTick)
 	{
+		return shotThrownOn(tick, paidOnTick, attackDueTick, Integer.MIN_VALUE);
+	}
+
+	/**
+	 * As above, and a drop on a tick after the last booked attack's throw is a new attack, even ahead of the due tick
+	 * (T-137): the weapon came round sooner than its speed said. At Yama a cast that killed a Void Flare was followed by
+	 * the next cast three ticks later, not five (Scatter ashes, OSRS Wiki: Purging staff); its splat on the next flare
+	 * went unbooked, and the flare's fight read no attack ([1392] and [1462] of Eric's 18:00 log).
+	 */
+	static int shotThrownOn(int tick, int paidOnTick, int attackDueTick, int lastBookedThrowTick)
+	{
 		if (paidOnTick == Integer.MIN_VALUE || paidOnTick >= tick)
 		{
 			return Integer.MIN_VALUE;
+		}
+		if (lastBookedThrowTick != Integer.MIN_VALUE && paidOnTick > lastBookedThrowTick)
+		{
+			return paidOnTick;
 		}
 		// A tick of slack: the due tick is the weapon's, and the drop can read a tick early against it.
 		if (attackDueTick != Integer.MIN_VALUE && paidOnTick < attackDueTick - 1)
