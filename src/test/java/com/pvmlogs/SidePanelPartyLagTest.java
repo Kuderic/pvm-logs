@@ -20,7 +20,7 @@ import org.junit.Test;
 public class SidePanelPartyLagTest
 {
 	/** A fight fed a tick at a time, as SidePanelNoLagTest's: an attack every 4 ticks, a spec now and then, idle spans. */
-	private static final class Live
+	static final class Live
 	{
 		final int[] clock = {0};
 		final FightTimeline.Store store = new FightTimeline.Store();
@@ -106,7 +106,7 @@ public class SidePanelPartyLagTest
 	}
 
 	/** The party mid-fight: you, and three members each with their own fight; their panels attached as the panel does. */
-	private static final class Party
+	static final class Party
 	{
 		final Live you = new Live(27);
 		final Live[] them = {new Live(31), new Live(22), new Live(25)};

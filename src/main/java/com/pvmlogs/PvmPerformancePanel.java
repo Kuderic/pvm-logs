@@ -48,6 +48,8 @@ class PvmPerformancePanel extends PluginPanel
 	private final MaterialTab historyButton;
 	/** The strain probe (T-045): times apply and the repaints; null in tests. */
 	private final PerfProbe perf;
+	/** T-133: the dev-only timing of Swing's whole repaint pass; null unless asked for. */
+	private final SidePanelRepaintTiming repaintTiming;
 
 	// Swing's thread writes these, the client thread reads them.
 	private volatile boolean active;
@@ -192,6 +194,8 @@ class PvmPerformancePanel extends PluginPanel
 		historyTab.setPerf(perf);
 		tripTab.setPerf(perf);
 		partyTab.setPerf(perf);
+		// T-133: Swing's whole repaint pass timed, in a dev client started with -PrepaintTiming only.
+		repaintTiming = SidePanelRepaintTiming.installIfAsked(perf);
 
 		final JPanel display = new JPanel(new BorderLayout());
 		display.setBackground(SidePanelStyle.PANEL);
@@ -1240,6 +1244,10 @@ class PvmPerformancePanel extends PluginPanel
 	void apply(PanelSnapshot snapshot)
 	{
 		final long started = PerfProbe.start(perf);
+		if (repaintTiming != null)
+		{
+			repaintTiming.applying(snapshot.party != null ? "Party" : snapshot.trip != null ? "Trip" : "Fight");
+		}
 		shown = snapshot;
 		if (snapshot.fight != null)
 		{

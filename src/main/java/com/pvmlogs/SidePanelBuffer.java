@@ -35,6 +35,13 @@ final class SidePanelBuffer
 
 	private BufferedImage image;
 	private PerfProbe perf;
+	/** T-133: buffered paints so far, each its own copy to the window; for tests and the repro. */
+	private int paints;
+
+	int paints()
+	{
+		return paints;
+	}
 
 	void setPerf(PerfProbe perf)
 	{
@@ -95,6 +102,7 @@ final class SidePanelBuffer
 				Math.max(h, image == null ? 0 : image.getHeight()), BufferedImage.TYPE_INT_RGB);
 		}
 
+		paints++;
 		final long rendering = PerfProbe.start(perf);
 		final Graphics2D ig = image.createGraphics();
 		try

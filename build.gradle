@@ -120,6 +120,12 @@ tasks.register('run', JavaExec) {
 	// only silenced for that one package, so everything -ea is actually there to catch still fires.
 	jvmArgs "-ea", "-da:net.runelite.client.plugins.gpu..."
 	args "--developer-mode", "--debug"
+	// T-133: gradlew run -PrepaintTiming times Swing's whole repaint pass after each side panel update, into the PERF
+	// block (SidePanelRepaintTiming). Dev only, off unless asked for.
+	if (project.hasProperty('repaintTiming'))
+	{
+		systemProperty 'luckvsskill.repaintTiming', 'true'
+	}
 }
 
 tasks.register('shadowJar', Jar) {
