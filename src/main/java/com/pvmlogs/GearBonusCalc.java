@@ -1305,6 +1305,26 @@ class GearBonusCalc
 		return mark.isUp();
 	}
 
+	/**
+	 * T-135: the Mark of Darkness read from its cast's experience when no message said so: a +70 Magic cast that no
+	 * thrall answered (see the plugin's {@code inferMark}). The message is the better signal (its duration starts on
+	 * its tick); this is the fallback, and does nothing while the Mark is already up.
+	 */
+	String markFromCast(int castTick, int tick)
+	{
+		if (mark.isUp())
+		{
+			return null;
+		}
+		final boolean purging = isPurgingStaff(wornId(EquipmentInventorySlot.WEAPON));
+		final int baseMagic = client.getRealSkillLevel(Skill.MAGIC);
+		final String line = mark.cast(castTick, markDurationTicks(baseMagic, purging),
+			(purging ? "purging staff, x5" : "no purging staff") + ", base Magic " + baseMagic
+				+ "; from the +70 Magic cast on tick " + castTick + " with no thrall: no message seen");
+		mark.tick(tick);
+		return line;
+	}
+
 	/** Mark of Darkness and Charge in a few words, for the SETUP line. */
 	String describeBuffs()
 	{

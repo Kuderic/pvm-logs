@@ -741,6 +741,8 @@ public class PvmPerformancePlugin extends Plugin
 		gearBonuses.resetBuffs("the plugin has just started");
 		maxHits = new MaxHitCheck(line -> debug.log("%s", line));
 		timelines.setClock(client::getTickCount);
+		// T-135: a boss's hitpoints for its modifiers (Yama's phase 3 from a third), as counted here.
+		damageModifiers.setHitpoints(index -> new int[]{health.remaining(index, client.getTickCount()), health.maxHp(index)});
 		timelines.setEnabled(config.panelCharts());
 		timelines.setProbe(perf);
 		perf.setOn(config.debugLogging());
@@ -1394,7 +1396,17 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final Player me = client.getLocalPlayer();
 		return (current != null && !current.isEnded() && current.getTargetIndex() == npc.getIndex())
-			|| (me != null && npc.getInteracting() == me);
+			|| (me != null && npc.getInteracting() == me && !isFollower(npc));
+	}
+
+	/**
+	 * T-135: the player's pet, which follows them, interacting with them, and never attacks: never a source of a hit
+	 * taken. In Eric's 14:02 log at Yama, 60 TAKEN lines named the corrupted youngllef (npc 8738) among what hit him.
+	 */
+	private boolean isFollower(NPC npc)
+	{
+		final NPCComposition c = npc.getComposition();
+		return npc == client.getFollower() || c != null && c.isFollower();
 	}
 
 	/**
@@ -1457,7 +1469,7 @@ public class PvmPerformancePlugin extends Plugin
 		int count = 0;
 		for (NPC npc : client.getTopLevelWorldView().npcs())
 		{
-			if (npc == null || npc.getInteracting() != me)
+			if (npc == null || npc.getInteracting() != me || isFollower(npc))
 			{
 				continue;
 			}
@@ -1888,6 +1900,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			debug.log(xpLedger.castNote());
 		}
+		inferMark(tick, xpLedger.castNote());
 		if (award != null)
 		{
 			debug.log("xp award %s against npc %d", award, targetId);
@@ -3791,6 +3804,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			traceThrall("spawned", npc);
 			thralls.onThrallSpawned(npc.getIndex(), npc.getId(), distanceFromMe(npc), client.getTickCount());
+			lastThrallSpawnTick = client.getTickCount();
 		}
 		final OlmPhase phase = OlmPhase.forNpc(npc.getId());
 		if (phase != null)
@@ -5635,15 +5649,54 @@ public class PvmPerformancePlugin extends Plugin
 		perf.stop(PerfProbe.Slot.ON_CHAT_MESSAGE, t0);
 	}
 
+	// T-135: a +70 Magic cast is a superior thrall or the Mark of Darkness (XpLedger.CAST_XP); the tick of one waiting to
+	// be told apart, and the last tick a thrall spawned.
+	private int markCastTick = Integer.MIN_VALUE;
+	private int lastThrallSpawnTick = Integer.MIN_VALUE;
+
+	/**
+	 * T-135: the Mark of Darkness from its cast, when no message said so (the fallback; the message's type is the fix).
+	 * A +70 cast on T is a superior thrall if a thrall spawned on T, as Eric's thralls spawn on their cast's tick
+	 * (XpLedger's 88s); else, at T+1's close, the Mark, unless a thrall spawned on T+1 with no thrall cast of its own.
+	 * That second tick is a guess: a superior thrall spawning a tick late.
+	 */
+	private void inferMark(int tick, String castNote)
+	{
+		if (markCastTick == tick - 1)
+		{
+			final boolean ownThrall = castNote != null && castNote.contains("thrall");
+			if (lastThrallSpawnTick != tick || ownThrall)
+			{
+				final String line = gearBonuses.markFromCast(markCastTick, tick);
+				if (line != null)
+				{
+					debug.log("%s", line);
+					combatCalc.invalidateGear();
+				}
+			}
+			markCastTick = Integer.MIN_VALUE;
+		}
+		if (castNote != null && castNote.contains("Mark of Darkness") && lastThrallSpawnTick != tick)
+		{
+			markCastTick = tick;
+		}
+	}
+
 	private void handleChatMessage(ChatMessage event)
 	{
-		if (event.getType() != ChatMessageType.GAMEMESSAGE)
+		// T-135: the buffs' messages come as SPAM too, as RuneLite's Timers & Buffs takes them: the Mark of Darkness was
+		// never seen at Yama (Eric's 14:02 log, [7572]), so its +50% and accuracy were missing.
+		final boolean game = event.getType() == ChatMessageType.GAMEMESSAGE;
+		if (!game && event.getType() != ChatMessageType.SPAM)
 		{
 			return;
 		}
 		final String message = Text.removeTags(event.getMessage());
-		noteBlowpipeCheck(message);
-		recordKillMessage(message);
+		if (game)
+		{
+			noteBlowpipeCheck(message);
+			recordKillMessage(message);
+		}
 		final String buff = gearBonuses.onGameMessage(message, client.getTickCount());
 		if (buff != null)
 		{
@@ -5782,8 +5835,6 @@ public class PvmPerformancePlugin extends Plugin
 		damageModifiers.onGameTick();
 		// And the windows the boss's uptime allowances ride on, as they stand now (T-074).
 		observeMechanics();
-		// The tick's splats against the max each attack was expected to have (T-056).
-		maxHits.endTick(client.getTickCount());
 		// What they and the party's did to the fights' outcome distributions (T-050).
 		drainLuck.tick(client.getTickCount());
 		RaidScaling.setTombsRaidLevel(gearBonuses.tombsRaidLevel());
@@ -5837,6 +5888,10 @@ public class PvmPerformancePlugin extends Plugin
 				resolvePendingSample(entry.getKey());
 			}
 		}
+		// The tick's splats against the max each attack was expected to have (T-056). After the last place that scores an
+		// attack (T-135): settled earlier in the tick, a shot booked from its drop (UNSEEN SHOT) and resolved just above met
+		// a tick already cleared of its splats, so none of Eric's 33 casts over their max at Yama was flagged.
+		maxHits.endTick(client.getTickCount());
 
 		final Player me = client.getLocalPlayer();
 		if (me != null && me.getLocalLocation() != null)
@@ -6035,7 +6090,9 @@ public class PvmPerformancePlugin extends Plugin
 		// RuneLite's table does not; RuneLite's (nullable) as the fallback. The boss health bar, once read, beats both.
 		final MonsterStatsProvider.MonsterStats stats = monsterStats.get(npc.getId());
 		final Integer known = npcManager.getHealth(npc.getId());
-		final int maxHp = stats != null && stats.getHitpoints() > 0 ? stats.getHitpoints() : known == null ? -1 : known;
+		final int tableHp = stats != null && stats.getHitpoints() > 0 ? stats.getHitpoints() : known == null ? -1 : known;
+		// T-135: one that spawns damaged while the boss it serves is low (Yama's phase 3 flares at 71 of 140).
+		final int maxHp = spawnHp(npc, tableHp);
 		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount());
 		// Tags stripped: some names carry colour markup and it was reaching the CSV verbatim, "<col=00ffff>Rubble</col>" and
 		// all.
@@ -6965,6 +7022,49 @@ public class PvmPerformancePlugin extends Plugin
 	 * boss bar off, as this does. Logged whenever the reading changes, raw values and
 	 * all, so a log can settle what the game actually sends.
 	 */
+	/**
+	 * T-135: the hitpoints an npc starts its fight with: its rules' {@code spawnHp} while the boss bar (the HUD) names
+	 * the boss that rule follows at or below its share, else the table's. The HUD still shows Yama while the player is on
+	 * a flare, and the counts are gone by then (a flare is a room of its own).
+	 */
+	private int spawnHp(NPC npc, int tableHp)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final BossRules.Boss boss = rules == null ? null : rules.forNpc(npc.getId());
+		final BossRules.SpawnHp rule = boss == null ? null : boss.spawnHp;
+		if (rule == null || rule.hp <= 0 || rule.hudNpcIds == null)
+		{
+			return tableHp;
+		}
+		final int barNpc = client.getVarpValue(VarPlayerID.HPBAR_HUD_NPC);
+		final int hp = client.getVarbitValue(VarbitID.HPBAR_HUD_HP);
+		final int base = client.getVarbitValue(VarbitID.HPBAR_HUD_BASEHP);
+		if (!spawnsDamaged(rule, barNpc, hp, base))
+		{
+			return tableHp;
+		}
+		debug.log("SPAWN HP %s (npc %d, index %d): %d of %d, the boss bar reading npc %d at %d/%d", npc.getName(),
+			npc.getId(), npc.getIndex(), rule.hp, tableHp, barNpc, hp, base);
+		return rule.hp;
+	}
+
+	/** T-135: whether the HUD's reading puts the npc's spawn under its rule. */
+	static boolean spawnsDamaged(BossRules.SpawnHp rule, int barNpc, int hp, int base)
+	{
+		if (rule == null || rule.hudNpcIds == null || base <= 0 || hp < 0)
+		{
+			return false;
+		}
+		for (int id : rule.hudNpcIds)
+		{
+			if (id == barNpc)
+			{
+				return (double) hp / base <= rule.hudHpAtMost;
+			}
+		}
+		return false;
+	}
+
 	private void readHealthBar()
 	{
 		if (current == null || current.isEnded())

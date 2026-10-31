@@ -31,12 +31,19 @@ class DamageModifiers
 	private final MonsterStatsProvider monsters;
 	private final ModifierTracker tracker;
 	private final Consumer<String> log;
+	private final net.runelite.client.game.ItemManager items;
+	// T-135: the target's hitpoints, from the plugin's TargetHealth: {left, full} for an npc index, or null.
+	private java.util.function.IntFunction<int[]> hitpoints = index -> null;
+	// T-135: the last situation's line logged for each boss, so a MOD line comes only when it changes.
+	private final Map<Integer, String> situationSeen = new HashMap<>();
 
 	@Inject
-	DamageModifiers(Client client, MonsterStatsProvider monsters, DebugLog debug)
+	DamageModifiers(Client client, MonsterStatsProvider monsters, DebugLog debug,
+		net.runelite.client.game.ItemManager items)
 	{
 		this.client = client;
 		this.monsters = monsters;
+		this.items = items;
 		this.log = line -> debug.log("%s", line);
 		this.tracker = new ModifierTracker(log);
 		this.tracker.setPresence(this::present);
@@ -198,6 +205,7 @@ class DamageModifiers
 	{
 		tracker.clear();
 		insideSeen.clear();
+		situationSeen.clear();
 		meleeSeen.clear();
 	}
 
@@ -214,15 +222,133 @@ class DamageModifiers
 		}
 		final int distance = hasMeleeRule(boss.damageModifiers) ? meleeDistance(npc) : NO_DISTANCE;
 		final Boolean inMelee = distance == NO_DISTANCE ? null : distance == IN_MELEE;
+		final ModifierTracker.Situation situation = hasSituationRule(boss.damageModifiers) ? situation(npc, style)
+			: ModifierTracker.Situation.UNKNOWN;
 		final List<BossRules.ModifierRule> mods = tracker.applying(npc.getIndex(), boss.damageModifiers, npc.getId(),
 			style == null ? null : style.name(), client.getTickCount(), client.getTickCount() + Math.max(0, delayTicks),
-			behind(npc), this::inside, inMelee);
+			behind(npc), this::inside, inMelee, situation);
+		if (situation != ModifierTracker.Situation.UNKNOWN)
+		{
+			noteSituation(npc, situation, mods);
+		}
 		if (distance != NO_DISTANCE)
 		{
 			meleeSeen.put(client.getTickCount(), new MeleeSeen(npc.getIndex(), npc.getName(), distance, style, mods));
 			meleeSeen.keySet().removeIf(t -> client.getTickCount() - t > MELEE_SEEN_TICKS);
 		}
 		return live ? ModifierTracker.shownLive(mods) : mods;
+	}
+
+	/** T-135: where the boss's hitpoints come from (the plugin's TargetHealth): {left, full} for an npc index. */
+	void setHitpoints(java.util.function.IntFunction<int[]> hitpoints)
+	{
+		this.hitpoints = hitpoints == null ? index -> null : hitpoints;
+	}
+
+	/** T-135: the flat change to the npc's magic defence bonus its modifiers make for an attack going out now. */
+	int magicDefenceFlat(NPC npc, CombatCalc.Style style, int delayTicks)
+	{
+		return npc == null || bossFor(npc.getId()) == null ? 0
+			: ModifierTracker.magicDefenceFlat(forAttack(npc, style, delayTicks));
+	}
+
+	private static boolean hasSituationRule(BossRules.DamageModifierRules rules)
+	{
+		if (rules == null || rules.modifiers == null)
+		{
+			return false;
+		}
+		for (BossRules.ModifierRule m : rules.modifiers)
+		{
+			if (m.hpAtMost != null || m.hpAbove != null || m.tankMagic != null)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * T-135: the boss's hitpoints as a share, and whether the player it's interacting with (Yama's "primary target",
+	 * the tank) uses magic: the local player by the attack style in hand, another by their weapon's highest attack bonus
+	 * being magic. The wiki has Yama's magic defence follow "If his primary target attacks him with magic": the weapon is
+	 * a reading of that for a partner, not a source.
+	 */
+	private ModifierTracker.Situation situation(NPC npc, CombatCalc.Style style)
+	{
+		final int[] hp = hitpoints.apply(npc.getIndex());
+		final double share = hp == null || hp[0] < 0 || hp[1] <= 0 ? -1 : (double) hp[0] / hp[1];
+		return new ModifierTracker.Situation(share, tankMagic(npc, style));
+	}
+
+	private Boolean tankMagic(NPC npc, CombatCalc.Style style)
+	{
+		final net.runelite.api.Actor target = npc.getInteracting();
+		if (!(target instanceof Player))
+		{
+			return null;
+		}
+		if (target == client.getLocalPlayer())
+		{
+			return style == null ? null : style == CombatCalc.Style.MAGIC;
+		}
+		final net.runelite.api.PlayerComposition looks = ((Player) target).getPlayerComposition();
+		return looks == null ? null : magicWeapon(looks.getEquipmentId(net.runelite.api.kit.KitType.WEAPON));
+	}
+
+	/** T-135: a weapon whose highest attack bonus is magic; null when its stats aren't known. */
+	private Boolean magicWeapon(int itemId)
+	{
+		if (itemId <= 0 || items == null)
+		{
+			return itemId <= 0 ? Boolean.FALSE : null;
+		}
+		final net.runelite.client.game.ItemStats stats = items.getItemStats(itemId);
+		final net.runelite.client.game.ItemEquipmentStats e = stats == null ? null : stats.getEquipment();
+		return e == null ? null : highestIsMagic(e.getAstab(), e.getAslash(), e.getAcrush(), e.getArange(), e.getAmagic());
+	}
+
+	/** T-135: whether magic is the highest of a weapon's attack bonuses, and above 0. */
+	static boolean highestIsMagic(int stab, int slash, int crush, int ranged, int magic)
+	{
+		return magic > 0 && magic > Math.max(Math.max(stab, slash), Math.max(crush, ranged));
+	}
+
+	// T-135: a MOD line when the boss's situation changes what applies (who tanks, with what; its phase).
+	private void noteSituation(NPC npc, ModifierTracker.Situation s, List<BossRules.ModifierRule> mods)
+	{
+		final net.runelite.api.Actor target = npc.getInteracting();
+		final String who = !(target instanceof Player) ? "no player" : target == client.getLocalPlayer() ? "you"
+			: "another player";
+		final String line = situationLine(npc.getName(), who, s, mods);
+		if (!line.equals(situationSeen.put(npc.getIndex(), line)))
+		{
+			log.accept(line + " at tick " + client.getTickCount());
+		}
+	}
+
+	static String situationLine(String boss, String who, ModifierTracker.Situation s, List<BossRules.ModifierRule> mods)
+	{
+		final StringBuilder applied = new StringBuilder();
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.hpAtMost != null || m.hpAbove != null || m.tankMagic != null)
+			{
+				applied.append(applied.length() == 0 ? "" : ", ").append(m.name);
+				if (m.magicDefenceChange != null)
+				{
+					applied.append(String.format(" (magic defence %+d)", m.magicDefenceChange));
+				}
+				if (m.version != null)
+				{
+					applied.append(" (the ").append(m.version).append(" version's stats)");
+				}
+			}
+		}
+		return String.format("MOD %s: targeting %s%s, %s: %s", boss, who,
+			s.tankMagic == null ? "" : s.tankMagic ? " (magic)" : " (not magic)",
+			s.hpShare < 0 ? "hitpoints unknown" : String.format("%.0f%% of its hitpoints left", 100 * s.hpShare),
+			applied.length() == 0 ? "none" : applied.toString());
 	}
 
 	// What the player's melee distance from a boss with an outOfMelee rule was on each recent tick, and the modifiers it

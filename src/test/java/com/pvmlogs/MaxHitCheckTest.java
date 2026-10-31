@@ -37,6 +37,30 @@ public class MaxHitCheckTest
 		assertEquals(2, check.exceeded(fight));
 	}
 
+	/**
+	 * T-135: a shot booked from its drop (UNSEEN SHOT) is scored at the tick's end, after the hitsplats; settled before
+	 * that, as the plugin did, its splat was gone. Eric's 14:02 log at Yama, [7591]: a 60 against max 39, never flagged,
+	 * nor any of the 33 over 39. The plugin now settles last.
+	 */
+	@Test
+	public void aShotScoredAtTheTicksEndMeetsItsSplat()
+	{
+		final Fight yama = new Fight("Yama", 14176, 60992, 2500, 0L, null, 0);
+		// Before: the tick settled, then the shot scored.
+		check.splat(60992, 7591, 60);
+		check.endTick(7591);
+		check.scored(yama, 60992, 7591, 39, true, () -> "Purging staff");
+		check.splat(60992, 7596, 58);
+		check.endTick(7596);
+		assertEquals(0, check.exceeded(yama));
+		// Now: scored, then settled.
+		check.splat(60992, 7601, 61);
+		check.scored(yama, 60992, 7601, 39, true, () -> "Purging staff");
+		check.endTick(7601);
+		assertEquals(1, check.exceeded(yama));
+		assertEquals("MAX EXCEEDED 61 > 39 (Purging staff)", lines.get(lines.size() - 1));
+	}
+
 	@Test
 	public void atOrUnderTheMaxIsQuiet()
 	{

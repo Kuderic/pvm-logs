@@ -100,10 +100,10 @@ public class MonsterVersionTest
 		assertEquals("Damaged", wardens.stats.getVersion());
 		assertNotNull(wardens.stats.getWarning());
 		assertTrue(wardens.stats.getWarning().contains("Enraged"));
-		// Yama has a rule saying what is unmodelled AND two same-hitpoints phases; both are said.
+		// T-135: Yama's phase 3 is a boss modifier now: the rule's default is the Normal version, with no warning.
 		final MonsterStatsProvider.Choice yama = choose(14176, -1, -1);
-		assertTrue(yama.stats.getWarning().contains("Magic defence bonus"));
-		assertTrue(yama.stats.getWarning().contains("Phase 3"));
+		assertEquals("Normal", yama.stats.getVersion());
+		assertNull(yama.stats.getWarning());
 	}
 
 	@Test

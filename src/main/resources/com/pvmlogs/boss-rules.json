@@ -132,11 +132,93 @@
     },
     {
       "name": "Yama",
-      "npcIds": [14176],
-      "unmodelled": "Magic defence bonus is +60 while the tank uses magic and -30 otherwise, outside phase 3 (DPS calc scaling/Phases.ts). The tank's style is not tracked.",
+      "npcIds": [
+        14176
+      ],
+      "variants": [
+        {"version": "Normal", "maxHp": 2500, "default": true}
+      ],
       "defenceDrain": {
         "maxDefenceDrain": 80,
         "source": "OSRS Wiki, read 2026-10-28: Yama/Strategies: 'his stats can be drained a maximum of 80 Defence levels (to 145)'. Contracted fights are immune (Temporary skill drain); a contract is not detected, so not modelled."
+      },
+      "damageModifiers": {
+        "modifiers": [
+          {
+            "name": "phase 3",
+            "hpAtMost": 0.3334,
+            "version": "Phase 3",
+            "source": "T-135. OSRS Wiki, read 2026-10-31: Yama/Strategies: 'If his primary target attacks him with magic, his magic defence will significantly increase from -30 to +60'; 'If the player currently targeted by Yama is using magic during phase 1 and 2, his magic defence raises to 60'; phase 3: 'Yama will position himself in the centre of the arena and increase his defence bonuses' ('+81 magic defence'); the phases end 'Upon reaching 66.6% and 33.3% of his health (not a hard cap)', phase 3 beginning once the Judge is killed. The DPS calc (c1f7737): scaling/Phases.ts sets Yama's magic defence to 60 for 'Tank using magic' and -30 otherwise, outside its 'Phase 3' version (monsters.json: Normal magic +0; Phase 3 magic +81, crush 449, stab 135, slash 108, ranged 297/449). The signal: his hitpoints at or below a third when the attack goes out. He can't be attacked through the intermission, so that is phase 3, but for the hit that takes him past the third (the threshold is 'not a hard cap'). No animation or id marks it (RuneLite 1.13.4's gamevals: his NPC_YAMA01_* are the same throughout). Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f): both kills' last flares spawned with him at 229 and 305, after their second Judge."
+          },
+          {
+            "name": "tank uses magic",
+            "hpAbove": 0.3334,
+            "tankMagic": true,
+            "magicDefenceChange": 60,
+            "source": "T-135. OSRS Wiki, read 2026-10-31: Yama/Strategies: 'If his primary target attacks him with magic, his magic defence will significantly increase from -30 to +60'; 'If the player currently targeted by Yama is using magic during phase 1 and 2, his magic defence raises to 60'; phase 3: 'Yama will position himself in the centre of the arena and increase his defence bonuses' ('+81 magic defence'); the phases end 'Upon reaching 66.6% and 33.3% of his health (not a hard cap)', phase 3 beginning once the Judge is killed. The DPS calc (c1f7737): scaling/Phases.ts sets Yama's magic defence to 60 for 'Tank using magic' and -30 otherwise, outside its 'Phase 3' version (monsters.json: Normal magic +0; Phase 3 magic +81, crush 449, stab 135, slash 108, ranged 297/449). The tank is the player Yama is interacting with: the local player by the attack style in hand, a partner by their weapon's highest attack bonus being magic (a reading of 'attacks him with magic', not a source). Neither when he targets no player: then the Normal's +0."
+          },
+          {
+            "name": "tank not using magic",
+            "hpAbove": 0.3334,
+            "tankMagic": false,
+            "magicDefenceChange": -30,
+            "source": "T-135. OSRS Wiki, read 2026-10-31: Yama/Strategies: 'If his primary target attacks him with magic, his magic defence will significantly increase from -30 to +60'; 'If the player currently targeted by Yama is using magic during phase 1 and 2, his magic defence raises to 60'; phase 3: 'Yama will position himself in the centre of the arena and increase his defence bonuses' ('+81 magic defence'); the phases end 'Upon reaching 66.6% and 33.3% of his health (not a hard cap)', phase 3 beginning once the Judge is killed. The DPS calc (c1f7737): scaling/Phases.ts sets Yama's magic defence to 60 for 'Tank using magic' and -30 otherwise, outside its 'Phase 3' version (monsters.json: Normal magic +0; Phase 3 magic +81, crush 449, stab 135, slash 108, ranged 297/449). As 'tank uses magic', the other way."
+          }
+        ]
+      }
+    },
+    {
+      "name": "Void Flare",
+      "npcIds": [
+        14179
+      ],
+      "notes": "T-135. Yama's Void Flares: 140 hp (the DPS calc's Fire and Shadow versions), 200% demonbane vulnerability (GearBonusCalc).",
+      "spawnHp": {
+        "hp": 71,
+        "hudNpcIds": [
+          14176
+        ],
+        "hudHpAtMost": 0.3334,
+        "source": "T-135. OSRS Wiki, read 2026-10-31: Void flare: in phase 3 Yama will 'summon shadow flares with 50% health (71 Hitpoints)'; Yama/Strategies: 'the flares spawn with half (71) health'. Phase 3 read as Yama's rule has it, from the boss bar: the HUD names Yama (npc 14176) while the player is on a flare (Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f): at [7943] 229/2500, [8391] 305/2500, both flares dying to one 71; at [8095] 2032/2500, the flare taking 77 + 62)."
+      },
+      "damageModifiers": {
+        "modifiers": [
+          {
+            "name": "guaranteed max, magic",
+            "styles": [
+              "MAGIC"
+            ],
+            "guaranteedMax": true,
+            "source": "T-135. OSRS Wiki, read 2026-10-31: Void flare: 'players are guaranteed a maximum hit when attacking them with magic or Standard Ranged weapons'; Yama/Strategies: 'using magic attacks or the scorching bow will always deal their max hit'. The DPS calc (c1f7737) has them in ALWAYS_MAX_HIT_MONSTERS for every style. Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f): each phase 1-2 flare's first hit a max-hit splat of 77 ([8095], [8240], [8248], [9797]), the calc's Mark-boosted max."
+          },
+          {
+            "name": "guaranteed max, standard ranged",
+            "styles": [
+              "RANGED"
+            ],
+            "weaponCategories": [
+              "BOW"
+            ],
+            "guaranteedMax": true,
+            "source": "T-135. OSRS Wiki, read 2026-10-31: Void flare: 'magic or Standard Ranged weapons' (standard ranged: bows and their arrows, as the wiki's ranged defence types have it; the bow category is the reading). Melee isn't listed, though the calc has it: not taken."
+          }
+        ]
+      }
+    },
+    {
+      "name": "Judge of Yama",
+      "npcIds": [
+        14180
+      ],
+      "notes": "T-135. Its fights are unscored (T-136's call): this is its expected for when they are.",
+      "damageModifiers": {
+        "modifiers": [
+          {
+            "name": "guaranteed max",
+            "guaranteedMax": true,
+            "source": "T-135. OSRS Wiki, read 2026-10-31: Judge of Yama: 'Attacks made on the judge always land as both successful and maximum hits'; it prays against the last style used ('so two forms of combat are required'), which isn't read here, so an attack into its prayer would be scored at the max too. The DPS calc (c1f7737) has 14180 in ALWAYS_MAX_HIT_MONSTERS for every style. Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f): 45 of Eric's 50 splats on it max-hit splats (type 43), none a 0."
+          }
+        ]
       }
     },
     {

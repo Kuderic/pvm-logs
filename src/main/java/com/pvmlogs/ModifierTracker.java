@@ -392,6 +392,30 @@ final class ModifierTracker
 	List<BossRules.ModifierRule> applying(int npcIndex, BossRules.DamageModifierRules rules, int npcId, String style,
 		int throwTick, int landTick, boolean behind, InsideCheck insideNpc, Boolean inMelee)
 	{
+		return applying(npcIndex, rules, npcId, style, throwTick, landTick, behind, insideNpc, inMelee, Situation.UNKNOWN);
+	}
+
+	/** T-135: what the boss's own state says, for the {@code hpAtMost}, {@code hpAbove} and {@code tankMagic} rules. */
+	static final class Situation
+	{
+		static final Situation UNKNOWN = new Situation(-1, null);
+		/** Hitpoints left as a share of full; below 0 when not known. */
+		final double hpShare;
+		/** Whether its target uses magic; null when it has none or that isn't known. */
+		final Boolean tankMagic;
+
+		Situation(double hpShare, Boolean tankMagic)
+		{
+			this.hpShare = hpShare;
+			this.tankMagic = tankMagic;
+		}
+	}
+
+	/** As above, with the boss's own state (T-135). */
+	List<BossRules.ModifierRule> applying(int npcIndex, BossRules.DamageModifierRules rules, int npcId, String style,
+		int throwTick, int landTick, boolean behind, InsideCheck insideNpc, Boolean inMelee, Situation boss)
+	{
+		final Situation at = boss == null ? Situation.UNKNOWN : boss;
 		final List<BossRules.ModifierRule> out = new ArrayList<>(2);
 		for (BossRules.ModifierRule m : modifiers(rules))
 		{
@@ -417,6 +441,15 @@ final class ModifierTracker
 				continue;
 			}
 			if (m.outOfMelee != null && (inMelee == null || m.outOfMelee == inMelee))
+			{
+				continue;
+			}
+			if (m.hpAtMost != null && (at.hpShare < 0 || at.hpShare > m.hpAtMost)
+				|| m.hpAbove != null && (at.hpShare < 0 || at.hpShare <= m.hpAbove))
+			{
+				continue;
+			}
+			if (m.tankMagic != null && (at.tankMagic == null || !m.tankMagic.equals(at.tankMagic)))
 			{
 				continue;
 			}
@@ -574,6 +607,20 @@ final class ModifierTracker
 			}
 		}
 		return (int) Math.max(0, Math.min(Integer.MAX_VALUE, r));
+	}
+
+	/** T-135: the flat changes to the boss's magic defence bonus these modifiers make. */
+	static int magicDefenceFlat(List<BossRules.ModifierRule> mods)
+	{
+		int change = 0;
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.magicDefenceChange != null)
+			{
+				change += m.magicDefenceChange;
+			}
+		}
+		return change;
 	}
 
 	/** The modifiers the live figures may show (T-087): all but those marked {@code hiddenLive}. */
