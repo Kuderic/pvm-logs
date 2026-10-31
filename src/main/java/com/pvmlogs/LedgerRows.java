@@ -1287,7 +1287,18 @@ final class LedgerRows
 		final int other;
 		/** T* - T: positive when the rolls saved time. */
 		final double luck;
+		/**
+		 * T-134 (Eric, 2026-10-31: "DPS should include thralls as part of your dps", and "All your damage"): the weapon's
+		 * damage and the player's other damage (thrall, recoil and vengeance, damage over time) over the scored clock.
+		 */
 		final double dps;
+		/** T-134: the weapon's damage alone over the scored clock, the DPS before T-134 (the tile's sub-line). */
+		final double weaponDps;
+		/**
+		 * T-134: what {@link #dps} is compared with: the expected damage and the same other damage (luck-neutral, so on
+		 * both sides, as Luck treats it) over the scored clock; NaN without an expectation.
+		 */
+		final double expectedDps;
 		/** The share of the clock spent attacking or on cooldown: idle ticks count against it, eating doesn't (T-038). */
 		final double uptime;
 		/** The idle ticks' seconds: off cooldown, no attack, not eating. */
@@ -1361,7 +1372,9 @@ final class LedgerRows
 			// and overstate luck's seconds, and understate DPS (T-023). The clock in the title stays the whole room's.
 			luck = expected <= 0 || expected + other <= 0 || scoredClock <= 0
 				? Double.NaN : scoredClock * (damage - expected) / (expected + other);
-			dps = scoredClock <= 0 ? Double.NaN : damage / scoredClock;
+			weaponDps = scoredClock <= 0 ? Double.NaN : damage / scoredClock;
+			dps = scoredClock <= 0 ? Double.NaN : (damage + other) / scoredClock;
+			expectedDps = scoredClock <= 0 || expected <= 0 ? Double.NaN : (expected + other) / scoredClock;
 			final double p = expected > 0 ? DamageMoments.percentile(damage, expected, s.damageVariance()) : -1;
 			percentile = p < 0 ? Double.NaN : p;
 			expectedDuration = Double.isNaN(luck) ? Double.NaN : clock + luck;
@@ -1819,8 +1832,8 @@ final class LedgerRows
 		}
 		else
 		{
-			// Too wide for a box saved narrow: the pair alone, as Damage/expected reads.
-			final String expected = oneDecimal(n.expected / n.scoredClock);
+			// Too wide for a box saved narrow: the pair alone, as Damage/expected reads. T-134: both with your other damage.
+			final String expected = oneDecimal(n.expectedDps);
 			rows.add(new Row("DPS", oneDecimal(n.dps) + " (expected " + expected + ")", FontRole.EMPHASIS,
 				FontRole.VALUE, Colour.NEUTRAL, Colour.NEUTRAL, null, oneDecimal(n.dps) + "/" + expected));
 		}

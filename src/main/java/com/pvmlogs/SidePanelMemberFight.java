@@ -438,6 +438,8 @@ final class SidePanelMemberFight
 		v.ct = u.ct;
 		v.st = u.st;
 		v.d = u.d;
+		// T-134: their other damage, so their DPS tile counts it as the meter does.
+		v.so = Math.max(0, u.o);
 		v.e = u.e < 0 ? null : u.e;
 		v.dv = -1d;
 		v.am = u.a;

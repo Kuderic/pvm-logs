@@ -1054,11 +1054,12 @@ final class SidePanelModel
 		tiles.add(tile("Kills/hr", Text.title(rate == null ? LedgerRows.UNKNOWN : rate, SidePanelStyle.VALUE),
 			Text.small(rate == null ? "after a minute" : "over " + LedgerRows.duration(clock), rate == null
 				? SidePanelStyle.MUTED : SidePanelStyle.SECONDARY), SidePanelStyle.TRACK));
-		final double expectedDps = n.scoredClock > 0 && n.expected > 0 ? n.expected / n.scoredClock : Double.NaN;
-		tiles.add(tile("DPS", Text.title(Double.isNaN(n.dps) ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps),
-			SidePanelStyle.VALUE), Text.small(warning ? "expected hidden" : Double.isNaN(expectedDps) ? "weapon only"
-			: "expected " + LedgerRows.oneDecimal(expectedDps), warning ? SidePanelStyle.MUTED : SidePanelStyle.SECONDARY),
-			SidePanelStyle.TRACK));
+		// T-134: all your damage against the expected and the same other damage, both over the scored clock.
+		final double expectedDps = n.expectedDps;
+		tiles.add(new Tile(Text.small("DPS", SidePanelStyle.SECONDARY), Text.title(Double.isNaN(n.dps)
+			? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps), SidePanelStyle.VALUE), Text.small(warning
+			? "expected hidden" : Double.isNaN(expectedDps) ? dpsSub(n) : "expected " + LedgerRows.oneDecimal(expectedDps),
+			warning ? SidePanelStyle.MUTED : SidePanelStyle.SECONDARY), null, SidePanelStyle.TRACK, dpsTooltip(n, in)));
 		final String other = otherDamage(in);
 		tiles.add(tile("Damage", Text.title(LedgerRows.number(n.damage), SidePanelStyle.VALUE),
 			Text.small(other.isEmpty() ? "weapon only" : other, SidePanelStyle.SECONDARY), SidePanelStyle.TRACK));
@@ -1376,9 +1377,11 @@ final class SidePanelModel
 				shortOther.equals(other) ? null : shortOther, edge));
 		}
 
-		tiles.add(tile("DPS", Text.title(Double.isNaN(n.dps) ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps),
-			SidePanelStyle.VALUE), Text.small(in.unscored && in.kind == Kind.ROOM ? "on the " + in.scoredName
-			: "weapon only", SidePanelStyle.SECONDARY), SidePanelStyle.TRACK));
+		// T-134: all your damage over the scored clock; the sub-line says what's in it, the tooltip each part.
+		tiles.add(new Tile(Text.small("DPS", SidePanelStyle.SECONDARY), Text.title(Double.isNaN(n.dps)
+			? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps), SidePanelStyle.VALUE), Text.small(in.unscored
+			&& in.kind == Kind.ROOM ? "on the " + in.scoredName : dpsSub(n), SidePanelStyle.SECONDARY), null,
+			SidePanelStyle.TRACK, dpsTooltip(n, in)));
 
 		final boolean avoidable = avoidableShown(n, in);
 		final double execution = shownExecution(n, in);
@@ -1393,6 +1396,49 @@ final class SidePanelModel
 			? LedgerRows.UNKNOWN : LedgerRows.partPercent(execution), SidePanelStyle.VALUE), lostText,
 			anyLost ? SidePanelStyle.ticksShort(lost) + " lost" : null, SidePanelStyle.TRACK));
 		return tiles;
+	}
+
+	/** T-134: the DPS tile's sub-line: {@code weapon 21.1} beside your other damage, {@code weapon only} without. */
+	static String dpsSub(LedgerRows.Numbers n)
+	{
+		return n.other > 0 && !Double.isNaN(n.weaponDps) ? "weapon " + LedgerRows.oneDecimal(n.weaponDps) : "weapon only";
+	}
+
+	/**
+	 * T-134: the DPS tile's tooltip, each part's rate over the scored clock, on two lines: {@code 22.9 DPS over 2:05 of
+	 * scored fighting:} then {@code weapon 21.1, thrall 1.2, recoil/veng 0.3, venom 0.3.} Null without other damage (the
+	 * sub-line says it all).
+	 */
+	static String dpsTooltip(LedgerRows.Numbers n, Input in)
+	{
+		if (n.other <= 0 || Double.isNaN(n.dps) || n.scoredClock <= 0)
+		{
+			return null;
+		}
+		final List<String> parts = new ArrayList<>();
+		parts.add("weapon " + LedgerRows.oneDecimal(n.weaponDps));
+		if (in.scoredThrall > 0)
+		{
+			parts.add("thrall " + LedgerRows.oneDecimal(in.scoredThrall / n.scoredClock));
+		}
+		if (in.scoredReflect > 0)
+		{
+			parts.add("recoil/veng " + LedgerRows.oneDecimal(in.scoredReflect / n.scoredClock));
+		}
+		for (Map.Entry<String, Integer> e : DotKinds.split(in.scoredDotByKind, in.scoredDot, DotKinds.REMAINDER)
+			.entrySet())
+		{
+			parts.add(e.getKey() + " " + LedgerRows.oneDecimal(e.getValue() / n.scoredClock));
+		}
+		// A party member's live panels know the sum alone (their update's o), not its kinds.
+		final int named = Math.max(0, in.scoredThrall) + Math.max(0, in.scoredReflect) + Math.max(0, in.scoredDot);
+		if (n.other > named)
+		{
+			parts.add((named == 0 ? "thrall, recoil and DoT " : "other ") + LedgerRows.oneDecimal((n.other - named)
+				/ n.scoredClock));
+		}
+		return "<html>" + LedgerRows.oneDecimal(n.dps) + " DPS over " + LedgerRows.duration(n.scoredClock)
+			+ " of scored fighting:<br>" + String.join(", ", parts) + ".</html>";
 	}
 
 	private static Tile tile(String label, Text value, Text sub, Color edge)

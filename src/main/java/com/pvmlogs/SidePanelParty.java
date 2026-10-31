@@ -47,8 +47,12 @@ final class SidePanelParty
 	static final String NOT_IN_PARTY = "Not in a RuneLite party. Members of your party who run Luck vs Skill show here, "
 		+ "with their damage beside yours.";
 	static final String NOTHING_YET = "Your party's damage shows here once you fight.";
+	/**
+	 * T-134: sharing members' thrall, recoil and damage over time are theirs now (their {@code o}), so "and thralls" goes:
+	 * what's left is players not running Luck vs Skill (their thralls too) and members on a sender before T-134.
+	 */
 	static final String OTHERS_NOTE = "others: damage on the targets no sharing member accounts for: members not running "
-		+ "Luck vs Skill, and thralls.";
+		+ "Luck vs Skill.";
 	/** An attack row the sender summed the rest into (T-124's {@link LuckVsSkillUpdate#MAX_ROWS}). */
 	static final String OTHER_ATTACKS = "Other attacks";
 	static final String YOU_NAME = "you";
@@ -144,7 +148,7 @@ final class SidePanelParty
 		final int others = others(in.othersDamage, in.members);
 		final int total = total(in.members, others);
 		final List<Member> order = sorted(in.members);
-		final int top = Math.max(others, order.get(0).figures.d);
+		final int top = Math.max(others, order.get(0).figures.all());
 		final double seconds = Math.max(0.6, in.seconds);
 		final List<PanelSnapshot.PartyRow> rows = new ArrayList<>(order.size() + 1);
 		for (int i = 0; i < order.size(); i++)
@@ -171,16 +175,18 @@ final class SidePanelParty
 	{
 		final LuckVsSkillUpdate f = m.figures;
 		final String name = m.you ? YOU_NAME : m.name;
-		final String[] dmg = {compact(f.d), dps(f.d, seconds), share(f.d, total)};
+		// T-134: all their damage: the weapon's and their thrall, recoil and damage over time.
+		final int all = f.all();
+		final String[] dmg = {compact(all), dps(all, seconds), share(all, total)};
 		final boolean luckKnown = f.p >= 0;
 		final String[] luck = {luckKnown ? LedgerRows.band(f.p) : "", luckKnown ? seconds(f.ls) : ""};
 		final String[] exec = {f.x >= 0 ? LedgerRows.partPercent(f.x) : "", f.il > 0 ? "-" + f.il + LedgerRows.TICKS_SHORT
 			: ""};
 		final Color luckColour = luckKnown ? SidePanelStyle.of(LedgerRows.percentileBand(f.p)) : SidePanelStyle.MUTED;
-		final String place = ordinal(rank) + " of " + of + " · " + share(f.d, total) + " · " + dps(f.d, seconds) + " dps";
+		final String place = ordinal(rank) + " of " + of + " · " + share(all, total) + " · " + dps(all, seconds) + " dps";
 		final PanelSnapshot.PartyBreakdown breakdown = new PanelSnapshot.PartyBreakdown(m.you ? "You" : m.name, place,
 			attacks(f, seconds, in.itemNames), summary(f, !in.live));
-		return new PanelSnapshot.PartyRow(m.id, name, m.you, m.left, m.colour(), fill(f.d, top), dmg, luck, exec,
+		return new PanelSnapshot.PartyRow(m.id, name, m.you, m.left, m.colour(), fill(all, top), dmg, luck, exec,
 			luckColour, m.ticks, m.damage, breakdown).with(m.avatar, m.fight, m.fightLive);
 	}
 
@@ -188,11 +194,15 @@ final class SidePanelParty
 	static List<Member> sorted(List<Member> members)
 	{
 		final List<Member> out = new ArrayList<>(members);
-		out.sort(Comparator.comparingInt((Member m) -> -m.figures.d).thenComparing(m -> !m.you).thenComparingLong(m -> m.id));
+		out.sort(Comparator.comparingInt((Member m) -> -m.figures.all()).thenComparing(m -> !m.you)
+			.thenComparingLong(m -> m.id));
 		return out;
 	}
 
-	/** The damage no sharing member accounts for: other players' hits less the members' own. Never negative. */
+	/**
+	 * The damage no sharing member accounts for: other players' hits less the members' own, all of it (T-134: their
+	 * thrall's splats reach you as another player's too). Never negative.
+	 */
 	static int others(int othersDamage, List<Member> members)
 	{
 		long members_ = 0;
@@ -200,7 +210,7 @@ final class SidePanelParty
 		{
 			if (!m.you)
 			{
-				members_ += Math.max(0, m.figures.d);
+				members_ += m.figures.all();
 			}
 		}
 		return (int) Math.max(0, othersDamage - members_);
@@ -211,7 +221,7 @@ final class SidePanelParty
 		long t = Math.max(0, others);
 		for (Member m : members)
 		{
-			t += Math.max(0, m.figures.d);
+			t += m.figures.all();
 		}
 		return (int) Math.min(Integer.MAX_VALUE, t);
 	}
@@ -353,6 +363,7 @@ final class SidePanelParty
 			s.r = u.rn != null ? u.rn : u.r;
 			s.rn = u.rn;
 			s.d += u.d;
+			s.o += Math.max(0, u.o);
 			s.e += Math.max(0, u.e);
 			s.st += u.st;
 			s.a += u.a;

@@ -48,7 +48,8 @@ public class PartyShareTest
 				names.add(f.getName());
 			}
 		}
-		assertEquals("[v, k, r, rs, rn, ri, d, e, st, a, ct, kill, p, ls, x, u, il, bd, gd, pd, bs, gs, ps, tk, th, w]",
+		// T-134: o, the sender's other damage (thrall, recoil and vengeance, damage over time).
+		assertEquals("[v, k, r, rs, rn, ri, d, e, st, a, ct, kill, p, ls, x, u, il, bd, gd, pd, bs, gs, ps, tk, th, w, o]",
 			names.toString());
 	}
 
