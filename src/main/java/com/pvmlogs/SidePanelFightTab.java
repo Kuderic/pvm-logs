@@ -83,6 +83,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 
 		/** A room picked in the whole raid's Rooms list: This room, on it. */
 		void showRaidRoom(int index);
+
+		/** T-125: the Fight tab's party line was clicked: the Party tab. */
+		default void openParty()
+		{
+		}
 	}
 
 	/** Every action a no-op, for tests and renders. */
@@ -286,6 +291,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				unscored(tab);
 				// The tiles under the header, the at-a-glance summary (Eric's pick, 07:45).
 				tiles(tab);
+				partyLine(tab);
 				damage(tab);
 				curve(tab);
 				budget(tab);
@@ -600,6 +606,35 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				}
 			}
 		});
+	}
+
+	/**
+	 * T-125: one line under the tiles with someone in the party sharing, {@code Party · you 2nd of 5 · 38%}, which opens
+	 * the Party tab (Eric's pick, option B).
+	 */
+	private void partyLine(FightTab tab)
+	{
+		if (tab.partyLine == null)
+		{
+			return;
+		}
+		final JPanel card = SidePanelParts.card(0);
+		final SidePanelParts.Line line = new SidePanelParts.Line(Text.title("Party", SidePanelStyle.VALUE),
+			Text.small(tab.partyLine + "  ›", SidePanelStyle.SECONDARY));
+		card.add(line);
+		card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		card.setToolTipText("Your party's damage beside yours, on the Party tab");
+		card.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mouseClicked(MouseEvent e)
+			{
+				actions.openParty();
+			}
+		});
+		add(card);
+		updaters.add(t -> line.set(Text.title("Party", SidePanelStyle.VALUE), null, Text.small(t.partyLine + "  ›",
+			SidePanelStyle.SECONDARY)));
 	}
 
 	private void curve(FightTab tab)

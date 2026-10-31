@@ -30,8 +30,226 @@ final class PanelSnapshot
 
 	PanelSnapshot(FightTab fight, TripTab trip)
 	{
+		this(fight, trip, null);
+	}
+
+	/** T-125: the Party tab; null when it wasn't built. */
+	final PartyTab party;
+
+	PanelSnapshot(FightTab fight, TripTab trip, PartyTab party)
+	{
 		this.fight = fight;
 		this.trip = trip;
+		this.party = party;
+	}
+
+	// ---- T-125: the Party tab ----
+
+	/**
+	 * The Party tab: the meter's rows (members biggest damage first, {@code others} last), its header, and what the
+	 * Damage over time chart needs. With no one sharing, {@link #sharing} is false and {@link #empty} says why.
+	 */
+	static final class PartyTab
+	{
+		final boolean sharing;
+		final String empty;
+		/** The room or raid: {@code Zebak}; its clock is {@link #clock}. */
+		final String where;
+		/** {@code party 79.1 dps}. */
+		final String partyDps;
+		/** The room/raid switch: null outside a raid. */
+		final Boolean wholeRaid;
+		/** After the room: the {@code dmg · luck · exec} switch shows. */
+		final boolean after;
+		final List<PartyRow> rows;
+		/** What {@code others} is, under the meter; null without an others row. */
+		final String othersNote;
+		/** The chart's last tick. */
+		final int ticks;
+		/** The chart's end label: the scope's clock. */
+		final String clock;
+
+		PartyTab(String where, String partyDps, Boolean wholeRaid, boolean after, List<PartyRow> rows, String othersNote,
+			int ticks, String clock)
+		{
+			this.sharing = true;
+			this.empty = null;
+			this.where = where;
+			this.partyDps = partyDps;
+			this.wholeRaid = wholeRaid;
+			this.after = after;
+			this.rows = list(rows);
+			this.othersNote = othersNote;
+			this.ticks = Math.max(1, ticks);
+			this.clock = clock;
+		}
+
+		private PartyTab(String empty)
+		{
+			this.sharing = false;
+			this.empty = empty;
+			this.where = "";
+			this.partyDps = "";
+			this.wholeRaid = null;
+			this.after = false;
+			this.rows = Collections.emptyList();
+			this.othersNote = null;
+			this.ticks = 1;
+			this.clock = "";
+		}
+
+		static PartyTab empty(String why)
+		{
+			return new PartyTab(why);
+		}
+
+		/** The members' ids in order, others as -1: a member drilled into stays while their id is here. */
+		List<Long> ids()
+		{
+			final List<Long> out = new ArrayList<>(rows.size());
+			for (PartyRow r : rows)
+			{
+				out.add(r.id);
+			}
+			return out;
+		}
+
+		/** What decides the tab's components: rows are painted, so only their number, the switches and the note. */
+		String structure()
+		{
+			return !sharing ? "empty" : "rows" + rows.size() + (wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room")
+				+ (after ? "|after" : "") + (othersNote == null ? "" : "|n");
+		}
+
+		PartyRow row(long id)
+		{
+			for (PartyRow r : rows)
+			{
+				if (r.id == id && !r.others)
+				{
+					return r;
+				}
+			}
+			return null;
+		}
+	}
+
+	/** One row of the meter: a member, or others. Values by metric: damage, DPS, share; luck and its seconds; execution. */
+	static final class PartyRow
+	{
+		static final long OTHERS_ID = -1;
+		final long id;
+		final String name;
+		final boolean you;
+		final boolean left;
+		final boolean others;
+		final Color colour;
+		/** The bar: this row's damage against the top's, 0 to 1. */
+		final double fill;
+		final String[] dmg;
+		final String[] luck;
+		final String[] exec;
+		final Color luckColour;
+		/** Damage over time: cumulative damage at each point's tick. */
+		final int[] seriesTicks;
+		final int[] seriesDamage;
+		/** The click-in view; null for others. */
+		final PartyBreakdown breakdown;
+
+		PartyRow(long id, String name, boolean you, boolean left, Color colour, double fill, String[] dmg, String[] luck,
+			String[] exec, Color luckColour, int[] seriesTicks, int[] seriesDamage, PartyBreakdown breakdown)
+		{
+			this.id = id;
+			this.name = name;
+			this.you = you;
+			this.left = left;
+			this.others = false;
+			this.colour = colour;
+			this.fill = fill;
+			this.dmg = dmg;
+			this.luck = luck;
+			this.exec = exec;
+			this.luckColour = luckColour;
+			this.seriesTicks = seriesTicks;
+			this.seriesDamage = seriesDamage;
+			this.breakdown = breakdown;
+		}
+
+		private PartyRow(double fill, String[] dmg, int[][] series, Color colour)
+		{
+			this.id = OTHERS_ID;
+			this.name = "others";
+			this.you = false;
+			this.left = false;
+			this.others = true;
+			this.colour = colour;
+			this.fill = fill;
+			this.dmg = dmg;
+			this.luck = new String[]{"", ""};
+			this.exec = new String[]{"", ""};
+			this.luckColour = SidePanelStyle.MUTED;
+			this.seriesTicks = series[0];
+			this.seriesDamage = series[1];
+			this.breakdown = null;
+		}
+
+		static PartyRow others(double fill, String[] dmg, int[][] series, Color colour)
+		{
+			return new PartyRow(fill, dmg, series, colour);
+		}
+
+		/** The meter's values for {@code m}. */
+		String[] values(SidePanelParty.Metric m)
+		{
+			return m == SidePanelParty.Metric.LUCK ? luck : m == SidePanelParty.Metric.EXEC ? exec : dmg;
+		}
+
+		/** Damage at {@code tick}, read off the series: the last point at or before it. */
+		int damageAt(int tick)
+		{
+			int d = 0;
+			for (int i = 0; i < seriesTicks.length && seriesTicks[i] <= tick; i++)
+			{
+				d = seriesDamage[i];
+			}
+			return d;
+		}
+	}
+
+	/** A member's breakdown: their place, attack rows, and Luck, Execution and damage taken as rows. */
+	static final class PartyBreakdown
+	{
+		final String title;
+		final String place;
+		final List<PartyAttack> attacks;
+		final List<Row> summary;
+
+		PartyBreakdown(String title, String place, List<PartyAttack> attacks, List<Row> summary)
+		{
+			this.title = title;
+			this.place = place;
+			this.attacks = list(attacks);
+			this.summary = list(summary);
+		}
+	}
+
+	/** One attack row: its name, damage and share, a share bar, and two lines of figures. */
+	static final class PartyAttack
+	{
+		final String name;
+		final String right;
+		final double fill;
+		final String line1;
+		final String line2;
+
+		PartyAttack(String name, String right, double fill, String line1, String line2)
+		{
+			this.name = name;
+			this.right = right;
+			this.fill = fill;
+			this.line1 = line1;
+			this.line2 = line2;
+		}
 	}
 
 	/** One of the trip's rooms (spec 3.3): texts only, nothing that points back at the room. */
@@ -796,6 +1014,8 @@ final class PanelSnapshot
 		final Loadout loadout;
 		final ListRow lastFight;
 		final Empty empty;
+		/** T-125: the Party tab's line under the tiles, {@code you 2nd of 5 · 38%}; null with no one sharing. */
+		final String partyLine;
 		/**
 		 * T-099: the Damage card's Boss, Adds and All views, in that order, in a room with a boss and adds that took
 		 * damage; null for no switch. {@link #damage} and {@link #chart} are All's until {@link #showing} picks one.
@@ -828,6 +1048,7 @@ final class PanelSnapshot
 			loadout = b.loadout;
 			lastFight = b.lastFight;
 			empty = b.empty;
+			partyLine = b.partyLine;
 			byTarget = b.byTarget == null ? null : list(b.byTarget);
 			target = -1;
 		}
@@ -857,6 +1078,7 @@ final class PanelSnapshot
 			loadout = t.loadout;
 			lastFight = t.lastFight;
 			empty = t.empty;
+			partyLine = t.partyLine;
 			byTarget = t.byTarget;
 			target = i;
 		}
@@ -892,6 +1114,7 @@ final class PanelSnapshot
 					.append(budget.note == null ? "" : "n");
 			}
 			s.append(tiles == null ? "" : "|T");
+			s.append(partyLine == null ? "" : "|P");
 			s.append(curve == null ? "" : "|c");
 			s.append(noCurve == null ? "" : "|nc");
 			s.append(execution == null ? "" : "|e" + execution.parts.size());
@@ -1065,6 +1288,7 @@ final class PanelSnapshot
 		ListRow lastFight;
 		Empty empty;
 		List<TargetView> byTarget;
+		String partyLine;
 
 		FightTab build()
 		{

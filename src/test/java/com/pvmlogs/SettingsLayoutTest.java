@@ -106,8 +106,17 @@ public class SettingsLayoutTest
 			"showOverlay", "overlayShowLoadout", "overlayAlwaysDps", "overlayDpsIdleSeconds", "overlayBossesOnly",
 			"overlayHoldSeconds",
 			"overlayCovers", "overlayLuck", "overlayParts", "overlayDetails",
-			"panelLive", "panelCharts", "panelLargerText", "panelSmoothFont",
-			"debugLogging", "shareWithParty"), keys());
+			"panelLive", "panelCharts", "panelLargerText", "panelSmoothFont", "shareWithParty",
+			"debugLogging"), keys());
+	}
+
+	/** T-125: sharing sits with the Party tab it feeds, in an open section, not in Data & debugging. */
+	@Test
+	public void sharingIsInTheSidePanelSection()
+	{
+		final ConfigItem share = items().stream().filter(i -> i.keyName().equals("shareWithParty")).findFirst().get();
+		assertEquals(PvmPerformanceConfig.SIDE_PANEL_SECTION, share.section());
+		assertFalse(sections().get(share.section()).closedByDefault());
 	}
 
 	@Test
