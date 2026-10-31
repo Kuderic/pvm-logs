@@ -30,6 +30,8 @@ final class SidePanelPartyMeter extends JComponent
 	private List<PanelSnapshot.PartyRow> rows = Collections.emptyList();
 	private SidePanelParty.Metric metric = SidePanelParty.Metric.DMG;
 	private int hover = -1;
+	/** T-130: the member whose Fight panels show under the chart, outlined in their colour; you by default. */
+	private long selected = SidePanelParty.YOU_ID;
 	/** How many value columns the last paint fitted: the DPS column goes first where a name would be cut to nothing. */
 	private int shownColumns;
 	private int paints;
@@ -81,6 +83,21 @@ final class SidePanelPartyMeter extends JComponent
 		repaint();
 	}
 
+	/** T-130: the selected member: a repaint. */
+	void setSelected(long id)
+	{
+		if (id != selected)
+		{
+			selected = id;
+			repaint();
+		}
+	}
+
+	long selected()
+	{
+		return selected;
+	}
+
 	void setMetric(SidePanelParty.Metric metric)
 	{
 		if (this.metric != metric)
@@ -130,7 +147,7 @@ final class SidePanelPartyMeter extends JComponent
 			return SidePanelParty.OTHERS_NOTE;
 		}
 		return (r.you ? "You" : r.name) + ": " + r.dmg[0] + " damage, " + r.dmg[1] + " dps, " + r.dmg[2]
-			+ " of the party's. Click for the breakdown.";
+			+ " of the party's. Click for their Fight panels below.";
 	}
 
 	@Override
@@ -220,7 +237,14 @@ final class SidePanelPartyMeter extends JComponent
 			g.fillRect(0, y + 1, (int) Math.round(w * r.fill), rh - 2);
 			g.setColor(r.left ? SidePanelStyle.alpha(r.colour, 0.5) : r.colour);
 			g.fillRect(0, y + 1, 2, rh - 2);
-			if (i == hover && !r.others)
+			if (r.id == selected && !r.others)
+			{
+				// T-130: the selected member, outlined in their colour.
+				g.setColor(r.colour);
+				g.drawRect(0, y + 1, w - 1, rh - 3);
+				g.drawRect(1, y + 2, w - 3, rh - 5);
+			}
+			else if (i == hover && !r.others)
 			{
 				g.setColor(SidePanelStyle.alpha(SidePanelStyle.VALUE, 0.45));
 				g.drawRect(0, y + 1, w - 1, rh - 3);

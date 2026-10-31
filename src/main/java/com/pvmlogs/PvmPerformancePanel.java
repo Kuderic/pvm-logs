@@ -53,7 +53,7 @@ class PvmPerformancePanel extends PluginPanel
 	private volatile boolean active;
 	private volatile boolean dirty = true;
 	/** T-128: the Party tab's member opened (Swing writes, the client thread reads), or none. */
-	private volatile long partyOpened = SidePanelPartyTab.NONE;
+	private volatile long partySelected = SidePanelParty.YOU_ID;
 	/** The room/raid switch as the player left it; null until they touch it, so the overlay's setting decides. */
 	private volatile Boolean wholeRaid;
 	/** A room picked in the whole raid's list, by index, and the raid's room count when it was picked; -1 for none. */
@@ -181,7 +181,7 @@ class PvmPerformancePanel extends PluginPanel
 		// T-128: the member opened is built for, from the click on.
 		partyTab = new SidePanelPartyTab(actions, folds, icons, id ->
 		{
-			partyOpened = id;
+			partySelected = id;
 			requestUpdate();
 		});
 		// T-114: the Calibration report button only with Debug logging on.
@@ -388,7 +388,10 @@ class PvmPerformancePanel extends PluginPanel
 		// T-125: the party's board changes whatever the player is doing.
 		final PartyBoard board = plugin.getPartyBoard();
 		final List<Object> shape = Arrays.asList(fight, over, pre, room, raid, whole,
-			history.size(), head, trip.getStartMillis(), tab, board == null ? 0L : board.revision(), partyOpened,
+			history.size(), head, trip.getStartMillis(), tab, board == null ? 0L : board.revision(), partySelected,
+			// T-129: joining or leaving a party, or a member coming or going, rebuilds the Party tab at once, in or out of
+			// a fight; on the other tabs, nothing.
+			tab == PARTY_TAB ? partyState() : null,
 			board == null || board.isEmpty() ? null : avatars());
 		final boolean force = dirty;
 		final boolean fighting = fight != null && !over && !pre;
@@ -726,6 +729,9 @@ class PvmPerformancePanel extends PluginPanel
 		final SidePanelParty.Input in = new SidePanelParty.Input();
 		final net.runelite.client.party.PartyService party = instance(plugin, net.runelite.client.party.PartyService.class);
 		in.inParty = party != null && party.isInParty();
+		// T-129, T-130: the party's size, and which party it is.
+		in.partySize = in.inParty ? party.getMembers().size() : 0;
+		in.partyKey = in.inParty ? party.getPartyId() : 0;
 		final PartyBoard board = plugin.getPartyBoard();
 		if (board == null)
 		{
@@ -736,6 +742,7 @@ class PvmPerformancePanel extends PluginPanel
 			final net.runelite.client.party.PartyMember m = party == null ? null : party.getMemberById(id);
 			return m == null ? null : m.getDisplayName();
 		});
+		in.shared = views.size();
 		if (views.isEmpty())
 		{
 			partySlots.clear();
@@ -786,12 +793,12 @@ class PvmPerformancePanel extends PluginPanel
 			raidScope ? SidePanelParty.sum(mine) : mine.get(0));
 		final net.runelite.client.party.PartyMember me = party == null ? null : party.getLocalMember();
 		you.avatar = me == null ? null : me.getAvatar();
-		final long opened = partyOpened;
-		if (!light && !raidScope && opened == SidePanelParty.YOU_ID)
+		final long opened = partySelected;
+		if (!light && opened == SidePanelParty.YOU_ID)
 		{
-			// T-128: your own row opens your own Fight tab for the room, as the sender's side builds it.
-			you.fight = SidePanelModel.fight(SidePanelMemberFight.input(room, FightTimeline.room(room, plugin.getTimelines()),
-				rules(), !in.live));
+			// T-130: your Fight panels under the party, the Fight tab's own build for the room or raid on show. Built
+			// here only while the Party tab shows (the Fight tab builds only while it shows), so never twice.
+			you.fight = yourFightPanels(fight, display, room, raid, whole);
 		}
 		if (!light)
 		{
@@ -838,6 +845,51 @@ class PvmPerformancePanel extends PluginPanel
 			}
 		}
 		return in;
+	}
+
+	/**
+	 * T-130: the Fight tab's own input and model for the scope on show, whole: its chart sent from the start, and the
+	 * Fight tab's incremental chart bookkeeping left as it was, so its next build sends it what it hasn't had.
+	 */
+	private PanelSnapshot.FightTab yourFightPanels(Fight fight, Encounter display, Encounter room, Raid raid,
+		boolean whole)
+	{
+		final Object scope = chartScope;
+		final int sent = chartSent;
+		final SidePanelModel.Input in = read(fight, display, room, raid, whole, false, plugin.getHistory());
+		chartScope = scope;
+		chartSent = sent;
+		in.chartFrom = 0;
+		return SidePanelModel.fight(in);
+	}
+
+	/** T-129: whether the player is in a party, which, and its members, as they stand; two reads of PartyService. */
+	private List<Object> partyState()
+	{
+		final net.runelite.client.party.PartyService party = instance(plugin, net.runelite.client.party.PartyService.class);
+		if (party == null || !party.isInParty())
+		{
+			return partyState(false, 0, java.util.Collections.<Long>emptyList());
+		}
+		final List<Long> ids = new ArrayList<>();
+		for (net.runelite.client.party.PartyMember m : party.getMembers())
+		{
+			ids.add(m.getMemberId());
+		}
+		return partyState(true, party.getPartyId(), ids);
+	}
+
+	/** T-129: the Party tab's party key: whether in one, which, and who's in it; equal while none of those changed. */
+	static List<Object> partyState(boolean inParty, long partyId, List<Long> members)
+	{
+		if (!inParty)
+		{
+			return java.util.Collections.emptyList();
+		}
+		final List<Object> out = new ArrayList<>(members.size() + 1);
+		out.add(partyId);
+		out.addAll(members);
+		return out;
 	}
 
 	/** T-128: member Fight tabs from their room messages, built once each. Client thread. */

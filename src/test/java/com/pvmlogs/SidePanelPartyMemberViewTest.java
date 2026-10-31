@@ -33,33 +33,82 @@ public class SidePanelPartyMemberViewTest
 		return p;
 	}
 
+	/** T-130: one page, your Fight panels under the party by default, named. */
 	@Test
-	public void aMemberOpenedAfterTheirRoomIsTheirFightTab()
+	public void theDefaultIsYourFightPanelsUnderTheParty()
 	{
-		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaBrindleAfter());
+		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
 		final SidePanelPartyTab tab = p.partyTab();
-		tab.open(22);
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
+		assertNotNull(tab.meter());
+		assertNotNull(tab.chart());
+		assertEquals("you · Fight panels", tab.heading().left.getText());
+		assertNotNull(tab.memberFight());
+		assertNotNull(SidePanelPictures.sectionOf(tab.memberFight(), "budget"));
+		// No line faded for you.
+		assertEquals(SidePanelPartyTab.NONE, tab.chart().focus());
+		// The meter and chart come first, then the heading, then the panels.
+		final List<Component> order = new ArrayList<>(Arrays.asList(tab.getComponents()));
+		assertTrue(order.indexOf(SidePanelPictures.sectionOf(tab, "party")) < order.indexOf(SidePanelPictures.sectionOf(tab,
+			"partyChart")));
+	}
+
+	@Test
+	public void selectingAMemberSwitchesThePanelsInPlaceAndNotTheMeter()
+	{
+		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
+		final SidePanelPartyTab tab = p.partyTab();
+		final int built = tab.rebuilds();
+		final int members = tab.memberRebuilds();
+		final SidePanelPartyMeter meter = tab.meter();
+		final SidePanelPartyChart chart = tab.chart();
+		tab.select(22);
+		// Only the member's part is built again.
+		assertEquals(built, tab.rebuilds());
+		assertEquals(members + 1, tab.memberRebuilds());
+		assertSame(meter, tab.meter());
+		assertSame(chart, tab.chart());
+		// Their row outlined, their line bright, their name above their panels.
+		assertEquals(22, meter.selected());
+		assertEquals(22, tab.chart().focus());
+		assertEquals("Brindle · Fight panels", tab.heading().left.getText());
 		final SidePanelFightTab fight = tab.memberFight();
 		assertNotNull(fight);
-		// The Fight tab's panels, by the Fight tab's component.
 		for (String id : new String[]{"damage", "curve", "budget", "execution", "chart", "ticks"})
 		{
 			assertNotNull(id, SidePanelPictures.sectionOf(fight, id));
 		}
-		// Their own Damage over time is in it: no party chart under it.
-		assertNull(tab.chart());
-		assertNotNull(SidePanelPictures.sectionOf(tab, "partyMember"));
-		tab.back();
-		assertNull(tab.memberFight());
-		assertNotNull(tab.meter());
+		// Again: back to you.
+		tab.select(22);
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
+		assertEquals(SidePanelPartyTab.NONE, tab.chart().focus());
+		assertEquals("you · Fight panels", tab.heading().left.getText());
+		assertEquals(built, tab.rebuilds());
 	}
 
 	@Test
-	public void midFightTheirViewIsTheLiveFightTabAndThePartyChart()
+	public void aMemberLeavingOrANewPartyGoesBackToYou()
+	{
+		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
+		final SidePanelPartyTab tab = p.partyTab();
+		tab.select(22);
+		final SidePanelParty.Input without = SidePanelPartyExamples.toaYouAndBrindle();
+		without.members.remove(2);
+		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(without)));
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
+		tab.select(21);
+		final SidePanelParty.Input other = SidePanelPartyExamples.toaYouAndBrindle();
+		other.partyKey = 99;
+		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(other)));
+		assertEquals(SidePanelParty.YOU_ID, tab.selected());
+	}
+
+	@Test
+	public void midFightAMembersPanelsAreTheLiveSubsetWithTheLine()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.tobQuillonLive());
 		final SidePanelPartyTab tab = p.partyTab();
-		tab.open(31);
+		tab.select(31);
 		final SidePanelFightTab fight = tab.memberFight();
 		assertNotNull(fight);
 		assertNotNull(SidePanelPictures.sectionOf(fight, "damage"));
@@ -76,13 +125,14 @@ public class SidePanelPartyMemberViewTest
 	}
 
 	@Test
-	public void withoutTheirRoomMessageTheCompactBreakdownShows()
+	public void withoutTheirRoomMessageTheCompactBreakdownShowsInline()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toa());
 		final SidePanelPartyTab tab = p.partyTab();
-		tab.open(22);
+		tab.select(22);
 		assertNull(tab.memberFight());
-		assertNotNull(SidePanelPictures.sectionOf(tab, "partyMember"));
+		assertEquals("Brindle · Fight panels", tab.heading().left.getText());
+		assertNotNull(tab.meter());
 		assertNotNull(tab.chart());
 	}
 
@@ -124,7 +174,7 @@ public class SidePanelPartyMemberViewTest
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.tobQuillonLive());
 		final SidePanelPartyTab tab = p.partyTab();
-		tab.open(31);
+		tab.select(31);
 		final int built = tab.rebuilds();
 		final SidePanelFightTab fight = tab.memberFight();
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(SidePanelPartyExamples.tobQuillonLive())));
@@ -145,6 +195,7 @@ public class SidePanelPartyMemberViewTest
 				for (double scale : new double[]{1, 2})
 				{
 					for (Object[] c : new Object[][]{{SidePanelPartyExamples.toaBrindleAfter(), 22L},
+						{SidePanelPartyExamples.toaYouAndBrindle(), null}, {SidePanelPartyExamples.cox(), 51L},
 						{SidePanelPartyExamples.tobQuillonLive(), 31L}, {SidePanelPartyExamples.toaWithPictures(), null},
 						{SidePanelPartyExamples.withEcho(), null}})
 					{
@@ -157,7 +208,7 @@ public class SidePanelPartyMemberViewTest
 							p.tabs().select(p.tabs().getTab(3));
 							if (c[1] != null)
 							{
-								p.partyTab().open((Long) c[1]);
+								p.partyTab().select((Long) c[1]);
 							}
 							SidePanelPictures.draw(p.tabs(), p.partyTab(), scale);
 							final String at = (larger ? "larger " : "") + (smooth ? "smooth " : "normal ") + scale + "× "

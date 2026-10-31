@@ -38,6 +38,12 @@ final class SidePanelParty
 	static final Color OTHERS = new Color(0x6A6A6A);
 
 	static final String NOBODY = "No one in your party is sharing.";
+	/** T-129: in a party, before anyone's update has come in. */
+	static String waiting(int partySize)
+	{
+		return (partySize > 1 ? "In a party of " + partySize + "." : "In a party.")
+			+ " Members running Luck vs Skill appear here once their fight starts.";
+	}
 	static final String NOT_IN_PARTY = "Not in a RuneLite party. Members of your party who run Luck vs Skill show here, "
 		+ "with their damage beside yours.";
 	static final String NOTHING_YET = "Your party's damage shows here once you fight.";
@@ -110,6 +116,11 @@ final class SidePanelParty
 		/** Other players' hits on the scope's targets, as the client saw them (Fight's othersDamage). */
 		int othersDamage;
 		final List<Member> members = new ArrayList<>();
+		/** T-129: the party's size as RuneLite has it, and how many members have shared anything yet. */
+		int partySize;
+		int shared;
+		/** T-130: RuneLite's party id, 0 out of one. */
+		long partyKey;
 		/** Item names, for the attack rows; the id's number without one. */
 		IntFunction<String> itemNames = id -> "item " + id;
 	}
@@ -126,7 +137,9 @@ final class SidePanelParty
 		}
 		if (!sharing || in.scope == null)
 		{
-			return PanelSnapshot.PartyTab.empty(!in.inParty ? NOT_IN_PARTY : !sharing ? NOBODY : NOTHING_YET);
+			// T-129: out of a party; in one before anyone has shared; shared, but nothing of yours on show yet.
+			return PanelSnapshot.PartyTab.empty(!in.inParty ? NOT_IN_PARTY : in.shared == 0 && !sharing
+				? waiting(in.partySize) : !sharing ? NOBODY : NOTHING_YET).party(in.partyKey);
 		}
 		final int others = others(in.othersDamage, in.members);
 		final int total = total(in.members, others);
@@ -151,7 +164,7 @@ final class SidePanelParty
 		}
 		return new PanelSnapshot.PartyTab(in.scope, String.format(Locale.ENGLISH,
 			"party %.1f dps", total / seconds), in.wholeRaid, !in.live, rows, others > 0 ? OTHERS_NOTE : null, ticks,
-			LedgerRows.duration(seconds));
+			LedgerRows.duration(seconds)).party(in.partyKey);
 	}
 
 	private static PanelSnapshot.PartyRow row(Member m, int rank, int of, int top, int total, double seconds, Input in)

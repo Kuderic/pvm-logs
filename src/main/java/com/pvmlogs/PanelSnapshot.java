@@ -68,6 +68,15 @@ final class PanelSnapshot
 		final int ticks;
 		/** The chart's end label: the scope's clock. */
 		final String clock;
+		/** T-130: the party it's for (RuneLite's party id, 0 out of one): a new party puts the selection back on you. */
+		long partyKey;
+
+		/** T-130: this tab, for this party. */
+		PartyTab party(long key)
+		{
+			this.partyKey = key;
+			return this;
+		}
 
 		PartyTab(String where, String partyDps, Boolean wholeRaid, boolean after, List<PartyRow> rows, String othersNote,
 			int ticks, String clock)
@@ -117,7 +126,8 @@ final class PanelSnapshot
 		/** What decides the tab's components: rows are painted, so only their number, the switches and the note. */
 		String structure()
 		{
-			return !sharing ? "empty" : "rows" + rows.size() + (wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room")
+			// T-129: an empty tab's line is its structure: joining a party changes it.
+			return !sharing ? "empty|" + empty : "rows" + rows.size() + (wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room")
 				+ (after ? "|after" : "") + (othersNote == null ? "" : "|n");
 		}
 
