@@ -721,11 +721,19 @@ final class PanelSnapshot
 	{
 		final Text hint;
 		final List<Part> parts;
+		/** T-126: the Execution card's and tile's tooltip, its sum ({@code 100% − uptime 0.6% … = 95%}); null for none. */
+		final String tooltip;
 
 		Parts(Text hint, List<Part> parts)
 		{
+			this(hint, parts, null);
+		}
+
+		Parts(Text hint, List<Part> parts, String tooltip)
+		{
 			this.hint = hint;
 			this.parts = list(parts);
+			this.tooltip = tooltip;
 		}
 	}
 

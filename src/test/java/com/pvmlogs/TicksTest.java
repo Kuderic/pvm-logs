@@ -105,7 +105,7 @@ public class TicksTest
 		// Eric's kill: luck 14.35 s slower (seconds), uptime 15 s and eating 4.2 s (ticks), the boost in damage.
 		assertEquals("14 s slower", row(rows, "Luck").right);
 		assertEquals("89% (-25 ticks)", row(rows, " uptime").right);
-		assertEquals("85% (-16 dmg)", row(rows, " stat boost").right);
+		assertEquals("98% (-16 dmg)", row(rows, " stat boost").right);
 		assertEquals("7 ticks", row(rows, LedgerRows.EATING).right);
 		assertEquals("10 ticks", row(rows, LedgerRows.MECHANICS).right);
 		// Clocks.

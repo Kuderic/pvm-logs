@@ -574,10 +574,14 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		for (PanelSnapshot.Tile t : tab.tiles)
 		{
 			final SidePanelStatTile v = new SidePanelStatTile(t);
-			// T-118: Luck's and Execution's time is in ticks; say what a tick is.
-			if ("Luck".equals(t.label.text) || "Execution".equals(t.label.text))
+			// T-118: Luck's and Execution's time is in ticks; say what a tick is. T-126: Execution's adds its sum.
+			if ("Luck".equals(t.label.text))
 			{
 				v.setToolTipText(SidePanelModel.TICK_NOTE);
+			}
+			else if ("Execution".equals(t.label.text))
+			{
+				v.setToolTipText(tab.execution.tooltip);
 			}
 			views.add(v);
 			grid.add(v);
@@ -588,6 +592,12 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			for (int i = 0; i < views.size(); i++)
 			{
 				views.get(i).set(t.tiles.get(i));
+				// T-126: the Execution tile's sum moves with its figures; text only, set when it changes.
+				final String tip = t.tiles.get(i).label.text.equals("Execution") ? t.execution.tooltip : null;
+				if (tip != null && !tip.equals(views.get(i).getToolTipText()))
+				{
+					views.get(i).setToolTipText(tip);
+				}
 			}
 		});
 	}
@@ -730,10 +740,13 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			card.add(bar);
 		}
 		final SidePanelSection section = new SidePanelSection("execution", "Execution", tab.execution.hint, card, folds);
+		section.setTooltip(tab.execution.tooltip);
 		add(section);
 		updaters.add(t ->
 		{
 			section.setHint(t.execution.hint);
+			// T-126: the sum moves with the figures; text only, no layout.
+			section.setTooltip(t.execution.tooltip);
 			for (int i = 0; i < bars.size(); i++)
 			{
 				bars.get(i).set(t.execution.parts.get(i));

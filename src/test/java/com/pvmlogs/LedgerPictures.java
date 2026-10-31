@@ -92,6 +92,18 @@ public final class LedgerPictures
 		// T-117: Eric's kill at the Leviathan in a box saved at the narrowest width: the ticks' short forms.
 		s.put("39-ticks-narrow", LedgerRows.build(leviathan, LedgerRows.State.fight("The Leviathan", true, true, false),
 			all));
+		// T-126: a kill like Eric's (00:37): about 600 ideal, 2 damage to prayer, 17 to gear and 5 to the boost, a tick idle.
+		final LedgerExamples.FakeScope erics = LedgerExamples.kill();
+		erics.ticksLost = 2;
+		erics.ticksLostEating = 0;
+		erics.idealSetupDamage = 600;
+		erics.efficiency = 1 - 24 / 600.0;
+		erics.boostShare = 0.97;
+		erics.boostCostShare = 5 / 600.0;
+		erics.switchCostShare = 17 / 600.0;
+		erics.damageVariance = 11436;
+		s.put("40-execution-like-erics", LedgerRows.build(erics, LedgerRows.State.fight("Vardorvis", true, true, false),
+			all));
 		s.put("38-run-long", LedgerRows.build(demons, LedgerRows.State.run("Greater abyssal demon", 120, 3_753, false,
 			false), all));
 		// T-075: the trip's drains and specs, in words.

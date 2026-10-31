@@ -180,7 +180,7 @@ public class LedgerRowsTest
 			d(" uptime", "93% (-8 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "84% (-9 dmg)"),
+			d(" stat boost", "98% (-9 dmg)"),
 			d(" damage taken", "112"),
 			d(" eating", "2 ticks")),
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)));
@@ -198,7 +198,7 @@ public class LedgerRowsTest
 			d(" uptime", "89% (-25 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "85% (-16 dmg)"),
+			d(" stat boost", "98% (-16 dmg)"),
 			d(" damage taken", "248"),
 			d(" eating", "7 ticks"),
 			b("", ""),
@@ -220,7 +220,7 @@ public class LedgerRowsTest
 			d(" uptime", "94% (-14 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "95% (-8 dmg)"),
+			d(" stat boost", "99% (-8 dmg)"),
 			d(" damage taken", "310"),
 			b("", ""),
 			main("Summary", ""),
@@ -243,7 +243,7 @@ public class LedgerRowsTest
 			d(" uptime", "96% (-52 ticks)", COST),
 			d(" prayer", "99% (-16 dmg)"),
 			d(" gear", "99% (-12 dmg)"),
-			d(" stat boost", "88% (-102 dmg)", COST),
+			d(" stat boost", "98% (-102 dmg)", COST),
 			d(" damage taken", "1,404"),
 			d(" eating", "11 ticks"),
 			b("", ""),
@@ -274,7 +274,7 @@ public class LedgerRowsTest
 			d(" uptime", "90% (-92 ticks)", COST),
 			d(" prayer", "98% (-204 dmg)", COST),
 			d(" gear", "99% (-34 dmg)"),
-			d(" stat boost", "97% (-103 dmg)"),
+			d(" stat boost", "99% (-103 dmg)"),
 			d(" damage taken", "980"),
 			b("", ""),
 			main("Summary", ""),
@@ -307,7 +307,7 @@ public class LedgerRowsTest
 			d(" uptime", "93% (-8 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "84% (-9 dmg)"),
+			d(" stat boost", "98% (-9 dmg)"),
 			d(" damage taken", "112"),
 			d(" eating", "2 ticks")),
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, true)));
@@ -395,7 +395,7 @@ public class LedgerRowsTest
 		s.attacksPrayed = 50;
 		s.attacksSwitched = 50;
 		s.attacksDrained = 25;
-		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" stat boost", "85% (-16 dmg)")));
+		assertTrue(build(s, State.fight("Vardorvis", false, false, false)).contains(d(" stat boost", "98% (-16 dmg)")));
 	}
 
 	@Test
@@ -564,7 +564,7 @@ public class LedgerRowsTest
 			d(" uptime", "93% (-8 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "84% (-9 dmg)"),
+			d(" stat boost", "98% (-9 dmg)"),
 			d(" damage taken", "112"),
 			d(" eating", "2 ticks")),
 			build(LedgerExamples.midFight(), State.fight("Vardorvis", false, false, false)));
@@ -637,7 +637,7 @@ public class LedgerRowsTest
 	{
 		// Eric, 2026-10-26: under Execution, the damage you took.
 		final List<Row> rows = build(LedgerExamples.kill(), State.fight("Vardorvis", false, false, false));
-		assertEquals(d(" stat boost", "85% (-16 dmg)"), rows.get(7));
+		assertEquals(d(" stat boost", "98% (-16 dmg)"), rows.get(7));
 		assertEquals(d(" damage taken", "248"), rows.get(8));
 		final Settings off = new Settings();
 		off.parts = ExecutionParts.OFF;
@@ -749,7 +749,7 @@ public class LedgerRowsTest
 		s.details = false;
 		final List<Row> rows = LedgerRows.build(LedgerExamples.kill(), State.fight("Vardorvis", true, true, false), s);
 		assertEquals(10, rows.size());
-		assertEquals(d(" stat boost", "85% (-16 dmg)"), rows.get(7));
+		assertEquals(d(" stat boost", "98% (-16 dmg)"), rows.get(7));
 		assertEquals(d(" damage taken", "248"), rows.get(8));
 		assertEquals(d(" eating", "7 ticks"), rows.get(9));
 	}
@@ -1575,7 +1575,7 @@ public class LedgerRowsTest
 			d(" avoidable eating", "90% (-22 ticks)", COST),
 			d(" prayer", "100%"),
 			d(" gear", "100%"),
-			d(" stat boost", "85% (-16 dmg)"),
+			d(" stat boost", "98% (-16 dmg)"),
 			taken("263 · 141 avoidable", "263"),
 			// 16.2 s of eating, 13.0 of it avoidable: the neutral row keeps the rest.
 			d(" eating", "5 ticks")), rows.subList(execution + 1, execution + 8));

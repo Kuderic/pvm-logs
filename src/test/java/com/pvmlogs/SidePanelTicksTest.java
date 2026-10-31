@@ -140,13 +140,15 @@ public class SidePanelTicksTest
 		int noted = 0;
 		for (Component c : all(p.fightTab()))
 		{
-			if (c instanceof JComponent && SidePanelModel.TICK_NOTE.equals(((JComponent) c).getToolTipText()))
+			final String tip = c instanceof JComponent ? ((JComponent) c).getToolTipText() : null;
+			if (tip != null && tip.contains(SidePanelModel.TICK_NOTE))
 			{
 				noted++;
 			}
 		}
-		// Where the time went's card, and the Luck and Execution tiles.
-		assertEquals(3, noted);
+		// Where the time went's card, and the Luck and Execution tiles; T-126: the Execution card's header too, after its
+		// sum.
+		assertEquals(4, noted);
 	}
 
 	@Test
