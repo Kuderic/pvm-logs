@@ -102,6 +102,11 @@ public final class SidePanelPictures
 			partyTab(out);
 			return;
 		}
+		if (args.length > 1 && "alldps".equals(args[1]))
+		{
+			allYourDamage(out);
+			return;
+		}
 		if (args.length > 1 && "reset".equals(args[1]))
 		{
 			setupDamageAndNewTrip(out);
@@ -1669,6 +1674,78 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-134: DPS counting all your damage: the Fight tab's tiles with the DPS tile's tooltip (a thrall; all three kinds;
+	 * none), a run's tiles, and the Party meter with a member's other damage. Normal, Smooth and Larger at 1x and 2x.
+	 */
+	private static void allYourDamage(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-tile-with-a-thrall", scale, dpsTiles(SidePanelExamples.dead(), scale));
+				final SidePanelModel.Input three = SidePanelExamples.dead();
+				final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) three.scope;
+				s.reflectDamage = 41;
+				s.dotDamage = 30;
+				three.scoredReflect = 41;
+				three.scoredDot = 30;
+				three.scoredDotByKind = java.util.Collections.singletonMap("venom", 30);
+				write(dir, "b-tile-with-all-three", scale, dpsTiles(three, scale));
+				final SidePanelModel.Input none = SidePanelExamples.dead();
+				((LedgerExamples.FakeScope) none.scope).thrallDamage = 0;
+				none.scoredThrall = 0;
+				write(dir, "c-tile-weapon-only", scale, dpsTiles(none, scale));
+				final SidePanelTimelineExamples.Built run = SidePanelRunExamples.demonRun(12);
+				run.fight.recordThrallDamage(120);
+				write(dir, "d-run-tiles-with-a-thrall", scale, dpsTiles(SidePanelRunExamples.live(run), scale));
+				final SidePanelParty.Input party = SidePanelPartyExamples.toa();
+				party.members.get(0).figures.o = 80;
+				party.members.get(2).figures.o = 410;
+				write(dir, "e-party-meter-with-other-damage", scale, party(party, null, -1, null, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** The Fight tab down to its four tiles, with the DPS tile's tooltip under it where it has one. */
+	static BufferedImage dpsTiles(SidePanelModel.Input in, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		styled(panel);
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		SidePanelStatTile dps = null;
+		for (Component k : all(panel.fightTab()))
+		{
+			if (k instanceof SidePanelStatTile)
+			{
+				for (Component t : all((Container) k))
+				{
+					if (t instanceof SidePanelText && "DPS".equals(((SidePanelText) t).getText()))
+					{
+						dps = (SidePanelStatTile) k;
+					}
+				}
+			}
+		}
+		final Container grid = dps.getParent();
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(grid.getParent(), grid.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final BufferedImage tiles = whole.getSubimage(0, 0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale),
+			Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height + 4) * scale)));
+		return dps.getToolTipText() == null ? tiles : withTooltip(tiles, dps, scale);
 	}
 
 	/** The Party tab on {@code in}: {@code open} a member's breakdown, {@code hover} a tick of the chart, a metric picked. */

@@ -85,6 +85,11 @@ public final class LuckVsSkillUpdate extends PartyMemberMessage
 	int th;
 	/** The attack rows, as the Damage card has them, biggest damage first. */
 	List<Row> w;
+	/**
+	 * T-134: the sender's other damage on the scored fights (thrall, recoil and vengeance, damage over time:
+	 * {@code LedgerRows.Scope.scoredOtherDamage()}), luck-neutral. Add-only: 0 from a sender before T-134.
+	 */
+	int o;
 
 	public LuckVsSkillUpdate()
 	{
@@ -118,6 +123,12 @@ public final class LuckVsSkillUpdate extends PartyMemberMessage
 	}
 
 	/** The room this is about, for keying a member's rooms: its name and start. */
+	/** T-134: all the sender's damage, the weapon's and the other: what the Party meter shows. */
+	int all()
+	{
+		return Math.max(0, d) + Math.max(0, o);
+	}
+
 	String roomKey()
 	{
 		return r + "@" + rs;

@@ -640,6 +640,8 @@ final class SidePanelHistory
 		double scoredSeconds = 0;
 		int damage = 0;
 		double expected = 0;
+		// T-134: the runs' other damage of yours (thrall, recoil and vengeance, damage over time), in DPS on both sides.
+		int other = 0;
 		int taken = 0;
 		int runKills = 0;
 		double best = -1;
@@ -663,6 +665,7 @@ final class SidePanelHistory
 			scoredSeconds += n.scoredClock;
 			damage += Math.max(0, n.damage);
 			expected += Math.max(0, n.expected);
+			other += n.other;
 			taken += Math.max(0, r.getDamageTaken());
 			if (seconds >= SidePanelModel.PER_HOUR_FROM_SECONDS)
 			{
@@ -679,9 +682,10 @@ final class SidePanelHistory
 		final String all = SidePanelModel.perHour(runKills, runSeconds);
 		tiles.add(tile("kills/hr", all == null ? LedgerRows.UNKNOWN : all, "over " + plural(runs, "run"),
 			SidePanelStyle.TRACK));
-		tiles.add(tile("DPS", scoredSeconds <= 0 ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(damage / scoredSeconds),
-			scoredSeconds > 0 && expected > 0 ? "expected " + LedgerRows.oneDecimal(expected / scoredSeconds) : "",
-			SidePanelStyle.TRACK));
+		// T-134: all your damage over the scored clock, against the expected and the same other damage.
+		tiles.add(tile("DPS", scoredSeconds <= 0 ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal((damage + other)
+			/ scoredSeconds), scoredSeconds > 0 && expected > 0 ? "expected " + LedgerRows.oneDecimal((expected + other)
+			/ scoredSeconds) : "", SidePanelStyle.TRACK));
 		tiles.add(tile("taken per kill", runKills == 0 ? LedgerRows.UNKNOWN
 			: LedgerRows.oneDecimal((double) taken / runKills), "damage", SidePanelStyle.TRACK));
 		return new Card(name, kills, Collections.emptyList(), 0, tiles, null, icon(name, rooms), runs);

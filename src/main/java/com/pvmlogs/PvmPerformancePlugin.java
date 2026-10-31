@@ -203,7 +203,10 @@ public class PvmPerformancePlugin extends Plugin
 		// T-041: blank where the boss has no attack rules, and on fights saved before them.
 		+ "damageTakenAvoidable,avoidableEatingTicks,"
 		// T-050: blank on fights saved before it and where nothing could be drained. Seconds as luck's are.
-		+ "drainValueDamage,drainValueExpected,specLuckDamage,drainValueSec,drainValueExpectedSec,specLuckSec\n";
+		+ "drainValueDamage,drainValueExpected,specLuckDamage,drainValueSec,drainValueExpectedSec,specLuckSec,"
+		// T-134: all your damage (weapon, thrall, recoil and vengeance, damage over time) over the scored clock, as the
+		// side panel's DPS. dps above stays the weapon's over the whole duration, so older exports still compare.
+		+ "dpsAll\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -7685,7 +7688,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
 			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d,%d,%s,%s,%s%n",
+				+ "%d,%d,%d,%d,%d,%s,%s,%s,%s%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -7722,7 +7725,8 @@ public class PvmPerformancePlugin extends Plugin
 				csvExpected(room.getDamageTakenAvoidable(), 0),
 				csvExpected(room.getAvoidableEatingTicks(), 1),
 				csvDrain(room.getDrainValueDamage(), room.getDrainValueExpected(), room.getSpecLuckDamage(),
-					room::luckSeconds));
+					room::luckSeconds),
+				csvDpsAll(LedgerRows.of(room)));
 	}
 
 	static String csvRaidRow(String raidName, int raidRun, List<Encounter> rooms)
@@ -7739,7 +7743,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
 			+ String.format("%s,,,,,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d,%d,%s,%s,%s%n",
+				+ "%d,%d,%d,%d,%d,%s,%s,%s,%s%n",
 				started,
 				raid.getDamageDealt(),
 				raid.getDamageTaken(),
@@ -7775,7 +7779,8 @@ public class PvmPerformancePlugin extends Plugin
 				csvExpected(raid.getDamageTakenAvoidable(), 0),
 				csvExpected(raid.getAvoidableEatingTicks(), 1),
 				csvDrain(raid.getDrainValueDamage(), raid.getDrainValueExpected(), raid.getSpecLuckDamage(),
-					raid::luckSeconds));
+					raid::luckSeconds),
+				csvDpsAll(LedgerRows.of(raid)));
 	}
 
 	private static String csvFightRow(String raidName, int raidRun, Fight fight)
@@ -7790,7 +7795,7 @@ public class PvmPerformancePlugin extends Plugin
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
 		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-			+ "%d,%d,%d,%d,%d,%s,%s,%s%n",
+			+ "%d,%d,%d,%d,%d,%s,%s,%s,%s%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -7831,7 +7836,23 @@ public class PvmPerformancePlugin extends Plugin
 			csvExpected(fight.getDamageTakenAvoidable(), 0),
 			csvExpected(fight.getAvoidableEatingTicks(), 1),
 			csvDrain(fight.getDrainValueDamage(), fight.getDrainValueExpected(), fight.getSpecLuckDamage(),
-				fight::luckSeconds));
+				fight::luckSeconds),
+			csvDpsAll(LedgerRows.of(alone(fight))));
+	}
+
+	/** T-134: the dpsAll column: the side panel's DPS ({@code LedgerRows.Numbers.dps}); blank with no scored time. */
+	static String csvDpsAll(LedgerRows.Scope scope)
+	{
+		final double dps = new LedgerRows.Numbers(scope).dps;
+		return Double.isNaN(dps) ? "" : String.format("%.2f", dps);
+	}
+
+	/** T-134: a fight as a room of its own, for its scope. */
+	private static Encounter alone(Fight fight)
+	{
+		final Encounter e = new Encounter(fight.encounterName(), null, fight.getStartMillis());
+		e.add(fight);
+		return e;
 	}
 
 	/**

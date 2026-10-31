@@ -75,6 +75,8 @@ final class PartyShare
 		u.rn = room.getRaid() == null ? null : room.getRaid().getDisplayName();
 		u.ri = room.getRaid() == null ? 0 : raidNumber;
 		u.d = n.damage;
+		// T-134: the player's other damage, so the Party meter shows all of it.
+		u.o = n.other;
 		u.e = LuckVsSkillUpdate.wire(n.expected);
 		u.st = Math.max(0, scope.scoredCombatTicks());
 		u.a = Math.max(0, scope.attacksMade());

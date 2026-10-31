@@ -626,6 +626,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			{
 				v.setToolTipText(tab.execution.tooltip);
 			}
+			else if (t.tooltip != null)
+			{
+				// T-134: the DPS tile's parts.
+				v.setToolTipText(t.tooltip);
+			}
 			views.add(v);
 			grid.add(v);
 		}
@@ -636,7 +641,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			{
 				views.get(i).set(t.tiles.get(i));
 				// T-126: the Execution tile's sum moves with its figures; text only, set when it changes.
-				final String tip = t.tiles.get(i).label.text.equals("Execution") ? t.execution.tooltip : null;
+				final String tip = t.tiles.get(i).label.text.equals("Execution") ? t.execution.tooltip
+					: t.tiles.get(i).tooltip;
 				if (tip != null && !tip.equals(views.get(i).getToolTipText()))
 				{
 					views.get(i).setToolTipText(tip);

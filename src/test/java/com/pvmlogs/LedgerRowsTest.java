@@ -770,7 +770,11 @@ public class LedgerRowsTest
 		// 136.8 x (688 - 778) / (778 + 80)
 		assertEquals(-14.35, kill.luck, 0.01);
 		assertEquals(122.45, kill.expectedDuration, 0.01);
-		assertEquals(5.03, kill.dps, 0.01);
+		// T-134: DPS is all your damage over the scored clock, (688 + 80) / 136.8; the weapon's alone, 688 / 136.8.
+		assertEquals(5.61, kill.dps, 0.01);
+		assertEquals(5.03, kill.weaponDps, 0.01);
+		// Against the expected and the same thrall: (778 + 80) / 136.8.
+		assertEquals(6.27, kill.expectedDps, 0.01);
 		// T-038: uptime counts the 25 idle ticks, not the 7 eating. 89.0% x 0.98 = 87.3%, up from 84%.
 		assertEquals((1 - 25.0 / 228) * 0.98, kill.execution, 1e-9);
 		assertEquals(15.0, kill.uptimeCost, 1e-9);
@@ -1163,7 +1167,9 @@ public class LedgerRowsTest
 		sire.dotDamage = 8;
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(sire);
 		assertEquals(72 * (444 - 612) / 620.0, n.luck, 1e-9);
-		assertEquals(444 / 72.0, n.dps, 1e-9);
+		// T-134: with the burn, all your damage: (444 + 8) / 72.
+		assertEquals(452 / 72.0, n.dps, 1e-9);
+		assertEquals(444 / 72.0, n.weaponDps, 1e-9);
 		assertEquals(111.6, n.clock, 1e-9);
 		final List<Row> rows = build(sire, State.fight("Abyssal Sire", true, true, false));
 		assertEquals(title("Abyssal Sire", "1:51").left + " (dead)", rows.get(0).left);

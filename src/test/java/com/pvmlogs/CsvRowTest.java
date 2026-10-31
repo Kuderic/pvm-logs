@@ -33,9 +33,9 @@ public class CsvRowTest
 	{
 		// attempts and targets are both there now: one throw of chinchompas is one attempt and several targets. T-018 added
 		// four at the end, T-017 Part B one more (reflectDamage), T-041 two (damageTakenAvoidable, avoidableEatingTicks), T-050
-		// six (the drain value, realized and averaged, and the spec luck, in damage and in seconds).
-		assertEquals(49, COLUMNS);
-		assertEquals("specLuckSec", PvmPerformancePlugin.CSV_HEADER.trim().substring(
+		// six (the drain value, realized and averaged, and the spec luck, in damage and in seconds), T-134 one (dpsAll).
+		assertEquals(50, COLUMNS);
+		assertEquals("dpsAll", PvmPerformancePlugin.CSV_HEADER.trim().substring(
 			PvmPerformancePlugin.CSV_HEADER.trim().lastIndexOf(',') + 1));
 	}
 
@@ -102,10 +102,10 @@ public class CsvRowTest
 	public void damageTakenAndItsBreakdownHaveTheirColumns()
 	{
 		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
-		// T-018's four, followed since T-017 Part B by reflectDamage, since T-041 by the two avoidable columns and since
-		// T-050 by the six drain columns.
+		// T-018's four, followed since T-017 Part B by reflectDamage, since T-041 by the two avoidable columns, since
+		// T-050 by the six drain columns and since T-134 by dpsAll.
 		assertEquals(Arrays.asList("dotTaken", "hitsTaken", "biggestHitTaken", "damageTakenUnprotected"),
-			header.subList(header.size() - 13, header.size() - 9));
+			header.subList(header.size() - 14, header.size() - 10));
 		assertEquals(10, header.indexOf("damageTaken"));
 		final Fight f = fight();
 		f.recordHitTaken(41, true, 700L);
@@ -129,6 +129,27 @@ public class CsvRowTest
 		assertEquals("53", raidCells[header.indexOf("damageTaken")]);
 		assertEquals("6", raidCells[header.indexOf("dotTaken")]);
 		assertEquals("41", raidCells[header.indexOf("damageTakenUnprotected")]);
+	}
+
+	/**
+	 * T-134: dpsAll is all your damage (weapon, thrall, recoil and vengeance, damage over time) over the scored clock, as
+	 * the side panel's DPS; dps stays the weapon's over the whole duration.
+	 */
+	@Test
+	public void dpsAllCountsAllYourDamageAndDpsStaysTheWeapons()
+	{
+		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
+		final SidePanelTimelineExamples.Built b = SidePanelPartyExamples.longRoom();
+		final Fight f = b.fight;
+		f.recordReflectDamage(30);
+		final String[] cells = ("fight,,,\"\"," + PvmPerformancePlugin.csvRow(f)).trim().split(",", -1);
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(b.room));
+		assertEquals(String.format("%.2f", n.dps), cells[header.indexOf("dpsAll")]);
+		assertEquals(String.format("%.2f", f.dps()), cells[header.indexOf("dps")]);
+		assertEquals(n.dps, (n.damage + 80 + 30) / n.scoredClock, 1e-9);
+		final String[] roomCells = PvmPerformancePlugin.csvRoomRow("", 0, b.room).trim().split(",", -1);
+		assertEquals(String.format("%.2f", n.dps), roomCells[header.indexOf("dpsAll")]);
+		assertEquals(header.size(), roomCells.length);
 	}
 
 	@Test

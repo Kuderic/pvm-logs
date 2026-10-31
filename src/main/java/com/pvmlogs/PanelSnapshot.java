@@ -629,6 +629,8 @@ final class PanelSnapshot
 		final String subShort;
 		/** The 2 px top edge: Track, or the value's colour when it's coloured. */
 		final Color edge;
+		/** T-134: the tile's tooltip (the DPS tile's parts); null for none, or the tab's own (Luck's, Execution's). */
+		final String tooltip;
 
 		Tile(Text label, Text value, Text sub, Color edge)
 		{
@@ -637,11 +639,17 @@ final class PanelSnapshot
 
 		Tile(Text label, Text value, Text sub, String subShort, Color edge)
 		{
+			this(label, value, sub, subShort, edge, null);
+		}
+
+		Tile(Text label, Text value, Text sub, String subShort, Color edge, String tooltip)
+		{
 			this.label = label;
 			this.value = value;
 			this.sub = sub;
 			this.subShort = subShort;
 			this.edge = edge;
+			this.tooltip = tooltip;
 		}
 	}
 

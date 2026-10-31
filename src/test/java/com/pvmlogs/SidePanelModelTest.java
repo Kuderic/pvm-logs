@@ -146,7 +146,8 @@ public class SidePanelModelTest
 		assertEquals("bottom 20%", tile(t, "Luck").value.text);
 		assertEquals("14 s slower", tile(t, "Luck").sub.text);
 		assertEquals("+80 thrall", tile(t, "Damage/expected").sub.text);
-		assertEquals("weapon only", tile(t, "DPS").sub.text);
+		// T-134: the tile counts the thrall; its sub-line keeps the weapon's alone.
+		assertEquals("weapon 5.0", tile(t, "DPS").sub.text);
 		// Uptime's 15 idle seconds and stat boost 2.4 s: 17.4 s, rounded, and costing because uptime is. Eating's 4.2 s
 		// isn't one of Execution's parts (T-038).
 		// T-118: in ticks, 17.4 s / 0.6.
