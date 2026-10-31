@@ -762,6 +762,8 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		// T-124: the party message, and the dev loopback when the dev launcher asks for it (never on a hub build).
 		wsClient.registerMessage(LuckVsSkillUpdate.class);
+		// T-128: a room's Fight tab, once as it ends, for a member's click-in on the Party tab.
+		wsClient.registerMessage(LuckVsSkillRoom.class);
 		partyEcho = PartyShare.echoEnabled(System.getProperty(PartyShare.ECHO_PROPERTY), BuildInfo.describe());
 		if (partyEcho)
 		{
@@ -791,6 +793,7 @@ public class PvmPerformancePlugin extends Plugin
 	protected void shutDown()
 	{
 		wsClient.unregisterMessage(LuckVsSkillUpdate.class);
+		wsClient.unregisterMessage(LuckVsSkillRoom.class);
 		partyBoard.clear();
 		partyRoom = null;
 		overlayManager.remove(overlay);
@@ -4240,6 +4243,9 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			partyRoomEndSent = true;
 			sendToParty(PartyShare.build(LuckVsSkillUpdate.ROOM_END, partyRoom, roomAttacks(partyRoom), raidNumber(partyRoom)));
+			// T-128: the room's Fight tab, as this player's own panel draws it.
+			sendRoomToParty(SidePanelMemberFight.message(partyRoom, FightTimeline.room(partyRoom, timelines),
+				raidNumber(partyRoom), monsterStats == null ? null : monsterStats.rules()));
 		}
 		final Encounter room = currentEncounter;
 		final int tick = client.getTickCount();
@@ -4276,6 +4282,22 @@ public class PvmPerformancePlugin extends Plugin
 					PartyShare.ECHO_WAIT);
 			}
 			partyBoard.accept(me == null ? -1 : me.getMemberId(), update, PartyBoard.LOCAL_NAME, System.currentTimeMillis());
+		}
+	}
+
+	/** T-128: the room's Fight tab to the party, as {@link #sendToParty} sends the update, the loopback's copy too. */
+	private void sendRoomToParty(LuckVsSkillRoom room)
+	{
+		partyService.send(room);
+		if (debug.isOn())
+		{
+			debug.log("PARTY sent room fight %s: %d bytes", room.r, gson.toJson(room).length());
+		}
+		if (partyEcho && !partyEchoSeen && partySent > PartyShare.ECHO_WAIT)
+		{
+			final PartyMember me = partyService.getLocalMember();
+			partyBoard.acceptRoom(me == null ? -1 : me.getMemberId(), room, PartyBoard.LOCAL_NAME,
+				System.currentTimeMillis());
 		}
 	}
 
@@ -4320,6 +4342,19 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("PARTY loopback: the party server echoes your own updates");
 		}
 		partyBoard.accept(update.getMemberId(), update, own ? PartyBoard.ECHO_NAME : null, System.currentTimeMillis());
+	}
+
+	/** T-128: another member's room Fight tab, from RuneLite's websocket thread; your own echo as the update's. */
+	@Subscribe
+	public void onLuckVsSkillRoom(LuckVsSkillRoom room)
+	{
+		final PartyMember me = partyService.getLocalMember();
+		final boolean own = me != null && me.getMemberId() == room.getMemberId();
+		if (!PartyShare.keep(own, partyEcho))
+		{
+			return;
+		}
+		partyBoard.acceptRoom(room.getMemberId(), room, own ? PartyBoard.ECHO_NAME : null, System.currentTimeMillis());
 	}
 
 	@Subscribe

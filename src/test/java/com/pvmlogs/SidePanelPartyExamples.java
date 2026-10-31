@@ -124,7 +124,8 @@ final class SidePanelPartyExamples
 	static String itemName(int id)
 	{
 		return id == TWISTED_BOW ? "Twisted bow" : id == ZARYTE_CROSSBOW ? "Zaryte crossbow" : id == SCYTHE
-			? "Scythe of vitur" : id == BOWFA ? "Bow of faerdhinen" : "item " + id;
+			? "Scythe of vitur" : id == BOWFA ? "Bow of faerdhinen" : id == net.runelite.api.gameval.ItemID.ABYSSAL_TENTACLE
+			? "Abyssal tentacle" : id == net.runelite.api.gameval.ItemID.BONE_CLAWS ? "Burning claws" : "item " + id;
 	}
 
 	/** A duo at Nex, both sharing, after the kill: nobody else hit the boss. */
@@ -222,6 +223,84 @@ final class SidePanelPartyExamples
 	{
 		final SidePanelParty.Input in = nobody();
 		in.inParty = false;
+		return in;
+	}
+
+	// ---- T-128 ----
+
+	/** A stand-in for a Discord picture: a 128 px square in two tones with a letter (the real ones come from RuneLite). */
+	static java.awt.image.BufferedImage picture(int seed, char letter)
+	{
+		final java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(128, 128,
+			java.awt.image.BufferedImage.TYPE_INT_RGB);
+		final java.awt.Graphics2D g = img.createGraphics();
+		final java.awt.Color a = java.awt.Color.getHSBColor((seed * 0.17f) % 1f, 0.45f, 0.75f);
+		final java.awt.Color b = java.awt.Color.getHSBColor((seed * 0.17f + 0.08f) % 1f, 0.55f, 0.45f);
+		g.setPaint(new java.awt.GradientPaint(0, 0, a, 128, 128, b));
+		g.fillRect(0, 0, 128, 128);
+		g.setColor(java.awt.Color.WHITE);
+		g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, 72));
+		final java.awt.FontMetrics f = g.getFontMetrics();
+		g.drawString(String.valueOf(letter), (128 - f.charWidth(letter)) / 2, (128 + f.getAscent() - f.getDescent()) / 2);
+		g.dispose();
+		return img;
+	}
+
+	/** The ToA room with Discord pictures for you and Moss Pike; Brindle has none, so her colour stands in. */
+	static SidePanelParty.Input toaWithPictures()
+	{
+		final SidePanelParty.Input in = toa();
+		in.members.get(0).avatar = picture(1, 'Y');
+		in.members.get(1).avatar = picture(4, 'M');
+		return in;
+	}
+
+	/** A 4-minute fight played through the plugin's calls, as a member's room message brings it (T-128). */
+	static SidePanelTimelineExamples.Built longRoom()
+	{
+		return SidePanelTimelineExamples.fight("Zebak", "Burning claws", ItemID_BONE_CLAWS, 215, new int[]{5, 20},
+			new int[]{60, 4, 150, 6}, new int[]{100, 3}, 2_100, 2_050, 300, 280, 140);
+	}
+
+	private static final int ItemID_BONE_CLAWS = net.runelite.api.gameval.ItemID.BONE_CLAWS;
+
+	/** The ToA room with Brindle opened after the room: her Fight tab from her room message, round-tripped. */
+	static SidePanelParty.Input toaBrindleAfter()
+	{
+		final SidePanelParty.Input in = toaWithPictures();
+		final SidePanelTimelineExamples.Built b = longRoom();
+		final com.google.gson.Gson gson = new com.google.gson.Gson();
+		final LuckVsSkillRoom sent = gson.fromJson(gson.toJson(SidePanelMemberFight.message(b.room, b.view(), 0, null)),
+			LuckVsSkillRoom.class);
+		in.members.get(2).fight = SidePanelModel.fight(SidePanelMemberFight.decode(sent.f));
+		return in;
+	}
+
+	/** The ToB room mid-fight with Quillon opened: his Fight tab from his live update. */
+	static SidePanelParty.Input tobQuillonLive()
+	{
+		final SidePanelParty.Input in = tobLive();
+		final SidePanelTimelineExamples.Built b = longRoom();
+		final LuckVsSkillUpdate u = PartyShare.build(LuckVsSkillUpdate.LIVE, b.room, b.view().attacks, 0);
+		u.r = "Verzik Vitur";
+		final SidePanelParty.Member q = in.members.get(1);
+		q.fight = SidePanelModel.fight(SidePanelMemberFight.live(u, SidePanelPartyExamples::itemName));
+		q.fightLive = true;
+		q.avatar = picture(7, 'Q');
+		return in;
+	}
+
+	/** The loopback: you and your echo, the same updates, on one axis. */
+	static SidePanelParty.Input withEcho()
+	{
+		final SidePanelParty.Input in = input("Araxxor", 129, false, null, 2_960);
+		final SidePanelParty.Member you = member(SidePanelParty.YOU_ID, "you", true, 0, figures("Araxxor", true, 2_960,
+			2_880, 215, 0.5, -1, 0.91, 6, attacks(TWISTED_BOW, 52, 41, 2_960, 2_880, false)), 215);
+		in.members.add(you);
+		final SidePanelParty.Member echo = new SidePanelParty.Member(31, PartyBoard.ECHO_NAME, false, you.figures);
+		echo.ticks = you.ticks;
+		echo.damage = you.damage;
+		in.members.add(echo);
 		return in;
 	}
 }

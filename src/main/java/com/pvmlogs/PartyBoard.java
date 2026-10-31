@@ -36,12 +36,30 @@ final class PartyBoard
 		final int scoredTicks;
 		final int damage;
 		final double expected;
+		/**
+		 * T-128: the room's clock in ticks at the update ({@link LuckVsSkillUpdate#ct}), the party chart's one x axis:
+		 * scored ticks leave out idle time and unscored adds, so a line drawn by them ran ahead of yours. 0 from a sender
+		 * that didn't send it.
+		 */
+		final int clockTicks;
 
 		Point(int scoredTicks, int damage, double expected)
+		{
+			this(scoredTicks, damage, expected, 0);
+		}
+
+		Point(int scoredTicks, int damage, double expected, int clockTicks)
 		{
 			this.scoredTicks = scoredTicks;
 			this.damage = damage;
 			this.expected = expected;
+			this.clockTicks = clockTicks;
+		}
+
+		/** The x the chart draws it at: the room's clock, or the scored ticks from a sender without it. */
+		int x()
+		{
+			return clockTicks > 0 ? clockTicks : scoredTicks;
 		}
 	}
 
@@ -62,10 +80,21 @@ final class PartyBoard
 		/** The current (or last) raid's room summaries, in the order they ended. */
 		final List<LuckVsSkillUpdate> raidRooms;
 		final long updatedMillis;
+		/** T-128: each room's Fight tab, as they sent it when it ended ({@link LuckVsSkillRoom}), by room key. */
+		final Map<String, LuckVsSkillRoom> fights;
 
 		View(long memberId, String name, LuckVsSkillUpdate live, LuckVsSkillUpdate lastRoom, String room,
 			Map<String, List<Point>> series, List<LuckVsSkillUpdate> raidRooms, long updatedMillis)
 		{
+			this(memberId, name, live, lastRoom, room, series, raidRooms, updatedMillis,
+				Collections.<String, LuckVsSkillRoom>emptyMap());
+		}
+
+		View(long memberId, String name, LuckVsSkillUpdate live, LuckVsSkillUpdate lastRoom, String room,
+			Map<String, List<Point>> series, List<LuckVsSkillUpdate> raidRooms, long updatedMillis,
+			Map<String, LuckVsSkillRoom> fights)
+		{
+			this.fights = fights;
 			this.memberId = memberId;
 			this.name = name;
 			this.live = live;
@@ -88,6 +117,8 @@ final class PartyBoard
 		String raidName;
 		int raid;
 		final LinkedHashMap<String, LuckVsSkillUpdate> raidRooms = new LinkedHashMap<>();
+		/** T-128: their rooms' Fight tabs. */
+		final LinkedHashMap<String, LuckVsSkillRoom> fights = new LinkedHashMap<>();
 		long updatedMillis;
 
 		Member(long id)
@@ -115,9 +146,9 @@ final class PartyBoard
 		m.room = u.roomKey();
 		final List<Point> points = m.series.computeIfAbsent(m.room, k -> new ArrayList<>());
 		final Point last = points.isEmpty() ? null : points.get(points.size() - 1);
-		if (last == null || last.scoredTicks != u.st || last.damage != u.d)
+		if (last == null || last.scoredTicks != u.st || last.damage != u.d || last.clockTicks != u.ct)
 		{
-			points.add(new Point(u.st, u.d, u.e));
+			points.add(new Point(u.st, u.d, u.e, u.ct));
 			if (points.size() > MAX_POINTS)
 			{
 				points.remove(0);
@@ -147,6 +178,24 @@ final class PartyBoard
 				trim(m.raidRooms);
 			}
 		}
+		revision++;
+	}
+
+	/**
+	 * T-128: a room's Fight tab from {@code memberId}, sent once as it ended. Kept by its room key, as the series are,
+	 * for the last {@link #MAX_ROOMS} rooms.
+	 */
+	synchronized void acceptRoom(long memberId, LuckVsSkillRoom room, String nameOverride, long now)
+	{
+		if (room == null || room.r == null || room.f == null)
+		{
+			return;
+		}
+		final Member m = members.computeIfAbsent(memberId, Member::new);
+		m.nameOverride = nameOverride;
+		m.updatedMillis = Math.max(m.updatedMillis, now);
+		m.fights.put(room.roomKey(), room);
+		trim(m.fights);
 		revision++;
 	}
 
@@ -204,7 +253,7 @@ final class PartyBoard
 			m.series.forEach((room, points) -> series.put(room, Collections.unmodifiableList(new ArrayList<>(points))));
 			out.add(new View(m.id, name == null ? "Party member" : name, m.live, m.lastRoom, m.room,
 				Collections.unmodifiableMap(series), Collections.unmodifiableList(new ArrayList<>(m.raidRooms.values())),
-				m.updatedMillis));
+				m.updatedMillis, Collections.unmodifiableMap(new LinkedHashMap<>(m.fights))));
 		}
 		return Collections.unmodifiableList(out);
 	}
