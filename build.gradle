@@ -128,6 +128,25 @@ tasks.register('run', JavaExec) {
 	}
 }
 
+// T-138: a one-off, dev-only repair of history.json (HistoryRepair, test code, never shipped). Run with RuneLite closed:
+// gradlew historyRepair lists what it would change and changes nothing; -Papply writes it, a backup first;
+// -ParaxxorSolo also marks the Araxxor kills saved before T-106 solo.
+tasks.register('historyRepair', JavaExec) {
+	description = 'Dev only (T-138): stitch Yama kills saved split before T-136 back together in history.json.'
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.pvmlogs.HistoryRepair'
+	def repairArgs = []
+	if (project.hasProperty('apply'))
+	{
+		repairArgs << '--apply'
+	}
+	if (project.hasProperty('araxxorSolo'))
+	{
+		repairArgs << '--araxxor-solo'
+	}
+	args repairArgs
+}
+
 tasks.register('shadowJar', Jar) {
 	dependsOn configurations.testRuntimeClasspath
 	manifest {
