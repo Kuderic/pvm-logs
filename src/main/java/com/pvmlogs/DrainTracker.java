@@ -595,20 +595,57 @@ final class DrainTracker
 		r.defenceStart = start == null ? r.defenceEnd : start.defence;
 		r.magicStart = start == null ? r.magicEnd : start.magic;
 		r.magicDefenceStart = start == null ? r.magicDefenceEnd : start.magicDefence;
-		perStatAndSource(r, t.target);
+		final List<DrainEvent> before = new ArrayList<>();
+		for (DrainEvent e : t.events)
+		{
+			if (e.thrownTick < fromTick && e.landedTick < fromTick)
+			{
+				before.add(e);
+			}
+		}
+		perStatAndSource(r, t.target, before);
 		return r;
+	}
+
+	/** As below, with nothing carried in. */
+	static void perStatAndSource(DrainRecord r, DrainRule.Target target)
+	{
+		perStatAndSource(r, target, java.util.Collections.emptyList());
 	}
 
 	/**
 	 * T-141: the record's drains per stat and per source, from its events: each stat that changed in the fight (or that
 	 * a drain moved, back since), and each weapon with what it took off each stat. A reset's levels are no source's.
 	 */
-	static void perStatAndSource(DrainRecord r, DrainRule.Target target)
+	/**
+	 * T-144: and with {@code before}, the target's events before the fight, each source whose drains it opens with is a
+	 * source here too, its throws counted where they landed ({@code thrown} and {@code landed} 0 here, nothing taken in
+	 * this fight): so a room's records summed give each special its whole value, each throw once.
+	 */
+	static void perStatAndSource(DrainRecord r, DrainRule.Target target, List<DrainEvent> before)
 	{
 		r.stats = new ArrayList<>(3);
 		r.sources = new ArrayList<>(2);
 		final Map<String, DrainRecord.SourceDrain> bySource = new LinkedHashMap<>();
 		final boolean[] moved = new boolean[3];
+		final boolean[] drainedAtStart = {r.defenceStart < target.defence, r.magicStart < target.magic,
+			r.magicDefenceStart < target.magicDefence};
+		for (DrainEvent e : carriedIn(before))
+		{
+			final DrainRecord.SourceDrain d = bySource.computeIfAbsent(DrainRecord.sourceKey(e.weapon, e.own), k ->
+			{
+				final DrainRecord.SourceDrain n = new DrainRecord.SourceDrain();
+				n.weapon = e.weapon;
+				n.own = e.own;
+				return n;
+			});
+			carriedOn(d, DrainRecord.StatDrain.DEFENCE, drainedAtStart[0] && e.defenceBefore > e.defenceAfter);
+			carriedOn(d, DrainRecord.StatDrain.MAGIC, drainedAtStart[1] && e.magicBefore > e.magicAfter);
+			carriedOn(d, DrainRecord.StatDrain.MAGIC_DEFENCE, drainedAtStart[2]
+				&& e.magicDefenceBefore > e.magicDefenceAfter);
+		}
+		// A carried source whose stat is back at its base by the fight brings nothing: dropped.
+		bySource.values().removeIf(d -> d.drained.isEmpty());
 		for (DrainEvent e : r.events)
 		{
 			if (e.isReset() || e.isRegen() || e.weapon == null || !(e.isDrain() || e.isSkip()))
@@ -636,20 +673,48 @@ final class DrainTracker
 			moved[2] |= took(d, DrainRecord.StatDrain.MAGIC_DEFENCE, e.magicDefenceBefore - e.magicDefenceAfter);
 		}
 		r.sources.addAll(bySource.values());
-		if (moved[0] || r.defenceStart != r.defenceEnd)
+		// T-144: a stat the fight opens drained is the fight's too, though nothing moved it: its drains still add.
+		if (moved[0] || r.defenceStart != r.defenceEnd || drainedAtStart[0])
 		{
 			r.stats.add(stat(DrainRecord.StatDrain.DEFENCE, target.defence, target.defenceFloor, r.defenceStart,
 				r.defenceEnd, target.regenTicks));
 		}
-		if (moved[1] || r.magicStart != r.magicEnd)
+		if (moved[1] || r.magicStart != r.magicEnd || drainedAtStart[1])
 		{
 			r.stats.add(stat(DrainRecord.StatDrain.MAGIC, target.magic, target.magicFloor, r.magicStart, r.magicEnd,
 				target.regenTicks));
 		}
-		if (moved[2] || r.magicDefenceStart != r.magicDefenceEnd)
+		if (moved[2] || r.magicDefenceStart != r.magicDefenceEnd || drainedAtStart[2])
 		{
 			r.stats.add(stat(DrainRecord.StatDrain.MAGIC_DEFENCE, target.magicDefence, 0, r.magicDefenceStart,
 				r.magicDefenceEnd, 0));
+		}
+	}
+
+	// The events before a fight since the target's stats were last put back: the drains it can still be carrying.
+	private static List<DrainEvent> carriedIn(List<DrainEvent> before)
+	{
+		final List<DrainEvent> out = new ArrayList<>();
+		for (DrainEvent e : before)
+		{
+			if (e.isReset())
+			{
+				out.clear();
+			}
+			else if (e.isDrain() && e.weapon != null)
+			{
+				out.add(e);
+			}
+		}
+		return out;
+	}
+
+	// A carried source: the stat it drained, with nothing taken in this fight (its takes were counted where they landed).
+	private static void carriedOn(DrainRecord.SourceDrain d, String stat, boolean on)
+	{
+		if (on)
+		{
+			d.drained.putIfAbsent(stat, 0);
 		}
 	}
 

@@ -299,6 +299,139 @@ public class DrainsPerStatTest
 		assertEquals(191, f.getDefenceEnd());
 	}
 
+	// ---- T-144: drains carried into a later fight stay with the special that made them ----
+
+	/** A second fight on the same target, opened drained: melee blows only, nothing thrown. */
+	private Fight laterFight(DrainLuck luck, int from, String style)
+	{
+		final Fight f = fight();
+		luck.start(f, tracker.tracked(INDEX));
+		for (int tick = from; tick < from + 60; tick += 5)
+		{
+			attack(luck, f, tick, style);
+		}
+		return f;
+	}
+
+	/** Two fights on one target, an Emberlight in the first: the second's value is the Emberlight's, not before this fight. */
+	@Test
+	public void aCarriedEmberlightKeepsItsValue()
+	{
+		final DrainLuck luck = luck();
+		final Fight first = emberlightFight(luck, true, false);
+		first.recordDrain(tracker.record(INDEX, 0));
+		final Fight second = laterFight(luck, 100, "melee");
+		second.recordDrain(tracker.record(INDEX, 100));
+		final Map<String, Map<String, Double>> bySource = luck.valueBySource(second);
+		final double carried = value(bySource.get("EMBERLIGHT"), DrainRecord.StatDrain.DEFENCE);
+		assertTrue(bySource.toString(), carried > 1);
+		assertNull(bySource.toString(), bySource.get(DrainLuck.BEFORE));
+		// The combined value is the sum, as before.
+		assertEquals(second.getDrainValueDamage(), sum(luck.valueByStat(second)), 1e-9);
+		assertEquals(second.getDrainValueDamage(), carried, 1e-9);
+		// The second record: Defence (opened drained, though nothing moved it) and the Emberlight carried in, no throws.
+		final DrainRecord r = second.getDrainRecord();
+		final DrainRecord.StatDrain defence = r.stat(DrainRecord.StatDrain.DEFENCE);
+		assertNotNull(defence);
+		assertEquals(191, defence.start);
+		assertEquals(carried, defence.value, 1e-9);
+		assertEquals(1, r.sources.size());
+		final DrainRecord.SourceDrain ember = r.sources.get(0);
+		assertEquals("EMBERLIGHT", ember.weapon);
+		assertEquals(0, ember.thrown);
+		assertEquals(0, ember.landed);
+		assertEquals(Integer.valueOf(0), ember.drained.get(DrainRecord.StatDrain.DEFENCE));
+		assertEquals(carried, ember.value, 1e-9);
+		// Summed over the room, as the Drains card does: one throw, one landing, 34 taken, both fights' value.
+		int thrown = 0;
+		int taken = 0;
+		double total = 0;
+		for (Fight f : new Fight[] {first, second})
+		{
+			for (DrainRecord.SourceDrain d : f.getDrainRecord().sources)
+			{
+				thrown += d.thrown;
+				taken += d.drained.getOrDefault(DrainRecord.StatDrain.DEFENCE, 0);
+				total += d.value;
+			}
+		}
+		assertEquals(1, thrown);
+		assertEquals(34, taken);
+		assertEquals(first.getDrainValueDamage() + second.getDrainValueDamage(), total, 1e-9);
+	}
+
+	/** Drained before the tracker followed the target: before this fight, as T-141 had it. */
+	@Test
+	public void drainedBeforeTheTrackerFollowedItStaysBefore()
+	{
+		final DrainLuck luck = luck();
+		tracker.track(INDEX, YAMA, "Yama", TARGET);
+		tracker.tracked(INDEX).state = new DrainRule.State(191, 250, 0, 250, 250, 250);
+		final Fight f = laterFight(luck, 100, "melee");
+		final Map<String, Map<String, Double>> bySource = luck.valueBySource(f);
+		assertEquals(f.getDrainValueDamage(), value(bySource.get(DrainLuck.BEFORE), DrainRecord.StatDrain.DEFENCE), 1e-9);
+		assertTrue(f.getDrainValueDamage() > 1);
+		// And with an Emberlight on top: the levels before its event stay before, its own are its.
+		special(luck, f, 200, SpecialWeapon.EMBERLIGHT, "melee", 40);
+		final Map<String, Map<String, Integer>> carried = DrainLuck.carried(tracker.tracked(INDEX));
+		final Map<String, Integer> defence = carried.get(DrainRecord.StatDrain.DEFENCE);
+		assertEquals(Integer.valueOf(34), defence.get(DrainLuck.BEFORE));
+		assertEquals(Integer.valueOf(34), defence.get("EMBERLIGHT"));
+	}
+
+	/** Soul Rend's reduction carried across Yama's form change (his Phase 3 version's id here) stays the Eye of ayak's. */
+	@Test
+	public void aSoulRendCarriedAcrossAFormChange()
+	{
+		final DrainLuck luck = luck();
+		final Fight first = soulRendFight(luck, false, true);
+		final DrainRule.Target phase3 = new DrainRule.Target(225, 250, 0, 250, 250, 250, 145, 0, false, true, false, false,
+			100);
+		tracker.changed(INDEX, 90, YAMA + 1, "Yama", phase3, false);
+		assertEquals(33, DrainRule.magicDefenceReduction(tracker.tracked(INDEX).state, phase3));
+		final Fight second = laterFight(luck, 100, "magic");
+		final Map<String, Map<String, Double>> bySource = luck.valueBySource(second);
+		assertTrue(bySource.toString(), value(bySource.get("EYE_OF_AYAK"), DrainRecord.StatDrain.MAGIC_DEFENCE) > 1);
+		assertNull(bySource.get(DrainLuck.BEFORE));
+		assertEquals(second.getDrainValueDamage(), sum(bySource.get("EYE_OF_AYAK")), 1e-9);
+		assertTrue(first.getDrainValueDamage() > 0);
+	}
+
+	/** A warhammer and a Bandos godsword carried together keep their split in the later fight. */
+	@Test
+	public void aWarhammerAndAGodswordCarriedTogether()
+	{
+		final DrainLuck luck = luck();
+		final Fight first = fight();
+		luck.start(first, tracker.track(INDEX, YAMA, "Yama", TARGET));
+		special(luck, first, 5, SpecialWeapon.DRAGON_WARHAMMER, "melee", 40);
+		special(luck, first, 10, SpecialWeapon.BANDOS_GODSWORD, "melee", 20);
+		first.recordDrain(tracker.record(INDEX, 0));
+		final Fight second = laterFight(luck, 100, "melee");
+		second.recordDrain(tracker.record(INDEX, 100));
+		final Map<String, Map<String, Double>> bySource = luck.valueBySource(second);
+		final double hammer = value(bySource.get("DRAGON_WARHAMMER"), DrainRecord.StatDrain.DEFENCE);
+		final double godsword = value(bySource.get("BANDOS_GODSWORD"), DrainRecord.StatDrain.DEFENCE);
+		assertTrue(bySource.toString(), hammer > godsword && godsword > 0);
+		assertEquals(second.getDrainValueDamage(), hammer + godsword, 1e-9);
+		assertEquals(2, second.getDrainRecord().sources.size());
+		assertEquals(0, second.getDrainRecord().sources.get(0).thrown + second.getDrainRecord().sources.get(1).thrown);
+	}
+
+	/** A fight with nothing carried builds its record as T-141 did. */
+	@Test
+	public void nothingCarriedIsAsBefore()
+	{
+		final DrainRecord r = new DrainRecord();
+		r.defenceStart = 225;
+		r.defenceEnd = 225;
+		r.magicStart = 250;
+		r.magicEnd = 250;
+		DrainTracker.perStatAndSource(r, TARGET);
+		assertTrue(r.stats.isEmpty());
+		assertTrue(r.sources.isEmpty());
+	}
+
 	/** A form change carries the Eye of ayak's reduction whole onto the new form's bonus (the wiki: Zulrah). */
 	@Test
 	public void aFormChangeCarriesTheReduction()
