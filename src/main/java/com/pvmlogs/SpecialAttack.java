@@ -179,6 +179,20 @@ enum SpecialAttack
 		return this == EYE_OF_AYAK ? 5 : weaponTicks;
 	}
 
+	/**
+	 * T-145: a miss that leaves nothing to book it by: no experience (a powered staff's built-in spell pays only for
+	 * damage dealt, OSRS Wiki: Powered staff; a splash pays no Hitpoints experience, Splashing), no splat, and no
+	 * projectile the plugin takes as the player's. The Eye of Ayak's Soul Rend: 12 in Eric's logs of 2026-10-29 to 31
+	 * went unbooked, their ticks lost. Its throw is booked from the energy falling instead. The others: a melee or
+	 * ranged miss shows a 0 that books it; the Purging staff's demonbane spells pay their base experience on a splash
+	 * (T-136's SPLASH); the Accursed sceptre's and the Eldritch staff's specials aren't in Eric's logs, so whether
+	 * theirs show is not known.
+	 */
+	boolean missShowsNothing()
+	{
+		return this == EYE_OF_AYAK;
+	}
+
 	static
 	{
 		for (SpecialAttack spec : values())
