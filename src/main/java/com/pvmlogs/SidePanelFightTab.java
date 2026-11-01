@@ -1264,11 +1264,12 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		for (int i = 0; i < tab.defence.blocks.size(); i++)
 		{
 			final PanelSnapshot.DrainBlock b = tab.defence.blocks.get(i);
-			final SidePanelParts.Line head = new SidePanelParts.Line(new PanelSnapshot.Row(b.name, b.hint, b.change, null));
+			final SidePanelParts.Line head = new SidePanelParts.Line(headRow(b));
 			// Room for its widest digits: "225 → 191" drawn at 2× measures wider than at 1×, and the arrow is the font's
-			// fallback's, whose width differs by machine; where it still doesn't fit, it closes up rather than cut.
+			// fallback's, whose width differs by machine. Where it still doesn't fit, the change closes up, then the
+			// name's hint ("at its floor") goes, before the name is cut.
 			head.right.reserveDigits();
-			head.right.setShort(closed(b.change.text));
+			head.left.cutSuffixFirst();
 			if (i > 0)
 			{
 				head.setBorder(new javax.swing.border.EmptyBorder(6, 0, 0, 0));
@@ -1309,8 +1310,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			for (int i = 0; i < heads.size(); i++)
 			{
 				final PanelSnapshot.DrainBlock b = t.defence.blocks.get(i);
-				heads.get(i).set(new PanelSnapshot.Row(b.name, b.hint, b.change, null), 0, i > 0 ? 6 : 0);
-				heads.get(i).right.setShort(closed(b.change.text));
+				heads.get(i).set(headRow(b), 0, i > 0 ? 6 : 0);
 				if (bars.get(i) != null && b.bar != null)
 				{
 					bars.get(i).set(b.bar.start, b.bar.end, b.bar.base, b.bar.floor);
@@ -1329,10 +1329,12 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
-	/** T-142: a block head's change with its arrow closed up ({@code 225→191}), its short form. */
-	private static String closed(String change)
+	/** T-142: a block's head: its name and hint, its change, and that with its arrow closed up ({@code 225→191}). */
+	private static PanelSnapshot.Row headRow(PanelSnapshot.DrainBlock b)
 	{
-		return change.replace(" \u2192 ", "\u2192");
+		final String closed = b.change.text.replace(" \u2192 ", "\u2192");
+		return new PanelSnapshot.Row(b.name, b.hint, b.change, null, false, false, closed.equals(b.change.text) ? null :
+			java.util.Collections.singletonList(closed));
 	}
 
 	/** T-142: a block line's inset: under the stat, and further under a special. */
