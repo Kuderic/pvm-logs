@@ -1225,6 +1225,11 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		else if (actor instanceof NPC && !hitsplat.isMine())
 		{
+			if (hitsplat.isOthers())
+			{
+				// T-147: a candidate for a special seen thrown by a player outside the party.
+				drain.onOthersHitsplat((NPC) actor, hitsplat.getAmount());
+			}
 			onNotMineSplat((NPC) actor, hitsplat);
 		}
 		else if (actor != null && actor == client.getLocalPlayer())
@@ -4049,6 +4054,14 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void handleAnimationChanged(AnimationChanged event)
 	{
+		// T-147: another player's special at the open fight's target, from their animation and weapon: drains by players
+		// outside the RuneLite party, whose counters never reach us. Only players aimed at the target, on this event.
+		if (event.getActor() instanceof Player && event.getActor() != client.getLocalPlayer() && current != null
+			&& !current.isEnded() && event.getActor().getInteracting() instanceof NPC
+			&& ((NPC) event.getActor().getInteracting()).getIndex() == current.getTargetIndex())
+		{
+			drain.onOtherPlayerAnimation((Player) event.getActor(), (NPC) event.getActor().getInteracting());
+		}
 		// For the TAKEN line (T-018): what the fight's target started, logged beside the next splats on me.
 		if (event.getActor() instanceof NPC && current != null && !current.isEnded()
 			&& ((NPC) event.getActor()).getIndex() == current.getTargetIndex())
