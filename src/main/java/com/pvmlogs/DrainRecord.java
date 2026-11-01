@@ -81,6 +81,8 @@ final class DrainRecord
 		/** RuneLite's {@code SpecialWeapon} name, e.g. {@code EMBERLIGHT}, {@code EYE_OF_AYAK}. */
 		String weapon;
 		boolean own;
+		/** T-147: seen thrown by a player outside the RuneLite party, from their animation: see {@link DrainEvent#seen}. */
+		boolean seen;
 		/** Specials thrown and landed; for a party member's, the drains their counter sent (thrown) and landed. */
 		int thrown;
 		int landed;
@@ -94,7 +96,13 @@ final class DrainRecord
 	/** T-141: the source's key in {@link DrainLuck}'s values: its weapon, a party member's marked as such. */
 	static String sourceKey(String weapon, boolean own)
 	{
-		return own ? weapon : weapon + " (party)";
+		return sourceKey(weapon, own, false);
+	}
+
+	/** T-147: and one seen from a player outside the party: {@code DRAGON_WARHAMMER (seen)}. */
+	static String sourceKey(String weapon, boolean own, boolean seen)
+	{
+		return own ? weapon : weapon + (seen ? " (seen)" : " (party)");
 	}
 
 	/**
@@ -120,7 +128,7 @@ final class DrainRecord
 		{
 			for (SourceDrain d : sources)
 			{
-				final Map<String, Double> v = bySource == null ? null : bySource.get(sourceKey(d.weapon, d.own));
+				final Map<String, Double> v = bySource == null ? null : bySource.get(sourceKey(d.weapon, d.own, d.seen));
 				d.valueByStat = v == null ? new LinkedHashMap<>() : new LinkedHashMap<>(v);
 				double total = 0;
 				for (double x : d.valueByStat.values())
