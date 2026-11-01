@@ -212,6 +212,8 @@ class XpLedger
 
 	// What the last close() took for casts rather than attacks, for the plugin's log; null when nothing.
 	private String castNote;
+	// T-139: the Magic it took, for the Mark of Darkness's fallback; 0 when nothing.
+	private int castMagic;
 
 	/**
 	 * Ends the tick: whatever it paid becomes one award against the target. A
@@ -227,6 +229,7 @@ class XpLedger
 	Award close(int tick, int targetId, double formulaMultiplier, boolean[] cannotReport)
 	{
 		castNote = null;
+		castMagic = 0;
 		boolean any = false;
 		for (boolean r : reported)
 		{
@@ -242,6 +245,7 @@ class XpLedger
 		if (cast != null)
 		{
 			castNote = String.format("CAST not an attack on %d: %s (+%d Magic)", tick, cast, g[MAGIC]);
+			castMagic = g[MAGIC];
 			g[MAGIC] = 0;
 			// What is left is the attack's, if there was one; a tick that paid the cast alone makes no award.
 			any = false;
@@ -285,6 +289,12 @@ class XpLedger
 		return castNote;
 	}
 
+	/** T-139: the Magic the last {@link #close} took for casts that are not attacks; 0 when nothing. */
+	int castMagic()
+	{
+		return castMagic;
+	}
+
 	/**
 	 * Whether the Magic in one tick's gains was paid by casts that are not
 	 * attacks, and which: their names, or null when it is (or may be) an attack's.
@@ -321,9 +331,10 @@ class XpLedger
 	}
 
 	/**
-	 * The cast, or two casts on one tick, that pay exactly this much Magic; null
-	 * when none. Casts paying the same are named together ("or"); of two casts,
-	 * the likeliest pair in {@link #CAST_XP}'s order.
+	 * The cast, or two or three casts on one tick, that pay exactly this much
+	 * Magic; null when none. Casts paying the same are named together ("or");
+	 * of several, the first of {@link #castsSumming} (the fewest casts, then
+	 * {@link #CAST_XP}'s order).
 	 */
 	static String castsPaying(int magic)
 	{
@@ -339,17 +350,142 @@ class XpLedger
 		{
 			return one.toString();
 		}
-		for (int i = 0; i < CAST_XP.length; i++)
+		// T-139: two or three casts, each spell once and one thrall at most (a 158 is a Greater thrall and the Mark,
+		// not two thralls).
+		for (int[] casts : castsSumming(magic))
 		{
-			for (int j = i; j < CAST_XP.length; j++)
+			if (casts.length > 1)
 			{
-				if (CAST_XP[i] + CAST_XP[j] == magic)
-				{
-					return CAST_NAMES[i] + " and " + CAST_NAMES[j];
-				}
+				return names(casts);
 			}
 		}
 		return null;
+	}
+
+	/** T-139: the most casts one tick's Magic is decoded into. Three is the Mark beside a thrall and Death Charge. */
+	static final int MOST_CASTS = 3;
+	/** T-139: CAST_XP's index of the Mark of Darkness, the 70 a superior thrall also pays. */
+	static final int MARK = 6;
+
+	private static boolean isThrall(int cast)
+	{
+		return CAST_NAMES[cast].contains("thrall");
+	}
+
+	/**
+	 * T-139: every way of paying exactly this much Magic with one to {@link #MOST_CASTS} casts on one tick, in
+	 * the fewest casts first, then {@link #CAST_XP}'s order: each spell at most once, and at most one thrall, as a thrall can't be raised while
+	 * another is out (one thrall spawned beside the +158 at [1799] of Eric's 18:00 log, 2026-10-31).
+	 */
+	static List<int[]> castsSumming(int magic)
+	{
+		final List<int[]> out = new ArrayList<>();
+		sum(magic, 0, new int[MOST_CASTS], 0, out);
+		// The fewest casts first (a stable sort keeps CAST_XP's order within each count), as names read the first.
+		out.sort(java.util.Comparator.comparingInt(c -> c.length));
+		return out;
+	}
+
+	private static void sum(int left, int from, int[] picked, int n, List<int[]> out)
+	{
+		if (left == 0 && n > 0)
+		{
+			out.add(java.util.Arrays.copyOf(picked, n));
+			return;
+		}
+		if (n == MOST_CASTS || left <= 0)
+		{
+			return;
+		}
+		for (int i = from; i < CAST_XP.length; i++)
+		{
+			if (isThrall(i) && thralls(picked, n) > 0)
+			{
+				continue;
+			}
+			picked[n] = i;
+			sum(left - CAST_XP[i], i + 1, picked, n + 1, out);
+		}
+	}
+
+	private static int thralls(int[] casts, int n)
+	{
+		int count = 0;
+		for (int i = 0; i < n; i++)
+		{
+			count += isThrall(casts[i]) ? 1 : 0;
+		}
+		return count;
+	}
+
+	/** T-139: whether these casts are all thralls, Death Charge and the Mark (see {@link #markBeside}). */
+	private static boolean routine(int[] casts)
+	{
+		for (int c : casts)
+		{
+			if (!isThrall(c) && c != MARK && !"Death Charge".equals(CAST_NAMES[c]))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static String names(int[] casts)
+	{
+		final StringBuilder b = new StringBuilder();
+		for (int i = 0; i < casts.length; i++)
+		{
+			b.append(i == 0 ? "" : i == casts.length - 1 ? " and " : ", ").append(CAST_NAMES[casts[i]]);
+		}
+		return b.toString();
+	}
+
+	/**
+	 * T-139: whether one tick's cast Magic held the Mark of Darkness, given whether a thrall spawned for it: what else
+	 * the tick cast ("" when the Mark alone), or null when it may not have been the Mark. Of the ways to pay the
+	 * amount ({@link #castsSumming}), only those that agree with the spawn count: one thrall cast when a thrall
+	 * spawned for this tick, none when none did. It is the Mark when every one of them holds it. So a lone 70 is the
+	 * Mark with no spawn and a superior thrall with one; a 158 with a spawn is a Greater thrall and the Mark (two thralls
+	 * can't be, and Lesser Corruption with Ward of Arceuus raises none); 88 + 90 + 70 the same.
+	 *
+	 * <p>Only the casts Eric's logs show beside each other are read with it: the thralls, Death Charge and the Mark
+	 * (a thrall with Death Charge is the 178 every kill opens with). Three casts can be paid too many ways otherwise:
+	 * 248 with one thrall is also a superior thrall, Ward of Arceuus and Greater Corruption. A tick of other casts is
+	 * left undecided, so not taken for the Mark.
+	 */
+	static String markBeside(int magic, boolean thrallSpawned)
+	{
+		String rest = null;
+		for (int[] casts : castsSumming(magic))
+		{
+			if ((thralls(casts, casts.length) > 0) != thrallSpawned || !routine(casts))
+			{
+				continue;
+			}
+			int mark = -1;
+			for (int i = 0; i < casts.length; i++)
+			{
+				mark = casts[i] == MARK ? i : mark;
+			}
+			if (mark < 0)
+			{
+				return null;
+			}
+			if (rest == null)
+			{
+				final int[] others = new int[casts.length - 1];
+				for (int i = 0, k = 0; i < casts.length; i++)
+				{
+					if (i != mark)
+					{
+						others[k++] = casts[i];
+					}
+				}
+				rest = others.length == 0 ? "" : names(others);
+			}
+		}
+		return rest;
 	}
 
 	/** Settles awards whose damage can no longer be arriving: checks them, and calibrates from the clean ones. */

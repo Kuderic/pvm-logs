@@ -1244,6 +1244,7 @@ class GearBonusCalc
 		}
 		if (message.startsWith("You have placed a Mark of Darkness upon yourself"))
 		{
+			markMessageTick = tick;
 			final boolean purging = isPurgingStaff(wornId(EquipmentInventorySlot.WEAPON));
 			final int baseMagic = client.getRealSkillLevel(Skill.MAGIC);
 			return mark.cast(tick, markDurationTicks(baseMagic, purging),
@@ -1305,22 +1306,84 @@ class GearBonusCalc
 		return mark.isUp();
 	}
 
-	/**
-	 * T-135: the Mark of Darkness read from its cast's experience when no message said so: a +70 Magic cast that no
-	 * thrall answered (see the plugin's {@code inferMark}). The message is the better signal (its duration starts on
-	 * its tick); this is the fallback, and does nothing while the Mark is already up.
-	 */
-	String markFromCast(int castTick, int tick)
+	// T-139: the tick the Mark's own message was last seen, so the fallback doesn't take the same cast again.
+	private int markMessageTick = Integer.MIN_VALUE;
+
+	/** T-139: whether a purging staff is worn now: kept with a cast on its tick, as the Mark's x5 is the cast's. */
+	boolean wearsPurgingStaff()
 	{
-		if (mark.isUp())
+		return isPurgingStaff(wornId(EquipmentInventorySlot.WEAPON));
+	}
+
+	// T-135, T-139: a cast tick whose Magic may hold the Mark's 70, waiting a tick for a thrall to spawn: its Magic,
+	// whether a thrall spawned on it, and whether a purging staff was worn on it.
+	private int markCastTick = Integer.MIN_VALUE;
+	private int markCastMagic;
+	private boolean markCastSpawn;
+	private boolean markCastPurging;
+
+	/**
+	 * T-135, T-139: the Mark of Darkness from its cast's experience when no message said so, at each tick's close.
+	 * A cast tick whose Magic may hold the Mark's 70 waits a tick. At T+1's close, a thrall spawned for it on T, or on
+	 * T+1 with no thrall cast of its own (a guess: a thrall spawning a tick late), and {@link XpLedger#markBeside} says
+	 * whether the 70 was the Mark: a lone 70 with no thrall; a 158 that raised one, a Greater thrall and the Mark.
+	 *
+	 * @param castMagic the Magic this tick's casts paid ({@link XpLedger#castMagic})
+	 * @param castNote this tick's cast line ({@link XpLedger#castNote}), for its own thrall cast
+	 * @param thrallSpawned whether a thrall spawned on this tick
+	 * @return the MARK line, or null when nothing changed
+	 */
+	String markFromCasts(int tick, int castMagic, String castNote, boolean thrallSpawned)
+	{
+		String line = null;
+		if (markCastTick == tick - 1)
+		{
+			final boolean ownThrall = castNote != null && castNote.contains("thrall");
+			final String beside = XpLedger.markBeside(markCastMagic, markCastSpawn || thrallSpawned && !ownThrall);
+			if (beside != null)
+			{
+				line = markFromCast(markCastTick, tick, markCastPurging, markCastMagic, beside);
+			}
+			markCastTick = Integer.MIN_VALUE;
+		}
+		if (castMagic > 0 && (XpLedger.markBeside(castMagic, false) != null
+			|| XpLedger.markBeside(castMagic, true) != null))
+		{
+			markCastTick = tick;
+			markCastMagic = castMagic;
+			markCastSpawn = thrallSpawned;
+			markCastPurging = wearsPurgingStaff();
+		}
+		return line;
+	}
+
+	/**
+	 * T-135: the Mark of Darkness read from its cast's experience when no message said so (see the plugin's
+	 * {@code inferMark} and {@link XpLedger#markBeside}). The message is the better signal (its duration starts on
+	 * its tick); this is the fallback.
+	 *
+	 * <p>T-139: a recast while the Mark is up refreshes it, as the message's path does (Eric's 18:00 log: the +158 at
+	 * [1799] kept it up past the [734] cast's end, his staff hitting up to 60 on Yama after it). Only a cast the
+	 * message already took is left alone. The x5 is the purging staff's on the cast's tick, {@code purgingOnCast}:
+	 * the wiki has the staff "equipped" as the Mark is cast, and switching afterwards keeps the duration (the 18:30
+	 * log: the staff at [84], the Emberlight by [85], the Mark still up at [449]).
+	 *
+	 * @param magic the cast's Magic, for the line
+	 * @param beside what else the tick cast ("" when the Mark alone), for the line
+	 */
+	String markFromCast(int castTick, int tick, boolean purgingOnCast, int magic, String beside)
+	{
+		if (markMessageTick >= castTick && markMessageTick <= tick)
 		{
 			return null;
 		}
-		final boolean purging = isPurgingStaff(wornId(EquipmentInventorySlot.WEAPON));
 		final int baseMagic = client.getRealSkillLevel(Skill.MAGIC);
-		final String line = mark.cast(castTick, markDurationTicks(baseMagic, purging),
-			(purging ? "purging staff, x5" : "no purging staff") + ", base Magic " + baseMagic
-				+ "; from the +70 Magic cast on tick " + castTick + " with no thrall: no message seen");
+		final String from = beside == null || beside.isEmpty()
+			? "from the +" + magic + " Magic cast on tick " + castTick + " with no thrall"
+			: "from a +" + magic + " drop on tick " + castTick + ", " + beside + " + the Mark";
+		final String line = mark.cast(castTick, markDurationTicks(baseMagic, purgingOnCast),
+			(purgingOnCast ? "purging staff on the cast's tick, x5" : "no purging staff on the cast's tick")
+				+ ", base Magic " + baseMagic + "; " + from + ": no message seen");
 		mark.tick(tick);
 		return line;
 	}

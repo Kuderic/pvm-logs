@@ -739,6 +739,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Turned off and on again, the plugin cannot know what happened in between: Mark of Darkness and Charge read down
 		// until their messages say otherwise (T-026).
 		gearBonuses.resetBuffs("the plugin has just started");
+		markMessageLogged = false;
 		maxHits = new MaxHitCheck(line -> debug.log("%s", line));
 		timelines.setClock(client::getTickCount);
 		// T-135: a boss's hitpoints for its modifiers (Yama's phase 3 from a third), as counted here.
@@ -1900,7 +1901,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			debug.log(xpLedger.castNote());
 		}
-		inferMark(tick, xpLedger.castNote());
+		inferMark(tick, xpLedger.castNote(), xpLedger.castMagic());
 		if (award != null)
 		{
 			debug.log("xp award %s against npc %d", award, targetId);
@@ -5649,36 +5650,19 @@ public class PvmPerformancePlugin extends Plugin
 		perf.stop(PerfProbe.Slot.ON_CHAT_MESSAGE, t0);
 	}
 
-	// T-135: a +70 Magic cast is a superior thrall or the Mark of Darkness (XpLedger.CAST_XP); the tick of one waiting to
-	// be told apart, and the last tick a thrall spawned.
-	private int markCastTick = Integer.MIN_VALUE;
+	// T-135: the last tick a thrall spawned, for the Mark of Darkness's fallback (GearBonusCalc.markFromCasts).
 	private int lastThrallSpawnTick = Integer.MIN_VALUE;
+	// T-139: the Mark's message still isn't seen with SPAM taken: its raw text and type, logged once a session.
+	private boolean markMessageLogged;
 
-	/**
-	 * T-135: the Mark of Darkness from its cast, when no message said so (the fallback; the message's type is the fix).
-	 * A +70 cast on T is a superior thrall if a thrall spawned on T, as Eric's thralls spawn on their cast's tick
-	 * (XpLedger's 88s); else, at T+1's close, the Mark, unless a thrall spawned on T+1 with no thrall cast of its own.
-	 * That second tick is a guess: a superior thrall spawning a tick late.
-	 */
-	private void inferMark(int tick, String castNote)
+	/** T-135: the Mark of Darkness from its cast, when no message said so (T-139: GearBonusCalc.markFromCasts). */
+	private void inferMark(int tick, String castNote, int castMagic)
 	{
-		if (markCastTick == tick - 1)
+		final String line = gearBonuses.markFromCasts(tick, castMagic, castNote, lastThrallSpawnTick == tick);
+		if (line != null)
 		{
-			final boolean ownThrall = castNote != null && castNote.contains("thrall");
-			if (lastThrallSpawnTick != tick || ownThrall)
-			{
-				final String line = gearBonuses.markFromCast(markCastTick, tick);
-				if (line != null)
-				{
-					debug.log("%s", line);
-					combatCalc.invalidateGear();
-				}
-			}
-			markCastTick = Integer.MIN_VALUE;
-		}
-		if (castNote != null && castNote.contains("Mark of Darkness") && lastThrallSpawnTick != tick)
-		{
-			markCastTick = tick;
+			debug.log("%s", line);
+			combatCalc.invalidateGear();
 		}
 	}
 
@@ -5687,6 +5671,14 @@ public class PvmPerformancePlugin extends Plugin
 		// T-135: the buffs' messages come as SPAM too, as RuneLite's Timers & Buffs takes them: the Mark of Darkness was
 		// never seen at Yama (Eric's 14:02 log, [7572]), so its +50% and accuracy were missing.
 		final boolean game = event.getType() == ChatMessageType.GAMEMESSAGE;
+		// T-139: what the game sends for the Mark, as it comes, once a session: every MARK up so far is the fallback's.
+		// Any type, as GAMEMESSAGE and SPAM both missed it; no sender, so a player's chat can't take the one line.
+		if (!markMessageLogged && event.getMessage() != null && event.getMessage().contains("Mark of Darkness")
+			&& (event.getName() == null || event.getName().isEmpty()))
+		{
+			markMessageLogged = true;
+			debug.log("MARK message seen (once a session): type %s, raw \"%s\"", event.getType(), event.getMessage());
+		}
 		if (!game && event.getType() != ChatMessageType.SPAM)
 		{
 			return;
