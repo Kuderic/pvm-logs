@@ -1235,19 +1235,91 @@ final class PanelSnapshot
 		final Figure specLuck;
 		/** T-076: the drop for a bar, base to now with the floor; null when the levels aren't known. */
 		final Drop drop;
+		/**
+		 * T-142 (Eric's pick, A): the Drains card's blocks, one per drained stat, each with its specials under it; null
+		 * for a kill saved before T-141, which shows the card above ({@link #rows}, {@link #drop}).
+		 */
+		final List<DrainBlock> blocks;
 
 		Defence(Text hint, List<Row> rows, Figure worth, Figure specLuck, Drop drop)
+		{
+			this(hint, rows, worth, specLuck, drop, null);
+		}
+
+		Defence(Text hint, List<Row> rows, Figure worth, Figure specLuck, Drop drop, List<DrainBlock> blocks)
 		{
 			this.hint = hint == null ? Text.NONE : hint;
 			this.rows = list(rows);
 			this.worth = worth;
 			this.specLuck = specLuck;
 			this.drop = drop;
+			this.blocks = blocks == null ? null : list(blocks);
 		}
 
 		String structure()
 		{
-			return rows.size() + (worth == null ? "" : "w") + (specLuck == null ? "" : "s") + (drop == null ? "" : "b");
+			final StringBuilder b = new StringBuilder();
+			if (blocks != null)
+			{
+				b.append("B");
+				for (DrainBlock k : blocks)
+				{
+					b.append('[').append(k.structure()).append(']');
+				}
+			}
+			return b + (rows.size() + (worth == null ? "" : "w") + (specLuck == null ? "" : "s") + (drop == null ? ""
+				: "b"));
+		}
+	}
+
+	/**
+	 * T-142: one drained stat's block on the Drains card: its name and change ({@code Defence  225 → 191}, {@code Magic
+	 * defence  −93}), a bar from its base with the floor where it has one, then its lines: each special (what it added,
+	 * then its landings and what it took off), drains it already had, its regen, and which of your attacks it helped.
+	 */
+	static final class DrainBlock
+	{
+		final Text name;
+		/** {@code  at its floor}, or none. */
+		final Text hint;
+		final Text change;
+		/** Null for none: magic defence, or a stat no drain changed. */
+		final Drop bar;
+		final List<BlockLine> lines;
+
+		DrainBlock(Text name, Text hint, Text change, Drop bar, List<BlockLine> lines)
+		{
+			this.name = name;
+			this.hint = hint == null ? Text.NONE : hint;
+			this.change = change;
+			this.bar = bar;
+			this.lines = list(lines);
+		}
+
+		String structure()
+		{
+			final StringBuilder b = new StringBuilder(bar == null ? "" : "b");
+			for (BlockLine l : lines)
+			{
+				b.append(l.level);
+			}
+			return b.toString();
+		}
+	}
+
+	/** T-142: one line of a block, set in by {@code level} (1 under the stat, 2 under a special), its label's short forms. */
+	static final class BlockLine
+	{
+		final Row row;
+		final int level;
+		/** Shorter forms of the label, longest first, drawn where the whole one doesn't fit; empty for none. */
+		final List<String> leftShort;
+
+		BlockLine(Row row, int level, List<String> leftShort)
+		{
+			this.row = row;
+			this.level = level;
+			this.leftShort = leftShort == null ? java.util.Collections.<String>emptyList() : list(leftShort);
 		}
 	}
 

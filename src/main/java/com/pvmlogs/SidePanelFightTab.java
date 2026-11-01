@@ -1224,6 +1224,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			return;
 		}
+		if (tab.defence.blocks != null)
+		{
+			drains(tab);
+			return;
+		}
 		final JPanel card = SidePanelParts.card(6);
 		final SidePanelDrainBar bar = tab.defence.drop == null ? null : new SidePanelDrainBar(tab.defence.drop);
 		if (bar != null)
@@ -1243,6 +1248,89 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			}
 			rows.set(defenceRows(t.defence));
 		});
+	}
+
+	/**
+	 * T-142 (Eric's pick, A): the Drains card, a block per drained stat (its name and change, a small bar with the
+	 * floor, its lines: each special under it, drains it already had, its regen, which of your attacks it helped), then
+	 * {@code Drains added}. Built once per structure; a snapshot sets texts in place.
+	 */
+	private void drains(FightTab tab)
+	{
+		final JPanel card = SidePanelParts.card(3);
+		final List<SidePanelParts.Line> heads = new ArrayList<>();
+		final List<SidePanelDrainBar.Bar> bars = new ArrayList<>();
+		final List<List<SidePanelParts.Line>> lines = new ArrayList<>();
+		for (int i = 0; i < tab.defence.blocks.size(); i++)
+		{
+			final PanelSnapshot.DrainBlock b = tab.defence.blocks.get(i);
+			final SidePanelParts.Line head = new SidePanelParts.Line(new PanelSnapshot.Row(b.name, b.hint, b.change, null));
+			// Room for its widest digits: "225 → 191" drawn at 2× measures wider than at 1×, and the arrow is the font's
+			// fallback's.
+			head.right.reserveDigits();
+			if (i > 0)
+			{
+				head.setBorder(new javax.swing.border.EmptyBorder(6, 0, 0, 0));
+			}
+			card.add(head);
+			heads.add(head);
+			SidePanelDrainBar.Bar bar = null;
+			if (b.bar != null)
+			{
+				bar = new SidePanelDrainBar.Bar();
+				bar.set(b.bar.start, b.bar.end, b.bar.base, b.bar.floor);
+				card.add(bar);
+			}
+			bars.add(bar);
+			final List<SidePanelParts.Line> ls = new ArrayList<>(b.lines.size());
+			for (PanelSnapshot.BlockLine l : b.lines)
+			{
+				final SidePanelParts.Line line = new SidePanelParts.Line(l.row);
+				line.setBorder(new javax.swing.border.EmptyBorder(0, indent(l.level), 0, 0));
+				line.left.setShort(l.leftShort);
+				card.add(line);
+				ls.add(line);
+			}
+			lines.add(ls);
+		}
+		final SidePanelParts.Line worth = tab.defence.worth == null ? null : new SidePanelParts.Line(tab.defence.worth.row());
+		if (worth != null)
+		{
+			worth.setBorder(new javax.swing.border.EmptyBorder(6, 0, 0, 0));
+			card.add(worth);
+		}
+		final SidePanelSection section = new SidePanelSection("defence", SidePanelModel.DRAINS, tab.defence.hint, card,
+			folds);
+		add(section);
+		updaters.add(t ->
+		{
+			section.setHint(t.defence.hint);
+			for (int i = 0; i < heads.size(); i++)
+			{
+				final PanelSnapshot.DrainBlock b = t.defence.blocks.get(i);
+				heads.get(i).set(new PanelSnapshot.Row(b.name, b.hint, b.change, null), 0, i > 0 ? 6 : 0);
+				if (bars.get(i) != null && b.bar != null)
+				{
+					bars.get(i).set(b.bar.start, b.bar.end, b.bar.base, b.bar.floor);
+				}
+				for (int k = 0; k < lines.get(i).size(); k++)
+				{
+					final PanelSnapshot.BlockLine l = b.lines.get(k);
+					lines.get(i).get(k).set(l.row, indent(l.level), 0);
+					lines.get(i).get(k).left.setShort(l.leftShort);
+				}
+			}
+			if (worth != null)
+			{
+				worth.set(t.defence.worth.row(), 0, 6);
+			}
+		});
+	}
+
+	/** T-142: a block line's inset: under the stat, and further under a special. */
+	private static int indent(int level)
+	{
+		return level <= 0 ? 0 : level == 1 ? SidePanelParts.INDENT : SidePanelParts.INDENT + 8;
 	}
 
 	/** The card's rows: the facts, then its two figures. */
