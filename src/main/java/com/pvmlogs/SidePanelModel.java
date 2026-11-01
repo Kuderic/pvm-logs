@@ -159,6 +159,13 @@ final class SidePanelModel
 		 * session, whose drain record keeps only what was thrown and what landed.
 		 */
 		List<WeaponRow> specRows = Collections.emptyList();
+		/**
+		 * T-142: the drains per stat, each with its specials (T-141's record, summed over the room's fights), for the
+		 * Drains card's blocks. Null for a kill whose record is from before T-141: today's card.
+		 */
+		List<StatPart> stats;
+		/** T-142: the boss rolls its magic defence off its Defence (boss-rules.json), so a Defence drain helps magic too. */
+		boolean magicUsesDefence;
 
 		int ownThrown()
 		{
@@ -169,6 +176,51 @@ final class SidePanelModel
 			}
 			return n;
 		}
+	}
+
+	/** T-142: one drained stat over a room: its levels (or bonus), what its drains added, its specials. */
+	static final class StatPart
+	{
+		/** {@link DrainRecord.StatDrain}'s name: defence, magic or magicDefence. */
+		String stat;
+		int base;
+		int floor;
+		int start;
+		int end;
+		int regenTicks;
+		Integer bonusAtStart;
+		Integer bonusAtEnd;
+		double value;
+		/** No drain changed it: it's here for its specials alone (one that landed nothing, say). */
+		boolean unchanged;
+		final List<SourcePart> sources = new ArrayList<>();
+
+		SourcePart source(String weapon, boolean own)
+		{
+			for (SourcePart s : sources)
+			{
+				if (s.weapon.equals(weapon) && s.own == own)
+				{
+					return s;
+				}
+			}
+			final SourcePart s = new SourcePart();
+			s.weapon = weapon;
+			s.own = own;
+			sources.add(s);
+			return s;
+		}
+	}
+
+	/** T-142: one special's drains on one stat over a room: its landings, what it took off, what it added. */
+	static final class SourcePart
+	{
+		String weapon;
+		boolean own;
+		int thrown;
+		int landed;
+		int drained;
+		double value;
 	}
 
 	/** T-052: a target's tracked stats while the fight runs (T-049's tracker). */
@@ -661,7 +713,128 @@ final class SidePanelModel
 		d.valueSeconds = room.luckSeconds(d.valueDamage);
 		d.specLuckDamage = room.getSpecLuckDamage();
 		d.specLuckSeconds = room.luckSeconds(d.specLuckDamage);
+		d.stats = statParts(room);
 		return d;
+	}
+
+	/**
+	 * T-142: the room's drains per stat, T-141's record summed over its fights: each stat's first start and last end,
+	 * what its drains added, and its specials' landings, what they took off and what they added on it. Null where any
+	 * fight's record is from before T-141 (no per-stat fields): today's card.
+	 */
+	static List<StatPart> statParts(Encounter room)
+	{
+		final Map<String, StatPart> by = new LinkedHashMap<>();
+		boolean any = false;
+		for (Fight f : room.getFights())
+		{
+			final DrainRecord r = f.getDrainRecord();
+			if (r == null || r.immune)
+			{
+				continue;
+			}
+			if (r.stats == null || r.sources == null)
+			{
+				return null;
+			}
+			any = true;
+			for (DrainRecord.StatDrain sd : r.stats)
+			{
+				StatPart p = by.get(sd.stat);
+				if (p == null || p.unchanged)
+				{
+					final StatPart was = p;
+					p = new StatPart();
+					p.stat = sd.stat;
+					p.base = sd.base;
+					p.floor = sd.floor;
+					p.start = sd.start;
+					p.regenTicks = sd.regenTicks;
+					p.bonusAtStart = sd.bonusAtStart;
+					if (was != null)
+					{
+						p.sources.addAll(was.sources);
+					}
+					by.put(sd.stat, p);
+				}
+				p.end = sd.end;
+				if (p.bonusAtStart == null)
+				{
+					p.bonusAtStart = sd.bonusAtStart;
+				}
+				if (sd.bonusAtEnd != null)
+				{
+					p.bonusAtEnd = sd.bonusAtEnd;
+				}
+				p.value += sd.value;
+			}
+			for (DrainRecord.SourceDrain sd : r.sources)
+			{
+				final java.util.Set<String> on = new java.util.LinkedHashSet<>(sd.drained.keySet());
+				on.addAll(sd.valueByStat.keySet());
+				if (on.isEmpty())
+				{
+					// A special that took nothing off (none landed): under the stat it drains.
+					on.add(statOf(sd.weapon));
+				}
+				for (String stat : on)
+				{
+					StatPart p = by.get(stat);
+					if (p == null)
+					{
+						p = new StatPart();
+						p.stat = stat;
+						p.unchanged = true;
+						by.put(stat, p);
+					}
+					final SourcePart sp = p.source(sd.weapon, sd.own);
+					sp.thrown += sd.thrown;
+					sp.landed += sd.landed;
+					sp.drained += Math.max(0, sd.drained.getOrDefault(stat, 0));
+					sp.value += sd.valueByStat.getOrDefault(stat, 0.0);
+				}
+			}
+		}
+		if (!any)
+		{
+			return null;
+		}
+		final List<StatPart> out = new ArrayList<>(by.size());
+		for (String stat : new String[]{DrainRecord.StatDrain.DEFENCE, DrainRecord.StatDrain.MAGIC,
+			DrainRecord.StatDrain.MAGIC_DEFENCE})
+		{
+			final StatPart p = by.get(stat);
+			if (p != null && (!p.unchanged || !p.sources.isEmpty()))
+			{
+				out.add(p);
+			}
+		}
+		return out;
+	}
+
+	/** T-142: the stat a special drains, for one that took nothing off: the Eye of ayak magic defence, Seercull Magic. */
+	static String statOf(String weapon)
+	{
+		return "EYE_OF_AYAK".equals(weapon) ? DrainRecord.StatDrain.MAGIC_DEFENCE : "SEERCULL".equals(weapon)
+			? DrainRecord.StatDrain.MAGIC : DrainRecord.StatDrain.DEFENCE;
+	}
+
+	/** T-142: whether the room's boss rolls its magic defence off its Defence (boss-rules.json: Verzik, the Ice demon). */
+	static boolean magicUsesDefence(BossRules rules, List<Fight> fights)
+	{
+		if (rules == null)
+		{
+			return false;
+		}
+		for (Fight f : fights)
+		{
+			final BossRules.Boss b = rules.forNpc(f.getTargetId());
+			if (b != null && b.defenceDrain != null && b.defenceDrain.magicUsesDefence)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** T-052: a target's tracked stats for the live line, or null until a drain has landed on it. */
@@ -1964,6 +2137,10 @@ final class SidePanelModel
 	 */
 	static PanelSnapshot.Defence defence(Drain d)
 	{
+		if (d.stats != null)
+		{
+			return drains(d);
+		}
 		final List<Row> rows = new ArrayList<>();
 		if (hasFloor(d))
 		{
@@ -1984,6 +2161,171 @@ final class SidePanelModel
 		// T-119: the specials' luck is no row of its own now; its time is on the specials' rows, on hover.
 		return new PanelSnapshot.Defence(Text.small(path(d.defenceStart, d.defenceEnd), SidePanelStyle.SECONDARY), rows,
 			drainWorth(d), null, drop(d));
+	}
+
+	// ---- T-142: the Drains card (Eric's pick, A: stacked blocks) ----
+
+	/** T-142: the card's title with T-141's per-stat record: it holds magic defence and Magic too. */
+	static final String DRAINS = "Drains";
+
+	/**
+	 * T-142 (Eric, 2026-11-01: "at yama there's emberlight and ayak specs which are independent"): a block per drained
+	 * stat, each special under the stat it drained with what it added, then {@code Drains added}, the sum of the stats'
+	 * values (T-050's drain value), with its time on hover. The header's hint is that sum.
+	 */
+	static PanelSnapshot.Defence drains(Drain d)
+	{
+		final List<PanelSnapshot.DrainBlock> blocks = new ArrayList<>(d.stats.size());
+		final String luckTip = specLuckTip(d);
+		for (StatPart p : d.stats)
+		{
+			blocks.add(block(p, d, luckTip));
+		}
+		final PanelSnapshot.Figure worth = drainWorth(d);
+		final Text hint = worth != null ? Text.small(worth.damage, SidePanelStyle.SECONDARY)
+			: Text.small(path(d.defenceStart, d.defenceEnd), SidePanelStyle.SECONDARY);
+		return new PanelSnapshot.Defence(hint, Collections.<Row>emptyList(), worth, null, null, blocks);
+	}
+
+	private static PanelSnapshot.DrainBlock block(StatPart p, Drain d, String luckTip)
+	{
+		final boolean bonus = DrainRecord.StatDrain.MAGIC_DEFENCE.equals(p.stat);
+		final String name = bonus ? "Magic defence" : DrainRecord.StatDrain.MAGIC.equals(p.stat) ? "Magic" : "Defence";
+		final int reduction = Math.max(0, p.base - p.end);
+		final boolean changed = !p.unchanged && (bonus ? reduction > 0 : p.start != p.end);
+		final Text change = !changed ? Text.small("unchanged", SidePanelStyle.MUTED)
+			: Text.body(bonus ? "-" + reduction : path(p.start, p.end), SidePanelStyle.VALUE);
+		final boolean floor = !bonus && p.floor > 0 && p.floor < Math.max(p.base, p.start);
+		final Text hint = changed && floor && p.end <= p.floor ? Text.small(" at its floor", SidePanelStyle.MUTED)
+			: Text.NONE;
+		final PanelSnapshot.Drop bar = !changed || bonus ? null : new PanelSnapshot.Drop(p.start, p.end, Math.max(p.base,
+			p.start), floor ? p.floor : 0, Text.NONE, Text.NONE);
+		final List<PanelSnapshot.BlockLine> lines = new ArrayList<>();
+		// Magic defence: the bonus the attacks met, the boss's modifiers in (Yama's moves with his target and phase).
+		if (bonus && changed && p.bonusAtStart != null && p.bonusAtEnd != null)
+		{
+			final String met = signedPlain(p.bonusAtStart) + " → " + signedPlain(p.bonusAtEnd);
+			lines.add(new PanelSnapshot.BlockLine(new Row(Text.small("bonus met " + met, SidePanelStyle.SECONDARY),
+				Text.NONE, Text.NONE, null), 1, java.util.Arrays.asList("bonus " + met, met)));
+		}
+		long shown = 0;
+		for (SourcePart src : p.sources)
+		{
+			final long v = LedgerRows.roundHalfAway(src.value);
+			shown += v;
+			lines.add(line(Text.small(weaponName(src.weapon), SidePanelStyle.BODY), Text.NONE, Text.small(dmg(v),
+				dmgColour(v)), src.own ? luckTip : "A party member's drains, as their special counter sent them.", 1));
+			final List<String> forms = new ArrayList<>(landings(src, d));
+			if (!src.own)
+			{
+				// A party member's: labelled so on its second line, the name kept whole.
+				for (int k = 0; k < forms.size(); k++)
+				{
+					forms.set(k, "party · " + forms.get(k));
+				}
+			}
+			final String took = src.drained > 0 ? " · -" + src.drained : "";
+			final List<String> withTook = new ArrayList<>(forms.size());
+			for (String f : forms)
+			{
+				withTook.add(f + took);
+			}
+			lines.add(new PanelSnapshot.BlockLine(new Row(Text.small(withTook.get(0), SidePanelStyle.SECONDARY),
+				Text.NONE), 2, withTook.subList(1, withTook.size())));
+		}
+		// Drains it had when a fight began (an earlier fight of the room, or before it): in its value, no special's.
+		final long total = LedgerRows.roundHalfAway(p.value);
+		final long before = total - shown;
+		if (before != 0)
+		{
+			lines.add(line(Text.small("already drained", SidePanelStyle.BODY), Text.NONE, Text.small(dmg(before),
+				dmgColour(before)), "Drains " + (bonus ? "of its magic defence" : "of its " + name) + " the boss had when "
+				+ "a fight began, from an earlier fight of the room or from before it: counted in its value, not to any one "
+				+ "special.", 1));
+		}
+		if (changed && !bonus && p.regenTicks > 0)
+		{
+			lines.add(line(Text.small("regens 1 every " + p.regenTicks + " ticks", SidePanelStyle.MUTED), Text.NONE, null,
+				null, 1));
+		}
+		final List<String> helps = helps(p.stat, d.magicUsesDefence);
+		final int parts = p.sources.size() + (before != 0 ? 1 : 0);
+		lines.add(new PanelSnapshot.BlockLine(new Row(Text.small(helps.get(0), SidePanelStyle.MUTED), Text.NONE,
+			parts > 1 ? Text.small(dmg(total), dmgColour(total)) : Text.NONE), 1, helps.subList(1,
+			helps.size())));
+		return new PanelSnapshot.DrainBlock(Text.body(name, SidePanelStyle.VALUE), hint, change, bar, lines);
+	}
+
+	private static PanelSnapshot.BlockLine line(Text left, Text hint, Text right, String tooltip, int level)
+	{
+		return new PanelSnapshot.BlockLine(new Row(left, hint, right == null ? Text.NONE : right, tooltip), level, null);
+	}
+
+	/** T-142: {@code +38 dmg}, {@code +0 dmg} for a special that added nothing (shown as it is). */
+	private static String dmg(long v)
+	{
+		return (v >= 0 ? "+" : "-") + LedgerRows.number(Math.abs(v)) + " dmg";
+	}
+
+	private static Color dmgColour(long v)
+	{
+		return v > 0 ? SidePanelStyle.BETTER : v < 0 ? SidePanelStyle.COST : SidePanelStyle.BODY;
+	}
+
+	private static String signedPlain(int v)
+	{
+		return v > 0 ? "+" + v : v < 0 ? "-" + -v : "0";
+	}
+
+	/**
+	 * T-142: which of your attacks a stat's drains help, longest first (Larger text draws a shorter one): Defence your
+	 * melee and ranged, and your magic too where the boss rolls magic defence off it; Magic and magic defence your magic.
+	 */
+	static List<String> helps(String stat, boolean magicUsesDefence)
+	{
+		if (DrainRecord.StatDrain.DEFENCE.equals(stat))
+		{
+			return magicUsesDefence ? Arrays.asList("for your melee, ranged & magic", "for all your attacks", "all attacks")
+				: Arrays.asList("for your melee & ranged", "for melee & ranged", "melee & ranged");
+		}
+		return Arrays.asList("for your magic", "magic");
+	}
+
+	/**
+	 * T-142: a special's landings, longest first, as today's card has them (T-119): {@code landed 2 of 5 (expected
+	 * 2.4)}, or for one that drains by its damage {@code 152 dmg (expected 130)}; a party member's {@code 1 drain}.
+	 */
+	static List<String> landings(SourcePart src, Drain d)
+	{
+		if (!src.own)
+		{
+			return Collections.singletonList(src.thrown + (src.thrown == 1 ? " drain" : " drains"));
+		}
+		final net.runelite.client.plugins.specialcounter.SpecialWeapon w = specialWeapon(src.weapon);
+		final WeaponRow r = specRow(d.specRows, w);
+		final String count = src.landed + " of " + src.thrown;
+		final List<String> forms = new ArrayList<>(3);
+		if (r != null && !DrainRule.drainsOnLanding(w) && r.expectedKnown)
+		{
+			final String dmg = LedgerRows.number(Math.max(0, r.damage));
+			final long expected = Math.round(r.expected);
+			forms.add(dmg + " dmg (expected " + LedgerRows.number(expected) + ")");
+			forms.add(dmg + " (exp " + LedgerRows.number(expected) + ")");
+			forms.add(dmg + " dmg");
+		}
+		else if (r != null && r.landedKnown > 0)
+		{
+			final String expected = LedgerRows.oneDecimal(r.landedExpected / r.landedKnown * src.thrown);
+			forms.add("landed " + count + " (expected " + expected + ")");
+			forms.add(count + " (exp " + expected + ")");
+			forms.add(count);
+		}
+		else
+		{
+			forms.add("landed " + count);
+			forms.add(count);
+		}
+		return forms;
 	}
 
 	/** Whether the boss has a Defence floor above 0 and below its base (T-049's rules). */

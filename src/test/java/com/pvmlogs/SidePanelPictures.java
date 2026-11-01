@@ -107,6 +107,11 @@ public final class SidePanelPictures
 			allYourDamage(out);
 			return;
 		}
+		if (args.length > 1 && "drains".equals(args[1]))
+		{
+			drainsCard(out);
+			return;
+		}
 		if (args.length > 1 && "reset".equals(args[1]))
 		{
 			setupDamageAndNewTrip(out);
@@ -1746,6 +1751,44 @@ public final class SidePanelPictures
 		final BufferedImage tiles = whole.getSubimage(0, 0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale),
 			Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height + 4) * scale)));
 		return dps.getToolTipText() == null ? tiles : withTooltip(tiles, dps, scale);
+	}
+
+	/**
+	 * T-142: the Drains card (Eric's pick, A: a block per drained stat): Yama's Emberlight and Soul Rend, a warhammer and
+	 * Bandos godsword, the Sire's Emberlight, a boss at its floor with a party drain, Soul Rends that landed nothing, a
+	 * boss whose magic rolls off its Defence, and a kill saved before T-141 (today's card). Normal, Smooth and Larger, 1x
+	 * and 2x.
+	 */
+	private static void drainsCard(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-yama-emberlight-and-soul-rend", scale, card(SidePanelDrainsExamples.kill(
+					SidePanelDrainsExamples.yama(), false), scale, "defence"));
+				write(dir, "b-warhammer-and-godsword", scale, card(SidePanelDrainsExamples.kill(
+					SidePanelDrainsExamples.graardor(), false), scale, "defence"));
+				write(dir, "c-sire-emberlight", scale, card(SidePanelDrainsExamples.kill(SidePanelDrainsExamples.sire(),
+					false), scale, "defence"));
+				write(dir, "d-at-its-floor-with-a-party-drain", scale, card(SidePanelDrainsExamples.kill(
+					SidePanelDrainsExamples.floorAndParty(), false), scale, "defence"));
+				write(dir, "e-soul-rends-that-landed-nothing", scale, card(SidePanelDrainsExamples.kill(
+					SidePanelDrainsExamples.soulRendsMissed(), false), scale, "defence"));
+				write(dir, "f-magic-off-defence", scale, card(SidePanelDrainsExamples.kill(
+					SidePanelDrainsExamples.magicOffDefence(), true), scale, "defence"));
+				write(dir, "g-old-kill-todays-card", scale, card(SidePanelDrainsExamples.kill(SidePanelDrainsExamples.old(),
+					false), scale, "defence"));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
 	}
 
 	/** The Party tab on {@code in}: {@code open} a member's breakdown, {@code hover} a tick of the chart, a metric picked. */

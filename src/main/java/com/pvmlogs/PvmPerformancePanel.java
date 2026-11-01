@@ -570,6 +570,11 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
+		if (in.drain != null)
+		{
+			// T-142: a Defence drain helps magic too where the boss rolls magic defence off its Defence.
+			in.drain.magicUsesDefence = SidePanelModel.magicUsesDefence(rules(), room.getFights());
+		}
 		// T-109: what the room's damage was, named by the boss rules.
 		SidePanelModel.fillRoomDamageSources(in, java.util.Collections.singletonList(room), rules());
 		if (in.run)
@@ -1352,6 +1357,12 @@ class PvmPerformancePanel extends PluginPanel
 				public java.util.Set<String> avoidable(Encounter room)
 				{
 					return avoidableAttacks(room.getFights());
+				}
+
+				@Override
+				public boolean magicUsesDefence(Encounter room)
+				{
+					return SidePanelModel.magicUsesDefence(rules(), room.getFights());
 				}
 			};
 		}

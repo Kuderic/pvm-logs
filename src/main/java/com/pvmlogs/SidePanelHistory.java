@@ -52,6 +52,12 @@ final class SidePanelHistory
 		{
 			return Collections.emptySet();
 		}
+
+		/** T-142: whether the room's boss rolls magic defence off its Defence (boss-rules.json); false without rules. */
+		default boolean magicUsesDefence(Encounter room)
+		{
+			return false;
+		}
 	}
 
 	// ---- rooms ----
@@ -927,6 +933,10 @@ final class SidePanelHistory
 		in.historyFights = history.size();
 		in.version = names == null ? null : names.name(room, in.maxHp);
 		in.avoidableAttacks = names == null ? Collections.emptySet() : names.avoidable(room);
+		if (in.drain != null && names != null)
+		{
+			in.drain.magicUsesDefence = names.magicUsesDefence(room);
+		}
 		// T-095: a run has no average to set against, and no luck to remove.
 		if (in.killed && room.getRaid() == null && in.warning == null && !in.run)
 		{
