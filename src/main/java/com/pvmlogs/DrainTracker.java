@@ -108,9 +108,11 @@ final class DrainTracker
 		final int dueTick;
 		final DrainRule.Target target;
 		final List<Integer> splats = new ArrayList<>(2);
+		/** T-143: whether hitpoints experience came on the tick it was thrown: it dealt damage. */
+		final boolean hpXpGiven;
 
 		Throw(int thrownTick, SpecialWeapon weapon, int npcIndex, int npcId, String name, int dueTick,
-			DrainRule.Target target)
+			DrainRule.Target target, boolean hpXpGiven)
 		{
 			this.thrownTick = thrownTick;
 			this.weapon = weapon;
@@ -119,6 +121,7 @@ final class DrainTracker
 			this.name = name;
 			this.dueTick = dueTick;
 			this.target = target;
+			this.hpXpGiven = hpXpGiven;
 		}
 	}
 
@@ -164,7 +167,21 @@ final class DrainTracker
 			apply(ensure(npcIndex, npcId, name, target), weapon, true, thrownTick, dueTick, hpXpGiven ? 1 : 0, hpXpGiven);
 			return;
 		}
-		pending.add(new Throw(thrownTick, weapon, npcIndex, npcId, name, dueTick, target));
+		pending.add(new Throw(thrownTick, weapon, npcIndex, npcId, name, dueTick, target, hpXpGiven));
+	}
+
+	/**
+	 * T-143: whether a special whose splat never came missed, rather than went unmatched: the Eye of ayak's Soul Rend
+	 * with no hitpoints experience on the tick it was thrown. Its attack pays experience only for the damage it deals
+	 * (OSRS Wiki, Powered staff: "The built-in spells give no base experience and grants the player 2 Magic experience
+	 * per damage dealt"; Splashing: "As no damage is dealt to your target, splashing will not give you any Hitpoints
+	 * experience"), so none on its tick says it dealt none. In Eric's logs (2026-10-31, 18:30 and 19:06) all five Soul
+	 * Rends read "no matching splat" had no experience on their tick and no splat on Yama. Whether a splash shows a
+	 * hitsplat isn't sourced, and doesn't matter here. Every other special keeps its no-splat skip.
+	 */
+	static boolean splashed(SpecialWeapon weapon, boolean hpXpGiven)
+	{
+		return weapon == SpecialWeapon.EYE_OF_AYAK && !hpXpGiven;
 	}
 
 	/** One of the player's own splats on an npc: a candidate for any special due there on this tick. */
@@ -197,6 +214,12 @@ final class DrainTracker
 				continue;
 			}
 			it.remove();
+			if (t.splats.isEmpty() && splashed(t.weapon, t.hpXpGiven))
+			{
+				// T-143: a Soul Rend that splashed: it dealt nothing, so it reduces nothing. A miss, not a skip.
+				apply(ensure(t.npcIndex, t.npcId, t.name, t.target), t.weapon, true, t.thrownTick, now, 0, false);
+				continue;
+			}
 			if (t.splats.isEmpty() || twoGlaives && t.splats.size() < 2)
 			{
 				final Tracked tracked = ensure(t.npcIndex, t.npcId, t.name, t.target);
