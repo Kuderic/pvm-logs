@@ -503,6 +503,25 @@ public class PvmPerformancePlugin extends Plugin
 	// Rend lands five ticks after its throw, so a second Soul Rend fired before the first was booked took its place, and
 	// the first was scored as an ordinary attack (Eric's 14:02 Yama log, the throw on [7608]).
 	private final java.util.Deque<Integer> unspentSpecDrops = new java.util.ArrayDeque<>();
+	// T-145: the tick the energy last fell with a special's weapon held: a throw, whether or not it pays experience.
+	private int specThrowTick = Integer.MIN_VALUE;
+	// T-145: a special whose miss pays nothing and shows nothing (the Eye of Ayak's Soul Rend), watched until the tick
+	// after its throw: with no experience by then it splashed, and is booked as a miss.
+	private PendingSpecial pendingSpecial;
+
+	private static final class PendingSpecial
+	{
+		final int tick;
+		final NPC npc;
+		final SpecialAttack special;
+
+		PendingSpecial(int tick, NPC npc, SpecialAttack special)
+		{
+			this.tick = tick;
+			this.npc = npc;
+			this.special = special;
+		}
+	}
 	private int specEnergy = -1;
 	// Where I stood on each of the last few ticks, in scene coordinates: a projectile names the tile it left, which is
 	// where the player was when it was fired, not where they are when the event arrives.
@@ -835,6 +854,8 @@ public class PvmPerformancePlugin extends Plugin
 		// Both re-read from scratch: a stale energy reading across a reset would look like a special the moment the bar came
 		// back lower than it was.
 		unspentSpecDrops.clear();
+		specThrowTick = Integer.MIN_VALUE;
+		pendingSpecial = null;
 		specEnergy = -1;
 		recentSpecDrops.clear();
 		weaponByTick.clear();
@@ -2365,6 +2386,14 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		if (!isProjectileMine(projectile, me, target))
 		{
+			// T-145: what flew as a special went out, for the next log to name Soul Rend's projectile, if it has one.
+			if (specThrowTick != Integer.MIN_VALUE && client.getTickCount() - specThrowTick <= 1)
+			{
+				final Actor from = projectile.getSourceActor();
+				debug.log("SPECIAL TICK projectile %d at npc %d (index %d), not taken as mine: source %s", projectile.getId(),
+					((NPC) target).getId(), ((NPC) target).getIndex(), from == null ? "none"
+						: from == me ? "me" : from instanceof NPC ? "npc " + ((NPC) from).getId() : "another player");
+			}
 			return;
 		}
 		// One attack a tick, because a player cannot throw two. The booking was already capped on a tick stamp; what was not
@@ -3062,6 +3091,50 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	/**
+	 * T-145: a special thrown with nothing to show for a miss (the Eye of Ayak's Soul Rend: no experience, no splat, a
+	 * projectile the plugin doesn't know) booked as the miss it was, once the tick after its throw has passed with no
+	 * experience. Its throw is the energy falling with its weapon in hand, aimed at the fight's target. One that landed
+	 * paid experience on its throw tick (or the next, as the energy can fall a tick ahead) and is booked by that, so it is
+	 * never booked twice. OSRS Wiki, Powered staff: the built-in spells "grant ... 2 Magic experience per damage
+	 * dealt"; Splashing: "splashing will not give you any Hitpoints experience".
+	 */
+	private void bookSplashedSpecial(int now)
+	{
+		final PendingSpecial p = pendingSpecial;
+		if (p == null || now <= p.tick)
+		{
+			return;
+		}
+		pendingSpecial = null;
+		if (!splashedSpecial(p.tick, xpThrowTick))
+		{
+			return;
+		}
+		if (current == null || current.isEnded() || current.getTargetIndex() != p.npc.getIndex())
+		{
+			debug.log("SPLASHED SPECIAL %s thrown on %d at npc index %d: not the open fight's target, not booked",
+				p.special.getDisplayName(), p.tick, p.npc.getIndex());
+			return;
+		}
+		if (attackObservedTick == now)
+		{
+			debug.log("SPLASHED SPECIAL %s thrown on %d: another attack was seen this tick, not booked", p.special.getDisplayName(),
+				p.tick);
+			return;
+		}
+		recordAttackObserved(false, p.npc, now - p.tick);
+		attackObservedSplash = true;
+		debug.log("SPLASHED SPECIAL %s on %s (npc %d, index %d): thrown on %d, no experience since: booked as a miss",
+			p.special.getDisplayName(), current.getTargetName(), current.getTargetId(), current.getTargetIndex(), p.tick);
+	}
+
+	/** T-145: whether a special thrown on {@code throwTick} has paid no experience since: none on its tick or after. */
+	static boolean splashedSpecial(int throwTick, int lastXpTick)
+	{
+		return lastXpTick == Integer.MIN_VALUE || lastXpTick < throwTick;
+	}
+
+	/**
 	 * T-136: whether a target despawning died: flagged dead by the game, or
 	 * with nothing left, by the boss bar or by every splat counted on it. A
 	 * boss that burrows or a player who leaves on a trip (T-088) leaves it with
@@ -3083,7 +3156,7 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	static boolean throwProvenByXp(int now, int dueTick, int xpTick, int speed)
 	{
-		return xpTick != Integer.MIN_VALUE && dueTick != Integer.MIN_VALUE && xpTick >= dueTick - 1 && xpTick <= now
+		return xpTick != Integer.MIN_VALUE && (dueTick == Integer.MIN_VALUE || xpTick >= dueTick - 1) && xpTick <= now
 			&& now < xpTick + Math.max(1, speed);
 	}
 
@@ -5313,13 +5386,15 @@ public class PvmPerformancePlugin extends Plugin
 		// Eats the bookings can no longer change - on or before the attack tick this one judges - are logged with what they
 		// did to the due tick.
 		logEats(foodDelay.settle(client.getTickCount() - lag, attackDueTick));
-		final Integer xpSpeed = speedByTick.get(xpThrowTick);
+		// T-145: a special's energy falling proves its throw as its experience does, and a splashed one pays none.
+		final int proofTick = Math.max(xpThrowTick, specThrowTick);
+		final Integer xpSpeed = speedByTick.get(proofTick);
 		// T-137: a special's XP proves its own speed's worth (a Soul Rend's 5 against the staff's 3).
-		final SpecialAttack xpSpecial = xpThrowTick == Integer.MIN_VALUE
-			|| unspentSpecialFor(unspentSpecDrops, xpThrowTick) == Integer.MIN_VALUE ? null
-			: SpecialAttack.forItem(weaponByTick.getOrDefault(xpThrowTick, combatCalc.equippedWeaponId()));
+		final SpecialAttack xpSpecial = proofTick == Integer.MIN_VALUE
+			|| unspentSpecialFor(unspentSpecDrops, proofTick) == Integer.MIN_VALUE ? null
+			: SpecialAttack.forItem(weaponByTick.getOrDefault(proofTick, combatCalc.equippedWeaponId()));
 		final boolean provenByXp = attackOverdue(client.getTickCount(), attackDueTick, lag)
-			&& throwProvenByXp(client.getTickCount(), attackDueTick, xpThrowTick,
+			&& throwProvenByXp(client.getTickCount(), attackDueTick, proofTick,
 			speedAfter(xpSpeed != null ? xpSpeed : combatCalc.attackSpeedTicks(), xpSpecial, false));
 		if (!attackOverdue(client.getTickCount(), attackDueTick, lag) || provenByXp)
 		{
@@ -5879,6 +5954,18 @@ public class PvmPerformancePlugin extends Plugin
 		if (previous >= 0 && energy < previous)
 		{
 			final int specFiredTick = client.getTickCount();
+			// T-145: the weapon in hand as the energy falls threw it, as DefenceDrain reads it.
+			final SpecialAttack thrown = SpecialAttack.forItem(combatCalc.equippedWeaponId());
+			if (thrown != null)
+			{
+				specThrowTick = specFiredTick;
+				final Player me = client.getLocalPlayer();
+				final Actor aimed = me == null ? null : me.getInteracting();
+				if (thrown.missShowsNothing() && aimed instanceof NPC)
+				{
+					pendingSpecial = new PendingSpecial(specFiredTick, (NPC) aimed, thrown);
+				}
+			}
 			unspentSpecDrops.addLast(specFiredTick);
 			while (unspentSpecDrops.size() > SPEC_DROPS_KEPT)
 			{
@@ -5922,6 +6009,8 @@ public class PvmPerformancePlugin extends Plugin
 		logTaskMismatch(combatCalc.onSlayerTick(client.getTickCount()));
 		// First: the tick's experience has all arrived by now, and none of the splats it pays for can have.
 		trackThrallAndXp();
+		// T-145: a Soul Rend thrown last tick that has paid no experience by now splashed.
+		bookSplashedSpecial(client.getTickCount());
 		// The specials due this tick land their drains before anything works out an expectation (T-049).
 		drain.onGameTick();
 		// Damage-modifier windows that ran out (T-057).
