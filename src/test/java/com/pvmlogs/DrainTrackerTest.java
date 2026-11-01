@@ -97,6 +97,73 @@ public class DrainTrackerTest
 			+ "no matching splat on tick 101"));
 	}
 
+	/**
+	 * T-143: a Soul Rend with no splat and no hitpoints experience on its tick splashed: a miss, which reduces nothing,
+	 * not a skip. Eric's 18:30 log: thrown on [1572], due [1577], no experience on [1572] and no splat on Yama.
+	 */
+	@Test
+	public void aSoulRendThatSplashedIsAMiss()
+	{
+		final DrainRule.Target yama = new DrainRule.Target(225, 250, 0, 250, 250, 250, 145, 0, false, true, false, false,
+			100);
+		tracker.ownThrow(1572, SpecialWeapon.EYE_OF_AYAK, BOSS, BOSS_ID, "Yama", 1577, yama, false);
+		tracker.tick(1577);
+		assertEquals(1, tracker.pendingCount());
+		tracker.tick(1578);
+		assertEquals(0, tracker.pendingCount());
+		final DrainEvent e = bossState().events.get(0);
+		assertTrue(e.isDrain());
+		assertFalse(e.landed);
+		assertEquals(0, e.hit);
+		assertEquals(0, DrainRule.magicDefenceReduction(bossState().state, yama));
+		assertTrue(lines.get(0), lines.get(0).startsWith("DRAIN Eye of Ayak by me on Yama (npc 12345, index 7): "
+			+ "thrown 1572, landed 1578, hit 0 (missed)"));
+		// The record counts it thrown, not landed.
+		assertEquals(1, tracker.record(BOSS, 0).specs.get("EYE_OF_AYAK")[0]);
+		assertEquals(0, tracker.record(BOSS, 0).specs.get("EYE_OF_AYAK")[1]);
+	}
+
+	/** T-143: a Soul Rend that paid hitpoints experience but whose splat wasn't matched is still a skip: it was not a miss. */
+	@Test
+	public void aSoulRendWithExperienceButNoSplatIsStillASkip()
+	{
+		tracker.ownThrow(100, SpecialWeapon.EYE_OF_AYAK, BOSS, BOSS_ID, "Boss", 105, boss(), true);
+		tracker.tick(105);
+		tracker.tick(106);
+		assertEquals(DrainTracker.NO_SPLAT, bossState().events.get(0).skip);
+		// And one whose splat came is matched as before, its damage the reduction.
+		tracker.ownThrow(200, SpecialWeapon.EYE_OF_AYAK, BOSS, BOSS_ID, "Boss", 205, boss(), true);
+		tracker.ownSplat(BOSS, 205, 33);
+		tracker.tick(205);
+		assertEquals(33, DrainRule.magicDefenceReduction(bossState().state, boss()));
+	}
+
+	/** T-143: every other draining special keeps its no-splat skip, with experience on its tick or without. */
+	@Test
+	public void theOtherSpecialsStillSkipWithNoSplat()
+	{
+		int index = 20;
+		for (SpecialWeapon w : SpecialWeapon.values())
+		{
+			if (!DrainRule.drains(w) || w == SpecialWeapon.EYE_OF_AYAK || w == SpecialWeapon.ELDER_MAUL)
+			{
+				continue;
+			}
+			for (boolean xp : new boolean[] {false, true})
+			{
+				index++;
+				tracker.ownThrow(100, w, index, BOSS_ID, "Boss", 101, boss(), xp);
+				tracker.tick(101);
+				tracker.tick(102);
+				final DrainEvent e = tracker.tracked(index).events.get(0);
+				assertEquals(w + " " + xp, DrainTracker.NO_SPLAT, e.skip);
+				assertFalse(DrainTracker.splashed(w, xp));
+			}
+		}
+		assertTrue(DrainTracker.splashed(SpecialWeapon.EYE_OF_AYAK, false));
+		assertFalse(DrainTracker.splashed(SpecialWeapon.EYE_OF_AYAK, true));
+	}
+
 	/** The Tonalztics' two glaives are the first two splats; one landing takes an eighth of the Magic once. */
 	@Test
 	public void tonalzticsCountsItsTwoGlaives()
