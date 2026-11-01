@@ -201,10 +201,16 @@ final class DrainLuck
 		final Entry e = new Entry(fight.getTargetIndex(), new SpecOutcomes(target.target, target.state));
 		e.lastEvent = target.events.isEmpty() ? null : target.events.get(target.events.size() - 1);
 		e.shareEvent = e.lastEvent;
-		// T-141: drained already when the fight opened: nobody's in this fight.
-		took(e, DrainRecord.StatDrain.DEFENCE, BEFORE, target.target.defence - target.state.defence);
-		took(e, DrainRecord.StatDrain.MAGIC, BEFORE, target.target.magic - target.state.magic);
-		took(e, DrainRecord.StatDrain.MAGIC_DEFENCE, BEFORE, DrainRule.magicDefenceReduction(target.state, target.target));
+		// T-144: what the target opens the fight drained with, by the source that made it, from the tracker's events: a
+		// drain carried from an earlier fight of the room stays with its special. BEFORE keeps only what the tracker didn't
+		// see made.
+		for (Map.Entry<String, Map<String, Integer>> stat : carried(target).entrySet())
+		{
+			for (Map.Entry<String, Integer> source : stat.getValue().entrySet())
+			{
+				took(e, stat.getKey(), source.getKey(), source.getValue());
+			}
+		}
 		entries.put(fight, e);
 		order.add(fight);
 		while (order.size() > KEEP_FIGHTS)
@@ -509,8 +515,59 @@ final class DrainLuck
 
 	// ---- T-141: the value per stat and per source ----
 
-	/** The source key for drains the target already had when the fight opened. */
+	/**
+	 * The source key for drains the target already had when the fight opened. T-144: only those the tracker didn't see
+	 * made: drained before it followed the target, or by events dropped past {@link DrainTracker#MAX_EVENTS}.
+	 */
 	static final String BEFORE = "before this fight";
+
+	/**
+	 * T-144: what each source took off each stat of a target since the tracker followed it ({@code stat -> source key ->
+	 * amount}), from its events: the drains it opens a fight with. A reset puts the stats back, so nobody's drains are
+	 * left. What the first event kept already found drained, and anything drained with no event at all, is
+	 * {@link #BEFORE}'s.
+	 */
+	static Map<String, Map<String, Integer>> carried(DrainTracker.Tracked t)
+	{
+		final Map<String, Map<String, Integer>> out = new LinkedHashMap<>();
+		final DrainRule.Target base = t.target;
+		if (t.events.isEmpty())
+		{
+			add(out, DrainRecord.StatDrain.DEFENCE, BEFORE, base.defence - t.state.defence);
+			add(out, DrainRecord.StatDrain.MAGIC, BEFORE, base.magic - t.state.magic);
+			add(out, DrainRecord.StatDrain.MAGIC_DEFENCE, BEFORE, DrainRule.magicDefenceReduction(t.state, base));
+			return out;
+		}
+		final DrainEvent first = t.events.get(0);
+		add(out, DrainRecord.StatDrain.DEFENCE, BEFORE, base.defence - first.defenceBefore);
+		add(out, DrainRecord.StatDrain.MAGIC, BEFORE, base.magic - first.magicBefore);
+		add(out, DrainRecord.StatDrain.MAGIC_DEFENCE, BEFORE, base.magicDefence - first.magicDefenceBefore);
+		for (DrainEvent ev : t.events)
+		{
+			if (ev.isReset())
+			{
+				out.clear();
+				continue;
+			}
+			if (!ev.isDrain() || ev.weapon == null)
+			{
+				continue;
+			}
+			final String source = DrainRecord.sourceKey(ev.weapon, ev.own);
+			add(out, DrainRecord.StatDrain.DEFENCE, source, ev.defenceBefore - ev.defenceAfter);
+			add(out, DrainRecord.StatDrain.MAGIC, source, ev.magicBefore - ev.magicAfter);
+			add(out, DrainRecord.StatDrain.MAGIC_DEFENCE, source, ev.magicDefenceBefore - ev.magicDefenceAfter);
+		}
+		return out;
+	}
+
+	private static void add(Map<String, Map<String, Integer>> into, String stat, String source, int amount)
+	{
+		if (amount > 0)
+		{
+			into.computeIfAbsent(stat, k -> new LinkedHashMap<>()).merge(source, amount, Integer::sum);
+		}
+	}
 	private static final String[] STATS = {DrainRecord.StatDrain.DEFENCE, DrainRecord.StatDrain.MAGIC,
 		DrainRecord.StatDrain.MAGIC_DEFENCE};
 
