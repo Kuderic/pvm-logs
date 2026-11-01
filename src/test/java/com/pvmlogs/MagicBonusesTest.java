@@ -246,18 +246,94 @@ public class MagicBonusesTest
 		assertEquals(77, marked.maxHit());
 	}
 
-	/** T-135: the Mark read from its cast when no message said so; nothing while it is up already. */
+	/** T-135: the Mark read from its cast when no message said so. T-139: a recast while it is up refreshes it. */
 	@Test
 	public void theMarkFromItsCast()
 	{
 		wield(ItemID.PURGING_STAFF);
 		assertFalse(calc.hasMarkOfDarkness());
-		final String line = calc.markFromCast(7572, 7573);
+		final String line = calc.markFromCast(7572, 7573, true, 70, "");
 		assertNotNull(line);
 		assertTrue(line, line.startsWith("MARK up: cast on tick 7572"));
 		assertTrue(line, line.contains("from the +70 Magic cast on tick 7572 with no thrall"));
+		assertTrue(line, line.contains("lasts 1485 ticks"));
 		assertTrue(calc.hasMarkOfDarkness());
-		assertNull(calc.markFromCast(7600, 7601));
+		final String again = calc.markFromCast(7600, 7601, true, 70, "");
+		assertTrue(again, again.startsWith("MARK refreshed: cast on tick 7600"));
+		assertTrue(again, again.endsWith("to tick 9085"));
+	}
+
+	/** T-139: a cast the message already took isn't taken again by the fallback. */
+	@Test
+	public void theMessageTakesTheCastFirst()
+	{
+		markUp(ItemID.PURGING_STAFF);
+		assertNull(calc.markFromCast(100, 101, true, 70, ""));
+		assertTrue(calc.hasMarkOfDarkness());
+	}
+
+	/**
+	 * T-139: the x5 is the purging staff's on the cast's tick. Eric's 18:30 log: the +70 at [84], read at [85] after he
+	 * had the Emberlight, gave 297 ticks; the Mark was still up at [449], the staff's 72 on a flare.
+	 */
+	@Test
+	public void theStaffOnTheCastTickGivesTheFive()
+	{
+		wield(ItemID.PURGING_STAFF);
+		assertNull(calc.markFromCasts(84, 70, "CAST not an attack on 84: Resurrect Superior thrall or Mark of Darkness"
+			+ " (+70 Magic)", false));
+		wield(ItemID.EMBERLIGHT);
+		final String line = calc.markFromCasts(85, 0, null, false);
+		assertNotNull(line);
+		assertTrue(line, line.contains("purging staff on the cast's tick, x5"));
+		assertTrue(line, line.contains("lasts 1485 ticks, to tick 1569"));
+		assertFalse(calc.wearsPurgingStaff());
+	}
+
+	/** T-139: and the other way: the Emberlight on the cast's tick, the staff on the next, gives the plain duration. */
+	@Test
+	public void theStaffAfterTheCastDoesNot()
+	{
+		wield(ItemID.EMBERLIGHT);
+		calc.markFromCasts(84, 70, null, false);
+		wield(ItemID.PURGING_STAFF);
+		final String line = calc.markFromCasts(85, 0, null, false);
+		assertTrue(line, line.contains("no purging staff on the cast's tick"));
+		assertTrue(line, line.contains("lasts 297 ticks"));
+	}
+
+	/**
+	 * T-139: the +158 at [1799] of Eric's 18:00 log, a thrall spawning on its tick and Death Charge's 90 on the next:
+	 * a Greater thrall and the Mark, refreshing the one cast at [734].
+	 */
+	@Test
+	public void aGreaterThrallAndTheMarkOnOneTick()
+	{
+		wield(ItemID.PURGING_STAFF);
+		calc.markFromCasts(734, 70, null, false);
+		assertNotNull(calc.markFromCasts(735, 178, "CAST not an attack on 735: Resurrect Greater thrall and Death Charge"
+			+ " (+178 Magic)", true));
+		assertNull(calc.markFromCasts(1799, 158, null, true));
+		wield(ItemID.EMBERLIGHT);
+		final String line = calc.markFromCasts(1800, 90, "CAST not an attack on 1800: Death Charge (+90 Magic)", false);
+		assertNotNull(line);
+		assertTrue(line, line.startsWith("MARK refreshed: cast on tick 1799"));
+		assertTrue(line, line.contains("from a +158 drop on tick 1799, Resurrect Greater thrall + the Mark"));
+		assertTrue(line, line.endsWith("to tick 3284"));
+	}
+
+	/** T-139: a lone 70 with a thrall spawning on its tick is a superior thrall, not the Mark. */
+	@Test
+	public void aSuperiorThrallIsNotTheMark()
+	{
+		wield(ItemID.PURGING_STAFF);
+		calc.markFromCasts(500, 70, null, true);
+		assertNull(calc.markFromCasts(501, 0, null, false));
+		assertFalse(calc.hasMarkOfDarkness());
+		// A thrall spawning a tick late, with no thrall cast of its own on that tick: still the superior thrall's.
+		calc.markFromCasts(600, 70, null, false);
+		assertNull(calc.markFromCasts(601, 0, null, true));
+		assertFalse(calc.hasMarkOfDarkness());
 	}
 
 	/** Not a demon, no demonbane: the Mark changes nothing. */

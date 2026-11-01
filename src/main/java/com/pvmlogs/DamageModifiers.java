@@ -314,20 +314,38 @@ class DamageModifiers
 		return magic > 0 && magic > Math.max(Math.max(stab, slash), Math.max(crush, ranged));
 	}
 
-	// T-135: a MOD line when the boss's situation changes what applies (who tanks, with what; its phase).
+	// T-135: a MOD line when the boss's situation changes what applies (who tanks, with what; its phase). T-139: only
+	// when what applies changes, not each time its hitpoints do: the share stays in the line, as of the change.
 	private void noteSituation(NPC npc, ModifierTracker.Situation s, List<BossRules.ModifierRule> mods)
 	{
+		if (!situationChanged(situationSeen, npc.getIndex(), mods))
+		{
+			return;
+		}
 		final net.runelite.api.Actor target = npc.getInteracting();
 		final String who = !(target instanceof Player) ? "no player" : target == client.getLocalPlayer() ? "you"
 			: "another player";
-		final String line = situationLine(npc.getName(), who, s, mods);
-		if (!line.equals(situationSeen.put(npc.getIndex(), line)))
-		{
-			log.accept(line + " at tick " + client.getTickCount());
-		}
+		log.accept(situationLine(npc.getName(), who, s, mods) + " at tick " + client.getTickCount());
+	}
+
+	/** T-139: whether what applies to this npc from its situation differs from the last time, noting it if so. */
+	static boolean situationChanged(Map<Integer, String> seen, int npcIndex, List<BossRules.ModifierRule> mods)
+	{
+		final String applied = situationApplied(mods);
+		return !applied.equals(seen.put(npcIndex, applied));
 	}
 
 	static String situationLine(String boss, String who, ModifierTracker.Situation s, List<BossRules.ModifierRule> mods)
+	{
+		final String applied = situationApplied(mods);
+		return String.format("MOD %s: targeting %s%s, %s: %s", boss, who,
+			s.tankMagic == null ? "" : s.tankMagic ? " (magic)" : " (not magic)",
+			s.hpShare < 0 ? "hitpoints unknown" : String.format("%.0f%% of its hitpoints left", 100 * s.hpShare),
+			applied);
+	}
+
+	/** The rules a boss's situation turned on (its hitpoints, its tank's style), as the MOD line names them. */
+	static String situationApplied(List<BossRules.ModifierRule> mods)
 	{
 		final StringBuilder applied = new StringBuilder();
 		for (BossRules.ModifierRule m : mods)
@@ -345,10 +363,7 @@ class DamageModifiers
 				}
 			}
 		}
-		return String.format("MOD %s: targeting %s%s, %s: %s", boss, who,
-			s.tankMagic == null ? "" : s.tankMagic ? " (magic)" : " (not magic)",
-			s.hpShare < 0 ? "hitpoints unknown" : String.format("%.0f%% of its hitpoints left", 100 * s.hpShare),
-			applied.length() == 0 ? "none" : applied.toString());
+		return applied.length() == 0 ? "none" : applied.toString();
 	}
 
 	// What the player's melee distance from a boss with an outOfMelee rule was on each recent tick, and the modifiers it
