@@ -27,6 +27,9 @@ import org.junit.Test;
  * plugins being grandfathered guarantees nothing, so an update or takeover is reviewed against today's rules. When the
  * page changes, change {@link #RULES}.
  *
+ * <p>The packager's own list of rejected APIs ({@code runelite/plugin-hub-tooling}, {@code disallowed-apis.txt}) is
+ * here too, read 2026-10-28 (T-067): with it the hub build fails, not just the review.
+ *
  * <p>One rule is ours, not the wiki's: file access goes only through {@code net.runelite.client.util.Filepath}, so
  * {@code java.nio.file.Files} and {@code Paths} are out too. Filepath is what keeps a plugin inside its own folder, and
  * going round it with NIO defeats the point of the {@code java.io} rule.
@@ -64,6 +67,13 @@ public class ForbiddenApiTest
 		rule("JNI or JNA", "\\bnative\\b|\\bSystem\\.load(?:Library)?\\s*\\(|\\bcom\\.sun\\.jna\\b");
 		rule("running external programs", "\\bProcessBuilder\\b|\\.exec\\s*\\(");
 		rule("net.runelite as the package", "^\\s*package\\s+net\\.runelite\\b");
+		// The packager's own list (plugin-hub-tooling's disallowed-apis.txt, read 2026-10-28 for T-067): it fails the
+		// build on these. Gson and OkHttpClient constructors are covered above.
+		rule("WidgetInfo or WidgetID (use InterfaceID / ComponentID)", "\\bWidgetInfo\\b|\\bWidgetID\\b");
+		rule("ChatMessageManager.update (a no-op)", "\\bchatMessageManager\\.update\\s*\\(");
+		rule("ItemManager.getItemStats(int, boolean) (use getItemStats(int))",
+			"\\bgetItemStats\\s*\\([^,()]*,");
+		rule("the RuneLite account session", "\\bAccountSession\\b|\\bSessionManager\\b|\\bAccountClient\\b");
 	}
 
 	private static void rule(String name, String regex)
@@ -120,6 +130,10 @@ public class ForbiddenApiTest
 			"System.loadLibrary(\"x\");",
 			"new ProcessBuilder(\"x\")",
 			"package net.runelite.client.plugins.x;",
+			"client.getWidget(WidgetInfo.INVENTORY)",
+			"chatMessageManager.update(node);",
+			"itemManager.getItemStats(id, false)",
+			"@Inject private SessionManager sessionManager;",
 		};
 		for (String line : forbidden)
 		{
@@ -137,6 +151,7 @@ public class ForbiddenApiTest
 			"log.warn(\"could not write java.io.File {}\", name);",
 			"/* Runtime.getRuntime() is out */ int x = 1;",
 			"executor.execute(this::flush);",
+			"final ItemStats stats = itemManager.getItemStats(dart.getItemId());",
 			"char quote = '\"'; String s = \"Desktop.getDesktop()\";",
 		};
 		for (String line : allowed)

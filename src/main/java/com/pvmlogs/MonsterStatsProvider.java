@@ -43,6 +43,8 @@ class MonsterStatsProvider
 {
 	private static final String URL = "https://raw.githubusercontent.com/weirdgloop/osrs-dps-calc/main/cdn/json/monsters.json";
 	private static final long MAX_AGE_MILLIS = 7L * 24 * 60 * 60 * 1000;
+	/** Names the plugin and nothing about the player (T-067). */
+	static final String USER_AGENT = "RuneLite plugin " + PvmPerformanceConfig.INTERNAL_NAME;
 
 	private final OkHttpClient httpClient;
 	private final Gson gson;
@@ -583,7 +585,7 @@ class MonsterStatsProvider
 	private void loadOrFetch()
 	{
 		loadedRules = BossRules.load(gson, rulesOverrideFile(dataDirectory));
-		log.debug("PvM Logs: {} boss rule ids from {}", loadedRules.size(), loadedRules.provenance());
+		log.debug("Luck vs Skill: {} boss rule ids from {}", loadedRules.size(), loadedRules.provenance());
 		final Filepath cache = cacheFile();
 		try
 		{
@@ -599,7 +601,7 @@ class MonsterStatsProvider
 		}
 		catch (Exception e)
 		{
-			log.warn("PvM Logs: could not read cached monster data", e);
+			log.warn("Luck vs Skill: could not read cached monster data", e);
 		}
 		fetch();
 	}
@@ -608,14 +610,14 @@ class MonsterStatsProvider
 	{
 		final Request request = new Request.Builder()
 			.url(URL)
-			.header("User-Agent", "RuneLite plugin pvm-logs")
+			.header("User-Agent", USER_AGENT)
 			.build();
 		httpClient.newCall(request).enqueue(new Callback()
 		{
 			@Override
 			public void onFailure(Call call, IOException e)
 			{
-				log.warn("PvM Logs: monster data fetch failed", e);
+				log.warn("Luck vs Skill: monster data fetch failed", e);
 			}
 
 			@Override
@@ -625,7 +627,7 @@ class MonsterStatsProvider
 				{
 					if (!r.isSuccessful() || r.body() == null)
 					{
-						log.warn("PvM Logs: monster data fetch returned {}", r.code());
+						log.warn("Luck vs Skill: monster data fetch returned {}", r.code());
 						return;
 					}
 					final byte[] bytes = r.body().bytes();
@@ -639,7 +641,7 @@ class MonsterStatsProvider
 				}
 				catch (Exception e)
 				{
-					log.warn("PvM Logs: could not store monster data", e);
+					log.warn("Luck vs Skill: could not store monster data", e);
 				}
 			}
 		});
@@ -657,7 +659,7 @@ class MonsterStatsProvider
 			return;
 		}
 		publish(parsed);
-		log.debug("PvM Logs: loaded {} monster ids, {} with several versions", parsed.versionsById.size(),
+		log.debug("Luck vs Skill: loaded {} monster ids, {} with several versions", parsed.versionsById.size(),
 			parsed.versionsById.values().stream().filter(v -> v.size() > 1).count());
 	}
 
