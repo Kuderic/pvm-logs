@@ -1493,11 +1493,15 @@ class CombatCalc
 			: drain.magicDefenceDrainedFrom(targetIndex);
 	}
 
-	/** The target's magic defence bonus, less what an Eye of ayak took (T-049). */
-	private int magicDefenceBonus(MonsterStatsProvider.MonsterStats npc)
+	/**
+	 * The target's magic defence bonus as the magic roll meets it: its data's, with its modifiers (T-087's burn stacks,
+	 * floored at 0; T-135's flat changes, which aren't), then T-141: less the Eye of ayak's whole reduction, to no lower
+	 * than 0, a bonus at or below 0 left alone ({@link DrainRule#magicDefenceBonus}, the wiki's rule).
+	 */
+	private int magicDefenceBonus(MonsterStatsProvider.MonsterStats npc, int npcId)
 	{
-		final int taken = magicDefenceDrained();
-		return taken <= 0 ? npc.getDefMagic() : Math.max(0, npc.getDefMagic() - taken);
+		final int bonus = Math.max(0, npc.getDefMagic() + bossMagicDefenceChange(npcId)) + bossMagicDefenceFlat(npcId);
+		return DrainRule.magicDefenceBonus(bonus, magicDefenceDrained());
 	}
 
 	// ToA: 2% per five raid levels, additively. Defence level only - magic does not scale, nor do defence bonuses.
@@ -1536,7 +1540,8 @@ class CombatCalc
 			attackBonus(AttackType.MAGIC), gear * (1.0 + elementalWeakness(npcId) / 100.0)), spec));
 		// Burn stacks on the Maggot King take 20 each off its magic defence bonus (T-087).
 		// T-135: and the flat changes, which aren't floored (Yama's -30 while his target doesn't use magic).
-		final int bonus = Math.max(0, magicDefenceBonus(npc) + bossMagicDefenceChange(npcId)) + bossMagicDefenceFlat(npcId);
+		// T-141: the Eye of ayak's reduction on what that leaves.
+		final int bonus = magicDefenceBonus(npc, npcId);
 		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.MAGIC.name(),
 			(magicDefenceLevel(npc) + 9) * (bonus + 64));
 		if (!hasConflictionGauntlets())
@@ -2772,7 +2777,9 @@ class CombatCalc
 	static final int AT_SPEC_ACCURACY = 5;
 	static final int AT_SPEC_MAX = 6;
 	static final int AT_CAP = 7;
-	static final int AT_WIDTH = 8;
+	/** T-141: the magic defence bonus a magic attack meets at the state, the target's modifiers in. */
+	static final int AT_MAGIC_DEFENCE = 8;
+	static final int AT_WIDTH = 9;
 
 	/**
 	 * The expected figures with the target's Defence, Magic and magic defence
@@ -2808,6 +2815,7 @@ class CombatCalc
 			final int specMax = specialAttackMaxHit(npcId);
 			out[AT_SPEC_MAX] = specMax > 0 ? specMax : maxHit(npcId);
 			out[AT_CAP] = Math.min(damageCap(npcId), overkillCap(npcId));
+			out[AT_MAGIC_DEFENCE] = magicDefenceBonus(monsters.get(npcId), npcId);
 			return out;
 		}
 		finally

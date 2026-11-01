@@ -260,18 +260,48 @@ public class DrainRuleTest
 		assertEquals(120, hit(restored, SpecialWeapon.SEERCULL, 30, t).magic);
 	}
 
-	/** The Eye of ayak takes its damage off the magic defence bonus, to 0, and leaves a negative bonus alone. */
+	/**
+	 * The Eye of ayak takes its damage off the magic defence bonus. T-141: the state keeps the whole reduction, which
+	 * meets whatever bonus the target has then, to no lower than 0, a bonus at or below 0 left alone (OSRS Wiki, Eye of
+	 * ayak, read 2026-11-01).
+	 */
 	@Test
 	public void eyeOfAyakLowersTheMagicDefenceBonus()
 	{
 		final DrainRule.Target t = boss();
 		DrainRule.State s = hit(fresh(t), SpecialWeapon.EYE_OF_AYAK, 40, t);
 		assertEquals(60, s.magicDefence);
+		assertEquals(40, DrainRule.magicDefenceReduction(s, t));
+		assertEquals(60, DrainRule.magicDefenceBonus(t.magicDefence, DrainRule.magicDefenceReduction(s, t)));
 		s = hit(s, SpecialWeapon.EYE_OF_AYAK, 70, t);
-		assertEquals(0, s.magicDefence);
+		assertEquals(110, DrainRule.magicDefenceReduction(s, t));
+		assertEquals(0, DrainRule.magicDefenceBonus(t.magicDefence, DrainRule.magicDefenceReduction(s, t)));
 		final DrainRule.Target negative = new DrainRule.Target(100, 190, -30, 300, 150, 1, 0, 0, false, false, false,
 			false);
-		assertEquals(-30, hit(fresh(negative), SpecialWeapon.EYE_OF_AYAK, 40, negative).magicDefence);
+		final DrainRule.State n = hit(fresh(negative), SpecialWeapon.EYE_OF_AYAK, 40, negative);
+		assertEquals(40, DrainRule.magicDefenceReduction(n, negative));
+		assertEquals(-30, DrainRule.magicDefenceBonus(-30, 40));
+		// A miss, or a hit of 0, takes nothing.
+		assertEquals(0, DrainRule.magicDefenceReduction(DrainRule.apply(fresh(t), SpecialWeapon.EYE_OF_AYAK, 0, true, t)
+			.after, t));
+		assertEquals(0, DrainRule.magicDefenceReduction(DrainRule.apply(fresh(t), SpecialWeapon.EYE_OF_AYAK, 30, false, t)
+			.after, t));
+	}
+
+	/** T-141: the wiki's own example: 50 to Yama in his melee stance (-30) leaves -30; his magic stance then +10, +31. */
+	@Test
+	public void theWikisYamaExample()
+	{
+		final DrainRule.Target yama = new DrainRule.Target(225, 250, 0, 250, 250, 250, 145, 0, false, true, false, false,
+			100);
+		final DrainRule.State s = hit(fresh(yama), SpecialWeapon.EYE_OF_AYAK, 50, yama);
+		final int reduction = DrainRule.magicDefenceReduction(s, yama);
+		assertEquals(50, reduction);
+		assertEquals(-30, DrainRule.magicDefenceBonus(0 - 30, reduction));
+		assertEquals(10, DrainRule.magicDefenceBonus(0 + 60, reduction));
+		assertEquals(31, DrainRule.magicDefenceBonus(81, reduction));
+		// It never comes back.
+		assertEquals(s.magicDefence, DrainRule.regenerate(s, yama).magicDefence);
 	}
 
 	@Test

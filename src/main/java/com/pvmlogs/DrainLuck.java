@@ -80,6 +80,8 @@ final class DrainLuck
 		final DrainRule.State realized;
 		final Map<Long, double[]> figures = new HashMap<>();
 		final Map<Long, DrainRule.State> states = new HashMap<>();
+		/** T-141: the real state with one stat's drains undone ({@code stat}), or one source's share of them ({@code stat|source}). */
+		final Map<String, DrainRule.State> undo = new LinkedHashMap<>();
 
 		Snapshot(int tick, DrainRule.State realized)
 		{
@@ -153,6 +155,15 @@ final class DrainLuck
 		double sentExpected;
 		double sentVariance;
 		boolean open = true;
+		// T-141: what each source took off each stat in the fight (stat -> source key -> amount), read from the tracker's
+		// events as they come; the drains before the fight under BEFORE.
+		final Map<String, Map<String, Integer>> drainedBy = new LinkedHashMap<>();
+		DrainEvent shareEvent;
+		// T-141: the expected damage each stat's drains added, and each source's per stat, as made.
+		final Map<String, Double> valueByStat = new LinkedHashMap<>();
+		final Map<String, Map<String, Double>> valueBySource = new LinkedHashMap<>();
+		Integer bonusAtStart;
+		Integer bonusAtEnd;
 
 		Entry(int npcIndex, SpecOutcomes outcomes)
 		{
@@ -189,6 +200,11 @@ final class DrainLuck
 		}
 		final Entry e = new Entry(fight.getTargetIndex(), new SpecOutcomes(target.target, target.state));
 		e.lastEvent = target.events.isEmpty() ? null : target.events.get(target.events.size() - 1);
+		e.shareEvent = e.lastEvent;
+		// T-141: drained already when the fight opened: nobody's in this fight.
+		took(e, DrainRecord.StatDrain.DEFENCE, BEFORE, target.target.defence - target.state.defence);
+		took(e, DrainRecord.StatDrain.MAGIC, BEFORE, target.target.magic - target.state.magic);
+		took(e, DrainRecord.StatDrain.MAGIC_DEFENCE, BEFORE, DrainRule.magicDefenceReduction(target.state, target.target));
 		entries.put(fight, e);
 		order.add(fight);
 		while (order.size() > KEEP_FIGHTS)
@@ -226,6 +242,13 @@ final class DrainLuck
 		final List<DrainRule.State> wanted = new ArrayList<>(e.outcomes.states(SpecOutcomes.MAX_STATES));
 		wanted.add(realized);
 		wanted.add(DrainRule.State.of(base));
+		// T-141: and the real state with each stat's drains undone, and each source's share where a stat has several.
+		if (t != null)
+		{
+			readShares(e, t);
+		}
+		undoStates(e, base, realized, snap.undo);
+		wanted.addAll(snap.undo.values());
 		for (DrainRule.State s : wanted)
 		{
 			if (!snap.figures.containsKey(Snapshot.key(s)))
@@ -238,6 +261,13 @@ final class DrainLuck
 			}
 		}
 		e.snapshots.put(tick, snap);
+		final double[] real = snap.figures.get(Snapshot.key(realized));
+		if (real != null && real.length > CombatCalc.AT_MAGIC_DEFENCE)
+		{
+			final int bonus = (int) real[CombatCalc.AT_MAGIC_DEFENCE];
+			e.bonusAtStart = e.bonusAtStart == null ? bonus : e.bonusAtStart;
+			e.bonusAtEnd = bonus;
+		}
 		for (Iterator<Integer> it = e.snapshots.keySet().iterator(); it.hasNext(); )
 		{
 			if (tick - it.next() > SNAPSHOT_TICKS)
@@ -263,6 +293,9 @@ final class DrainLuck
 		final long started = PerfProbe.start(perf);
 		final Snapshot snap = snapshotFor(e, madeTick, tick);
 		final double bookedVar = Math.max(0, variance);
+		// T-141: what this attack adds to the drain value, as SpecOutcomes counts it, to split by stat and source below.
+		final double realizedBefore = e.outcomes.realizedMean();
+		final double undrainedBefore = e.outcomes.undrainedMean();
 		if (special && weapon != null && DrainRule.drains(weapon))
 		{
 			e.outcomes.special(weapon, snap == null ? null : s ->
@@ -298,6 +331,8 @@ final class DrainLuck
 				return new double[]{Math.max(0, mean + f[meanAt] - r[meanAt]), v};
 			}, mean, bookedVar);
 		}
+		final double added = e.outcomes.realizedMean() - realizedBefore - (e.outcomes.undrainedMean() - undrainedBefore);
+		attribute(e, snap, added, special ? CombatCalc.AT_SPEC_MEAN : CombatCalc.AT_MEAN);
 		push(fight, e);
 		PerfProbe.stop(perf, PerfProbe.Slot.DRAIN_OUTCOMES, started);
 	}
@@ -363,6 +398,7 @@ final class DrainLuck
 			final DrainTracker.Tracked t = tracked.apply(e.npcIndex);
 			if (t != null)
 			{
+				readShares(e, t);
 				readEvents(e, t, now);
 				if (t.target != e.outcomes.target())
 				{
@@ -468,6 +504,258 @@ final class DrainLuck
 		e.sentExpected = expected;
 		e.sentVariance = variance;
 		fight.recordSpecOutcomes(expected, variance, o.drainValueDamage(), o.drainValueExpected());
+		fight.recordDrainValues(e.valueByStat, e.valueBySource, e.bonusAtStart, e.bonusAtEnd);
+	}
+
+	// ---- T-141: the value per stat and per source ----
+
+	/** The source key for drains the target already had when the fight opened. */
+	static final String BEFORE = "before this fight";
+	private static final String[] STATS = {DrainRecord.StatDrain.DEFENCE, DrainRecord.StatDrain.MAGIC,
+		DrainRecord.StatDrain.MAGIC_DEFENCE};
+
+	private static void took(Entry e, String stat, String source, int amount)
+	{
+		if (amount > 0)
+		{
+			e.drainedBy.computeIfAbsent(stat, k -> new LinkedHashMap<>()).merge(source, amount, Integer::sum);
+		}
+	}
+
+	// The tracker's drains since the last read, by source and stat. A reset puts the stats back: nobody's drains remain.
+	private static void readShares(Entry e, DrainTracker.Tracked t)
+	{
+		final List<DrainEvent> events = t.events;
+		int from = 0;
+		if (e.shareEvent != null)
+		{
+			for (int i = events.size() - 1; i >= 0; i--)
+			{
+				if (events.get(i) == e.shareEvent)
+				{
+					from = i + 1;
+					break;
+				}
+			}
+		}
+		for (int i = from; i < events.size(); i++)
+		{
+			final DrainEvent ev = events.get(i);
+			e.shareEvent = ev;
+			if (ev.isReset())
+			{
+				e.drainedBy.clear();
+				continue;
+			}
+			if (!ev.isDrain() || ev.weapon == null)
+			{
+				continue;
+			}
+			final String source = DrainRecord.sourceKey(ev.weapon, ev.own);
+			took(e, DrainRecord.StatDrain.DEFENCE, source, ev.defenceBefore - ev.defenceAfter);
+			took(e, DrainRecord.StatDrain.MAGIC, source, ev.magicBefore - ev.magicAfter);
+			took(e, DrainRecord.StatDrain.MAGIC_DEFENCE, source, ev.magicDefenceBefore - ev.magicDefenceAfter);
+		}
+	}
+
+	/** How far a stat is drained now: levels, or the Eye of ayak's reduction. */
+	static int drainedNow(String stat, DrainRule.Target base, DrainRule.State s)
+	{
+		switch (stat)
+		{
+			case DrainRecord.StatDrain.DEFENCE:
+				return Math.max(0, base.defence - s.defence);
+			case DrainRecord.StatDrain.MAGIC:
+				return Math.max(0, base.magic - s.magic);
+			default:
+				return DrainRule.magicDefenceReduction(s, base);
+		}
+	}
+
+	/** The state with {@code back} of a stat's drains given back. */
+	static DrainRule.State giveBack(String stat, DrainRule.State s, int back)
+	{
+		switch (stat)
+		{
+			case DrainRecord.StatDrain.DEFENCE:
+				return new DrainRule.State(s.defence + back, s.magic, s.magicDefence, s.attack, s.strength, s.ranged);
+			case DrainRecord.StatDrain.MAGIC:
+				return new DrainRule.State(s.defence, s.magic + back, s.magicDefence, s.attack, s.strength, s.ranged);
+			default:
+				return new DrainRule.State(s.defence, s.magic, s.magicDefence + back, s.attack, s.strength, s.ranged);
+		}
+	}
+
+	/**
+	 * The real state with each drained stat's drains undone (key {@code stat}) and, where a stat has two sources or more,
+	 * with each one's share undone ({@code stat|source}): its share of what was taken off the stat in the fight, of what
+	 * is drained now. Regeneration and floors so fall on the sources alike, a reading: which source's levels come back
+	 * first, or which a floor stopped, isn't kept.
+	 */
+	private static void undoStates(Entry e, DrainRule.Target base, DrainRule.State real, Map<String, DrainRule.State> into)
+	{
+		for (String stat : STATS)
+		{
+			final int now = drainedNow(stat, base, real);
+			if (now <= 0)
+			{
+				continue;
+			}
+			into.put(stat, giveBack(stat, real, now));
+			final Map<String, Integer> by = e.drainedBy.get(stat);
+			if (by == null || by.size() < 2)
+			{
+				continue;
+			}
+			final double total = by.values().stream().mapToInt(Integer::intValue).sum();
+			for (Map.Entry<String, Integer> s : by.entrySet())
+			{
+				into.put(stat + "|" + s.getKey(), giveBack(stat, real, (int) Math.round(now * s.getValue() / total)));
+			}
+		}
+	}
+
+	/**
+	 * An attack's share of the drain value ({@code added}: what it added, as SpecOutcomes counts it), split over the stats
+	 * by how much its figure falls with each stat's drains undone, and within a stat over its sources the same way. An
+	 * attack that rolls against one stat only (a melee blow against Defence, a cast against Magic and the magic defence
+	 * bonus) gives it all to that stat. The parts sum to {@code added}, so the stats sum to the combined value.
+	 */
+	private static void attribute(Entry e, Snapshot snap, double added, int at)
+	{
+		if (added == 0)
+		{
+			return;
+		}
+		final Map<String, Double> byStat = weights(snap, at, null);
+		if (byStat.isEmpty())
+		{
+			// No figures to say which: the first stat drained now, else the first drained in the fight.
+			final String stat = firstDrained(e, snap);
+			if (stat != null)
+			{
+				byStat.put(stat, 1.0);
+			}
+			else
+			{
+				return;
+			}
+		}
+		final double sum = byStat.values().stream().mapToDouble(Double::doubleValue).sum();
+		for (Map.Entry<String, Double> w : byStat.entrySet())
+		{
+			final double v = added * w.getValue() / sum;
+			e.valueByStat.merge(w.getKey(), v, Double::sum);
+			final Map<String, Integer> by = e.drainedBy.get(w.getKey());
+			if (by == null || by.isEmpty())
+			{
+				continue;
+			}
+			Map<String, Double> bySource = by.size() == 1 ? null : weights(snap, at, w.getKey());
+			if (bySource == null || bySource.isEmpty())
+			{
+				// One source, or no figures to split them: by what each took.
+				bySource = new LinkedHashMap<>();
+				for (Map.Entry<String, Integer> s : by.entrySet())
+				{
+					bySource.put(s.getKey(), (double) s.getValue());
+				}
+			}
+			final double sourceSum = bySource.values().stream().mapToDouble(Double::doubleValue).sum();
+			for (Map.Entry<String, Double> s : bySource.entrySet())
+			{
+				e.valueBySource.computeIfAbsent(s.getKey(), k -> new LinkedHashMap<>()).merge(w.getKey(),
+					v * s.getValue() / sourceSum, Double::sum);
+			}
+		}
+	}
+
+	// How much the figure falls with each undo state (of the stats, or of one stat's sources); only positive ones.
+	private static Map<String, Double> weights(Snapshot snap, int at, String stat)
+	{
+		final Map<String, Double> out = new LinkedHashMap<>();
+		if (snap == null)
+		{
+			return out;
+		}
+		final double[] r = snap.figures.get(Snapshot.key(snap.realized));
+		if (r == null || r[at] < 0)
+		{
+			return out;
+		}
+		for (Map.Entry<String, DrainRule.State> u : snap.undo.entrySet())
+		{
+			final String key = u.getKey();
+			final boolean ofSource = key.indexOf('|') >= 0;
+			if (stat == null ? ofSource : !key.startsWith(stat + "|"))
+			{
+				continue;
+			}
+			final double[] f = snap.figures.get(Snapshot.key(u.getValue()));
+			if (f == null || f[at] < 0)
+			{
+				continue;
+			}
+			final double fall = r[at] - f[at];
+			if (fall > 1e-9)
+			{
+				out.put(stat == null ? key : key.substring(stat.length() + 1), fall);
+			}
+		}
+		return out;
+	}
+
+	private static String firstDrained(Entry e, Snapshot snap)
+	{
+		if (snap != null)
+		{
+			for (String key : snap.undo.keySet())
+			{
+				if (key.indexOf('|') < 0)
+				{
+					return key;
+				}
+			}
+		}
+		return e.drainedBy.isEmpty() ? null : e.drainedBy.keySet().iterator().next();
+	}
+
+	/** T-141: the fight's value per stat, for the tests and the debug log; empty where none is kept. */
+	Map<String, Double> valueByStat(Fight fight)
+	{
+		final Entry e = entries.get(fight);
+		return e == null ? new LinkedHashMap<>() : e.valueByStat;
+	}
+
+	/** T-141: the fight's value per source and stat. */
+	Map<String, Map<String, Double>> valueBySource(Fight fight)
+	{
+		final Entry e = entries.get(fight);
+		return e == null ? new LinkedHashMap<>() : e.valueBySource;
+	}
+
+	/** T-141: the values in a few words, for the SPEC LUCK line: "defence +12.0 (EMBERLIGHT +12.0)". */
+	static String valuesLine(Map<String, Double> byStat, Map<String, Map<String, Double>> bySource)
+	{
+		final StringBuilder b = new StringBuilder();
+		for (Map.Entry<String, Double> s : byStat.entrySet())
+		{
+			b.append(b.length() == 0 ? "" : ", ").append(s.getKey()).append(String.format(" %+.1f", s.getValue()));
+			final StringBuilder parts = new StringBuilder();
+			for (Map.Entry<String, Map<String, Double>> src : bySource.entrySet())
+			{
+				final Double v = src.getValue().get(s.getKey());
+				if (v != null)
+				{
+					parts.append(parts.length() == 0 ? "" : ", ").append(src.getKey()).append(String.format(" %+.1f", v));
+				}
+			}
+			if (parts.length() > 0)
+			{
+				b.append(" (").append(parts).append(')');
+			}
+		}
+		return b.length() == 0 ? "none" : b.toString();
 	}
 
 	/** The fight has ended: its figures are final. A shot still landing on it is still booked (T-021). */
@@ -488,7 +776,8 @@ final class DrainLuck
 			o.merges() == 0 ? "" : String.format(" (%d merged, widest %d levels)", o.merges(), o.worstMerge()),
 			fight.getRealizedExpected(), fight.getSumExpectedAverageHit(), fight.getSpecLuckDamage(),
 			fight.luckSeconds(fight.getSpecLuckDamage()), fight.getDrainValueDamage(), fight.getDrainValueExpected(),
-			fight.luckSeconds(fight.getDrainValueDamage()), fight.luckSeconds(fight.getDrainValueExpected()));
+			fight.luckSeconds(fight.getDrainValueDamage()), fight.luckSeconds(fight.getDrainValueExpected()))
+			+ "; by stat " + valuesLine(e.valueByStat, e.valueBySource);
 	}
 
 	void clear()
