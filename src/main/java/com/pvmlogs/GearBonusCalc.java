@@ -1236,33 +1236,34 @@ class GearBonusCalc
 	 * is matched loosely (any message naming searing or burnt pages and a tome),
 	 * which is a guess until a log shows the real text.
 	 */
-	String onGameMessage(String message, int tick)
+	String onGameMessage(String raw, int tick)
 	{
-		if (message == null)
+		if (raw == null)
 		{
 			return null;
 		}
-		if (message.startsWith("You have placed a Mark of Darkness upon yourself"))
+		final String message = plainText(raw);
+		if (message.contains("You have placed a Mark of Darkness upon yourself"))
 		{
 			markMessageTick = tick;
 			final boolean purging = isPurgingStaff(wornId(EquipmentInventorySlot.WEAPON));
 			final int baseMagic = client.getRealSkillLevel(Skill.MAGIC);
 			return mark.cast(tick, markDurationTicks(baseMagic, purging),
-				(purging ? "purging staff, x5" : "no purging staff") + ", base Magic " + baseMagic);
+				(purging ? "purging staff, x5" : "no purging staff") + ", base Magic " + baseMagic + "; from the message");
 		}
-		if (message.startsWith("Your Mark of Darkness is about to run out"))
+		if (message.contains("Your Mark of Darkness is about to run out"))
 		{
 			return mark.warned(tick, MARK_WARNING_TICKS);
 		}
-		if (message.startsWith("Your Mark of Darkness has faded away"))
+		if (message.contains("Your Mark of Darkness has faded away"))
 		{
 			return mark.faded(tick);
 		}
-		if (message.startsWith("You feel charged with magic power"))
+		if (message.contains("You feel charged with magic power"))
 		{
-			return charge.cast(tick, CHARGE_TICKS, "");
+			return charge.cast(tick, CHARGE_TICKS, "from the message");
 		}
-		if (message.startsWith("Your magical charge fades away"))
+		if (message.contains("Your magical charge fades away"))
 		{
 			return charge.faded(tick);
 		}
@@ -1273,6 +1274,19 @@ class GearBonusCalc
 			return "TOME pages: " + (tomeSearing ? "searing" : "burnt") + ", from \"" + message + "\"";
 		}
 		return null;
+	}
+
+	// T-140: the game's colour tokens, which aren't <tags>: the Mark's message came as "@mes_hl_pur@You have placed a Mark
+	// of Darkness upon yourself.</col>" (Eric's 19:06 log, [118]), and Text.removeTags leaves the token in.
+	private static final java.util.regex.Pattern COLOUR_TOKEN = java.util.regex.Pattern.compile("@[A-Za-z0-9_]+@");
+
+	/**
+	 * T-140: a chat message as its text: tags and the game's {@code @...@} colour tokens out. The messages are then matched
+	 * wherever they sit in it, as RuneLite's Timers & Buffs does with {@code endsWith}.
+	 */
+	static String plainText(String message)
+	{
+		return COLOUR_TOKEN.matcher(message.replaceAll("<[^>]*>", "")).replaceAll("").trim();
 	}
 
 	/** Each tick: a buff whose fade was never shown is let go once its duration is well past. */

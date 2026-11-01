@@ -418,6 +418,8 @@ public class PvmPerformancePlugin extends Plugin
 	private final java.util.TreeMap<Integer, Integer> elementalKills = new java.util.TreeMap<>();
 	private final Set<Integer> elementalsDown = new HashSet<>();
 	private boolean attackDroppedCast;
+	// T-140: the attack being booked was proven by its drop (UNSEEN SHOT): scored from that tick's row, as a projectile is.
+	private boolean attackFromDrop;
 	// T-086: the attack being observed is a melee punish (the Maggot King's slam), thrown outside the weapon's speed, so it
 	// leaves the next attack due when it was; the ticks the fought boss started the animation a punish answers; and the
 	// fought boss's last animation, for the BOSS ANIM line.
@@ -1158,12 +1160,16 @@ public class PvmPerformancePlugin extends Plugin
 				: combatCalc.isMeleeEquipped() || !unbookedCast ? MELEE_BOOKING_LAG : castLag;
 			if (booked)
 			{
-				recordAttackObserved(false, npc, bookingLag);
+				recordAttackObserved(false, npc, bookingLag, melee);
 				if (unseenShot != Integer.MIN_VALUE)
 				{
 					// It went out on the drop's tick, which is what says the weapon was busy from then and which loadout threw it.
 					lastAttackSeenTick = unseenShot;
 					attackOriginTick = unseenShot;
+					// T-140: and its figures are that tick's row, as a projectile's are: by its splat the weapon is often the
+					// next one, its attack style a tick behind (Eric's 19:06 log: the Judge's staff casts at [977] and [987],
+					// landing with the Emberlight back in hand, scored at 28 against their 54s).
+					attackFromDrop = true;
 					debug.log("UNSEEN SHOT on %s (npc %d, index %d): a %d with no projectile of mine due, thrown on %d by its drop",
 						npc.getName(), npc.getId(), npc.getIndex(), hitsplat.getAmount(), unseenShot);
 				}
@@ -3223,8 +3229,8 @@ public class PvmPerformancePlugin extends Plugin
 		// row while it was in hand has the spell's.
 		// A melee punish takes its throw's row too (T-086): the punish window is the tick it was thrown on, and figures read
 		// at its hitsplat are an ordinary swing's.
-		final boolean originIsAuthoritative = scoresFromRow(attackObservedFromProjectile, beforeSwitch, punishedAttack(),
-			attackDroppedCast, atOrigin, targetId);
+		final boolean originIsAuthoritative = scoresFromRow(attackObservedFromProjectile || attackFromDrop, beforeSwitch,
+			punishedAttack(), attackDroppedCast, atOrigin, targetId);
 		if (originIsAuthoritative)
 		{
 			maxHit = (int) atOrigin[EXP_MAX];
@@ -3313,6 +3319,7 @@ public class PvmPerformancePlugin extends Plugin
 			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance,
 			originIsAuthoritative && beforeSwitch ? beforeSwitchNote(figuresTick)
 				: originIsAuthoritative && punishedAttack() ? " (a punish, from its throw's row on tick " + figuresTick + ")"
+				: originIsAuthoritative && attackFromDrop ? " (from its drop's row on tick " + figuresTick + ")"
 				: originIsAuthoritative && atOrigin.length > EXP_WIDTH
 					? " (from tick " + figuresTick + "'s row for the npc it was aimed at)" : "");
 		// Only an ordinary one-splat attack's max can be checked against a single splat (T-056).
@@ -4195,8 +4202,8 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		// Not the throw's row for a shot that dropped a spell click that never cast: that tick's figures were worked out
 		// with the click in hand, so the bow's 35 was judged against Shadow Rush's 14 (Eric's 05:01 log, [314]-[317]).
-		return scoringTick(attackFiguresTick, attackObservedFromProjectile && !attackDroppedCast, punishedAttack(),
-			expectedByTick.containsKey(attackThrownTick), attackThrownTick, attackOriginTick);
+		return scoringTick(attackFiguresTick, (attackObservedFromProjectile || attackFromDrop) && !attackDroppedCast,
+			punishedAttack(), expectedByTick.containsKey(attackThrownTick), attackThrownTick, attackOriginTick);
 	}
 
 	/** Whether the attack being booked is a melee punish (T-086): thrown on its tick, and proven by no cast or shot. */
@@ -5513,15 +5520,21 @@ public class PvmPerformancePlugin extends Plugin
 	private void recordAttackObserved(boolean fromProjectile, NPC npc)
 	{
 		recordAttackObserved(fromProjectile, npc,
-			fromProjectile ? PROJECTILE_BOOKING_LAG : MELEE_BOOKING_LAG);
+			fromProjectile ? PROJECTILE_BOOKING_LAG : MELEE_BOOKING_LAG, !fromProjectile);
+	}
+
+	private void recordAttackObserved(boolean fromProjectile, NPC npc, int bookingLag)
+	{
+		recordAttackObserved(fromProjectile, npc, bookingLag, false);
 	}
 
 	// How far behind the attack this observation is depends on what proved it, and there are three answers rather than
 	// two: a melee blow lands the tick it is thrown, a projectile surfaces two ticks later, and a cast with no projectile
 	// lands three.
-	private void recordAttackObserved(boolean fromProjectile, NPC npc, int bookingLag)
+	private void recordAttackObserved(boolean fromProjectile, NPC npc, int bookingLag, boolean meleeBlow)
 	{
 		final int npcId = npc.getId();
+		attackFromDrop = false;
 		// The npc it was aimed at: the attack is booked into that npc's fight, whatever is open by the booking (T-021).
 		attackObservedNpcIndex = npc.getIndex();
 		attackObservedNpc = npc;
@@ -5556,7 +5569,12 @@ public class PvmPerformancePlugin extends Plugin
 		// (T-065): a projectile is seen two ticks after its throw, so a switch on the throw's tick was missed, and a bow of
 		// faerdhinen shot fired just before swapping to a blowpipe was scored as the blowpipe.
 		attackThrownTick = client.getTickCount() - bookingLag;
-		attackSwitchTick = switchSinceThrow(attackThrownTick, client.getTickCount(), gearChangeTicks);
+		// T-140: a melee blow carries a switch made on its own tick: in Eric's logs, 7 of 48 blows whose worn items changed on
+		// their throw's tick hit over the loadout from before it, each within the one after ([734] of the 19:06 log: a 56
+		// against the Tormented bracelet's 51, within the Barrows gloves' 56; the Judge's 54s with the Emberlight against the
+		// staff's 36). Shots and casts keep T-065's rule.
+		attackSwitchTick = switchSinceThrow(switchSearchFrom(attackThrownTick, meleeBlow), client.getTickCount(),
+			gearChangeTicks);
 		// What it was thrown with decides whether another npc's splat in its window is its splash (T-092).
 		lastAttackSplashes = hitsSeveralTargets(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackThrownTick),
 			combatCalc.equippedWeaponId()), combatCalc.isMeleeEquipped() ? null : combatCalc.activeSpellName());
@@ -5570,12 +5588,15 @@ public class PvmPerformancePlugin extends Plugin
 		attackFiguresTick = figuresTickBeforeSwitch(attackThrownTick, attackSwitchTick, gearChangeTicks,
 			tick ->
 			{
-				final double[] row = expectedByTick.get(tick);
+				// T-140: or the row for the npc it was aimed at, where the shown fight was another's (T-107): the Judge's
+				// first staff cast at [716], thrown while Yama's fight was the one shown.
+				final double[] row = rowFor(expectedByTick.get(tick), aimedByTick.get(tick), thrownAtId, npc.getIndex());
 				return row != null && (int) row[EXP_NPC_ID] == thrownAtId && row[EXP_ACCURACY] >= 0;
 			}, SWITCH_LOOKBACK_TICKS);
 		if (attackFiguresTick != Integer.MIN_VALUE)
 		{
-			final double[] earlier = expectedByTick.get(attackFiguresTick);
+			final double[] earlier = rowFor(expectedByTick.get(attackFiguresTick), aimedByTick.get(attackFiguresTick),
+				thrownAtId, npc.getIndex());
 			attackObservedNpcId = thrownAtId;
 			attackObservedMaxHit = (int) earlier[EXP_MAX];
 			attackObservedAccuracy = earlier[EXP_ACCURACY];
@@ -5602,6 +5623,15 @@ public class PvmPerformancePlugin extends Plugin
 	 * tick after it, so a change on the throw's own tick counts: the attack still
 	 * went out with what was held before it.
 	 */
+	/**
+	 * T-140: the first tick a switch can have come after an attack thrown on {@code thrownTick}: that tick for a shot or a
+	 * cast (T-065), the next one for a melee blow, which carries a switch made on its own tick.
+	 */
+	static int switchSearchFrom(int thrownTick, boolean meleeBlow)
+	{
+		return meleeBlow ? thrownTick + 1 : thrownTick;
+	}
+
 	static int switchSinceThrow(int thrownTick, int now, Iterable<Integer> changeTicks)
 	{
 		int earliest = Integer.MAX_VALUE;
