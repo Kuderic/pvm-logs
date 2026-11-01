@@ -45,14 +45,14 @@ public class SidePanelDrainsCardTest
 		assertNotNull(def.bar);
 		assertEquals(145, def.bar.floor);
 		// The Emberlight, the drains he had when the second fight began, his regen, and the sum for your melee and ranged.
-		assertEquals(java.util.Arrays.asList("Emberlight | +30 dmg", "landed 2 of 5 · −34 |", "already drained | +8 dmg",
+		assertEquals(java.util.Arrays.asList("Emberlight | +30 dmg", "landed 2 of 5 · -34 |", "already drained | +8 dmg",
 			"regens 1 every 100 ticks |", "for your melee & ranged | +38 dmg"), texts(def));
 		final PanelSnapshot.DrainBlock md = d.blocks.get(1);
 		assertEquals("Magic defence", md.name.text);
 		// The reduction, and the bonus his casts met; no bar, no regen.
-		assertEquals("−60", md.change.text);
+		assertEquals("-60", md.change.text);
 		assertNull(md.bar);
-		assertEquals(java.util.Arrays.asList("bonus met +81 → +21 |", "Eye of ayak | +27 dmg", "landed 3 of 3 · −60 |",
+		assertEquals(java.util.Arrays.asList("bonus met +81 → +21 |", "Eye of ayak | +27 dmg", "landed 3 of 3 · -60 |",
 			"for your magic |"), texts(md));
 		// The total: the sum of the stats' values, T-050's drain value.
 		assertEquals("+65 dmg", d.worth.damage);
@@ -64,8 +64,8 @@ public class SidePanelDrainsCardTest
 	{
 		final PanelSnapshot.Defence d = card(SidePanelDrainsExamples.graardor(), false);
 		assertEquals(1, d.blocks.size());
-		assertEquals(java.util.Arrays.asList("Dragon warhammer | +96 dmg", "landed 1 of 2 · −75 |",
-			"Bandos godsword | +51 dmg", "landed 1 of 1 · −62 |", "regens 1 every 100 ticks |",
+		assertEquals(java.util.Arrays.asList("Dragon warhammer | +96 dmg", "landed 1 of 2 · -75 |",
+			"Bandos godsword | +51 dmg", "landed 1 of 1 · -62 |", "regens 1 every 100 ticks |",
 			"for your melee & ranged | +147 dmg"), texts(d.blocks.get(0)));
 		assertEquals("+147 dmg", d.worth.damage);
 	}
@@ -75,8 +75,8 @@ public class SidePanelDrainsCardTest
 	{
 		final PanelSnapshot.DrainBlock b = card(SidePanelDrainsExamples.floorAndParty(), false).blocks.get(0);
 		assertEquals(" at its floor", b.hint.text);
-		assertEquals(java.util.Arrays.asList("Dragon warhammer | +41 dmg", "landed 2 of 2 · −34 |",
-			"Dragon warhammer | +19 dmg", "party · 1 drain · −34 |", "for your melee & ranged | +60 dmg"), texts(b));
+		assertEquals(java.util.Arrays.asList("Dragon warhammer | +41 dmg", "landed 2 of 2 · -34 |",
+			"Dragon warhammer | +19 dmg", "party · 1 drain · -34 |", "for your melee & ranged | +60 dmg"), texts(b));
 	}
 
 	@Test
@@ -167,6 +167,8 @@ public class SidePanelDrainsCardTest
 		final Encounter[] rooms = {SidePanelDrainsExamples.yama(), SidePanelDrainsExamples.graardor(),
 			SidePanelDrainsExamples.floorAndParty(), SidePanelDrainsExamples.soulRendsMissed(),
 			SidePanelDrainsExamples.magicOffDefence()};
+		// Every cut at once, so a machine with other fallback fonts (CI) names them all in one run.
+		final List<String> cut = new ArrayList<>();
 		for (boolean larger : new boolean[]{false, true})
 		{
 			for (boolean smooth : new boolean[]{false, true})
@@ -187,8 +189,10 @@ public class SidePanelDrainsCardTest
 								if (c instanceof SidePanelText && ((SidePanelText) c).lastShown() != null)
 								{
 									final String shown = ((SidePanelText) c).lastShown();
-									assertFalse(larger + " " + smooth + " " + scale + " " + r.getName() + ": " + shown,
-										shown.contains(LedgerRows.CUT));
+									if (shown.contains(LedgerRows.CUT))
+									{
+										cut.add(larger + " " + smooth + " " + scale + " " + r.getName() + ": " + shown);
+									}
 								}
 							}
 						}
@@ -200,6 +204,7 @@ public class SidePanelDrainsCardTest
 				}
 			}
 		}
+		assertTrue(String.join("\n", cut), cut.isEmpty());
 	}
 
 	private static List<String> texts(Container c)

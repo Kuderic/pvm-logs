@@ -2194,7 +2194,7 @@ final class SidePanelModel
 		final int reduction = Math.max(0, p.base - p.end);
 		final boolean changed = !p.unchanged && (bonus ? reduction > 0 : p.start != p.end);
 		final Text change = !changed ? Text.small("unchanged", SidePanelStyle.MUTED)
-			: Text.body(bonus ? "−" + reduction : path(p.start, p.end), SidePanelStyle.VALUE);
+			: Text.body(bonus ? "-" + reduction : path(p.start, p.end), SidePanelStyle.VALUE);
 		final boolean floor = !bonus && p.floor > 0 && p.floor < Math.max(p.base, p.start);
 		final Text hint = changed && floor && p.end <= p.floor ? Text.small(" at its floor", SidePanelStyle.MUTED)
 			: Text.NONE;
@@ -2204,8 +2204,9 @@ final class SidePanelModel
 		// Magic defence: the bonus the attacks met, the boss's modifiers in (Yama's moves with his target and phase).
 		if (bonus && changed && p.bonusAtStart != null && p.bonusAtEnd != null)
 		{
-			lines.add(line(Text.small("bonus met " + signedPlain(p.bonusAtStart) + " → " + signedPlain(p.bonusAtEnd),
-				SidePanelStyle.SECONDARY), Text.NONE, null, null, 1));
+			final String met = signedPlain(p.bonusAtStart) + " → " + signedPlain(p.bonusAtEnd);
+			lines.add(new PanelSnapshot.BlockLine(new Row(Text.small("bonus met " + met, SidePanelStyle.SECONDARY),
+				Text.NONE, Text.NONE, null), 1, java.util.Arrays.asList("bonus " + met, met)));
 		}
 		long shown = 0;
 		for (SourcePart src : p.sources)
@@ -2223,7 +2224,7 @@ final class SidePanelModel
 					forms.set(k, "party · " + forms.get(k));
 				}
 			}
-			final String took = src.drained > 0 ? " · −" + src.drained : "";
+			final String took = src.drained > 0 ? " · -" + src.drained : "";
 			final List<String> withTook = new ArrayList<>(forms.size());
 			for (String f : forms)
 			{
@@ -2273,7 +2274,7 @@ final class SidePanelModel
 
 	private static String signedPlain(int v)
 	{
-		return v > 0 ? "+" + v : v < 0 ? "−" + -v : "0";
+		return v > 0 ? "+" + v : v < 0 ? "-" + -v : "0";
 	}
 
 	/**

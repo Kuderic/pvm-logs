@@ -1266,8 +1266,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			final PanelSnapshot.DrainBlock b = tab.defence.blocks.get(i);
 			final SidePanelParts.Line head = new SidePanelParts.Line(new PanelSnapshot.Row(b.name, b.hint, b.change, null));
 			// Room for its widest digits: "225 → 191" drawn at 2× measures wider than at 1×, and the arrow is the font's
-			// fallback's.
+			// fallback's, whose width differs by machine; where it still doesn't fit, it closes up rather than cut.
 			head.right.reserveDigits();
+			head.right.setShort(closed(b.change.text));
 			if (i > 0)
 			{
 				head.setBorder(new javax.swing.border.EmptyBorder(6, 0, 0, 0));
@@ -1309,6 +1310,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			{
 				final PanelSnapshot.DrainBlock b = t.defence.blocks.get(i);
 				heads.get(i).set(new PanelSnapshot.Row(b.name, b.hint, b.change, null), 0, i > 0 ? 6 : 0);
+				heads.get(i).right.setShort(closed(b.change.text));
 				if (bars.get(i) != null && b.bar != null)
 				{
 					bars.get(i).set(b.bar.start, b.bar.end, b.bar.base, b.bar.floor);
@@ -1325,6 +1327,12 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				worth.set(t.defence.worth.row(), 0, 6);
 			}
 		});
+	}
+
+	/** T-142: a block head's change with its arrow closed up ({@code 225→191}), its short form. */
+	private static String closed(String change)
+	{
+		return change.replace(" \u2192 ", "\u2192");
 	}
 
 	/** T-142: a block line's inset: under the stat, and further under a special. */
