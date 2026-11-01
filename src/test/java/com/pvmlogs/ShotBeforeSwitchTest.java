@@ -49,7 +49,7 @@ public class ShotBeforeSwitchTest
 	{
 		final Map<Integer, Loadout> rows = new HashMap<>();
 		final List<Integer> changes = new ArrayList<>();
-		private Loadout worn;
+		Loadout worn;
 
 		Ticks(Loadout start)
 		{
@@ -96,7 +96,10 @@ public class ShotBeforeSwitchTest
 
 		int figuresTick(int thrown, int seen)
 		{
-			final int switched = PvmPerformancePlugin.switchSinceThrow(thrown, seen, changes);
+			// T-140: a melee blow carries a switch made on its own tick.
+			final boolean melee = seen - thrown == MELEE;
+			final int switched = PvmPerformancePlugin.switchSinceThrow(PvmPerformancePlugin.switchSearchFrom(thrown, melee),
+				seen, changes);
 			return PvmPerformancePlugin.figuresTickBeforeSwitch(thrown, switched, changes, rows::containsKey, LOOKBACK);
 		}
 	}
@@ -123,17 +126,67 @@ public class ShotBeforeSwitchTest
 	}
 
 	@Test
-	public void meleeIsAsItWas()
+	public void meleeCarriesASwitchOnItsOwnTick()
 	{
-		// Master's rule for a blow seen the tick after its throw: a change on the observation's tick or the one before it
-		// takes the figures from before the change. The same answer for every switch tick, the one before the throw too.
+		// T-140: a blow thrown on 100, seen on 101. A change on its own tick is in the blow; one on the tick it is seen
+		// isn't. Before, a change on 100 took the figures from before it, and Eric's logs disagree: 7 of 48 such blows hit
+		// over that loadout's max, each within the new one's ([734] of the 19:06 log: 56 against 51 and 56).
 		for (int switchOn = 96; switchOn <= 101; switchOn++)
 		{
 			final Ticks ticks = new Ticks(WHIP).to(switchOn, BLOWPIPE);
-			final int seen = 100 + MELEE;
-			final Loadout masters = switchOn >= seen - 1 ? WHIP : BLOWPIPE;
-			assertEquals("switch on " + switchOn, masters, ticks.scored(100, MELEE));
+			final Loadout carried = switchOn == 100 + MELEE ? WHIP : BLOWPIPE;
+			assertEquals("switch on " + switchOn, carried, ticks.scored(100, MELEE));
 		}
+	}
+
+	/**
+	 * T-140: a cast proven by its drop (UNSEEN SHOT), seen three ticks later with the next weapon in hand and no switch
+	 * on record for it: scored from its throw's row, as a projectile is, not from the live figures. Eric's 19:06 log:
+	 * the Judge's staff casts at [977] and [987], scored at 28 against their 54s.
+	 */
+	@Test
+	public void aCastProvenByItsDropIsItsThrowsRow()
+	{
+		final Ticks ticks = new Ticks(STAFF).to(100);
+		ticks.worn = WHIP;
+		assertEquals(Integer.MIN_VALUE, ticks.figuresTick(100, 103));
+		final int at = PvmPerformancePlugin.scoringTick(Integer.MIN_VALUE, true, ticks.rows.containsKey(100), 100, 100);
+		assertEquals(100, at);
+		assertEquals(STAFF, ticks.rows.get(at));
+		// Before, as a melee blow is, it took the live figures: the whip's.
+		assertEquals(100, PvmPerformancePlugin.scoringTick(Integer.MIN_VALUE, false, true, 100, 100));
+	}
+
+	/**
+	 * T-140: the row for the npc the attack was aimed at counts as the throw's (T-107): the Judge's first staff cast at
+	 * [716], thrown while Yama's fight was the one shown, so that tick's shown row was Yama's.
+	 */
+	@Test
+	public void theAimedRowIsTheThrowsWhenAnotherFightIsShown()
+	{
+		final int yama = 14176;
+		final int judge = 14180;
+		final double[] yamaRow = row(yama, 60);
+		final double[] judgeRow = aimed(judge, 54, 46530);
+		assertEquals(54, (int) PvmPerformancePlugin.rowFor(yamaRow, judgeRow, judge, 46530)[PvmPerformancePlugin.EXP_MAX]);
+		assertEquals(60, (int) PvmPerformancePlugin.rowFor(yamaRow, judgeRow, yama, 54899)[PvmPerformancePlugin.EXP_MAX]);
+		// Another Judge's row isn't this one's.
+		assertEquals(yama, (int) PvmPerformancePlugin.rowFor(yamaRow, aimed(judge, 54, 1), judge, 46530)[PvmPerformancePlugin.EXP_NPC_ID]);
+	}
+
+	private static double[] row(int npcId, int max)
+	{
+		final double[] r = new double[PvmPerformancePlugin.EXP_WIDTH];
+		r[PvmPerformancePlugin.EXP_MAX] = max;
+		r[PvmPerformancePlugin.EXP_NPC_ID] = npcId;
+		return r;
+	}
+
+	private static double[] aimed(int npcId, int max, int index)
+	{
+		final double[] r = java.util.Arrays.copyOf(row(npcId, max), PvmPerformancePlugin.EXP_WIDTH + 1);
+		r[PvmPerformancePlugin.EXP_WIDTH] = index;
+		return r;
 	}
 
 	@Test

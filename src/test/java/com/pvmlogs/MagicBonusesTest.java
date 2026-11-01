@@ -263,6 +263,43 @@ public class MagicBonusesTest
 		assertTrue(again, again.endsWith("to tick 9085"));
 	}
 
+	/**
+	 * T-140: the Mark's message as the game sends it ([118] of Eric's 19:06 log, T-139's raw line): an {@code @mes_hl_pur@}
+	 * colour token before the text, which Text.removeTags leaves in, so a match on its start never fired.
+	 */
+	@Test
+	public void theMarksMessageWithItsColourToken()
+	{
+		wield(ItemID.PURGING_STAFF);
+		final String raw = "@mes_hl_pur@You have placed a Mark of Darkness upon yourself.</col>";
+		assertEquals("You have placed a Mark of Darkness upon yourself.", GearBonusCalc.plainText(raw));
+		final String line = calc.onGameMessage(raw, 118);
+		assertNotNull(line);
+		assertTrue(line, line.startsWith("MARK up: cast on tick 118 (purging staff, x5, base Magic 99; from the message)"));
+		assertTrue(calc.hasMarkOfDarkness());
+		// The fallback, a tick later, leaves the cast the message took.
+		assertNull(calc.markFromCasts(118, 70, null, false));
+		assertNull(calc.markFromCasts(119, 0, null, false));
+		// The warning and the fade, in the same shape: a guess at their tokens, until a log shows them.
+		assertTrue(calc.onGameMessage("@mes_hl_pur@Your Mark of Darkness is about to run out.</col>", 1593)
+			.startsWith("MARK ending: warning on tick 1593"));
+		assertTrue(calc.onGameMessage("<col=ef1020>Your Mark of Darkness has faded away.</col>", 1603)
+			.startsWith("MARK down: faded on tick 1603"));
+		assertFalse(calc.hasMarkOfDarkness());
+	}
+
+	/** T-140: Charge's two messages the same way. */
+	@Test
+	public void chargesMessagesWithAColourToken()
+	{
+		assertTrue(calc.onGameMessage("@mes_hl_pur@You feel charged with magic power.</col>", 5)
+			.startsWith("CHARGE up: cast on tick 5 (from the message)"));
+		assertTrue(calc.onGameMessage("@mes_hl_pur@Your magical charge fades away.</col>", 600)
+			.startsWith("CHARGE down: faded on tick 600"));
+		// Nothing else matches.
+		assertNull(calc.onGameMessage("@mes_hl_pur@You feel a little strange.</col>", 601));
+	}
+
 	/** T-139: a cast the message already took isn't taken again by the fallback. */
 	@Test
 	public void theMessageTakesTheCastFirst()
@@ -410,12 +447,12 @@ public class MagicBonusesTest
 		assertTrue(calc.describeBuffs(),
 			calc.describeBuffs().startsWith("mark of darkness down (assumed down: not seen since the plugin started)"));
 		wield(ItemID.PURGING_STAFF);
-		assertEquals("MARK up: cast on tick 100 (purging staff, x5, base Magic 99), lasts 1485 ticks, to tick 1585",
+		assertEquals("MARK up: cast on tick 100 (purging staff, x5, base Magic 99; from the message), lasts 1485 ticks, to tick 1585",
 			calc.onGameMessage("You have placed a Mark of Darkness upon yourself.", 100));
 		assertTrue(calc.hasMarkOfDarkness());
 		// A recast before it ends refreshes it (allowed since 14 May 2025).
 		wield(ItemID.KODAI_WAND);
-		assertEquals("MARK refreshed: cast on tick 400 (no purging staff, base Magic 99), lasts 297 ticks, to tick 697",
+		assertEquals("MARK refreshed: cast on tick 400 (no purging staff, base Magic 99; from the message), lasts 297 ticks, to tick 697",
 			calc.onGameMessage("You have placed a Mark of Darkness upon yourself.", 400));
 		assertEquals("MARK ending: warning on tick 690, ends tick 700 (estimated 697)",
 			calc.onGameMessage("Your Mark of Darkness is about to run out.", 690));
@@ -461,7 +498,7 @@ public class MagicBonusesTest
 		final MagicDamage down = spellOf(20);
 		calc.fillMagic(down, sara, monsters.get(NpcIds.GOBLIN), NpcIds.GOBLIN, Spell.SARADOMIN_STRIKE, false);
 		assertEquals(20, down.maxHit());
-		assertEquals("CHARGE up: cast on tick 5, lasts 700 ticks, to tick 705",
+		assertEquals("CHARGE up: cast on tick 5 (from the message), lasts 700 ticks, to tick 705",
 			calc.onGameMessage("You feel charged with magic power.", 5));
 		final MagicDamage up = spellOf(20);
 		calc.fillMagic(up, sara, monsters.get(NpcIds.GOBLIN), NpcIds.GOBLIN, Spell.SARADOMIN_STRIKE, false);
