@@ -478,7 +478,14 @@ final class EncounterGroup
 			// Araxxor's corpse (T-098). Clicking it to harvest or destroy it opened a fight on it ([282] and [748] of Eric's
 			// log of 2026-10-29 21:20): no attack, so not saved, but a RECONCILE line reading -100%. His death is the change
 			// into it, which the fight on him and the room still see (handleNpcChanged asks nothing of this list).
-			NpcID.ARAXXOR_DEAD)));
+			NpcID.ARAXXOR_DEAD,
+			// The Chambers of Xeric crab puzzle (T-148). OSRS Wiki, read 2026-11-01: Jewelled Crab: "These crabs cannot be killed
+			// by conventional combat"; their crystals are hit to change their colour. Hitting one with a Dragon warhammer opened
+			// a fight on it in Eric's raid of 2026-11-01 13:02 ([5402]-[5553]): no stats, nothing dealt, 111 lost ticks and the
+			// puzzle's beams' 56 taken, saved to history. The energy focuses (7580-7583) aren't listed: the wiki doesn't say
+			// they can't be attacked.
+			NpcID.RAIDS_LASERCRABS_CRAB_GREY, NpcID.RAIDS_LASERCRABS_CRAB_RED, NpcID.RAIDS_LASERCRABS_CRAB_GREEN,
+			NpcID.RAIDS_LASERCRABS_CRAB_BLUE)));
 	}
 
 	/**
