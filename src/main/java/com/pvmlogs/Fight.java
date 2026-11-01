@@ -628,6 +628,37 @@ class Fight
 	void recordDrain(DrainRecord record)
 	{
 		drainRecord = record;
+		fillDrainValues();
+	}
+
+	// T-141: DrainLuck's values per stat and per source, as they stand; into the record once it is in. Not saved on their
+	// own: the record keeps them.
+	private transient java.util.Map<String, Double> drainValueByStat;
+	private transient java.util.Map<String, java.util.Map<String, Double>> drainValueBySource;
+	private transient Integer magicDefenceBonusAtStart;
+	private transient Integer magicDefenceBonusAtEnd;
+
+	/**
+	 * T-141: what the drains added per stat ({@code stat -> value}) and per source ({@code source key -> stat -> value}),
+	 * as made, and the magic defence bonus the first and last attacks met; set again after every attack, so a shot still
+	 * landing after the fight closed (T-021) reaches the record too.
+	 */
+	void recordDrainValues(java.util.Map<String, Double> byStat, java.util.Map<String, java.util.Map<String, Double>> bySource,
+		Integer bonusAtStart, Integer bonusAtEnd)
+	{
+		drainValueByStat = byStat;
+		drainValueBySource = bySource;
+		magicDefenceBonusAtStart = bonusAtStart;
+		magicDefenceBonusAtEnd = bonusAtEnd;
+		fillDrainValues();
+	}
+
+	private void fillDrainValues()
+	{
+		if (drainRecord != null && (drainValueByStat != null || drainValueBySource != null))
+		{
+			drainRecord.fillValues(drainValueByStat, drainValueBySource, magicDefenceBonusAtStart, magicDefenceBonusAtEnd);
+		}
 	}
 
 	/** The fight's drain record (T-049), or null: saved before T-049, or nothing known of the target. */

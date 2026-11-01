@@ -3,6 +3,7 @@ package com.pvmlogs;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -305,7 +306,7 @@ final class DrainTracker
 			reset(t, tick, "became npc " + npcId, npcId, name, target);
 			return;
 		}
-		targets.put(npcIndex, t.moved(npcIndex, npcId, name, target, within(t.state, target)));
+		targets.put(npcIndex, t.moved(npcIndex, npcId, name, target, within(t.state, t.target, target)));
 	}
 
 	private void reset(Tracked t, int tick, String reason, int npcId, String name, DrainRule.Target target)
@@ -322,12 +323,13 @@ final class DrainTracker
 			npcId, now.npcIndex, reason, before.defence, now.state.defence, before.magic, now.state.magic));
 	}
 
-	// Drained levels carried onto a form with other levels: none above its base, none below its floors.
-	private static DrainRule.State within(DrainRule.State s, DrainRule.Target t)
+	// Drained levels carried onto a form with other levels: none above its base, none below its floors. T-141: the Eye of
+	// ayak's reduction carries whole, onto the new form's bonus (the wiki: "This also applies to Zulrah").
+	static DrainRule.State within(DrainRule.State s, DrainRule.Target from, DrainRule.Target t)
 	{
 		return new DrainRule.State(clamp(s.defence, t.defenceFloor, t.defence), clamp(s.magic, t.magicFloor, t.magic),
-			Math.min(s.magicDefence, t.magicDefence), Math.min(s.attack, t.attack), Math.min(s.strength, t.strength),
-			Math.min(s.ranged, t.ranged));
+			t.magicDefence - DrainRule.magicDefenceReduction(s, from), Math.min(s.attack, t.attack),
+			Math.min(s.strength, t.strength), Math.min(s.ranged, t.ranged));
 	}
 
 	private static int clamp(int v, int lo, int hi)
@@ -361,7 +363,7 @@ final class DrainTracker
 			return;
 		}
 		final Tracked t = old.moved(npcIndex, npcId, name, target, restores ? DrainRule.State.of(target)
-			: within(old.state, target));
+			: within(old.state, old.target, target));
 		targets.put(npcIndex, t);
 		if (restores)
 		{
@@ -570,7 +572,84 @@ final class DrainTracker
 		r.defenceStart = start == null ? r.defenceEnd : start.defence;
 		r.magicStart = start == null ? r.magicEnd : start.magic;
 		r.magicDefenceStart = start == null ? r.magicDefenceEnd : start.magicDefence;
+		perStatAndSource(r, t.target);
 		return r;
+	}
+
+	/**
+	 * T-141: the record's drains per stat and per source, from its events: each stat that changed in the fight (or that
+	 * a drain moved, back since), and each weapon with what it took off each stat. A reset's levels are no source's.
+	 */
+	static void perStatAndSource(DrainRecord r, DrainRule.Target target)
+	{
+		r.stats = new ArrayList<>(3);
+		r.sources = new ArrayList<>(2);
+		final Map<String, DrainRecord.SourceDrain> bySource = new LinkedHashMap<>();
+		final boolean[] moved = new boolean[3];
+		for (DrainEvent e : r.events)
+		{
+			if (e.isReset() || e.isRegen() || e.weapon == null || !(e.isDrain() || e.isSkip()))
+			{
+				continue;
+			}
+			final DrainRecord.SourceDrain d = bySource.computeIfAbsent(DrainRecord.sourceKey(e.weapon, e.own), k ->
+			{
+				final DrainRecord.SourceDrain n = new DrainRecord.SourceDrain();
+				n.weapon = e.weapon;
+				n.own = e.own;
+				return n;
+			});
+			d.thrown++;
+			if (e.landed)
+			{
+				d.landed++;
+			}
+			if (!e.isDrain())
+			{
+				continue;
+			}
+			moved[0] |= took(d, DrainRecord.StatDrain.DEFENCE, e.defenceBefore - e.defenceAfter);
+			moved[1] |= took(d, DrainRecord.StatDrain.MAGIC, e.magicBefore - e.magicAfter);
+			moved[2] |= took(d, DrainRecord.StatDrain.MAGIC_DEFENCE, e.magicDefenceBefore - e.magicDefenceAfter);
+		}
+		r.sources.addAll(bySource.values());
+		if (moved[0] || r.defenceStart != r.defenceEnd)
+		{
+			r.stats.add(stat(DrainRecord.StatDrain.DEFENCE, target.defence, target.defenceFloor, r.defenceStart,
+				r.defenceEnd, target.regenTicks));
+		}
+		if (moved[1] || r.magicStart != r.magicEnd)
+		{
+			r.stats.add(stat(DrainRecord.StatDrain.MAGIC, target.magic, target.magicFloor, r.magicStart, r.magicEnd,
+				target.regenTicks));
+		}
+		if (moved[2] || r.magicDefenceStart != r.magicDefenceEnd)
+		{
+			r.stats.add(stat(DrainRecord.StatDrain.MAGIC_DEFENCE, target.magicDefence, 0, r.magicDefenceStart,
+				r.magicDefenceEnd, 0));
+		}
+	}
+
+	private static boolean took(DrainRecord.SourceDrain d, String stat, int amount)
+	{
+		if (amount <= 0)
+		{
+			return false;
+		}
+		d.drained.merge(stat, amount, Integer::sum);
+		return true;
+	}
+
+	private static DrainRecord.StatDrain stat(String name, int base, int floor, int start, int end, int regenTicks)
+	{
+		final DrainRecord.StatDrain d = new DrainRecord.StatDrain();
+		d.stat = name;
+		d.base = base;
+		d.floor = floor;
+		d.start = start;
+		d.end = end;
+		d.regenTicks = regenTicks;
+		return d;
 	}
 
 	// The stats tracked on this index, or on the actor that has since replaced it.
@@ -607,11 +686,13 @@ final class DrainTracker
 		boolean landed, DrainRule.State before, DrainRule.Result r)
 	{
 		final DrainRule.State after = r.after;
+		// T-141: the magic defence as the Eye of ayak's reduction, which meets whatever bonus the target has then.
 		return String.format("DRAIN %s by %s on %s (npc %d, index %d): thrown %d, landed %d, hit %d (%s): defence %d -> %d"
-				+ " of %d (floor %d), magic %d -> %d of %d, magic defence %+d -> %+d%s",
+				+ " of %d (floor %d), magic %d -> %d of %d, magic defence %+d, reduced by %d -> %d%s",
 			weapon.getName(), who(own), t.name, t.npcId, t.npcIndex, thrownTick, landedTick, hit,
 			landed ? "landed" : "missed", before.defence, after.defence, t.target.defence, t.target.defenceFloor,
-			before.magic, after.magic, t.target.magic, before.magicDefence, after.magicDefence,
+			before.magic, after.magic, t.target.magic, t.target.magicDefence,
+			DrainRule.magicDefenceReduction(before, t.target), DrainRule.magicDefenceReduction(after, t.target),
 			r.floored ? ", floored" : "");
 	}
 

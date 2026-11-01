@@ -39,8 +39,17 @@ import net.runelite.client.plugins.specialcounter.SpecialWeapon;
  * RuneLite's special attack counter sends it).</li>
  * <li><b>Seercull</b>: the damage off Magic, only while Magic has not been
  * lowered.</li>
- * <li><b>Eye of ayak</b>: the damage off the magic defence bonus, to no lower than
- * 0, and only while it is above 0.</li>
+ * <li><b>Eye of ayak</b>: the damage off the magic defence bonus (T-141, OSRS Wiki,
+ * <i>Eye of ayak</i>, read 2026-11-01): "it reduces the target's Magic Defence by an
+ * amount equal to the damage dealt ... Although Magic Defence cannot be reduced below
+ * 0, the full reduction persists if the target's Magic Defence subsequently changes.
+ * For example, if the special attack deals 50 damage to Yama while he is in his
+ * melee stance, which has -30 Magic Defence, his Magic Defence remains at -30. If he
+ * then changes to his magic stance, his actual Magic Defence becomes +10 during
+ * phases 1 and 2, or +31 during phase 3, rather than +60 or +81 respectively." So
+ * the state keeps the whole reduction (its {@code magicDefence} is the data's bonus
+ * less it, unclamped), and {@link #magicDefenceBonus} meets it with the bonus the
+ * target has when an attack goes out.</li>
  * </ul>
  * Dinh's bulwark is in RuneLite's list, but in multi-combat it lowers the
  * targets' highest offensive stat, never Defence or Magic, so it is not modelled.
@@ -318,16 +327,32 @@ final class DrainRule
 				}
 				break;
 			case EYE_OF_AYAK:
-				if (landed && s.magicDefence > 0)
+				// T-141: every hit that deals damage adds to the reduction, whatever the bonus is now: it persists.
+				if (landed && damage > 0)
 				{
-					after = new State(s.defence, s.magic, Math.max(0, s.magicDefence - damage), s.attack, s.strength,
-						s.ranged);
+					after = new State(s.defence, s.magic, s.magicDefence - damage, s.attack, s.strength, s.ranged);
 				}
 				break;
 			default:
 				break;
 		}
 		return new Result(after, f.floored);
+	}
+
+	/**
+	 * T-141: a target's magic defence bonus as an attack meets it: {@code bonus}, the bonus it has now (its data's, with
+	 * its modifiers: Yama's +60 or -30, his Phase 3 version's +81), less the Eye of ayak's whole {@code reduction}, to no
+	 * lower than 0; a bonus at 0 or below is left as it is (the wiki's -30 stays -30).
+	 */
+	static int magicDefenceBonus(int bonus, int reduction)
+	{
+		return bonus <= 0 || reduction <= 0 ? bonus : Math.max(0, bonus - reduction);
+	}
+
+	/** T-141: the Eye of ayak's reduction in a state: the data's bonus less what the state keeps, never below 0. */
+	static int magicDefenceReduction(State s, Target t)
+	{
+		return Math.max(0, t.magicDefence - s.magicDefence);
 	}
 
 	/**

@@ -333,6 +333,18 @@ final class SpecOutcomes
 	}
 
 	/** The attacks' expectation as made, less what it would have been with nothing drained: the drain's worth. */
+	/** T-141: the attacks' expected damage as booked, at the states they were really made at. */
+	double realizedMean()
+	{
+		return realizedMean;
+	}
+
+	/** T-141: the same attacks at the undrained state. */
+	double undrainedMean()
+	{
+		return undrainedMean;
+	}
+
 	double drainValueDamage()
 	{
 		return realizedMean - undrainedMean;
