@@ -539,6 +539,11 @@ class BossRules
 		boolean magicUsesDefence;
 		/** Tekton: a warhammer or maul that misses still takes 5%, a godsword 10 (RuneLite's {@code SpecialWeapon}). */
 		boolean tekton;
+		/**
+		 * T-149: the first special of one of these ({@code SpecialWeapon} names) to reach it in a kill always lands:
+		 * Tekton's warhammer and elder maul. Anyone's counts as the first.
+		 */
+		List<String> firstSpecialLands;
 		/** A godsword drains twice its damage off it. */
 		boolean godswordDoubled;
 		/** Changing into any of these npc ids restores its stats to their base. */

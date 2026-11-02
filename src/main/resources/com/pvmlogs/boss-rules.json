@@ -384,8 +384,9 @@
       "npcIds": [7540, 7541, 7542, 7543, 7544, 7545],
       "defenceDrain": {
         "tekton": true,
+        "firstSpecialLands": ["DRAGON_WARHAMMER", "ELDER_MAUL"],
         "regenTicks": 15,
-        "source": "OSRS Wiki, read 2026-10-28: Chambers of Xeric/Strategies: 'missed warhammer/maul specials drain 5% and godsword specials drain 10 Defence levels'; Tekton: 'Tekton no longer resets his Defence when healing at the anvil'; Mod Ash's regen list on the CoX pages: 'Tekton - 15'."
+        "source": "OSRS Wiki, read 2026-10-28: Chambers of Xeric/Strategies: 'missed warhammer/maul specials drain 5% and godsword specials drain 10 Defence levels'; Tekton: 'Tekton no longer resets his Defence when healing at the anvil'; Mod Ash's regen list on the CoX pages: 'Tekton - 15'. Read 2026-11-01, Tekton: 'The first elder maul or dragon warhammer special that makes contact with Tekton will always land' (T-149)."
       }
     },
     {

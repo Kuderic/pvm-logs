@@ -291,6 +291,16 @@ final class DrainLuck
 	 */
 	void booked(Fight fight, int madeTick, int tick, boolean special, SpecialWeapon weapon, double mean, double variance)
 	{
+		booked(fight, madeTick, tick, special, weapon, mean, variance, false);
+	}
+
+	/**
+	 * As above; {@code certain} for a special certain to land (T-149: Tekton's first warhammer or elder maul), booked at
+	 * a landing's figures. Its outcomes at every state are then a landing's alone, so its drain is certain too.
+	 */
+	void booked(Fight fight, int madeTick, int tick, boolean special, SpecialWeapon weapon, double mean, double variance,
+		boolean certain)
+	{
 		final Entry e = entries.get(fight);
 		if (e == null || mean < 0)
 		{
@@ -306,8 +316,8 @@ final class DrainLuck
 		{
 			e.outcomes.special(weapon, snap == null ? null : s ->
 			{
-				final double[] f = snap.near(s);
-				final double[] r = snap.near(snap.realized);
+				final double[] f = certain ? CombatCalc.certainToLand(snap.near(s)) : snap.near(s);
+				final double[] r = certain ? CombatCalc.certainToLand(snap.near(snap.realized)) : snap.near(snap.realized);
 				if (f == null || r == null || f[CombatCalc.AT_SPEC_MEAN] < 0 || r[CombatCalc.AT_SPEC_MEAN] < 0)
 				{
 					return null;

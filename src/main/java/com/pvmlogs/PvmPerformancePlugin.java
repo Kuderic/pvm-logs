@@ -3375,6 +3375,15 @@ public class PvmPerformancePlugin extends Plugin
 			&& specAverageHit >= 0;
 		double expectedChances =
 			combatCalc.attackLandChance(accuracy, targetId);
+		// The special in hand on the tick it was thrown, for its drain's outcomes (T-050).
+		final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon = special
+			? DrainLuck.weaponFor(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick),
+				combatCalc.equippedWeaponId())) : null;
+		// T-149: Tekton's first warhammer or elder maul to reach him always lands (wiki, Tekton). A melee blow is booked by
+		// its splat, so it lands now; one booked otherwise, the tick after it went out.
+		final boolean certain = special && drain.firstSpecialCertain(fight.getTargetIndex(), targetId,
+			fight.getTargetName(), specWeapon, attackThrownTick, attackObservedLag == MELEE_BOOKING_LAG
+				? client.getTickCount() : attackOriginTick + 1);
 		if (special)
 		{
 			// The special's weapon, for the fight's record (T-110).
@@ -3394,6 +3403,13 @@ public class PvmPerformancePlugin extends Plugin
 			averageHit = specAverageHit;
 			variance = specVariance;
 			expectedChances = specLandChance;
+			if (certain)
+			{
+				final double[] landed = CombatCalc.certainToLand(expectedChances, averageHit, variance);
+				expectedChances = landed[0];
+				averageHit = landed[1];
+				variance = landed[2];
+			}
 		}
 		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f, var %.1f%s",
 			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance,
@@ -3404,10 +3420,6 @@ public class PvmPerformancePlugin extends Plugin
 					? " (from tick " + figuresTick + "'s row for the npc it was aimed at)" : "");
 		// Only an ordinary one-splat attack's max can be checked against a single splat (T-056).
 		final boolean checkable = !special && combatCalc.maxIsOneSplat();
-		// The special in hand on the tick it was thrown, for its drain's outcomes (T-050).
-		final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon = special
-			? DrainLuck.weaponFor(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick),
-				combatCalc.equippedWeaponId())) : null;
 		if (attackObservedLag == MELEE_BOOKING_LAG || attackObservedSplash)
 		{
 			maxHits.scored(fight, fight.getTargetIndex(), client.getTickCount(), maxHit, checkable,
@@ -3417,7 +3429,7 @@ public class PvmPerformancePlugin extends Plugin
 				fight.getTargetIndex());
 			fight.recordExpected(maxHit, expectedChances, at[0], at[1]);
 			trip(fight).recordExpected(expectedChances, at[0], at[1]);
-			drainLuck.booked(fight, figuresTick, client.getTickCount(), special, specWeapon, at[0], at[1]);
+			drainLuck.booked(fight, figuresTick, client.getTickCount(), special, specWeapon, at[0], at[1], certain);
 		}
 		else
 		{
@@ -3425,7 +3437,7 @@ public class PvmPerformancePlugin extends Plugin
 			pendingSamples.add(new PendingSample(fight,
 				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance,
 				line == null ? null : line.latest(), checkable, checkable ? combatCalc.wornNow() : null,
-				figuresTick, special, specWeapon, capThen));
+				figuresTick, special, specWeapon, capThen, certain));
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
@@ -3661,12 +3673,16 @@ public class PvmPerformancePlugin extends Plugin
 		private final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon;
 		// The hitpoints its figures were capped at (T-103); -1 unknown.
 		private final int capThen;
+		// T-149: a special certain to land (Tekton's first warhammer or elder maul), booked at a landing's figures.
+		private final boolean certain;
 
 		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit,
 			double variance, FightTimeline.Attack attack, boolean checkable, java.util.function.Supplier<String> worn,
-			int madeTick, boolean special, net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon, int capThen)
+			int madeTick, boolean special, net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon, int capThen,
+			boolean certain)
 		{
 			this.capThen = capThen;
+			this.certain = certain;
 			this.checkable = checkable;
 			this.worn = worn;
 			this.madeTick = madeTick;
@@ -3712,7 +3728,7 @@ public class PvmPerformancePlugin extends Plugin
 				}
 				sample.fight.recordExpected(sample.maxHit, sample.accuracy, averageHit, variance);
 				drainLuck.booked(sample.fight, sample.madeTick, client.getTickCount(), sample.special, sample.specWeapon,
-					averageHit, variance);
+					averageHit, variance, sample.certain);
 			}
 			trip(sample.fight).recordExpected(sample.accuracy, averageHit, variance);
 			return;
