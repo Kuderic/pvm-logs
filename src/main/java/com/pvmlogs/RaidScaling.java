@@ -80,9 +80,9 @@ final class RaidScaling
 	 * <li>Tombs: 2% more per five raid levels ({@link #tombsHitpoints}).</li>
 	 * </ul>
 	 */
-	static int hitpoints(Client client, int base, String version)
+	static int hitpoints(Client client, int base, int npcId, String version)
 	{
-		if (base <= 0)
+		if (base <= 0 || !scalesHitpoints(npcId))
 		{
 			return base;
 		}
@@ -127,6 +127,29 @@ final class RaidScaling
 			hp = hp * 3 / 2;
 		}
 		return hp;
+	}
+
+	/**
+	 * T-146: whether a raid monster's hitpoints scale. The Chambers' Scavenger beasts don't: their 14 kills in Eric's
+	 * raid of 2026-11-01 13:02, a party of three, counted 22 to 30 on the target against the table's 30, never over
+	 * ([3944] 29, [5776] 29, [11425] 29), where every other kind there fits the party factor (the Ice demon 274 of 140,
+	 * the Deathly mage and ranger 236 of 120, Tekton 590, the Muttadiles 492 to 498). The wiki's Scavenger beast page
+	 * gives 30 and says nothing of party scaling; none of its Chambers pages names another that doesn't scale.
+	 */
+	static boolean scalesHitpoints(int npcId)
+	{
+		return npcId != NpcID.RAIDS_SCAVENGER_BEAST_A && npcId != NpcID.RAIDS_SCAVENGER_BEAST_B;
+	}
+
+	/**
+	 * T-146: whether a raid monster's full hitpoints, counted from the table where the boss bar isn't read, may be short
+	 * of its real figure: in the Tombs, whose party and path level aren't read. A share of its overhead bar is then a
+	 * share of too little, and mustn't lower the count. In the Chambers the figure can only be long (no combat level
+	 * term), which makes the bar's bound looser, the safe side.
+	 */
+	static boolean fullMayBeShort(Client client)
+	{
+		return tombsRaidLevel(client) > 0;
 	}
 
 	/**
