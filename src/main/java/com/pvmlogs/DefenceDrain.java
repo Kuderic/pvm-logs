@@ -1,6 +1,9 @@
 package com.pvmlogs;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -60,6 +63,7 @@ class DefenceDrain
 	private SpecialWeapon thrownWeapon;
 	private int thrownTick = Integer.MIN_VALUE;
 	private int hitpointsXpTick = Integer.MIN_VALUE;
+	private final DebugLog debug;
 
 	@Inject
 	DefenceDrain(Client client, MonsterStatsProvider monsters, PartyHitpoints partyHitpoints, PartyService party,
@@ -69,7 +73,55 @@ class DefenceDrain
 		this.monsters = monsters;
 		this.partyHitpoints = partyHitpoints;
 		this.party = party;
+		this.debug = debug;
 		this.tracker = new DrainTracker(line -> debug.log("%s", line));
+	}
+
+	/**
+	 * T-149: whether the player's special, thrown on {@code thrownTick} and landing on this npc on {@code landedTick}, is
+	 * certain to land as the first of
+	 * its kind to reach it in the kill (Tekton's first warhammer or elder maul: OSRS Wiki, <i>Tekton</i>). Anyone's
+	 * special counts as the first: one by a party member or a player outside the party (T-147) before it puts the
+	 * player's at its roll. Logged when the rule applies; false where it doesn't.
+	 */
+	boolean firstSpecialCertain(int npcIndex, int npcId, String name, SpecialWeapon weapon, int thrownTick,
+		int landedTick)
+	{
+		final List<SpecialWeapon> weapons = firstSpecialLands(rulesFor(npcId));
+		if (weapon == null || !weapons.contains(weapon))
+		{
+			return false;
+		}
+		final String before = tracker.reachedBefore(npcIndex, weapons, thrownTick, landedTick);
+		if (debug != null)
+		{
+			debug.log("  FIRST %s on %s (npc %d, index %d), landing %d: %s", weapon.getName(), name, npcId, npcIndex,
+				landedTick, before == null ? "the first to reach it, certain to land (wiki, Tekton)"
+					: "not the first, " + before + "; at its roll");
+		}
+		return before == null;
+	}
+
+	/** T-149: the specials whose first to reach this boss in a kill always lands, from its rules; empty for most. */
+	static List<SpecialWeapon> firstSpecialLands(BossRules.DrainRules rules)
+	{
+		if (rules == null || rules.firstSpecialLands == null || rules.firstSpecialLands.isEmpty())
+		{
+			return Collections.emptyList();
+		}
+		final List<SpecialWeapon> out = new ArrayList<>(rules.firstSpecialLands.size());
+		for (String name : rules.firstSpecialLands)
+		{
+			try
+			{
+				out.add(SpecialWeapon.valueOf(name));
+			}
+			catch (IllegalArgumentException e)
+			{
+				// A name this RuneLite doesn't have: that weapon can't be told apart, so it isn't counted.
+			}
+		}
+		return out;
 	}
 
 	/**

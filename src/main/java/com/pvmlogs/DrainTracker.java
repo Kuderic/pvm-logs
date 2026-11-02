@@ -65,14 +65,20 @@ final class DrainTracker
 		int nextRegenTick = -1;
 		/** The index of the first actor these stats were tracked on, where a boss's actor was replaced since. */
 		final int originIndex;
+		/**
+		 * T-149: each weapon's first special to reach it (landed or not, anyone's), by {@code SpecialWeapon} name. Kept
+		 * apart from {@link #events}, which drop their oldest past {@link #MAX_EVENTS}.
+		 */
+		final Map<String, DrainEvent> firsts;
 
 		Tracked(int npcIndex, int npcId, String name, DrainRule.Target target)
 		{
-			this(npcIndex, npcId, name, target, DrainRule.State.of(target), new ArrayList<>(), npcIndex);
+			this(npcIndex, npcId, name, target, DrainRule.State.of(target), new ArrayList<>(), npcIndex,
+				new HashMap<>());
 		}
 
 		private Tracked(int npcIndex, int npcId, String name, DrainRule.Target target, DrainRule.State state,
-			List<DrainEvent> events, int originIndex)
+			List<DrainEvent> events, int originIndex, Map<String, DrainEvent> firsts)
 		{
 			this.npcIndex = npcIndex;
 			this.npcId = npcId;
@@ -81,13 +87,14 @@ final class DrainTracker
 			this.state = state;
 			this.events = events;
 			this.originIndex = originIndex;
+			this.firsts = firsts;
 		}
 
 		/** The same stats on another actor or form: its events and regeneration go with it. */
 		Tracked moved(int index, int id, String newName, DrainRule.Target newTarget, DrainRule.State newState)
 		{
 			final Tracked t = new Tracked(index, id, newName == null ? name : newName, newTarget, newState, events,
-				originIndex);
+				originIndex, firsts);
 			t.nextRegenTick = nextRegenTick;
 			return t;
 		}
@@ -652,6 +659,61 @@ final class DrainTracker
 			t.events.remove(0);
 		}
 		t.events.add(e);
+		if (reached(e))
+		{
+			t.firsts.putIfAbsent(e.weapon, e);
+		}
+	}
+
+	// T-149: the special reached the target: it drained, missed, or hit something immune or floored. A throw with no
+	// splat, or one whose target left, didn't.
+	private static boolean reached(DrainEvent e)
+	{
+		if (e.weapon == null || e.isReset() || e.isRegen())
+		{
+			return false;
+		}
+		return !DrainEvent.KIND_SKIP.equals(e.kind) || !NO_SPLAT.equals(e.skip) && !TARGET_GONE.equals(e.skip)
+			&& !NOT_MODELLED.equals(e.skip);
+	}
+
+	/**
+	 * T-149: what reached the target before the player's special of one of these weapons, thrown on
+	 * {@code thrownTick} and landing on {@code landedTick}, so that it isn't the first of them: null when nothing did,
+	 * and it's the first. Anyone's counts: an own special before, a party member's drain whose message came on or before
+	 * that tick (it lands before its message does), a seen special whose splat came by then, still waiting for a party
+	 * counter. The player's own event thrown on {@code thrownTick} is the one asked about: the elder maul's drains on
+	 * its throw, before its booking.
+	 *
+	 * <p>What it can't see: a party member's message that comes after, for a special that landed before; a special
+	 * outside the party whose animation isn't known (the elder maul's).
+	 */
+	String reachedBefore(int npcIndex, List<SpecialWeapon> weapons, int thrownTick, int landedTick)
+	{
+		final Tracked t = find(npcIndex);
+		if (t != null)
+		{
+			for (SpecialWeapon w : weapons)
+			{
+				final DrainEvent e = t.firsts.get(w.name());
+				if (e != null && !(e.own && e.thrownTick == thrownTick)
+					&& (e.landedTick < landedTick || e.landedTick == landedTick && !e.own))
+				{
+					return String.format("%s %s reached it on tick %d", e.own ? "my" : e.seen
+						? "a player outside the party's" : "a party member's", w.getName(), e.landedTick);
+				}
+			}
+		}
+		for (Seen s : seen)
+		{
+			if ((s.npcIndex == npcIndex || t != null && s.npcIndex == t.npcIndex) && weapons.contains(s.weapon)
+				&& !s.splats.isEmpty() && s.dueTick <= landedTick)
+			{
+				return String.format("a player outside the party's %s (slot %d) reached it on tick %d", s.weapon.getName(),
+					s.playerSlot, s.dueTick);
+			}
+		}
+		return null;
 	}
 
 	/** The target's tracked stats, or null where nothing has been thrown at it. */

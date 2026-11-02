@@ -2761,6 +2761,45 @@ class CombatCalc
 		return moments == null ? -1 : moments.mean;
 	}
 
+	/**
+	 * T-149: a one-roll special's figures given that it lands: {land 1, mean, variance}. Its damage is the roll's on a
+	 * landing and nothing on a miss, so its mean and second moment over its land chance are those of a landing (as
+	 * {@link SpecOutcomes#outcomes} splits them). Tekton's first warhammer or elder maul. Unchanged where the land chance
+	 * isn't known or is already 1.
+	 */
+	static double[] certainToLand(double land, double mean, double variance)
+	{
+		if (land <= 0 || land >= 1 || mean < 0)
+		{
+			return new double[]{land >= 1 ? 1 : land, mean, variance};
+		}
+		final double landedMean = mean / land;
+		final double landedM2 = (Math.max(0, variance) + mean * mean) / land;
+		return new double[]{1, landedMean, Math.max(0, landedM2 - landedMean * landedMean)};
+	}
+
+	/**
+	 * T-149: {@link #figuresAt}'s row with its special certain to land ({@link #certainToLand}): per-roll accuracy and
+	 * land chance 1, mean and variance a landing's. A copy; null for null.
+	 */
+	static double[] certainToLand(double[] row)
+	{
+		if (row == null)
+		{
+			return null;
+		}
+		final double[] out = row.clone();
+		final double[] landed = certainToLand(row[AT_SPEC_LAND], row[AT_SPEC_MEAN], row[AT_SPEC_VARIANCE]);
+		if (row[AT_SPEC_MEAN] >= 0)
+		{
+			out[AT_SPEC_LAND] = landed[0];
+			out[AT_SPEC_ACCURACY] = landed[0] >= 1 ? 1 : row[AT_SPEC_ACCURACY];
+			out[AT_SPEC_MEAN] = landed[1];
+			out[AT_SPEC_VARIANCE] = row[AT_SPEC_VARIANCE] < 0 ? row[AT_SPEC_VARIANCE] : landed[2];
+		}
+		return out;
+	}
+
 	/** The variance of one special's damage (T-028), from {@link #specialAttackAverageHit}'s distribution; -1 without one. */
 	double specialAttackVariance(int npcId)
 	{
