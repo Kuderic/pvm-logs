@@ -360,6 +360,17 @@ class BossRules
 		int[] startOnBossAnim;
 		/** One of the player's attacks lands with this modifier: the Leviathan's wound starts its special. */
 		String startOnModifierLanded;
+		/**
+		 * T-152: the boss's hitpoints, as a share of its full, at most this (the P3 Warden's enrage "below 5% HP for the
+		 * first time"). Read once a tick from the plugin's count or bar; opens the state and leaves it open.
+		 */
+		Double startOnHpAtMost;
+		/**
+		 * T-152: the boss's hitpoints rising by at least this share of its full between two readings (the P3 Warden heals
+		 * "for 20% of its maximum HP" as it enrages, which the bar shows where the dip below 5% can fall between
+		 * readings). Opens the state and leaves it open.
+		 */
+		Double startOnHeal;
 		/** A fixed length in ticks from the start; 0 for none. */
 		int ticks;
 		/** Ticks from what starts it to its start (T-087: the Maggot King's punish, two ticks into its slam). */
@@ -480,6 +491,20 @@ class BossRules
 		 * {@link #styles} and {@link #attackTypes}; all that are given must hold.
 		 */
 		Boolean guaranteedMax;
+		/**
+		 * T-152: a landed roll is drawn from ⌊max × rollMinPercent / 100⌋ to ⌊max × rollMaxPercent / 100⌋, whole
+		 * percents for the game's integer rounding; the max is the second. What {@link #wardensPoise} becomes.
+		 */
+		Integer rollMinPercent;
+		Integer rollMaxPercent;
+		/**
+		 * T-152: the Wardens' phase 2, poise (the DPS calc's facts): it cannot miss, and deals between m% and (m + 20)%
+		 * of the max, m from 15 to 40 by how far the attack roll beats a third of the defence roll, over 0 to 42,000.
+		 * Worked into {@link #accuracy}, {@link #rollMinPercent} and {@link #rollMaxPercent} for each attack.
+		 */
+		Boolean wardensPoise;
+		/** T-152: applies to a special attack's hitsplats as well as an ordinary attack's (the Wardens' P2 and core). */
+		Boolean specials;
 		/** The weapon in hand is one of these item ids; any when left out. */
 		int[] weapons;
 		/** The weapon's category (WeaponCategory names: CROSSBOW, ...) is one of these; any when left out. */

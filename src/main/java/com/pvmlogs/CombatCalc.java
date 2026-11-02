@@ -722,8 +722,50 @@ class CombatCalc
 		}
 		// The conditions on the player's own attack (T-098: the araxytes' guaranteed max hit).
 		final WeaponCategory category = weaponCategory();
-		return ModifierTracker.forPlayer(mods, weaponItemId(), category == null ? null : category.name(),
-			attackStyle().getAttackType().name(), highestAccuracy());
+		final List<BossRules.ModifierRule> applied = ModifierTracker.forPlayer(mods, weaponItemId(),
+			category == null ? null : category.name(), attackStyle().getAttackType().name(), highestAccuracy());
+		return withPoise(applied, npcId);
+	}
+
+	// T-152: the rolls the last hit chance was made from, for the Wardens' P2 share; and the guard that asks for them.
+	private int lastAttackRoll = -1;
+	private int lastDefenceRoll = -1;
+	private boolean poiseRolling;
+
+	private void noteRolls(int attackRoll, int defenceRoll)
+	{
+		lastAttackRoll = attackRoll;
+		lastDefenceRoll = defenceRoll;
+	}
+
+	/**
+	 * T-152: the Wardens' P2 poise worked out for this attack ({@link ModifierTracker#withPoise}): its share from the
+	 * ordinary attack's rolls, as the DPS calc takes the max attack roll and the defence roll, raid level in.
+	 */
+	private List<BossRules.ModifierRule> withPoise(List<BossRules.ModifierRule> mods, int npcId)
+	{
+		if (poiseRolling || !ModifierTracker.hasPoise(mods))
+		{
+			return mods;
+		}
+		poiseRolling = true;
+		try
+		{
+			lastAttackRoll = -1;
+			hitChance(npcId, null);
+		}
+		finally
+		{
+			poiseRolling = false;
+		}
+		return lastAttackRoll < 0 ? mods
+			: ModifierTracker.withPoise(mods, ModifierTracker.wardensPoisePercent(lastAttackRoll, lastDefenceRoll));
+	}
+
+	/** T-152: the boss's modifiers that apply to a special too (the Wardens' P2 and core); empty for most. */
+	private List<BossRules.ModifierRule> specialModifiers(int npcId)
+	{
+		return ModifierTracker.forSpecials(bossModifiers(npcId));
 	}
 
 	/** The player's highest attack bonus over everything worn (T-098): see {@link ModifierTracker#highestAccuracy}. */
@@ -1528,6 +1570,7 @@ class CombatCalc
 			: type == AttackType.SLASH ? npc.getDefSlash() : npc.getDefCrush();
 		final int defRoll = ModifierTracker.defenceRoll(mods, type.name(),
 			tombsDefenceRoll((defenceLevel(npc) + 9) * (defBonus + 64), npcId));
+		noteRolls(attRoll, defRoll);
 		return meleeHitChanceFrom(attRoll, defRoll);
 	}
 
@@ -1551,6 +1594,7 @@ class CombatCalc
 		final int bonus = magicDefenceBonus(npc, npcId);
 		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.MAGIC.name(),
 			tombsDefenceRoll((magicDefenceLevel(npc) + 9) * (bonus + 64), npcId));
+		noteRolls(attRoll, defRoll);
 		if (!hasConflictionGauntlets())
 		{
 			return hitChanceFrom(attRoll, defRoll);
@@ -1657,6 +1701,7 @@ class CombatCalc
 			scaled(attackRoll(effRanged, attackBonus(AttackType.RANGED), gear), spec));
 		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.RANGED.name(),
 			tombsDefenceRoll((defenceLevel(npc) + 9) * (npc.getDefRanged() + 64), npcId));
+		noteRolls(attRoll, defRoll);
 		return hitChanceFrom(attRoll, defRoll);
 	}
 
@@ -2677,7 +2722,22 @@ class CombatCalc
 	{
 		// Mitigated like an ordinary hit: a special on the wrong hand is no more exempt from Olm's mitigation than anything
 		// else is.
-		return (int) (unmitigatedSpecialAttackMaxHit(npcId) * mitigation(npcId));
+		final int max = (int) (unmitigatedSpecialAttackMaxHit(npcId) * mitigation(npcId));
+		// T-152: a modifier that applies to specials (the Wardens' core, x5) changes each hitsplat's max.
+		final List<BossRules.ModifierRule> mods = specialModifiers(npcId);
+		final SpecialAttack spec = specialAttack();
+		if (mods.isEmpty() || spec == null || max <= 0)
+		{
+			return max;
+		}
+		final int[] maxima = spec.hitMaxima((int) ((spec.hasDamageMultipliers() ? unmitigatedMaxHit(npcId)
+			: unmitigatedSpecialAttackMaxHit(npcId)) * mitigation(npcId)));
+		int total = 0;
+		for (int hit = 0; hit < maxima.length; hit++)
+		{
+			total += ModifierTracker.max(mods, maxima[hit], hit);
+		}
+		return total;
 	}
 
 	private int unmitigatedSpecialAttackMaxHit(int npcId)
@@ -2757,6 +2817,11 @@ class CombatCalc
 			return attackLandChance(hitChance(npcId), npcId);
 		}
 		if (spec.alwaysHits())
+		{
+			return 1.0;
+		}
+		// T-152: a modifier that says it cannot miss says so of a special too, where it applies to one.
+		if (ModifierTracker.accuracy(specialModifiers(npcId), 0) >= 1.0)
 		{
 			return 1.0;
 		}
@@ -2917,6 +2982,16 @@ class CombatCalc
 		if (accuracy < 0)
 		{
 			return null;
+		}
+		// T-152: where the boss's modifiers apply to specials (the Wardens' P2 poise, the core's x5), each hitsplat of the
+		// special's maxima goes through them, as an ordinary attack's do.
+		final List<BossRules.ModifierRule> specMods = specialModifiers(npcId);
+		if (!specMods.isEmpty() && !spec.hasFixedDamage())
+		{
+			final int[] maxima = spec.hitMaxima((int) ((spec.hasDamageMultipliers() ? unmitigatedMaxHit(npcId)
+				: unmitigatedSpecialAttackMaxHit(npcId)) * mitigation(npcId)));
+			return ModifierTracker.moments(specMods, maxima, ModifierTracker.accuracy(specMods, accuracy),
+				Math.min(damageCap(npcId), overkillCap(npcId)));
 		}
 		// Pulsate alone: fixed damage that no gear, prayer or mitigation touches, and the only hit Verzik's first phase lets
 		// past its cap.

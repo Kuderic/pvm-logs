@@ -191,6 +191,30 @@ class DamageModifiers
 	void onGameTick()
 	{
 		tracker.tick(client.getTickCount());
+		noteHitpoints();
+	}
+
+	// T-152: a boss whose state opens on its hitpoints (the P3 Warden's enrage) has them read once a tick.
+	private void noteHitpoints()
+	{
+		final net.runelite.api.WorldView view = client.getTopLevelWorldView();
+		if (view == null)
+		{
+			return;
+		}
+		for (NPC npc : view.npcs())
+		{
+			final BossRules.Boss boss = npc == null ? null : bossFor(npc.getId());
+			if (boss == null || !ModifierTracker.opensOnHitpoints(boss.damageModifiers))
+			{
+				continue;
+			}
+			final int[] hp = hitpoints.apply(npc.getIndex());
+			if (hp != null)
+			{
+				tracker.onHitpoints(npc.getIndex(), boss.name, boss.damageModifiers, hp[0], hp[1], client.getTickCount());
+			}
+		}
 	}
 
 	void forget(NPC npc)

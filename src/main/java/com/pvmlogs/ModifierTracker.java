@@ -60,6 +60,8 @@ final class ModifierTracker
 		/** Each count it carries (T-087): {how many, the tick the splat that showed it landed}. */
 		final Map<String, int[]> stacks = new HashMap<>();
 		int npcId = -1;
+		/** T-152: its hitpoints share at the last reading, for {@link BossRules.StateRule#startOnHeal}; -1 before one. */
+		double lastShare = -1;
 
 		Boss(String name, BossRules.DamageModifierRules rules)
 		{
@@ -177,6 +179,46 @@ final class ModifierTracker
 				}
 			}
 		}
+	}
+
+	/**
+	 * T-152: the boss's hitpoints, read once a tick ({@code left} of {@code full}): a state that opens on them
+	 * ({@link BossRules.StateRule#startOnHpAtMost}, {@link BossRules.StateRule#startOnHeal}) opens, and stays open.
+	 */
+	void onHitpoints(int npcIndex, String name, BossRules.DamageModifierRules rules, int left, int full, int tick)
+	{
+		if (left < 0 || full <= 0 || !opensOnHitpoints(rules))
+		{
+			return;
+		}
+		final Boss b = boss(npcIndex, name, rules);
+		final double share = (double) left / full;
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (s.startOnHpAtMost != null && share <= s.startOnHpAtMost)
+			{
+				open(b, s, tick, String.format("%d of %d hitpoints, at most %.0f%%", left, full, 100 * s.startOnHpAtMost));
+			}
+			else if (s.startOnHeal != null && b.lastShare >= 0 && share - b.lastShare >= s.startOnHeal)
+			{
+				open(b, s, tick, String.format("healed %.0f%% to %d of %d hitpoints", 100 * (share - b.lastShare), left,
+					full));
+			}
+		}
+		b.lastShare = share;
+	}
+
+	/** T-152: whether any of the boss's states opens on its hitpoints. */
+	static boolean opensOnHitpoints(BossRules.DamageModifierRules rules)
+	{
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (s.startOnHpAtMost != null || s.startOnHeal != null)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** The boss started an animation. */
@@ -546,6 +588,15 @@ final class ModifierTracker
 			{
 				v = Math.max(v, (int) Math.floor(m.minHitShare * max));
 			}
+			// T-152: the roll's own band, whole percents of the max.
+			if (landed && m.rollMinPercent != null)
+			{
+				v = Math.max(v, max * m.rollMinPercent / 100);
+			}
+			if (landed && m.rollMaxPercent != null)
+			{
+				v = Math.min(v, max * m.rollMaxPercent / 100);
+			}
 			if (m.cap != null)
 			{
 				v = Math.min(v, m.cap);
@@ -780,8 +831,99 @@ final class ModifierTracker
 			{
 				lo = Math.max(lo, (int) Math.floor(m.minHitShare * max));
 			}
+			if (m.rollMinPercent != null)
+			{
+				lo = Math.max(lo, max * m.rollMinPercent / 100);
+			}
 		}
-		return Math.min(lo, max);
+		return Math.min(lo, rollCeil(mods, max));
+	}
+
+	/** T-152: where a landed roll tops out: ⌊max × rollMaxPercent / 100⌋ where a modifier gives one, else the max. */
+	static int rollCeil(List<BossRules.ModifierRule> mods, int max)
+	{
+		int hi = max;
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.rollMaxPercent != null)
+			{
+				hi = Math.min(hi, max * m.rollMaxPercent / 100);
+			}
+		}
+		return Math.max(0, hi);
+	}
+
+	/**
+	 * T-152: the Wardens' P2 share m, in whole percents: 15 + ⌊25 × (attack roll − ⌊defence roll / 3⌋) / 42,000⌋, the
+	 * difference no lower than 0, the share held to 15 to 40 (the DPS calc's facts, its {@code iLerp}).
+	 */
+	static int wardensPoisePercent(long attackRoll, long defenceRoll)
+	{
+		final long delta = Math.max(0, attackRoll - defenceRoll / 3);
+		return (int) Math.max(15, Math.min(40, 15 + 25 * delta / 42_000));
+	}
+
+	/**
+	 * T-152: the modifiers with each {@link BossRules.ModifierRule#wardensPoise} worked out at share {@code percent}:
+	 * certain to land, from {@code percent}% to {@code percent + 20}% of the max.
+	 */
+	static List<BossRules.ModifierRule> withPoise(List<BossRules.ModifierRule> mods, int percent)
+	{
+		List<BossRules.ModifierRule> out = null;
+		for (int i = 0; i < mods.size(); i++)
+		{
+			final BossRules.ModifierRule m = mods.get(i);
+			if (!Boolean.TRUE.equals(m.wardensPoise))
+			{
+				continue;
+			}
+			if (out == null)
+			{
+				out = new ArrayList<>(mods);
+			}
+			final BossRules.ModifierRule d = new BossRules.ModifierRule();
+			d.name = m.name + " " + percent + "-" + (percent + 20) + "%";
+			d.npcIds = m.npcIds;
+			d.styles = m.styles;
+			d.specials = m.specials;
+			d.accuracy = 1.0;
+			d.rollMinPercent = percent;
+			d.rollMaxPercent = percent + 20;
+			d.source = m.source;
+			out.set(i, d);
+		}
+		return out == null ? mods : out;
+	}
+
+	/** T-152: whether any of these modifiers is the Wardens' P2 poise, to be worked out by the attack's rolls. */
+	static boolean hasPoise(List<BossRules.ModifierRule> mods)
+	{
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (Boolean.TRUE.equals(m.wardensPoise))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** T-152: the modifiers that also apply to a special attack ({@link BossRules.ModifierRule#specials}). */
+	static List<BossRules.ModifierRule> forSpecials(List<BossRules.ModifierRule> mods)
+	{
+		List<BossRules.ModifierRule> out = null;
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (Boolean.TRUE.equals(m.specials))
+			{
+				if (out == null)
+				{
+					out = new ArrayList<>(2);
+				}
+				out.add(m);
+			}
+		}
+		return out == null ? Collections.emptyList() : out;
 	}
 
 	/**
@@ -808,9 +950,10 @@ final class ModifierTracker
 			double m = (1 - accuracy) * missValue;
 			double second = (1 - accuracy) * missValue * missValue;
 			final int lo = rollFloor(mods, max);
-			for (int r = lo; r <= max; r++)
+			final int hi = rollCeil(mods, max);
+			for (int r = lo; r <= hi; r++)
 			{
-				final double each = accuracy * rollChance(r - lo, max - lo, rolls);
+				final double each = accuracy * rollChance(r - lo, hi - lo, rolls);
 				final double v = Math.min(cap, damage(mods, r, max, true, hit));
 				m += each * v;
 				second += each * v * v;
