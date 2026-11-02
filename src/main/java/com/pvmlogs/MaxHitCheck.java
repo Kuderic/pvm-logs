@@ -30,14 +30,17 @@ final class MaxHitCheck
 		final int max;
 		final boolean checkable;
 		final Supplier<String> describe;
+		/** T-150: the blowpipe's dart the max was worked out with, or null for any other weapon. */
+		final String dart;
 
-		Scored(Fight fight, int npcIndex, int max, boolean checkable, Supplier<String> describe)
+		Scored(Fight fight, int npcIndex, int max, boolean checkable, Supplier<String> describe, String dart)
 		{
 			this.fight = fight;
 			this.npcIndex = npcIndex;
 			this.max = max;
 			this.checkable = checkable;
 			this.describe = describe;
+			this.dart = dart;
 		}
 	}
 
@@ -78,8 +81,17 @@ final class MaxHitCheck
 	 */
 	void scored(Fight fight, int npcIndex, int tick, int max, boolean checkable, Supplier<String> describe)
 	{
+		scored(fight, npcIndex, tick, max, checkable, describe, null);
+	}
+
+	/**
+	 * As above, for a blowpipe: {@code dart} names the dart its max was worked out with (T-150). An ordinary hit over that
+	 * max says the dart remembered may not be the one loaded, and the line says so beside the MAX EXCEEDED.
+	 */
+	void scored(Fight fight, int npcIndex, int tick, int max, boolean checkable, Supplier<String> describe, String dart)
+	{
 		roll(tick);
-		scored.add(new Scored(fight, npcIndex, max, checkable, describe));
+		scored.add(new Scored(fight, npcIndex, max, checkable, describe, dart));
 	}
 
 	/** Checks what the tick brought; called once a tick, and on its own when a later tick's first call arrives. */
@@ -108,6 +120,11 @@ final class MaxHitCheck
 					exceeded.merge(s.fight, 1, Integer::sum);
 					log.accept(String.format("MAX EXCEEDED %d > %d (%s)", splat.amount, s.max,
 						s.describe == null ? "gear unknown" : s.describe.get()));
+					if (s.dart != null)
+					{
+						log.accept(String.format("BLOWPIPE dart may be stale: hit %d > max %d with %s", splat.amount, s.max,
+							s.dart));
+					}
 				}
 			}
 		}

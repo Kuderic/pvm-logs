@@ -134,8 +134,12 @@ enum SpecialAttack
 	EMBERLIGHT(ItemID.EMBERLIGHT, "Weaken", 1, 1, 1.0),
 
 	// Ranged
-	TOXIC_BLOWPIPE(new int[]{ItemID.TOXIC_BLOWPIPE,
-		ItemID.TOXIC_BLOWPIPE_LOADED}, "Toxic Siphon", 2, 1, 1.50),
+	// Toxic Siphon (wiki, Toxic blowpipe, read 2026-11-02): 50% energy, accuracy +100% and damage +50%, heals half the
+	// damage dealt. T-150: the Blazing blowpipe is the same blowpipe with the Trailblazer reloaded ornament kit, which
+	// "gives no additional bonuses" (wiki, Blazing blowpipe), RuneLite's TOXIC_BLOWPIPE_ORNAMENT ids (28687 empty, 28688
+	// charged). Missing from the table, its special was scored as an ordinary attack.
+	TOXIC_BLOWPIPE(new int[]{ItemID.TOXIC_BLOWPIPE, ItemID.TOXIC_BLOWPIPE_LOADED, ItemID.TOXIC_BLOWPIPE_ORNAMENT,
+		ItemID.TOXIC_BLOWPIPE_LOADED_ORNAMENT}, "Toxic Siphon", 2, 1, 1.50),
 	ZARYTE_CROSSBOW(ItemID.ZARYTE_XBOW, "Evoke", 2, 1, 1.0),
 	ARMADYL_CROSSBOW(ItemID.ACB, "Armadyl Eye", 2, 1, 1.0),
 	DRAGON_CROSSBOW(ItemID.XBOWS_CROSSBOW_DRAGON, "Annihilate", 1, 1, 1.20),

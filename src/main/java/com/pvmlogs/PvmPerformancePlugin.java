@@ -2433,6 +2433,7 @@ public class PvmPerformancePlugin extends Plugin
 			.add(attackThrownOn(startTick(projectile), lands, npc.getId(), projectileBookedTick(client.getTickCount())));
 		debug.log("projectile %d taken as mine, aimed at npc %d (index %d), lands tick %d",
 			projectile.getId(), npc.getId(), npc.getIndex(), lands);
+		noteDartInFlight(projectile.getId(), startTick(projectile));
 		// A projectile is never a spell that has none (T-066): a shadow spell clicked at a boss it stuns and still in hand
 		// is not what this is, whatever the cast animation did. The bow's next shot was scored as the Shadow Rush before it.
 		final Spell manual = combatCalc.recentManualCast();
@@ -3219,9 +3220,25 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	static int unspentSpecialFor(Iterable<Integer> unspent, int attackOriginTick)
 	{
+		return unspentSpecialFor(unspent, attackOriginTick, attackOriginTick);
+	}
+
+	/**
+	 * T-150: as above, by the tick the attack was thrown as well as the tick it was seen on. A projectile is seen when it
+	 * surfaces, the blowpipe's two ticks after its throw, past the window, while the energy fell on the throw. Two Toxic
+	 * Siphons back to back were booked as one special and one ordinary attack, the first claiming the second's fall
+	 * (the 11-01 Hydra, [48185] and [48187]; 10-28 19:46, [1566] and [1568]), and a lone one as ordinary.
+	 *
+	 * <p>So a fall in the window before the throw is this attack's; one in the window before it was seen is too, but
+	 * never one more than a tick after its throw: on a two-tick weapon that is the next attack's. Where the attack is seen
+	 * the tick after its throw (melee, by its splat), that is the window as it was.
+	 */
+	static int unspentSpecialFor(Iterable<Integer> unspent, int attackOriginTick, int attackThrownTick)
+	{
 		for (int drop : unspent)
 		{
-			if (specialWentOutFor(attackOriginTick, drop))
+			if (specialWentOutFor(attackThrownTick, drop)
+				|| specialWentOutFor(attackOriginTick, drop) && drop <= attackThrownTick + SPEC_BOOKING_WINDOW_TICKS)
 			{
 				return drop;
 			}
@@ -3371,7 +3388,7 @@ public class PvmPerformancePlugin extends Plugin
 		// on Verzik's first phase, its own exemption from the cap. Decided HERE rather than when the figures were sampled
 		// because the energy varp can arrive after that tick's onGameTick has already run, so whether the attack was a
 		// special is only reliably known by the time it is booked.
-		final boolean special = unspentSpecialFor(unspentSpecDrops, attackOriginTick) != Integer.MIN_VALUE
+		final boolean special = unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick) != Integer.MIN_VALUE
 			&& specAverageHit >= 0;
 		double expectedChances =
 			combatCalc.attackLandChance(accuracy, targetId);
@@ -3390,7 +3407,7 @@ public class PvmPerformancePlugin extends Plugin
 			fight.context().specWeapons = FightContext.addOnce(fight.context().specWeapons, combatCalc.itemLabel(
 				weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick), combatCalc.equippedWeaponId())));
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
-			unspentSpecDrops.remove(unspentSpecialFor(unspentSpecDrops, attackOriginTick));
+			unspentSpecDrops.remove(unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick));
 			expectDelayedSplat(fight, attackTick);
 			final FightTimeline line = timelines.of(fight);
 			if (line != null)
@@ -3423,7 +3440,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (attackObservedLag == MELEE_BOOKING_LAG || attackObservedSplash)
 		{
 			maxHits.scored(fight, fight.getTargetIndex(), client.getTickCount(), maxHit, checkable,
-				combatCalc.wornNow());
+				combatCalc.wornNow(), checkable ? combatCalc.blowpipeDartInUse() : null);
 			// Already landed: capped at what was left just before its splat (T-103), a thrall's in the tick between included.
 			final double[] at = cappedAtLanding(maxHit, expectedChances, averageHit, variance, capThen,
 				fight.getTargetIndex());
@@ -3437,7 +3454,7 @@ public class PvmPerformancePlugin extends Plugin
 			pendingSamples.add(new PendingSample(fight,
 				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance,
 				line == null ? null : line.latest(), checkable, checkable ? combatCalc.wornNow() : null,
-				figuresTick, special, specWeapon, capThen, certain));
+				figuresTick, special, specWeapon, capThen, certain, checkable ? combatCalc.blowpipeDartInUse() : null));
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
@@ -3675,14 +3692,17 @@ public class PvmPerformancePlugin extends Plugin
 		private final int capThen;
 		// T-149: a special certain to land (Tekton's first warhammer or elder maul), booked at a landing's figures.
 		private final boolean certain;
+		// T-150: the blowpipe dart its max was worked out with, for the stale-dart line; null for any other weapon.
+		private final String dart;
 
 		private PendingSample(Fight fight, int npcIndex, int tick, int maxHit, double accuracy, double averageHit,
 			double variance, FightTimeline.Attack attack, boolean checkable, java.util.function.Supplier<String> worn,
 			int madeTick, boolean special, net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon, int capThen,
-			boolean certain)
+			boolean certain, String dart)
 		{
 			this.capThen = capThen;
 			this.certain = certain;
+			this.dart = dart;
 			this.checkable = checkable;
 			this.worn = worn;
 			this.madeTick = madeTick;
@@ -3712,7 +3732,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			pendingSamples.remove(i);
 			maxHits.scored(sample.fight, sample.npcIndex, client.getTickCount(), sample.maxHit, sample.checkable,
-				sample.worn);
+				sample.worn, sample.dart);
 			// Capped at what was left as it landed, not as it was thrown (T-103).
 			final double[] at = cappedAtLanding(sample.maxHit, sample.accuracy, sample.averageHit, sample.variance,
 				sample.capThen, npcIndex);
@@ -5285,7 +5305,8 @@ public class PvmPerformancePlugin extends Plugin
 			final double boostShare = mechanic ? 1 : attackObservedBoostShare;
 			final boolean drained = !mechanic && attackObservedDrained;
 			// T-137: whether a special threw it, asked before the scoring below spends its energy fall.
-			final SpecialAttack thrownSpecial = unspentSpecialFor(unspentSpecDrops, attackOriginTick) == Integer.MIN_VALUE ? null
+			final SpecialAttack thrownSpecial = unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick)
+				== Integer.MIN_VALUE ? null
 				: SpecialAttack.forItem(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackTick),
 				combatCalc.equippedWeaponId()));
 			// Worked out both ways while the loadout and boost are the ones that threw the attack. Which applies is decided by
@@ -5580,6 +5601,25 @@ public class PvmPerformancePlugin extends Plugin
 			return;
 		}
 		rememberDart(dart, "blowpipe checked, tick " + client.getTickCount());
+	}
+
+	// T-150: a blowpipe shot of mine flies as its dart's projectile (gameval SpotanimID), so the dart is known from every
+	// ordinary shot. Remembered only when it differs: the Check message and darts used on it are the other ways.
+	private void noteDartInFlight(int projectileId, int thrownTick)
+	{
+		final BlowpipeDart dart = BlowpipeDart.fromProjectile(projectileId);
+		if (dart == null || dart == combatCalc.getLoadedDart()
+			|| !isDartBlowpipe(weaponByTick.getOrDefault(thrownTick, combatCalc.equippedWeaponId())))
+		{
+			return;
+		}
+		rememberDart(dart, "seen in flight, tick " + client.getTickCount());
+	}
+
+	/** T-150: the Toxic blowpipe or the Blazing blowpipe, the two that shoot darts. */
+	static boolean isDartBlowpipe(int weaponItemId)
+	{
+		return SpecialAttack.forItem(weaponItemId) == SpecialAttack.TOXIC_BLOWPIPE;
 	}
 
 	private void rememberDart(BlowpipeDart dart, String how)

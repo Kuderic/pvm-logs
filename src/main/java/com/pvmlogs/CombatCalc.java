@@ -2123,6 +2123,15 @@ class CombatCalc
 	}
 
 	/**
+	 * T-150: the dart the max is worked out with, and how it was learned ("Adamant (remembered for this account)"), while
+	 * a blowpipe is held; null otherwise. For the stale-dart line beside a MAX EXCEEDED.
+	 */
+	String blowpipeDartInUse()
+	{
+		return blowpipeDart() == null ? null : loadedDart + " (" + loadedDartSource + ")";
+	}
+
+	/**
 	 * The dart loaded in the blowpipe, or null when one is not held. The game
 	 * has no varbit for it, so it is the one last seen; see setBlowpipeDart.
 	 */
