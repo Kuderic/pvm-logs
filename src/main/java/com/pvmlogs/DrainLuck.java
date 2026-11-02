@@ -553,7 +553,7 @@ final class DrainLuck
 			{
 				continue;
 			}
-			final String source = DrainRecord.sourceKey(ev.weapon, ev.own);
+			final String source = DrainRecord.sourceKey(ev.weapon, ev.own, ev.seen);
 			add(out, DrainRecord.StatDrain.DEFENCE, source, ev.defenceBefore - ev.defenceAfter);
 			add(out, DrainRecord.StatDrain.MAGIC, source, ev.magicBefore - ev.magicAfter);
 			add(out, DrainRecord.StatDrain.MAGIC_DEFENCE, source, ev.magicDefenceBefore - ev.magicDefenceAfter);
@@ -608,7 +608,7 @@ final class DrainLuck
 			{
 				continue;
 			}
-			final String source = DrainRecord.sourceKey(ev.weapon, ev.own);
+			final String source = DrainRecord.sourceKey(ev.weapon, ev.own, ev.seen);
 			took(e, DrainRecord.StatDrain.DEFENCE, source, ev.defenceBefore - ev.defenceAfter);
 			took(e, DrainRecord.StatDrain.MAGIC, source, ev.magicBefore - ev.magicAfter);
 			took(e, DrainRecord.StatDrain.MAGIC_DEFENCE, source, ev.magicDefenceBefore - ev.magicDefenceAfter);

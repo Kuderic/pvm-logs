@@ -23,6 +23,11 @@ final class DrainEvent
 	String weapon;
 	/** The player's own special, or a party member's. */
 	boolean own;
+	/**
+	 * T-147: a special by a player outside the RuneLite party, seen from their animation and weapon rather than sent by
+	 * a special counter. Never the player's own. False on an event saved before.
+	 */
+	boolean seen;
 	/** For a regen, its first step. */
 	int thrownTick;
 	/** For a regen, its last step. */

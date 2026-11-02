@@ -197,9 +197,15 @@ final class SidePanelModel
 
 		SourcePart source(String weapon, boolean own)
 		{
+			return source(weapon, own, false);
+		}
+
+		/** T-147: and a special seen from a player outside the party, kept apart from a party member's. */
+		SourcePart source(String weapon, boolean own, boolean seen)
+		{
 			for (SourcePart s : sources)
 			{
-				if (s.weapon.equals(weapon) && s.own == own)
+				if (s.weapon.equals(weapon) && s.own == own && s.seen == seen)
 				{
 					return s;
 				}
@@ -207,6 +213,7 @@ final class SidePanelModel
 			final SourcePart s = new SourcePart();
 			s.weapon = weapon;
 			s.own = own;
+			s.seen = seen;
 			sources.add(s);
 			return s;
 		}
@@ -217,6 +224,8 @@ final class SidePanelModel
 	{
 		String weapon;
 		boolean own;
+		/** T-147: seen from a player outside the RuneLite party. */
+		boolean seen;
 		int thrown;
 		int landed;
 		int drained;
@@ -787,7 +796,7 @@ final class SidePanelModel
 						p.unchanged = true;
 						by.put(stat, p);
 					}
-					final SourcePart sp = p.source(sd.weapon, sd.own);
+					final SourcePart sp = p.source(sd.weapon, sd.own, sd.seen);
 					sp.thrown += sd.thrown;
 					sp.landed += sd.landed;
 					sp.drained += Math.max(0, sd.drained.getOrDefault(stat, 0));
@@ -2214,14 +2223,16 @@ final class SidePanelModel
 			final long v = LedgerRows.roundHalfAway(src.value);
 			shown += v;
 			lines.add(line(Text.small(weaponName(src.weapon), SidePanelStyle.BODY), Text.NONE, Text.small(dmg(v),
-				dmgColour(v)), src.own ? luckTip : "A party member's drains, as their special counter sent them.", 1));
+				dmgColour(v)), src.own ? luckTip : src.seen ? "A player outside your RuneLite party: their special, seen from"
+				+ " its animation and weapon, drained by its rule." : "A party member's drains, as their special counter sent"
+				+ " them.", 1));
 			final List<String> forms = new ArrayList<>(landings(src, d));
 			if (!src.own)
 			{
-				// A party member's: labelled so on its second line, the name kept whole.
+				// A party member's, or (T-147) one seen from a player outside the party: labelled so on its second line.
 				for (int k = 0; k < forms.size(); k++)
 				{
-					forms.set(k, "party · " + forms.get(k));
+					forms.set(k, (src.seen ? "seen · " : "party · ") + forms.get(k));
 				}
 			}
 			final String took = src.drained > 0 ? " · -" + src.drained : "";

@@ -125,6 +125,47 @@ final class DrainTracker
 		}
 	}
 
+	/**
+	 * T-147: a draining special seen thrown by a player outside the RuneLite party, waiting for its splat on its due tick,
+	 * then for {@link #PARTY_GRACE_TICKS} in case a party member's counter sends the same one. The player is kept by their
+	 * slot only, for the log; never a name.
+	 */
+	private static final class Seen
+	{
+		final int thrownTick;
+		final SpecialWeapon weapon;
+		final int playerSlot;
+		final int npcIndex;
+		final int npcId;
+		final String name;
+		final int dueTick;
+		final DrainRule.Target target;
+		final List<Integer> splats = new ArrayList<>(2);
+		int resolvedTick = Integer.MIN_VALUE;
+		int hit;
+		boolean landed;
+
+		Seen(int thrownTick, SpecialWeapon weapon, int playerSlot, int npcIndex, int npcId, String name, int dueTick,
+			DrainRule.Target target)
+		{
+			this.thrownTick = thrownTick;
+			this.weapon = weapon;
+			this.playerSlot = playerSlot;
+			this.npcIndex = npcIndex;
+			this.npcId = npcId;
+			this.name = name;
+			this.dueTick = dueTick;
+			this.target = target;
+		}
+	}
+
+	/**
+	 * T-147: ticks a seen special waits after its splat before it drains, for a party member's special counter to send
+	 * the same one: the counter wins. Its message comes once their client has the splat; a guess at its lag, logged.
+	 */
+	static final int PARTY_GRACE_TICKS = 3;
+	private final List<Seen> seen = new ArrayList<>();
+
 	private final Map<Integer, Tracked> targets = new HashMap<>();
 	/** Drained stats of a boss whose actor despawned, waiting for the one that replaces it, by boss. */
 	private final Map<String, Tracked> carried = new HashMap<>();
@@ -197,9 +238,113 @@ final class DrainTracker
 		}
 	}
 
+	/**
+	 * T-147: a draining special by a player outside the RuneLite party, seen from their animation with the weapon in
+	 * hand, aimed at the npc. Its splat is due {@code dueTick}: another player's splat on the npc then (see
+	 * {@link #othersSplat}).
+	 *
+	 * @param playerSlot the player's index in the client's player list, for the log only
+	 */
+	void seenThrow(int thrownTick, SpecialWeapon weapon, int playerSlot, int npcIndex, int npcId, String name,
+		int dueTick, DrainRule.Target target)
+	{
+		if (!DrainRule.drains(weapon) || target == null || npcIndex < 0)
+		{
+			return;
+		}
+		seen.add(new Seen(thrownTick, weapon, playerSlot, npcIndex, npcId, name, dueTick, target));
+		log.accept(String.format("SEEN %s special by player slot %d (outside the party) at %s (npc %d, index %d): thrown"
+			+ " %d, its splat due %d", weapon.getName(), playerSlot, name, npcId, npcIndex, thrownTick, dueTick));
+	}
+
+	/** T-147: another player's splat on an npc (others', {@code isOthers()}): a candidate for a seen special due then. */
+	void othersSplat(int npcIndex, int tick, int amount)
+	{
+		for (Seen t : seen)
+		{
+			if (t.npcIndex == npcIndex && t.dueTick == tick && t.resolvedTick == Integer.MIN_VALUE)
+			{
+				t.splats.add(Math.max(0, amount));
+			}
+		}
+	}
+
+	/**
+	 * T-147: which of the others' splats on a seen special's due tick is its: one, it; none, nothing to go on; two or
+	 * more, its outcome only where they agree and it's one the drain rule sets by landing alone (the warhammer, the
+	 * lights), since then the damage doesn't matter; otherwise nothing. Returns {hit, landed (1 or 0)}, or null.
+	 */
+	static int[] seenOutcome(SpecialWeapon weapon, List<Integer> splats)
+	{
+		if (splats.isEmpty())
+		{
+			return null;
+		}
+		if (splats.size() == 1)
+		{
+			return new int[]{splats.get(0), splats.get(0) > 0 ? 1 : 0};
+		}
+		boolean allHit = true;
+		boolean allMissed = true;
+		int least = Integer.MAX_VALUE;
+		for (int a : splats)
+		{
+			allHit &= a > 0;
+			allMissed &= a <= 0;
+			least = Math.min(least, a);
+		}
+		if (!DrainRule.drainsOnLanding(weapon) || !allHit && !allMissed)
+		{
+			return null;
+		}
+		return new int[]{allHit ? least : 0, allHit ? 1 : 0};
+	}
+
+	// T-147: seen specials due now resolved by their splats, and those resolved PARTY_GRACE_TICKS ago drained.
+	private void tickSeen(int now)
+	{
+		for (Iterator<Seen> it = seen.iterator(); it.hasNext(); )
+		{
+			final Seen t = it.next();
+			if (t.resolvedTick == Integer.MIN_VALUE)
+			{
+				if (now < t.dueTick || now == t.dueTick && t.splats.isEmpty())
+				{
+					continue;
+				}
+				final int[] outcome = seenOutcome(t.weapon, t.splats);
+				if (outcome == null)
+				{
+					it.remove();
+					log.accept(String.format("SEEN %s by player slot %d on %s (npc %d, index %d): not drained, %s on tick %d",
+						t.weapon.getName(), t.playerSlot, t.name, t.npcId, t.npcIndex, t.splats.isEmpty()
+							? "no others' splat" : t.splats.size() + " others' splats " + t.splats + " that don't say which",
+						t.dueTick));
+					continue;
+				}
+				t.hit = outcome[0];
+				t.landed = outcome[1] == 1;
+				t.resolvedTick = now;
+				log.accept(String.format("SEEN %s by player slot %d on %s (npc %d, index %d): splat %d on tick %d of %s (%s);"
+						+ " drains in %d ticks unless a party member's counter sends it", t.weapon.getName(), t.playerSlot,
+					t.name, t.npcId, t.npcIndex, t.hit, t.dueTick, t.splats, t.landed ? "landed" : "missed",
+					PARTY_GRACE_TICKS));
+				continue;
+			}
+			if (now - t.resolvedTick < PARTY_GRACE_TICKS)
+			{
+				continue;
+			}
+			it.remove();
+			apply(ensure(t.npcIndex, t.npcId, t.name, t.target), t.weapon, false, true, t.thrownTick, t.dueTick, t.hit,
+				t.landed);
+		}
+	}
+
 	/** Once a tick, after its splats: the specials due now are resolved, and those overdue given up on. */
 	void tick(int now)
 	{
+		tickSeen(now);
 		for (Iterator<Throw> it = pending.iterator(); it.hasNext(); )
 		{
 			final Throw t = it.next();
@@ -297,6 +442,19 @@ final class DrainTracker
 		{
 			log.accept(skipLine(weapon, false, name, npcId, npcIndex, "no stats for the target"));
 			return;
+		}
+		// T-147: the counter wins: a seen special of the same weapon on the same npc, waiting, is this one.
+		for (Iterator<Seen> it = seen.iterator(); it.hasNext(); )
+		{
+			final Seen t = it.next();
+			if (t.npcIndex == npcIndex && t.weapon == weapon && tick - t.thrownTick <= t.dueTick - t.thrownTick
+				+ PARTY_GRACE_TICKS + 1)
+			{
+				it.remove();
+				log.accept(String.format("SEEN %s by player slot %d on %s (npc %d, index %d): a party member's counter sent"
+					+ " it, so it's theirs", weapon.getName(), t.playerSlot, name, npcId, npcIndex));
+				break;
+			}
 		}
 		apply(ensure(npcIndex, npcId, name, target), weapon, false, tick, tick, hit, hit > 0);
 	}
@@ -435,6 +593,12 @@ final class DrainTracker
 	private void apply(Tracked t, SpecialWeapon weapon, boolean own, int thrownTick, int landedTick, int hit,
 		boolean landed)
 	{
+		apply(t, weapon, own, false, thrownTick, landedTick, hit, landed);
+	}
+
+	private void apply(Tracked t, SpecialWeapon weapon, boolean own, boolean seen, int thrownTick, int landedTick,
+		int hit, boolean landed)
+	{
 		final DrainRule.State before = t.state;
 		final DrainRule.Result r = DrainRule.apply(before, weapon, hit, landed, t.target);
 		if (r.changed(before))
@@ -444,21 +608,30 @@ final class DrainTracker
 			{
 				t.nextRegenTick = landedTick + t.target.regenTicks;
 			}
-			record(t, DrainEvent.drain(weapon.name(), own, thrownTick, landedTick, hit, landed, before, r.after,
-				r.floored));
-			log.accept(drainLine(t, weapon, own, thrownTick, landedTick, hit, landed, before, r));
+			record(t, seen(DrainEvent.drain(weapon.name(), own, thrownTick, landedTick, hit, landed, before, r.after,
+				r.floored), seen));
+			log.accept(drainLine(t, weapon, own, thrownTick, landedTick, hit, landed, before, r).replaceFirst(" by party ",
+				seen ? " by a player outside the party " : " by party "));
 			return;
 		}
 		if (!landed && !r.floored)
 		{
 			// A miss: nothing taken, but it was thrown and it counts.
-			record(t, DrainEvent.drain(weapon.name(), own, thrownTick, landedTick, hit, false, before, before, false));
-			log.accept(drainLine(t, weapon, own, thrownTick, landedTick, hit, false, before, r));
+			record(t, seen(DrainEvent.drain(weapon.name(), own, thrownTick, landedTick, hit, false, before, before, false),
+				seen));
+			log.accept(drainLine(t, weapon, own, thrownTick, landedTick, hit, false, before, r).replaceFirst(" by party ",
+				seen ? " by a player outside the party " : " by party "));
 			return;
 		}
 		final String reason = t.target.immune ? IMMUNE : r.floored ? AT_FLOOR : NO_EFFECT;
-		record(t, DrainEvent.skip(weapon.name(), own, thrownTick, landedTick, hit, landed, before, reason));
+		record(t, seen(DrainEvent.skip(weapon.name(), own, thrownTick, landedTick, hit, landed, before, reason), seen));
 		log.accept(skipLine(weapon, own, t.name, t.npcId, t.npcIndex, reason + " (hit " + hit + ")"));
+	}
+
+	private static DrainEvent seen(DrainEvent e, boolean seen)
+	{
+		e.seen = seen;
+		return e;
 	}
 
 	private Tracked ensure(int npcIndex, int npcId, String name, DrainRule.Target target)
@@ -530,8 +703,15 @@ final class DrainTracker
 	{
 		targets.clear();
 		pending.clear();
+		seen.clear();
 		carried.clear();
 		carriedTick.clear();
+	}
+
+	/** T-147: seen specials still waiting for their splat or for a party counter. */
+	int seenCount()
+	{
+		return seen.size();
 	}
 
 	/** Specials still waiting for their splat. */
@@ -632,11 +812,12 @@ final class DrainTracker
 			r.magicDefenceStart < target.magicDefence};
 		for (DrainEvent e : carriedIn(before))
 		{
-			final DrainRecord.SourceDrain d = bySource.computeIfAbsent(DrainRecord.sourceKey(e.weapon, e.own), k ->
+			final DrainRecord.SourceDrain d = bySource.computeIfAbsent(DrainRecord.sourceKey(e.weapon, e.own, e.seen), k ->
 			{
 				final DrainRecord.SourceDrain n = new DrainRecord.SourceDrain();
 				n.weapon = e.weapon;
 				n.own = e.own;
+				n.seen = e.seen;
 				return n;
 			});
 			carriedOn(d, DrainRecord.StatDrain.DEFENCE, drainedAtStart[0] && e.defenceBefore > e.defenceAfter);
@@ -652,11 +833,12 @@ final class DrainTracker
 			{
 				continue;
 			}
-			final DrainRecord.SourceDrain d = bySource.computeIfAbsent(DrainRecord.sourceKey(e.weapon, e.own), k ->
+			final DrainRecord.SourceDrain d = bySource.computeIfAbsent(DrainRecord.sourceKey(e.weapon, e.own, e.seen), k ->
 			{
 				final DrainRecord.SourceDrain n = new DrainRecord.SourceDrain();
 				n.weapon = e.weapon;
 				n.own = e.own;
+				n.seen = e.seen;
 				return n;
 			});
 			d.thrown++;

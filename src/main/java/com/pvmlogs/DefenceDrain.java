@@ -179,6 +179,63 @@ class DefenceDrain
 		return from == null || area == null ? 1 : area.distanceTo(from);
 	}
 
+	/**
+	 * T-147: the draining specials whose animations are known, by weapon: RuneLite's gameval {@code AnimationID}. The
+	 * others (elder maul, Emberlight, the sceptre, the Tonalztics, Seercull, the Eye of ayak, the anchor, the bone
+	 * weapons) aren't named there, so they aren't seen: no id is guessed.
+	 */
+	static final Map<SpecialWeapon, java.util.Set<Integer>> SPECIAL_ANIMATIONS = new java.util.EnumMap<>(SpecialWeapon.class);
+
+	static
+	{
+		SPECIAL_ANIMATIONS.put(SpecialWeapon.DRAGON_WARHAMMER,
+			java.util.Collections.singleton(net.runelite.api.gameval.AnimationID.DRAGON_WARHAMMER_SA_PLAYER));
+		SPECIAL_ANIMATIONS.put(SpecialWeapon.BANDOS_GODSWORD, new java.util.HashSet<>(java.util.Arrays.asList(
+			net.runelite.api.gameval.AnimationID.BGS_SPECIAL_PLAYER,
+			net.runelite.api.gameval.AnimationID.BGS_SPECIAL_ORNATE_PLAYER)));
+		final java.util.Set<Integer> lights = java.util.Collections.singleton(
+			net.runelite.api.gameval.AnimationID.DARK_SPEC_PLAYER);
+		SPECIAL_ANIMATIONS.put(SpecialWeapon.DARKLIGHT, lights);
+		SPECIAL_ANIMATIONS.put(SpecialWeapon.ARCLIGHT, lights);
+	}
+
+	/** T-147: the special a player's animation and weapon show, or null: a known special animation with its weapon. */
+	static SpecialWeapon seenSpecial(int weaponItemId, int animation)
+	{
+		final SpecialWeapon weapon = BY_ITEM_ID.get(weaponItemId);
+		final java.util.Set<Integer> animations = weapon == null ? null : SPECIAL_ANIMATIONS.get(weapon);
+		return animations != null && animations.contains(animation) ? weapon : null;
+	}
+
+	/**
+	 * T-147: another player's animation, already known to be aimed at the open fight's target (the plugin's
+	 * AnimationChanged hook; never a scan). A draining special with its weapon in hand is handed to the tracker, its
+	 * splat due by the weapon's hit delay from where they stand. Not the player's own, whose specials are seen from the
+	 * energy falling.
+	 */
+	void onOtherPlayerAnimation(Player player, NPC target)
+	{
+		if (player == null || target == null || player == client.getLocalPlayer() || player.getPlayerComposition() == null)
+		{
+			return;
+		}
+		final SpecialWeapon weapon = seenSpecial(player.getPlayerComposition().getEquipmentId(
+			net.runelite.api.kit.KitType.WEAPON), player.getAnimation());
+		if (weapon == null)
+		{
+			return;
+		}
+		final int tick = client.getTickCount();
+		tracker.seenThrow(tick, weapon, player.getId(), target.getIndex(), target.getId(), target.getName(),
+			tick + weapon.getHitDelay(distance(player, target)), targetFor(target));
+	}
+
+	/** T-147: another player's splat on an npc ({@code isOthers()}), for a seen special due there now. */
+	void onOthersHitsplat(NPC npc, int amount)
+	{
+		tracker.othersSplat(npc.getIndex(), client.getTickCount(), amount);
+	}
+
 	/** One of the player's own ({@code isMine()}) splats on an npc, before anything has judged it. */
 	void onMyHitsplat(NPC npc, int amount)
 	{
