@@ -935,9 +935,15 @@ public class PvmPerformancePlugin extends Plugin
 		if (actor instanceof NPC && hitsplat.isMine() && !EncounterGroup.isIgnored(((NPC) actor).getId()))
 		{
 			final NPC npc = (NPC) actor;
+			// T-153: the core's damage, passed on fivefold to a Warden whose core is out: her hitpoints, but not an attack of
+			// the player's on her. The attack's own splat is the one on the core, beside it.
+			final boolean passedOn = coreDamagePassedOn(npc.getId(), hitsplat.getAmount());
 			// Every splat of mine, before anything judges it (T-049): a special's own is picked from them by its tick and the
 			// order they arrive in, as RuneLite's special attack counter picks it, so a thrall's is never taken.
-			drain.onMyHitsplat(npc, hitsplat.getAmount());
+			if (!passedOn)
+			{
+				drain.onMyHitsplat(npc, hitsplat.getAmount());
+			}
 			// A hit into the Leviathan's wound breaks its stun (T-057).
 			if (damageModifiers.hasModifiers(npc))
 			{
@@ -949,9 +955,17 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				return;
 			}
+			// T-153: one no attack of the player's could deal, which the game nonetheless shows as his. Kept out of his damage,
+			// counted on the target, and opening no fight.
+			if (!passedOn && notAnAttack(hitsplat.getAmount(), combatCalc.maxHit(npc.getId()),
+				combatCalc.specialAttackMaxHit(npc.getId())))
+			{
+				onSplatNoAttackMade(npc, hitsplat);
+				return;
+			}
 			// Recoil and vengeance first (T-017 Part B): they are isMine() too, and a small recoil would otherwise go to the
 			// thrall gate, or book a blow.
-			final boolean couldBeReflected = hitsplat.getAmount() > 0 && couldHaveHitMe(npc);
+			final boolean couldBeReflected = !passedOn && hitsplat.getAmount() > 0 && couldHaveHitMe(npc);
 			final boolean xpExact = xpLedger.trusted()
 				&& xpLedger.coverage(hitsplat.getAmount(), client.getTickCount()) == XpLedger.Coverage.EXACT;
 			// The tick the attack this splat finishes was thrown on, from the experience it paid: asked before the splat spends
@@ -974,17 +988,23 @@ public class PvmPerformancePlugin extends Plugin
 			// out each small one is weighed before anything else hears of it. A thrall's splat opens no fight, books no
 			// attack and counts no hit; it still takes the target's health down.
 			splatInFlight = null;
+			if (passedOn)
+			{
+				// Paid for by the core's splat, which spends the experience; never a thrall's (a multiple of five, at least 5).
+				debug.log("hitsplat %d on %s (npc %d, index %d): the core's damage passed on, five times over (wiki, Core)",
+					hitsplat.getAmount(), npc.getName(), npc.getId(), npc.getIndex());
+			}
 			// A projectile our thrall set off before it went still lands as its own (T-101), and no thrall of ours is out to
 			// weigh it: in Eric's 21:40 log its 0 on Araxxor was taken as the player's, opened a fight there and took the
 			// crossbow shot aimed at a Mirrorback with it.
-			if (thralls.lastProjectileLands(npc.getIndex(), hitsplat.getAmount(), client.getTickCount()))
+			else if (thralls.lastProjectileLands(npc.getIndex(), hitsplat.getAmount(), client.getTickCount()))
 			{
 				debug.log("hitsplat %d on %s (index %d): THRALL, the landing of a projectile our thrall set off before it went",
 					hitsplat.getAmount(), npc.getName(), npc.getIndex());
 				creditThrall(npc, hitsplat.getAmount(), client.getTickCount());
 				return;
 			}
-			if (thralls.hasThrall() && hitsplat.getAmount() <= thralls.maxHit())
+			else if (thralls.hasThrall() && hitsplat.getAmount() <= thralls.maxHit())
 			{
 				final double p = judgedThralls(npc, hitsplat.getAmount(), now);
 				if (p >= THRALL_THRESHOLD)
@@ -1145,12 +1165,22 @@ public class PvmPerformancePlugin extends Plugin
 				hitsplat.getAmount(), hitsplat.getHitsplatType(), current.getTargetName(), npc.getId(), npc.getIndex(),
 				landedAttack, arrivedFromFlight,
 				onHitpoints ? "" : ", NOT HITPOINTS (" + HitsplatKind.typeName(hitsplat.getHitsplatType()) + ")");
-			current.recordDamageDealt(hitsplat.getAmount(), now, landedAttack);
+			// T-153: an unscored fight counts no landings: nothing was expected to land (the Scarab Swarms' "landed 1 of 0").
+			// The core's damage passed on lands its attack, but deals none of its own: the core's splat carries that.
+			final int weaponDamage = passedOn ? 0 : hitsplat.getAmount();
+			current.recordDamageDealt(weaponDamage, now, countsLanding(landedAttack, current.isScored()));
+			if (passedOn)
+			{
+				current.recordPassedOn(hitsplat.getAmount());
+			}
 			noteMonsterHit(npc, hitsplat.getAmount());
-			maxHits.splat(npc.getIndex(), client.getTickCount(), hitsplat.getAmount());
+			if (!passedOn)
+			{
+				maxHits.splat(npc.getIndex(), client.getTickCount(), hitsplat.getAmount());
+			}
 			if (current.isScored())
 			{
-				trip(current).recordAttempt(hitsplat.getAmount(), landedAttack, now);
+				trip(current).recordAttempt(weaponDamage, landedAttack, now);
 			}
 			// Melee, plus a projectile-less cast the animation route did not recognise; everything else is booked from its
 			// projectile. That route sees misses and this one cannot, so it books first and this is only here so an unknown cast
@@ -1238,6 +1268,64 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			onSplatOnMe(hitsplat, now);
 		}
+	}
+
+	// T-153: how many times over a splat must pass any attack's max to be no attack at all, and the least it must be. Wide,
+	// for a max the calculator has too low (T-152: the Keris partisan of amascut's 48s over a max of 31) and a hit that
+	// can triple (it "retains the 1/51 chance to deal triple damage" against kalphites and scabarites, wiki, Keris
+	// partisan of amascut): no real hit comes near it.
+	static final int NOT_AN_ATTACK_TIMES = 5;
+	static final int NOT_AN_ATTACK_LEAST = 200;
+
+	/**
+	 * T-153: whether a splat the game shows as the player's is past anything an attack of his could deal: more than
+	 * {@link #NOT_AN_ATTACK_TIMES} times the larger of his weapon's and its special's max on this target, and at least
+	 * {@link #NOT_AN_ATTACK_LEAST}. False when neither max is known. In Eric's raid of 2026-11-02, [33075]: a 1890 (type
+	 * 16, his own) on Tumeken's Warden as the Wardens' first phase ended, three ticks after the Obelisk died, with no
+	 * attack of his at her and his max 40; it opened a fight on her and counted as his. What it is, the phase change
+	 * taking her down, is a guess: it came on her "dead but still standing" animation (9669).
+	 */
+	static boolean notAnAttack(int amount, int maxHit, int specialMaxHit)
+	{
+		final int most = Math.max(maxHit, specialMaxHit);
+		return most > 0 && amount >= NOT_AN_ATTACK_LEAST && amount > NOT_AN_ATTACK_TIMES * most;
+	}
+
+	/** T-153: whether a landed attack counts as one in its fight: not in an unscored one, where none was expected. */
+	static boolean countsLanding(boolean landedAttack, boolean scored)
+	{
+		return landedAttack && scored;
+	}
+
+	/**
+	 * T-153: whether a splat of the player's on this npc is the core's damage passed on to a Warden whose core is out
+	 * (wiki, Core: "damage dealt to the core deals five times the damage towards the Warden"): hitpoints of hers, not an
+	 * attack's. A multiple of five, so a thrall's 1 to 3 is never taken for one. In Eric's raid every one of her 25
+	 * such splats came on the tick of his splat on the core, a fifth of it: 42 and 210, 48 and 240, 12 and 60.
+	 */
+	static boolean coreDamagePassedOn(int npcId, int amount)
+	{
+		return (npcId == NpcID.TOA_WARDEN_ELIDINIS_PHASE2_EXPOSED || npcId == NpcID.TOA_WARDEN_TUMEKEN_PHASE2_EXPOSED)
+			&& amount >= 5 && amount % 5 == 0;
+	}
+
+	/** T-153: a splat of {@link #notAnAttack}: counted on the target, in no one's damage, and opening no fight. */
+	private void onSplatNoAttackMade(NPC npc, Hitsplat hitsplat)
+	{
+		final int tick = client.getTickCount();
+		final int amount = hitsplat.getAmount();
+		final boolean onTarget = current != null && !current.isEnded() && current.getTargetIndex() == npc.getIndex();
+		health.damage(npc.getIndex(), npc.getId(), amount, tick);
+		damageByIndex.merge(npc.getIndex(), Math.max(0, amount), Integer::sum);
+		if (onTarget)
+		{
+			current.recordUnclassifiedDamage(amount);
+		}
+		debug.log("NOT AN ATTACK: a %d (type %d) of mine on %s (npc %d, index %d), more than %d times any attack's max (%d, "
+				+ "special %d): counted on it as unclassified, not as my damage%s", amount, hitsplat.getHitsplatType(),
+			Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), NOT_AN_ATTACK_TIMES,
+			combatCalc.maxHit(npc.getId()), combatCalc.specialAttackMaxHit(npc.getId()),
+			onTarget ? "" : ", and no fight opened on it");
 	}
 
 	/**
@@ -3627,7 +3715,9 @@ public class PvmPerformancePlugin extends Plugin
 	private double[] cappedAtLanding(int maxHit, double chances, double mean, double variance, int capThen, int npcIndex)
 	{
 		final int[] seen = capBeforeLanding.get(npcIndex);
-		final int capNow = seen != null && seen[0] == client.getTickCount() ? seen[1] : capLeft(npcIndex);
+		// T-153: a count run out on a target whose full hitpoints are known still says no attack deals more than them.
+		final int capNow = landingCap(seen != null && seen[0] == client.getTickCount() ? seen[1] : capLeft(npcIndex),
+			health.trustedMaxHp(npcIndex));
 		final double[] recapped = LandingCap.recap(maxHit, chances, mean, variance, capThen, capNow);
 		if (recapped == null)
 		{
@@ -3636,6 +3726,17 @@ public class PvmPerformancePlugin extends Plugin
 		debug.log("  capped at landing: %d left as it landed, %d when its figures were read: avg %.2f -> %.2f, var %.1f -> %.1f",
 			capNow, capThen, mean, recapped[0], variance, recapped[1]);
 		return recapped;
+	}
+
+	/**
+	 * T-153: what caps an attack as it lands: what was left ({@link #capLeft}); where that is unknown - a count run out
+	 * on a target not yet seen dead - its full hitpoints where they can be trusted, since no attack deals more than a
+	 * whole life. A 4-hitpoint Baboon Thrall was expected to take 20.2 of a crossbow shot whose count had already gone
+	 * to 0 on its own splat ([32416] of Eric's raid of 2026-11-02).
+	 */
+	static int landingCap(int left, int trustedFull)
+	{
+		return left >= 0 ? left : trustedFull > 0 ? trustedFull : -1;
 	}
 
 	/** The {@code scored as} line's note for figures from before a switch (T-065). */
@@ -6345,10 +6446,13 @@ public class PvmPerformancePlugin extends Plugin
 		// T-135: one that spawns damaged while the boss it serves is low (Yama's phase 3 flares at 71 of 140).
 		final int maxHp = spawnHp(npc, raidHp);
 		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount(), raidHp != tableHp,
-			RaidScaling.fullMayBeShort(client));
-		if (raidHp != tableHp)
+			RaidScaling.fullMayBeShort(client, npc.getId()));
+		// T-153: and in the Tombs, what it was read from, scaled or not.
+		final String basis = RaidScaling.hitpointsBasis(client, npc.getId());
+		if (raidHp != tableHp || basis != null)
 		{
-			raidHpNote = String.format("  RAID HP: %d full, scaled for the raid from the table's %d", raidHp, tableHp);
+			raidHpNote = String.format("  RAID HP: %d full, %s the table's %d%s", raidHp,
+				raidHp != tableHp ? "scaled for the raid from" : "as", tableHp, basis == null ? "" : " (" + basis + ")");
 		}
 		// T-146: its overhead bar, where the game shows one: damage from before the fight opened.
 		seeOverheadBar(npc, 0, "as the fight opened");
@@ -7274,7 +7378,9 @@ public class PvmPerformancePlugin extends Plugin
 		// T-146: what only its overhead bar showed it had taken: others' damage before the fight.
 		final int unseen = health.unseenDamage(index);
 		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + room %s "
-				+ "+ others %d + unclassified %d" + (unseen > 0 ? " + seen only on its bar " + unseen : "") + ", healed %d%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
+				+ "+ others %d + unclassified %d" + (unseen > 0 ? " + seen only on its bar " + unseen : "")
+				+ (current.getPassedOn() > 0 ? " + the core's passed on " + current.getPassedOn() : "")
+				+ ", healed %d%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
 				+ "read %d, now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
 			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),

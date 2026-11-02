@@ -22,7 +22,9 @@ final class EncounterGroup
 	// the boss's fight. Not the Sire's, Kraken's or Hespori's, whose adds are the phase the boss waits through and get their
 	// own fights in the room. The Maggot King's larvae too (T-086): one shot each as it flies, between the King's attacks.
 	private static final Set<String> ADDS_KEEP_BOSS_FIGHT = Collections.unmodifiableSet(new HashSet<>(
-		Arrays.asList("Zulrah", "Maggot King")));
+		Arrays.asList("Zulrah", "Maggot King",
+			// T-153: Ba-Ba's boulders and the Wardens' phase three energy siphons, broken between her and their attacks.
+			"Ba-Ba", "Wardens")));
 
 	// Bosses the hiscores' list names otherwise or not at all (T-089), so each kill stays a fight of its own rather than
 	// joining a run of monsters: the Barrows brothers (the list has only "Barrows Chests"), the Gauntlet's Hunllefs (listed
@@ -374,7 +376,9 @@ final class EncounterGroup
 			NpcID.TOA_WARDEN_ELIDINIS_PHASE3, NpcID.TOA_WARDEN_TUMEKEN_PHASE3,
 			NpcID.TOA_WARDEN_ELIDINIS_PHASE3_INACTIVE, NpcID.TOA_WARDEN_TUMEKEN_PHASE3_INACTIVE,
 			NpcID.TOA_WARDEN_ELIDINIS_PHASE3_CHARGING, NpcID.TOA_WARDEN_TUMEKEN_PHASE3_CHARGING,
-			NpcID.TOA_WARDEN_ELIDINIS_CORE, NpcID.TOA_WARDEN_TUMEKEN_CORE, NpcID.TOA_WARDENS_ENERGY);
+			NpcID.TOA_WARDEN_ELIDINIS_CORE, NpcID.TOA_WARDEN_TUMEKEN_CORE, NpcID.TOA_WARDENS_ENERGY,
+			// T-153: and phase three's energy siphons, also "Energy Siphon" in game (see UNSCORED).
+			NpcID.WARDENS_P3_ORB_BLUE, NpcID.WARDENS_P3_ORB_RED);
 
 		put(groups, "Ba-Ba",
 			NpcID.TOA_BABA, NpcID.TOA_BABA_DIGGING, NpcID.TOA_BABA_BABOON, NpcID.TOA_BABA_BOULDER,
@@ -469,6 +473,10 @@ final class EncounterGroup
 			// The Wardens' energy siphons - the skulls in phase two. They are a mechanic to be broken, not a thing to be
 			// scored against: each one opens its own fight and then sits on the overlay in place of the raid you are in.
 			NpcID.TOA_WARDENS_ENERGY,
+			// T-153: and the Obelisk in phase two, the form the first phase's takes as it dies ([33072]-[33073] of Eric's raid
+			// of 2026-11-02): no stats, nothing attacked it, and the wiki gives its phase two form none (Obelisk (Tombs of
+			// Amascut)). That it can't be attacked is a guess from that.
+			NpcID.TOA_WARDENS_P2_OBELISK_NPC,
 			// And the seer, which stands in that fight and is not part of it. Something on the phase change puts a single
 			// point of damage on it that isMine() reports as the player's, and that opened a fight, booked an attack and
 			// counted a kill: nine of each in one trip against an npc nobody had touched. Named outright rather than left
@@ -559,7 +567,16 @@ final class EncounterGroup
 			NpcID.NIGHTMARE_TOTEM_1_READY, NpcID.NIGHTMARE_TOTEM_1_CHARGED,
 			NpcID.NIGHTMARE_TOTEM_2_READY, NpcID.NIGHTMARE_TOTEM_2_CHARGED,
 			NpcID.NIGHTMARE_TOTEM_3_READY, NpcID.NIGHTMARE_TOTEM_3_CHARGED,
-			NpcID.NIGHTMARE_TOTEM_4_READY, NpcID.NIGHTMARE_TOTEM_4_CHARGED)));
+			NpcID.NIGHTMARE_TOTEM_4_READY, NpcID.NIGHTMARE_TOTEM_4_CHARGED,
+			// T-153: the Tombs' bosses' adds. Before, each one's death cleared every count, as an araxyte's did (T-091): in
+			// Eric's raid of 2026-11-02 Akkha came back from each shadow counted at full, 944 where his bar said 762 ([31601]),
+			// and Kephri, Ba-Ba and Tumeken's Warden likewise after each egg, boulder and siphon.
+			NpcID.AKKHA_SHADOW, NpcID.AKKHA_SHADOW_ENRAGE, NpcID.AKKHA_SHADOW_ENRAGE_DUMMY,
+			NpcID.TOA_KEPHRI_SHIELD_SCARAB, NpcID.TOA_KEPHRI_GUARDIAN_MELEE, NpcID.TOA_KEPHRI_GUARDIAN_RANGED,
+			NpcID.TOA_KEPHRI_GUARDIAN_MAGE, NpcID.TOA_KEPHRI_SCARAB_RANGEKITE, NpcID.KEPHRI_EGG_EXPLODE,
+			NpcID.KEPHRI_EGG_HATCH,
+			NpcID.TOA_BABA_BABOON, NpcID.TOA_BABA_BOULDER, NpcID.TOA_BABA_BOULDER_WEAK,
+			NpcID.WARDENS_P3_ORB_BLUE, NpcID.WARDENS_P3_ORB_RED)));
 	}
 
 	private static Set<Integer> buildUnscored()
@@ -573,6 +590,13 @@ final class EncounterGroup
 			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
 			NpcID.TOA_KEPHRI_SHIELD_SCARAB,
+			// T-153: Ba-Ba's boulders, attacked between her attacks ("Players will always hit their Ranged max hit on the
+			// cracked version", wiki, Boulder (Tombs of Amascut): six of Eric's 27s on 27 hitpoints, read as luck), and the
+			// Wardens' phase three energy siphons ("objects", 1 hitpoint solo, "players are guaranteed to hit it with melee",
+			// wiki, Energy Siphon: thirteen fights of a 1 each, no stats). Swatted in passing (ADDS_KEEP_BOSS_FIGHT): they open
+			// no fight, the boss's stays open, and the tick spent on one is the boss's.
+			NpcID.TOA_BABA_BOULDER, NpcID.TOA_BABA_BOULDER_WEAK,
+			NpcID.WARDENS_P3_ORB_BLUE, NpcID.WARDENS_P3_ORB_RED,
 			// The Royal Titans' elementals (T-061): a +70 magic attack bonus hits them every time, 75 Magic kills one in a cast,
 			// and an opposing wall or Elemental Blast destroys one outright (wiki, Royal Titans/Strategies). Scored, they would
 			// read as luck the way the Sire's respiratory systems did. The time on them counts.
@@ -646,6 +670,8 @@ final class EncounterGroup
 			NpcID.TOA_WARDEN_ELIDINIS_PHASE3_INACTIVE, NpcID.TOA_WARDEN_TUMEKEN_PHASE3_INACTIVE,
 			NpcID.TOA_WARDEN_ELIDINIS_PHASE3_CHARGING, NpcID.TOA_WARDEN_TUMEKEN_PHASE3_CHARGING,
 			NpcID.TOA_WARDENS_P1_OBELISK_NPC_INACTIVE,
+			// T-153: and the Obelisk once the first phase is over, which a fight on it turns into (see IGNORED).
+			NpcID.TOA_WARDENS_P2_OBELISK_NPC,
 			// The Hueycoatl's head while it cannot be hurt, and once it is beaten. Named outright by the gameval, which is the
 			// signal the suffixes are there to give.
 			NpcID.HUEY_HEAD_INVULNERABLE, NpcID.HUEY_HEAD_DEFEATED,

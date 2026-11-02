@@ -212,6 +212,8 @@ class Fight
 	// This session's attack-by-attack and tick-by-tick record (T-035), fed from the methods below where each counts, so
 	// its sums are the fight's. Transient: never saved, null for a fight read from history or with recording off.
 	private transient FightTimeline timeline;
+	// T-153: see recordPassedOn.
+	private transient int passedOn;
 
 	// The tick this target became attackable, and how long it took to be
 
@@ -420,6 +422,20 @@ class Fight
 			roomDamageBySource = new java.util.LinkedHashMap<>();
 		}
 		roomDamageBySource.merge(source == null ? RoomDamage.OTHER : source, d, Integer::sum);
+	}
+
+	/**
+	 * T-153: the core's damage passed on fivefold to a Warden whose core is out: her hitpoints, but not an attack's
+	 * damage (that is the splat on the core). For RECONCILE only; not saved.
+	 */
+	void recordPassedOn(int amount)
+	{
+		passedOn += Math.max(0, amount);
+	}
+
+	int getPassedOn()
+	{
+		return passedOn;
 	}
 
 	/** A splat of a type not known here. See unclassifiedDamage. */

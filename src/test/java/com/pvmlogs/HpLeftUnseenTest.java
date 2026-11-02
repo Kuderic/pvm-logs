@@ -127,10 +127,10 @@ public class HpLeftUnseenTest
 	@Test
 	public void tombsHitpointsScaleWithTheRaidLevel()
 	{
-		// 2% per five raid levels: 300 is +120%, 150 is +60%; 0 leaves it.
-		assertEquals(220, RaidScaling.tombsHitpoints(100, 300));
-		assertEquals(160, RaidScaling.tombsHitpoints(100, 150));
-		assertEquals(100, RaidScaling.tombsHitpoints(100, 0));
+		// 2% per five raid levels: 300 is +120%, 150 is +60%; 0 leaves it. T-153: on a monster that scales.
+		assertEquals(220, RaidScaling.tombsHitpoints(100, NpcID.TOA_ZEBAK, 300, 0, 1));
+		assertEquals(160, RaidScaling.tombsHitpoints(100, NpcID.TOA_ZEBAK, 150, 0, 1));
+		assertEquals(100, RaidScaling.tombsHitpoints(100, NpcID.TOA_ZEBAK, 0, 0, 1));
 	}
 
 	@Test

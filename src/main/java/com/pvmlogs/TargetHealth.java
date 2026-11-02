@@ -64,6 +64,12 @@ class TargetHealth
 		int hudMax = -1;
 		int hudTick = Integer.MIN_VALUE;
 		int lastTouchedTick = Integer.MIN_VALUE;
+		// T-153: the count of each pool the bar has shown, by its full hitpoints, while another is shown ({@link #hud}).
+		Map<Integer, int[]> pools;
+		// T-153: the id the npc wore at the last bar reading, and the count's damage and heals then ({@link #hud}).
+		int hudId;
+		int damageAtHud;
+		int healedAtHud;
 	}
 
 	private final Map<Integer, Entry> byIndex = new HashMap<>();
@@ -194,8 +200,10 @@ class TargetHealth
 	int boundByRatio(int index, int npcId, int ratio, int scale, int extra, int tick)
 	{
 		final Entry e = byIndex.get(index);
-		// A full figure that may be short (the Tombs, without the boss bar) makes the bar's share of it too little.
-		if (e == null || hudFresh(e, tick) || e.fullMayBeShort && e.hudMax <= 0)
+		// A full figure that may be short (the Tombs, without the boss bar) makes the bar's share of it too little. T-153:
+		// with the boss bar too: what a Tombs boss's count holds isn't always what its overhead bar shows (Kephri's shield
+		// splats take her first bar's 400 and aren't hitpoints), and the boss bar is read a tick later anyway.
+		if (e == null || hudFresh(e, tick) || e.fullMayBeShort)
 		{
 			return 0;
 		}
@@ -235,7 +243,15 @@ class TargetHealth
 		}
 	}
 
-	/** A bar reading the game has said belongs to this npc. Refused when it cannot be a reading. */
+	/**
+	 * A bar reading the game has said belongs to this npc. Refused when it cannot be a reading.
+	 *
+	 * <p>T-153: a new full on the bar is a pool of its own, and the count follows it: what was counted against the
+	 * last one is set aside under its full, and the count of the new one is taken up where it was left (nothing, the
+	 * first time). Kephri's first bar is 400 and her second 210 ([31325] of Eric's raid of 2026-11-02); Elidinis'
+	 * Warden in phase two shows a 330 that her poise fills while the core is in, and her 6030 while it is out, three
+	 * times over. Before, the count carried one pool's damage into the next: her kill reconciled 325 against 210.
+	 */
 	void hud(int index, int npcId, int hp, int base, int tick)
 	{
 		if (base <= 0 || hp < 0 || hp > base)
@@ -243,9 +259,63 @@ class TargetHealth
 			return;
 		}
 		final Entry e = entry(index, npcId, tick);
+		if (e.hudMax > 0 && e.hudMax != base)
+		{
+			switchPool(index, e, base, tick);
+		}
+		else if (e.hudMax == base && e.hudHp >= 0 && e.hudId != 0 && npcId != e.hudId)
+		{
+			restoredByBar(index, e, npcId, hp, tick);
+		}
 		e.hudHp = hp;
 		e.hudMax = base;
 		e.hudTick = tick;
+		e.hudId = npcId;
+		e.damageAtHud = e.damage;
+		e.healedAtHud = e.healed;
+	}
+
+	/**
+	 * T-153: the bar, read again as the npc changes form, shows more left than the last reading less what was counted
+	 * since: the game gave the rest back, and the count takes it as healed. Akkha at 0 as 11793 comes back as his enraged
+	 * 11794 with 214 of his 1070, a fifth ([32050]-[32051] of Eric's raid of 2026-11-02): his kill reconciled 1284
+	 * taken against 1070. Only on a change of form, so a bar that fills as the player works it (the P2 Warden's poise)
+	 * isn't taken for a heal, and only past {@link #barTolerance}.
+	 */
+	private void restoredByBar(int index, Entry e, int npcId, int hp, int tick)
+	{
+		final int counted = (e.damage - e.damageAtHud) - (e.healed - e.healedAtHud);
+		final int restored = hp - (e.hudHp - counted);
+		// Past the bar's tolerance: a splat counted a tick before the bar shows it isn't a heal.
+		if (restored <= barTolerance(e.hudMax))
+		{
+			return;
+		}
+		e.healed += restored;
+		if (notes.size() < MAX_NOTES)
+		{
+			notes.add(String.format("HP RESTORED: npc index %d went %d -> %d on tick %d with its bar at %d, %d more than the "
+				+ "count left it; counted as healed", index, e.hudId, npcId, tick, hp, restored));
+		}
+	}
+
+	private void switchPool(int index, Entry e, int toBase, int tick)
+	{
+		if (e.pools == null)
+		{
+			e.pools = new HashMap<>();
+		}
+		e.pools.put(e.hudMax, new int[]{e.damage, e.healed, e.unseen});
+		final int[] back = e.pools.remove(toBase);
+		e.damage = back == null ? 0 : back[0];
+		e.healed = back == null ? 0 : back[1];
+		e.unseen = back == null ? 0 : back[2];
+		if (notes.size() < MAX_NOTES)
+		{
+			notes.add(String.format("HP POOL: npc index %d's bar went from %d full to %d on tick %d; the count follows it, "
+				+ "%s", index, e.hudMax, toBase, tick, back == null ? "starting the new one at nothing taken"
+				: "taking up the " + back[0] + " counted on it before"));
+		}
 	}
 
 	private static boolean hudFresh(Entry e, int tick)
@@ -256,6 +326,16 @@ class TargetHealth
 	private static int fullHp(Entry e)
 	{
 		return e.hudMax > 0 ? e.hudMax : e.tableMaxHp;
+	}
+
+	/**
+	 * T-153: full hitpoints that no attack can deal more than: the bar's, or the table's where that figure can't be
+	 * short (see {@link RaidScaling#fullMayBeShort}); -1 otherwise.
+	 */
+	int trustedMaxHp(int index)
+	{
+		final Entry e = byIndex.get(index);
+		return e == null || e.hudMax <= 0 && e.fullMayBeShort ? -1 : fullHp(e);
 	}
 
 	/** Full hitpoints: the bar's if it has ever been read for this npc, otherwise the table's, otherwise -1. */

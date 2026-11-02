@@ -161,11 +161,11 @@ public class TargetHealthTest
 
 	/**
 	 * A phase with a new pool, seen by the bar: its full hitpoints change mid-fight.
-	 * The bar is followed; the count still carries the old pool's damage, which is
-	 * what the plugin now logs (T-011 item 6) and does not yet correct.
+	 * The bar is followed, and since T-153 the count too: it starts the new pool at
+	 * nothing taken, where before it carried the old pool's damage (T-011 item 6).
 	 */
 	@Test
-	public void aNewPoolOnTheBarIsFollowedButNotYetByTheCount()
+	public void aNewPoolOnTheBarIsFollowedByTheCount()
 	{
 		final TargetHealth h = new TargetHealth();
 		h.setTableMaxHp(INDEX, 8370, 2000, 0);
@@ -176,7 +176,8 @@ public class TargetHealthTest
 		h.hud(INDEX, 8372, 3250, 3250, 60);
 		assertEquals(3250, h.lastHudMax(INDEX));
 		assertEquals(3250, h.remaining(INDEX, 60));
-		assertEquals(1250, h.countedRemaining(INDEX));
+		assertEquals(3250, h.countedRemaining(INDEX));
+		assertEquals(0, h.damageCounted(INDEX));
 	}
 
 	// The Abyssal Sire, T-020: phase one's damage is healed back when it leaves phase one (wiki, Abyssal Sire/Strategies;
