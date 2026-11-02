@@ -52,7 +52,11 @@ class TargetHealth
 		int npcId;
 		final Set<Integer> ids = new HashSet<>();
 		int tableMaxHp = -1;
+		// T-146: the table figure was scaled for the raid (RaidScaling.hitpoints).
+		boolean raidScaled;
 		int damage;
+		// T-146: of the damage, what only its overhead bar showed (others' before the fight opened).
+		int unseen;
 		int healed;
 		int hudHp = -1;
 		int hudMax = -1;
@@ -134,10 +138,75 @@ class TargetHealth
 	/** Full hitpoints from the tables, used until the bar says otherwise. Ignored when not positive. */
 	void setTableMaxHp(int index, int npcId, int maxHp, int tick)
 	{
+		setTableMaxHp(index, npcId, maxHp, tick, false);
+	}
+
+	/** As above, {@code raidScaled} when the table figure was scaled for the raid it stands in (T-146). */
+	void setTableMaxHp(int index, int npcId, int maxHp, int tick, boolean raidScaled)
+	{
 		if (maxHp > 0)
 		{
-			entry(index, npcId, tick).tableMaxHp = maxHp;
+			final Entry e = entry(index, npcId, tick);
+			e.tableMaxHp = maxHp;
+			e.raidScaled = raidScaled;
 		}
+	}
+
+	/**
+	 * T-146: the most hitpoints an npc can have left for its overhead health bar to read {@code ratio} of {@code scale}
+	 * ({@code Actor.getHealthRatio}, {@code getHealthScale}) at {@code maxHp} full; -1 when it says nothing (no bar, or
+	 * no full hitpoints known). The bar shows a share rounded up: any hitpoints at all show at least one step, and full
+	 * shows every step - the reading RuneLite's opponent info takes of it, reversed for the upper end. The upper end,
+	 * because a count that errs to more left is the safe side for a cap.
+	 */
+	static int mostLeftForRatio(int ratio, int scale, int maxHp)
+	{
+		if (ratio < 0 || scale <= 0 || maxHp <= 0)
+		{
+			return -1;
+		}
+		if (ratio == 0)
+		{
+			return 0;
+		}
+		if (scale == 1 || ratio >= scale)
+		{
+			return maxHp;
+		}
+		return Math.min(maxHp, (maxHp * ratio - 1) / (scale - 1));
+	}
+
+	/**
+	 * T-146: the npc's overhead bar read {@code ratio} of {@code scale}: where the count has more left than that can
+	 * be, plus {@code extra} (a splat of the player's landing as it was read, which the reading may or may not show
+	 * yet), the difference was taken where the count didn't see it - other players' damage from before the fight
+	 * opened - and is counted now. Never raises the count; nothing while the boss bar is read. Returns what it added.
+	 */
+	int boundByRatio(int index, int npcId, int ratio, int scale, int extra, int tick)
+	{
+		final Entry e = byIndex.get(index);
+		if (e == null || hudFresh(e, tick))
+		{
+			return 0;
+		}
+		final int most = mostLeftForRatio(ratio, scale, fullHp(e));
+		final int counted = countedRemaining(index);
+		if (most < 0 || counted < 0 || counted <= most + Math.max(0, extra))
+		{
+			return 0;
+		}
+		final int added = counted - most - Math.max(0, extra);
+		entry(index, npcId, tick);
+		e.damage += added;
+		e.unseen += added;
+		return added;
+	}
+
+	/** T-146: what only its overhead bar showed this npc had taken ({@link #boundByRatio}). */
+	int unseenDamage(int index)
+	{
+		final Entry e = byIndex.get(index);
+		return e == null ? 0 : e.unseen;
 	}
 
 	void damage(int index, int npcId, int amount, int tick)
@@ -274,7 +343,7 @@ class TargetHealth
 		return fullHp(e) > 0 ? "counted" : "unknown";
 	}
 
-	/** Which source {@link #maxHp} answered from: "bar", "table" or "unknown". */
+	/** Which source {@link #maxHp} answered from: "bar", "table", "raid-scaled" (T-146) or "unknown". */
 	String maxSource(int index)
 	{
 		final Entry e = byIndex.get(index);
@@ -282,7 +351,7 @@ class TargetHealth
 		{
 			return "unknown";
 		}
-		return e.hudMax > 0 ? "bar" : e.tableMaxHp > 0 ? "table" : "unknown";
+		return e.hudMax > 0 ? "bar" : e.tableMaxHp > 0 ? (e.raidScaled ? "raid-scaled" : "table") : "unknown";
 	}
 
 	/** The index of the most recently touched target that has worn this id, or -1. Bosses are alone in their instance. */

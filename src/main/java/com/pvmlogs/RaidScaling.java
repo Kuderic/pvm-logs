@@ -73,6 +73,75 @@ final class RaidScaling
 	}
 
 	/**
+	 * T-146: a monster's full hitpoints as the raid it stands in leaves them, from its table figure (the solo, maxed
+	 * one); the table's otherwise. The count starts from this where the boss bar isn't read.
+	 * <ul>
+	 * <li>Chambers: times one plus half the party, rounded down ({@link #chambersHitpoints}).</li>
+	 * <li>Tombs: 2% more per five raid levels ({@link #tombsHitpoints}).</li>
+	 * </ul>
+	 */
+	static int hitpoints(Client client, int base, String version)
+	{
+		if (base <= 0)
+		{
+			return base;
+		}
+		final int toa = tombsRaidLevel(client);
+		if (toa > 0)
+		{
+			return tombsHitpoints(base, toa);
+		}
+		if (inChambers(client))
+		{
+			return chambersHitpoints(base, chambersPartySize(client), isChallengeMode(client),
+				version != null && version.toLowerCase().contains("challenge"));
+		}
+		return base;
+	}
+
+	/**
+	 * T-146: the Chambers. Sources:
+	 * <ul>
+	 * <li>The party factor, 1 + floor(T/2) for a team of T: OSRS Wiki, read 2026-11-01, Guardian (Chambers of Xeric):
+	 * "The strengths and hit points of the guardian is dependent on the party size", its formula multiplying by
+	 * (1 + floor(T/2)); Eric's raid of 2026-11-01 13:02, a party of three, read the boss bar at Tekton's 590 (table 300)
+	 * and the Great Olm's claws' 1200 (table 600), twice each; Talk:Chambers of Xeric/Strategies (2020, not Jagex's):
+	 * Tekton "300 solo to 600 duo", and Olm's stats "entirely determined by party size". The talk page's own reading
+	 * for larger parties ("monsters add their base hp" per member) doesn't fit three's 590, so it isn't followed.</li>
+	 * <li>The Guardian's own formula (151 x that factor, plus the party's average Mining times T) isn't applied: its
+	 * text came through garbled, and it doesn't fit the same day's second raid, whose Guardian died at 262 counted
+	 * ([11246]), under any party's figure by it. The common factor covers both of the day's Guardians (482 and more
+	 * for three, 262), on the side of more left.</li>
+	 * <li>The combat level term ("about 2 hp for each missing level", the same talk page: Tekton's 590 for 600) is left
+	 * out, for want of a source: the count errs to more left by a few percent.</li>
+	 * <li>Challenge mode: half as much again (the wiki infoboxes' Challenge Mode versions: Tekton 300 and 450, the
+	 * Guardian 250 and 375), unless the monster data's version is already the Challenge Mode one.</li>
+	 * </ul>
+	 */
+	static int chambersHitpoints(int base, int partySize, boolean challengeMode, boolean cmVersion)
+	{
+		final int party = Math.max(1, Math.min(100, partySize));
+		int hp = base * (1 + party / 2);
+		if (challengeMode && !cmVersion)
+		{
+			hp = hp * 3 / 2;
+		}
+		return hp;
+	}
+
+	/**
+	 * T-146: the Tombs. OSRS Wiki, read 2026-11-01, Tombs of Amascut: "for every 5 raid levels, an NPC's hitpoints,
+	 * defence, accuracy, and damage are increased by 2% additively". Left out, for want of a reading: the party ("the
+	 * 2nd-3rd member will add 90% of the base health of bosses each", "the 4th and beyond will add 60% each": no varbit
+	 * here gives the party's size) and the path level ("+8%", then "+5%" a level). The bosses show the boss bar, which
+	 * beats the count; a monster that doesn't is counted low on a path past level 0.
+	 */
+	static int tombsHitpoints(int base, int raidLevel)
+	{
+		return base * (100 + 2 * (raidLevel / 5)) / 100;
+	}
+
+	/**
 	 * Tombs: 2% per five raid levels, additively, so 500 is +200%. Defence level
 	 * only - magic does not move, and defence bonuses are armour.
 	 */

@@ -1108,6 +1108,8 @@ public class PvmPerformancePlugin extends Plugin
 			// has a SECOND route through recordSplash, which is what proved the cause. Trading a total that is right by luck for
 			// one that is silently short is the worse bargain; the real fix is to match a held sample to its own landing tick.
 			// What it had just before this splat (T-103), for the attack landing now: its own damage is counted further down.
+			// T-146: its overhead bar as the splat lands, the splat itself allowed for (the reading may or may not show it).
+			seeOverheadBar(npc, hitsplat.getAmount(), "as a splat of mine landed");
 			noteCapBeforeLanding(npc.getIndex());
 			resolvePendingSample(npc.getIndex());
 			// A cast waiting on an answer has it the moment one of my hitsplats DEALS DAMAGE to the NPC it was aimed at; nothing
@@ -3540,6 +3542,39 @@ public class PvmPerformancePlugin extends Plugin
 			return counted;
 		}
 		return counted == 0 && deadTick != null && deadTick < tick ? 0 : -1;
+	}
+
+	// T-146: the raid-scaled figure a fight opened with, for the debug lines beside its monster data.
+	private String raidHpNote;
+
+	/**
+	 * T-146: what the npc's overhead health bar says it has left at most, read where the game shows one, when its fight
+	 * opens and as each splat of the player's lands - never per tick over the scene. Where the count has more left
+	 * than that, the rest was taken unseen: teammates' damage from before the fight opened (a Scavenger beast at 1 of
+	 * 30 in Eric's raid of 2026-11-01 13:02, [5570]-[5574], judged against 30 and its killing 1 uncapped).
+	 */
+	private void seeOverheadBar(NPC npc, int extra, String when)
+	{
+		if (npc == null)
+		{
+			return;
+		}
+		final int ratio = npc.getHealthRatio();
+		final int scale = npc.getHealthScale();
+		if (ratio < 0 || scale <= 0)
+		{
+			return;
+		}
+		final int tick = client.getTickCount();
+		final int counted = health.countedRemaining(npc.getIndex());
+		final int added = health.boundByRatio(npc.getIndex(), npc.getId(), ratio, scale, extra, tick);
+		if (added > 0)
+		{
+			debug.log("HP SEEN on %s (npc %d, index %d) %s: its overhead bar at %d/%d, so at most %d left%s; the count had %d, "
+					+ "so %d were taken unseen", Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), when, ratio, scale,
+				TargetHealth.mostLeftForRatio(ratio, scale, health.maxHp(npc.getIndex())),
+				extra > 0 ? String.format(" (and the %d landing)", extra) : "", counted, added);
+		}
 	}
 
 	/** Notes the first tick an npc is seen dead (T-115). */
@@ -6289,9 +6324,17 @@ public class PvmPerformancePlugin extends Plugin
 		final MonsterStatsProvider.MonsterStats stats = monsterStats.get(npc.getId());
 		final Integer known = npcManager.getHealth(npc.getId());
 		final int tableHp = stats != null && stats.getHitpoints() > 0 ? stats.getHitpoints() : known == null ? -1 : known;
+		// T-146: as the raid it stands in scales it, where the boss bar isn't read (Tekton's table 300 against a bar of 590).
+		final int raidHp = RaidScaling.hitpoints(client, tableHp, stats == null ? null : stats.getVersion());
 		// T-135: one that spawns damaged while the boss it serves is low (Yama's phase 3 flares at 71 of 140).
-		final int maxHp = spawnHp(npc, tableHp);
-		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount());
+		final int maxHp = spawnHp(npc, raidHp);
+		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount(), raidHp != tableHp);
+		if (raidHp != tableHp)
+		{
+			raidHpNote = String.format("  RAID HP: %d full, scaled for the raid from the table's %d", raidHp, tableHp);
+		}
+		// T-146: its overhead bar, where the game shows one: damage from before the fight opened.
+		seeOverheadBar(npc, 0, "as the fight opened");
 		// Tags stripped: some names carry colour markup and it was reaching the CSV verbatim, "<col=00ffff>Rubble</col>" and
 		// all.
 		mechanics.reset();
@@ -6330,6 +6373,11 @@ public class PvmPerformancePlugin extends Plugin
 			current.getTargetName(), npc.getId(), npc.getIndex(), maxHp,
 			current.getGroupName(), current.encounterName(), raidType, client.getWorld());
 		debug.log("  %s", monsterStats.describe(npc.getId()));
+		if (raidHpNote != null)
+		{
+			debug.log("%s", raidHpNote);
+			raidHpNote = null;
+		}
 		debug.log("  %s", combatCalc.describeWorkedOut(npc.getId()));
 		// What is worn, by item id (T-056): which variant of a piece a bonus missed.
 		debug.log("  %s", combatCalc.describeWorn());
@@ -7206,8 +7254,10 @@ public class PvmPerformancePlugin extends Plugin
 		final int net = counted - healed;
 		// T-108: what the room's boss took while the player was on an add, booked to its fight before, so in no line's terms.
 		final int onAnAdd = whileOnAnAdd.getOrDefault(index, 0);
+		// T-146: what only its overhead bar showed it had taken: others' damage before the fight.
+		final int unseen = health.unseenDamage(index);
 		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + room %s "
-				+ "+ others %d + unclassified %d, healed %d%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
+				+ "+ others %d + unclassified %d" + (unseen > 0 ? " + seen only on its bar " + unseen : "") + ", healed %d%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
 				+ "read %d, now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
 			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),
