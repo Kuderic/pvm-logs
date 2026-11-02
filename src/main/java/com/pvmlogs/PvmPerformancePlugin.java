@@ -6341,10 +6341,11 @@ public class PvmPerformancePlugin extends Plugin
 		final Integer known = npcManager.getHealth(npc.getId());
 		final int tableHp = stats != null && stats.getHitpoints() > 0 ? stats.getHitpoints() : known == null ? -1 : known;
 		// T-146: as the raid it stands in scales it, where the boss bar isn't read (Tekton's table 300 against a bar of 590).
-		final int raidHp = RaidScaling.hitpoints(client, tableHp, stats == null ? null : stats.getVersion());
+		final int raidHp = RaidScaling.hitpoints(client, tableHp, npc.getId(), stats == null ? null : stats.getVersion());
 		// T-135: one that spawns damaged while the boss it serves is low (Yama's phase 3 flares at 71 of 140).
 		final int maxHp = spawnHp(npc, raidHp);
-		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount(), raidHp != tableHp);
+		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount(), raidHp != tableHp,
+			RaidScaling.fullMayBeShort(client));
 		if (raidHp != tableHp)
 		{
 			raidHpNote = String.format("  RAID HP: %d full, scaled for the raid from the table's %d", raidHp, tableHp);

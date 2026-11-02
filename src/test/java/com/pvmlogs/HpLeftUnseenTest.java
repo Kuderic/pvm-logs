@@ -96,6 +96,35 @@ public class HpLeftUnseenTest
 	}
 
 	@Test
+	public void scavengerBeastsDontScale()
+	{
+		// 14 kills of 22-30 on the target against the table's 30, in a party of three.
+		assertTrue(!RaidScaling.scalesHitpoints(NpcID.RAIDS_SCAVENGER_BEAST_A));
+		assertTrue(!RaidScaling.scalesHitpoints(NpcID.RAIDS_SCAVENGER_BEAST_B));
+		// Everything else in the raid does.
+		assertTrue(RaidScaling.scalesHitpoints(NpcID.RAIDS_TEKTON_WAITING));
+		assertTrue(RaidScaling.scalesHitpoints(NpcID.RAIDS_ICEDEMON_COMBAT));
+		assertTrue(RaidScaling.scalesHitpoints(NpcID.RAIDS_STONEGUARDIANS_LEFT));
+	}
+
+	@Test
+	public void aFullFigureThatMayBeShortTakesNoBoundFromTheOverheadBar()
+	{
+		// A Tombs monster without the boss bar, in a party: its full figure is short (no party size), so a share of its
+		// overhead bar is a share of too little. The count stands.
+		final TargetHealth health = new TargetHealth();
+		health.setTableMaxHp(INDEX, BEAST, 100, 0, true, true);
+		health.damage(INDEX, BEAST, 20, 1);
+		assertEquals(0, health.boundByRatio(INDEX, BEAST, 5, 30, 0, 2));
+		assertEquals(80, health.remaining(INDEX, 2));
+		// The same reading on a full figure that isn't short brings the count down.
+		final TargetHealth chambers = new TargetHealth();
+		chambers.setTableMaxHp(INDEX, BEAST, 100, 0, true, false);
+		chambers.damage(INDEX, BEAST, 20, 1);
+		assertTrue(chambers.boundByRatio(INDEX, BEAST, 5, 30, 0, 2) > 0);
+	}
+
+	@Test
 	public void tombsHitpointsScaleWithTheRaidLevel()
 	{
 		// 2% per five raid levels: 300 is +120%, 150 is +60%; 0 leaves it.

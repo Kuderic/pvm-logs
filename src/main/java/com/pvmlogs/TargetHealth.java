@@ -54,6 +54,8 @@ class TargetHealth
 		int tableMaxHp = -1;
 		// T-146: the table figure was scaled for the raid (RaidScaling.hitpoints).
 		boolean raidScaled;
+		// T-146: the table figure may be short of the real one (RaidScaling.fullMayBeShort): no overhead-bar bound on it.
+		boolean fullMayBeShort;
 		int damage;
 		// T-146: of the damage, what only its overhead bar showed (others' before the fight opened).
 		int unseen;
@@ -144,11 +146,18 @@ class TargetHealth
 	/** As above, {@code raidScaled} when the table figure was scaled for the raid it stands in (T-146). */
 	void setTableMaxHp(int index, int npcId, int maxHp, int tick, boolean raidScaled)
 	{
+		setTableMaxHp(index, npcId, maxHp, tick, raidScaled, false);
+	}
+
+	/** As above, {@code mayBeShort} when the table figure may be short of the real one (T-146: the Tombs). */
+	void setTableMaxHp(int index, int npcId, int maxHp, int tick, boolean raidScaled, boolean mayBeShort)
+	{
 		if (maxHp > 0)
 		{
 			final Entry e = entry(index, npcId, tick);
 			e.tableMaxHp = maxHp;
 			e.raidScaled = raidScaled;
+			e.fullMayBeShort = mayBeShort;
 		}
 	}
 
@@ -185,7 +194,8 @@ class TargetHealth
 	int boundByRatio(int index, int npcId, int ratio, int scale, int extra, int tick)
 	{
 		final Entry e = byIndex.get(index);
-		if (e == null || hudFresh(e, tick))
+		// A full figure that may be short (the Tombs, without the boss bar) makes the bar's share of it too little.
+		if (e == null || hudFresh(e, tick) || e.fullMayBeShort && e.hudMax <= 0)
 		{
 			return 0;
 		}
