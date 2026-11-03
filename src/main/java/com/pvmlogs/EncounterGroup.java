@@ -24,7 +24,9 @@ final class EncounterGroup
 	private static final Set<String> ADDS_KEEP_BOSS_FIGHT = Collections.unmodifiableSet(new HashSet<>(
 		Arrays.asList("Zulrah", "Maggot King",
 			// T-153: Ba-Ba's boulders and the Wardens' phase three energy siphons, broken between her and their attacks.
-			"Ba-Ba", "Wardens")));
+			"Ba-Ba", "Wardens",
+			// T-163: the wilderness spiders' spiderlings, Scorpia's offspring, Scurrius's rats and Vorkath's zombified spawn.
+			"Venenatis", "Spindel", "Scorpia", "Scurrius", "Vorkath")));
 
 	// Bosses the hiscores' list names otherwise or not at all (T-089), so each kill stays a fight of its own rather than
 	// joining a run of monsters: the Barrows brothers (the list has only "Barrows Chests"), the Gauntlet's Hunllefs (listed
@@ -425,6 +427,43 @@ final class EncounterGroup
 		put(groups, "Araxxor", NpcID.ARAXXOR, NpcID.ARAXXOR_DEAD,
 			NpcID.ARAXXOR_MINION_MIRRORBACK, NpcID.ARAXXOR_MINION_EXPLODE, NpcID.ARAXXOR_MINION_VENOM,
 			NpcID.ARAXXOR_MINION_EGG_MIRRORBACK, NpcID.ARAXXOR_MINION_EGG_EXPLODE, NpcID.ARAXXOR_MINION_EGG_VENOM);
+		// T-163: bosses whose adds weren't grouped, so every hit on one ended the boss's fight (Venenatis, Eric's log of
+		// 2026-11-03 07:00 from [14678]: 31 fights on her and 46 on her spiderlings over 5 kills). From the OSRS Wiki, read
+		// 2026-11-03, each with what the add is; RuneLite's gameval ids.
+		// Venenatis "begins by summoning two spiderlings", which "only have 5 health" and on which players "will deal their
+		// max hit ... regardless of gear" (wiki, Venenatis): swatted in passing, unscored. Spindel, her singles version,
+		// summons its own.
+		put(groups, "Venenatis", NpcID.VENENATIS, NpcID.VENENATIS_SPIDERLING);
+		put(groups, "Spindel", NpcID.VENENATIS_SINGLES, NpcID.SPINDEL_SPIDERLING);
+		// Vet'ion's skeleton hellhounds "must be killed as they grant him complete damage immunity while alive", and his
+		// greater ones in his enraged form "must also be killed" (wiki, Vet'ion): a phase he waits through, so scored adds of
+		// his room with fights of their own, as Araxxor's araxytes are. Calvar'ion, the singles version, likewise (the wiki
+		// gives its hellhounds their own pages; that they shield it the same way is taken from Vet'ion's).
+		put(groups, "Vet'ion", NpcID.VETION, NpcID.VETION_2, NpcID.VETION_TRANS, NpcID.VETION_TRANS_2,
+			NpcID.VETION_HELLHOUND_JNR, NpcID.VETION_HELLHOUND_SNR);
+		put(groups, "Calvar'ion", NpcID.VETION_SINGLE, NpcID.VETION_2_SINGLE, NpcID.VETION_TRANS_SINGLE,
+			NpcID.VETION_TRANS_2_SINGLE, NpcID.VETION_HELLHOUND_JNR_SINGLES, NpcID.VETION_HELLHOUND_SNR_SINGLES);
+		// Scorpia's guardians "will rapidly heal her when within 3 tiles of her", and the wiki suggests killing them once they
+		// spawn: scored adds of her room. Her offspring fill the pit with "weak but accurate ranged attacks": swatted in
+		// passing, unscored.
+		put(groups, "Scorpia", NpcID.SCORPIA, NpcID.SCORPIA_MINION, NpcID.SCORPIA_GUARDIAN);
+		// Sarachnis "summon[s] two Spawns of Sarachnis" at 66% and 33%; the wiki recommends killing the magic one, and
+		// "Upon Sarachnis' death, all her spawns will die as well": scored adds of her room.
+		put(groups, "Sarachnis", NpcID.SARACHNIS, NpcID.SARACHNIS_MELEE_SPAWN, NpcID.SARACHNIS_MAGE_SPAWN);
+		// Scurrius "may also summon six giant rats to aid him during the fight" (wiki, Scurrius): swatted in passing,
+		// unscored. The lair's patrolling rats (RAT_BOSS_GIANT_RAT_PATROL) aren't his summons and are left out.
+		put(groups, "Scurrius", NpcID.RAT_BOSS_NORMAL, NpcID.RAT_BOSS_INSTANCE, NpcID.RAT_BOSS_GIANT_RAT);
+		// Vorkath's Zombified Spawn: "Until the spawn is killed/explodes, Vorkath is immune to damage" (wiki, Vorkath); one
+		// cast or blow and it's gone: swatted in passing, unscored, its tick Vorkath's.
+		put(groups, "Vorkath", NpcID.VORKATH_SLEEPING, NpcID.VORKATH, NpcID.VORKATH_SPAWN);
+		// Bryophyta "is immune to all damage (except poison and venom)" while her growthlings live, and they "must be killed
+		// with either an axe, secateurs or magic secateurs" (wiki, Bryophyta): the phase she waits through, so fights of
+		// their own in her room, unscored (an axe's blows on them aren't the player's damage on her).
+		put(groups, "Bryophyta", NpcID.GB_MOSSGIANT, NpcID.GB_GROWTHLING);
+		// Nex's four mages each become attackable as she loses a fifth, and the one empowering her "must be killed in order to
+		// progress to the next phase" (wiki, Nex): scored adds of her room, as the Sire's and Araxxor's are.
+		put(groups, "Nex", NpcID.NEX, NpcID.NEX_SPAWNING, NpcID.NEX_SOULSPLIT, NpcID.NEX_DEFLECT, NpcID.NEX_DYING,
+			NpcID.NEX_SMOKEMAGE, NpcID.NEX_SHADOWMAGE, NpcID.NEX_BLOODMAGE, NpcID.NEX_ICEMAGE);
 		put(groups, "The Hueycoatl",
 			NpcID.HUEY_HEAD, NpcID.HUEY_HEAD_INVULNERABLE, NpcID.HUEY_HEAD_DEFEATED,
 			NpcID.HUEY_HEAD_ENRAGED, NpcID.HUEY_TAIL, NpcID.HUEY_TAIL_BROKEN,
@@ -557,6 +596,13 @@ final class EncounterGroup
 			// Araxxor's araxytes and their eggs (T-091).
 			NpcID.ARAXXOR_MINION_MIRRORBACK, NpcID.ARAXXOR_MINION_EXPLODE, NpcID.ARAXXOR_MINION_VENOM,
 			NpcID.ARAXXOR_MINION_EGG_MIRRORBACK, NpcID.ARAXXOR_MINION_EGG_EXPLODE, NpcID.ARAXXOR_MINION_EGG_VENOM,
+			// T-163: the adds grouped above, so their deaths keep the boss's count.
+			NpcID.VENENATIS_SPIDERLING, NpcID.SPINDEL_SPIDERLING,
+			NpcID.VETION_HELLHOUND_JNR, NpcID.VETION_HELLHOUND_SNR,
+			NpcID.VETION_HELLHOUND_JNR_SINGLES, NpcID.VETION_HELLHOUND_SNR_SINGLES,
+			NpcID.SCORPIA_MINION, NpcID.SCORPIA_GUARDIAN, NpcID.SARACHNIS_MELEE_SPAWN, NpcID.SARACHNIS_MAGE_SPAWN,
+			NpcID.RAT_BOSS_GIANT_RAT, NpcID.VORKATH_SPAWN, NpcID.GB_GROWTHLING,
+			NpcID.NEX_SMOKEMAGE, NpcID.NEX_SHADOWMAGE, NpcID.NEX_BLOODMAGE, NpcID.NEX_ICEMAGE,
 			// Hespori's flowers.
 			NpcID.HESPORI_HEALER_ACTIVE, NpcID.HESPORI_HEALER_INACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE, NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
@@ -608,6 +654,12 @@ final class EncounterGroup
 			// lands on the arena" is "instantly killed" (wiki, Maggot King/Strategies). Eric's log of 2026-10-29 shows it:
 			// every bow shot at one is a 30, on maxes of 24 to 37, which read as luck. The shot's tick is the King's time.
 			NpcID.UR_MAGGOT_LARVAE,
+			// T-163: Venenatis's and Spindel's spiderlings, on which players "will deal their max hit ... regardless of gear"
+			// (wiki, Venenatis): a 2.0 and a 3.7 expected on their 5s in Eric's log of 2026-11-03. Scorpia's offspring,
+			// Scurrius's rats, Vorkath's zombified spawn, swatted in passing; Bryophyta's growthlings, killed with an axe or
+			// secateurs. The time on them is the boss's.
+			NpcID.VENENATIS_SPIDERLING, NpcID.SPINDEL_SPIDERLING, NpcID.SCORPIA_MINION, NpcID.RAT_BOSS_GIANT_RAT,
+			NpcID.VORKATH_SPAWN, NpcID.GB_GROWTHLING,
 			// The Judge of Yama was here (unscored) until T-136: a required phase with stats of its own (400 hitpoints), so
 			// a scored add of Yama's room, as Araxxor's araxytes are (T-091), its damage and luck under the room's adds.
 			// Phosani's adds, killed in one hit apiece. Grouped rather than ignored, or the time spent on them would be booked
@@ -804,6 +856,18 @@ final class EncounterGroup
 		// Araxxor is the boss; an araxyte dying ends nothing but a fight on itself (T-091). Not his corpse: it despawning
 		// when harvested, with a fight open on an araxyte left alive, is not a kill of that araxyte.
 		oneBoss(rules, "Araxxor", NpcID.ARAXXOR);
+		// T-163: the boss is the boss; an add dying ends nothing but a fight on itself.
+		oneBoss(rules, "Venenatis", NpcID.VENENATIS);
+		oneBoss(rules, "Spindel", NpcID.VENENATIS_SINGLES);
+		oneBoss(rules, "Vet'ion", NpcID.VETION, NpcID.VETION_2, NpcID.VETION_TRANS, NpcID.VETION_TRANS_2);
+		oneBoss(rules, "Calvar'ion", NpcID.VETION_SINGLE, NpcID.VETION_2_SINGLE, NpcID.VETION_TRANS_SINGLE,
+			NpcID.VETION_TRANS_2_SINGLE);
+		oneBoss(rules, "Scorpia", NpcID.SCORPIA);
+		oneBoss(rules, "Sarachnis", NpcID.SARACHNIS);
+		oneBoss(rules, "Scurrius", NpcID.RAT_BOSS_NORMAL, NpcID.RAT_BOSS_INSTANCE);
+		oneBoss(rules, "Vorkath", NpcID.VORKATH_SLEEPING, NpcID.VORKATH);
+		oneBoss(rules, "Bryophyta", NpcID.GB_MOSSGIANT);
+		oneBoss(rules, "Nex", NpcID.NEX, NpcID.NEX_SPAWNING, NpcID.NEX_SOULSPLIT, NpcID.NEX_DEFLECT, NpcID.NEX_DYING);
 		// One snake: the head, the tail and the body segments are all it.
 		oneBossAll(rules, "The Hueycoatl");
 		oneBoss(rules, "Abyssal Sire", NpcID.ABYSSALSIRE_SIRE_STASIS_SLEEPING, NpcID.ABYSSALSIRE_SIRE_STASIS_AWAKE,

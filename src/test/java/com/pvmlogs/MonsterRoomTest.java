@@ -25,8 +25,9 @@ public class MonsterRoomTest
 	private static final int DEMON_ID = 415;
 	private static final String GREATER = "Greater abyssal demon";
 	private static final int GREATER_ID = 7410;
-	private static final String VORKATH = "Vorkath";
-	private static final int VORKATH_ID = 8061;
+	// A boss with no group (T-163 grouped Vorkath with his zombified spawn): Callisto.
+	private static final String VORKATH = "Callisto";
+	private static final int VORKATH_ID = 6609;
 	private static final long MINUTE = 60_000;
 
 	// ---- what's a boss ----
