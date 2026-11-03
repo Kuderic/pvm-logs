@@ -43,6 +43,12 @@ final class SidePanelBossIcons
 	// ---- which icon ----
 
 	/** The hiscores' bosses, by their name as {@link #key} writes it. */
+	/**
+	 * T-162: the Fractured Archive's kill count entry. RuneLite 1.13.6 renamed it from {@code FRACTURED_ARCHIVE} to
+	 * {@code THE_FRACTURED_ARCHIVE}; found by name, so the plugin compiles against either. Null if neither is there.
+	 * Declared before the tables, which use it.
+	 */
+	static final HiscoreSkill FRACTURED_ARCHIVE = byName("THE_FRACTURED_ARCHIVE", "FRACTURED_ARCHIVE");
 	private static final Map<String, HiscoreSkill> HISCORES = hiscores();
 	/** The plugin's names that aren't the hiscores' own (T-054), by {@link #key}. */
 	private static final Map<String, HiscoreSkill> OTHER_NAMES = otherNames();
@@ -94,7 +100,7 @@ final class SidePanelBossIcons
 		}
 		if (k.startsWith("ocellus"))
 		{
-			return HiscoreSkill.FRACTURED_ARCHIVE;
+			return FRACTURED_ARCHIVE;
 		}
 		return null;
 	}
@@ -151,7 +157,7 @@ final class SidePanelBossIcons
 		put(m, HiscoreSkill.THE_ROYAL_TITANS, "Branda the Fire Queen", "Eldric the Ice King");
 		// The Fractured Archive's bosses, as Jagex's "The Fractured Archive - Out Today" names them (the boss rules'
 		// sources): the archive's icon. Ocellus's phases are matched by prefix.
-		put(m, HiscoreSkill.FRACTURED_ARCHIVE, "Archive Guardian", "Bork", "Ezekiel", "Moia", "Xarth");
+		put(m, FRACTURED_ARCHIVE, "Archive Guardian", "Bork", "Ezekiel", "Moia", "Xarth");
 		// A raid's rooms, for a room whose raid isn't known: its raid's icon.
 		put(m, HiscoreSkill.CHAMBERS_OF_XERIC, "Tekton", "Vasa Nistirio", "Vespula", "Vanguards", "Muttadiles",
 			"Guardians", "Lizardman shamans", "Skeletal mystics", "Tightrope", "Ice demon");
@@ -162,8 +168,28 @@ final class SidePanelBossIcons
 		return Collections.unmodifiableMap(m);
 	}
 
+	/** T-162: the first of {@code names} that is a {@link HiscoreSkill} constant, by {@code values()}; or null. */
+	static HiscoreSkill byName(String... names)
+	{
+		for (String n : names)
+		{
+			for (HiscoreSkill s : HiscoreSkill.values())
+			{
+				if (s.name().equals(n))
+				{
+					return s;
+				}
+			}
+		}
+		return null;
+	}
+
 	private static void put(Map<String, HiscoreSkill> m, HiscoreSkill skill, String... names)
 	{
+		if (skill == null)
+		{
+			return;
+		}
 		for (String n : names)
 		{
 			m.put(key(n), skill);
