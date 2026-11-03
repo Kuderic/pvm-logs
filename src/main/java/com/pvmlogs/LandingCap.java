@@ -76,4 +76,23 @@ final class LandingCap
 		final double v = Math.max(0, variance + now.variance() - then.variance());
 		return new double[]{m, v};
 	}
+
+	/**
+	 * T-158: figures read with a cap of {@code capThen} - another npc's hitpoints, not the target's - taken back to what
+	 * they are with none, for {@link #recap} to cap at what the target had as the attack landed. Unchanged where they
+	 * weren't capped below the max ({@code capThen} unknown, 0 or at least {@code maxHit}: the calculator reads a count
+	 * run out as no cap) or where the attack is certain (no variance to move).
+	 */
+	static double[] uncapped(int maxHit, double chances, double mean, double variance, int capThen)
+	{
+		if (mean < 0 || maxHit <= 0 || capThen <= 0 || capThen >= maxHit || chances < 0
+			|| !(variance > DamageMoments.VARIANCE_FLOOR))
+		{
+			return new double[]{mean, variance};
+		}
+		final DamageMoments then = DamageMoments.capped(maxHit, capThen).landing(chances);
+		final DamageMoments none = DamageMoments.capped(maxHit, maxHit).landing(chances);
+		return new double[]{Math.max(0, mean + none.mean - then.mean),
+			Math.max(0, variance + none.variance() - then.variance())};
+	}
 }
