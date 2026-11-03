@@ -144,6 +144,16 @@ public class SidePanelBossIconsTest
 		m.put("Muttadiles", HiscoreSkill.CHAMBERS_OF_XERIC);
 		m.put("Pestilent Bloat", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("Zulrah", HiscoreSkill.ZULRAH);
+		// T-163: the bosses grouped with their adds.
+		m.put("Venenatis", HiscoreSkill.VENENATIS);
+		m.put("Spindel", HiscoreSkill.SPINDEL);
+		m.put("Vet'ion", HiscoreSkill.VETION);
+		m.put("Calvar'ion", HiscoreSkill.CALVARION);
+		m.put("Scorpia", HiscoreSkill.SCORPIA);
+		m.put("Sarachnis", HiscoreSkill.SARACHNIS);
+		m.put("Scurrius", HiscoreSkill.SCURRIUS);
+		m.put("Bryophyta", HiscoreSkill.BRYOPHYTA);
+		m.put("Nex", HiscoreSkill.NEX);
 		// T-088: in the rules for her burrow and as one per world.
 		m.put("Giant Mole", HiscoreSkill.GIANT_MOLE);
 		m.put("Vorkath", HiscoreSkill.VORKATH);

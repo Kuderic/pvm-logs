@@ -113,7 +113,8 @@ public class CalibrationTest
 	public void aBiasedBossOnARecordedBuildIsFlaggedAndAnHonestOneIsNot()
 	{
 		final List<Fight> vorkath = new ArrayList<>();
-		IntStream.range(0, 12).forEach(i -> vorkath.add(kill("Vorkath", 8061, i % 2 == 0 ? 80 + i : 120 - i, BUILD_A)));
+		// An honest boss with no group: Callisto (T-163 grouped Vorkath, here before, with his zombified spawn).
+		IntStream.range(0, 12).forEach(i -> vorkath.add(kill("Callisto", 6609, i % 2 == 0 ? 80 + i : 120 - i, BUILD_A)));
 		final List<Fight> history = newestFirst(biased(BUILD_A), vorkath);
 		final List<Calibration.Group> groups = Calibration.groups(history, null);
 		final Calibration.Group vard = group(groups, "boss", "Vardorvis", "aaaa111");
@@ -127,7 +128,7 @@ public class CalibrationTest
 		final int[] d = vard.deciles();
 		assertEquals(12, IntStream.of(d).sum());
 		assertEquals(0, IntStream.of(d).limit(9).sum());
-		final Calibration.Group vork = group(groups, "boss", "Vorkath", "aaaa111");
+		final Calibration.Group vork = group(groups, "boss", "Callisto", "aaaa111");
 		assertEquals(12, IntStream.of(vork.deciles()).sum());
 		assertEquals(0, vork.meanZ(), 0.1);
 		assertFalse(vork.flagged());
@@ -144,7 +145,7 @@ public class CalibrationTest
 		assertTrue(lines[4], lines[4].startsWith("  boss Vardorvis on build aaaa111: 12 kills, 12 fights, A 1692 / E 1200"
 			+ " = 1.41, mean z +"));
 		assertEquals("BOSSES (recorded builds):", lines[5]);
-		assertTrue(report.contains("  boss Vorkath on build aaaa111: 12 kills"));
+		assertTrue(report.contains("  boss Callisto on build aaaa111: 12 kills"));
 		assertFalse(report.contains(Calibration.OLDER));
 		// T-111's button still counts one flag.
 		assertEquals(1, PvmPerformancePanel.calibrationFlags(report));
