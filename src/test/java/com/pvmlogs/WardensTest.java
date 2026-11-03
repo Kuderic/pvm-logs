@@ -87,8 +87,9 @@ public class WardensTest
 			new ModifierTracker(null), 100);
 		assertEquals(0.8, ModifierTracker.accuracy(mods, 0.8), 0);
 		assertEquals(250, ModifierTracker.max(mods, 50));
-		// Each roll times five: 0.8 x 5 x 25.
-		assertEquals(100.0, ModifierTracker.moments(mods, new int[]{50}, 0.8, Integer.MAX_VALUE).mean, 1e-9);
+		// Each roll times five: 0.8 x 5 x 25; T-156: its 0 pushed up to 1 before the core's x5 (1 in 51 deals 5).
+		assertEquals(0.8 * 5 * (25 + 1.0 / 51), ModifierTracker.moments(mods, new int[]{50}, 0.8, Integer.MAX_VALUE).mean,
+			1e-9);
 	}
 
 	@Test

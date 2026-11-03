@@ -161,10 +161,11 @@ public class AraxyteMaxHitTest
 		assertEquals(29, shot.mean, 1e-12);
 		assertEquals(0, shot.variance(), 1e-9);
 		assertEquals(29, ModifierTracker.max(mods, 29));
-		// Without the rule, the same shot expected 13.0 with a variance near 100: the log's "avg 13.0".
+		// Without the rule, the same shot expected 13.0 with a variance near 100: the log's "avg 13.0" (T-156: and its 0
+		// pushed up to 1, 1 in 30).
 		final DamageMoments plain = ModifierTracker.moments(java.util.Collections.emptyList(), new int[]{29}, 0.896,
 			Integer.MAX_VALUE);
-		assertEquals(0.896 * 29 / 2.0, plain.mean, 1e-9);
+		assertEquals(0.896 * (29 / 2.0 + 1.0 / 30), plain.mean, 1e-9);
 		assertTrue(plain.variance() > 80);
 	}
 

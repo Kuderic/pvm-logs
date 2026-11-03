@@ -19,12 +19,13 @@ public class MultiHitDamageTest
 
 	// ---- PMF helpers: P(damage = d) ----
 
+	// A player's successful roll, its 0 pushed up to 1 (T-156; OSRS Wiki, Successful hit).
 	private static double[] roll(int max, int cap)
 	{
 		final double[] p = new double[Math.max(0, max) + 1];
 		for (int r = 0; r <= max; r++)
 		{
-			p[Math.min(r, cap)] += 1.0 / (max + 1);
+			p[Math.min(Math.max(1, r), cap)] += 1.0 / (max + 1);
 		}
 		return p;
 	}
@@ -91,7 +92,7 @@ public class MultiHitDamageTest
 		final DamageMoments m = CombatCalc.shapeMoments(OrdinaryShape.SPLIT, 45, p, 1, NONE);
 		assertMatches("split", convolve(landing(roll(22, NONE), p), landing(roll(23, NONE), p)), m);
 		// The same average as one roll to 45; a narrower spread.
-		assertEquals(p * 45 / 2.0, m.mean, 1e-12);
+		assertEquals(p * (45 / 2.0 + 1.0 / 23 + 1.0 / 24), m.mean, 1e-12);
 		assertTrue(m.variance() < CombatCalc.shapeMoments(OrdinaryShape.ONE, 45, p, 1, NONE).variance());
 		// Each half held to the cap on its own.
 		assertMatches("split capped", convolve(landing(roll(22, 15), p), landing(roll(23, 15), p)),
@@ -109,7 +110,7 @@ public class MultiHitDamageTest
 		// B1 (Y1 + B2 Y2): with chance 1 - p nothing; else the first roll plus a second that lands with p.
 		final double[] landed = convolve(roll(20, NONE), landing(roll(21, NONE), p));
 		assertMatches("macuahuitl", landing(landed, p), m);
-		assertEquals(p * 10 + p * p * 10.5, m.mean, 1e-12);
+		assertEquals(p * (10 + 1.0 / 21) + p * p * (10.5 + 1.0 / 22), m.mean, 1e-12);
 		// Below the one roll to 41 that master expected.
 		assertTrue(m.mean < p * 41 / 2.0);
 		assertEquals(p, CombatCalc.shapeLandChance(OrdinaryShape.MACUAHUITL, p, 1), 0);
@@ -124,7 +125,7 @@ public class MultiHitDamageTest
 		final double[] arrow = landing(roll(38, NONE), p);
 		assertMatches("dark bow", convolve(arrow, arrow), m);
 		// Twice the one roll master expected.
-		assertEquals(2 * p * 19, m.mean, 1e-12);
+		assertEquals(2 * p * (19 + 1.0 / 39), m.mean, 1e-12);
 	}
 
 	@Test

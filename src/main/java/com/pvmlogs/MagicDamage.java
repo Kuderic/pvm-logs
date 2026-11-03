@@ -152,6 +152,7 @@ final class MagicDamage
 	 * A successful hit's damage as moments (T-028): the same walk as
 	 * {@link #expectedOnHit}, every roll alike, Ahrim's as a 3:1 mixture, with
 	 * each outcome's square summed beside it. The mean is that walk's, to the bit.
+	 * A rolled 0 deals as a 1 (T-156).
 	 */
 	DamageMoments onHit(double mitigation, int splatCap, int attackCap)
 	{
@@ -165,7 +166,9 @@ final class MagicDamage
 		double squares = 0;
 		for (int rolled = bottom; rolled <= top; rolled++)
 		{
-			final int marked = afterMark(rolled);
+			// T-156: a successful 0 is pushed up to 1 (OSRS Wiki, Successful hit), before the twinflame's second splat and the
+			// target's share of it, as the DPS calc pushes; the Mark and Ahrim's leave a 1 a 1.
+			final int marked = afterMark(Math.max(1, rolled));
 			final double plain = landed(marked, mitigation, splatCap, attackCap);
 			if (ahrims)
 			{

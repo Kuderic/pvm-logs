@@ -33,6 +33,18 @@ public class DamageMomentsTest
 		return p;
 	}
 
+	// T-156: a player's successful roll, its 0 pushed up to 1 (OSRS Wiki, Successful hit), wherever the cap lets a 1 through.
+	private static double[] successful(int min, int max, int cap)
+	{
+		final double[] p = pmfRoll(min, max, cap);
+		if (p.length > 1 && cap >= 1)
+		{
+			p[1] += p[0];
+			p[0] = 0;
+		}
+		return p;
+	}
+
 	private static double[] landing(double[] roll, double chance)
 	{
 		final double[] p = new double[roll.length];
@@ -132,6 +144,31 @@ public class DamageMomentsTest
 	}
 
 	@Test
+	public void aSuccessfulRollMatchesItsPmf()
+	{
+		// T-156: the 0 pushed up to 1, against its PMF; a floor above 0 or a cap of 0 has nothing to push.
+		for (int max : new int[]{1, 2, 7, 30, 61})
+		{
+			for (int cap : new int[]{0, 1, 5, 29, 61, Integer.MAX_VALUE})
+			{
+				for (int min : new int[]{0, 3, 9})
+				{
+					if (min > max)
+					{
+						continue;
+					}
+					final String what = "successful " + min + ".." + max + " cap " + cap;
+					assertMatches(what, successful(min, max, cap), DamageMoments.successful(min, max, cap));
+				}
+			}
+			assertMatches("successful 0.." + max, successful(0, max, Integer.MAX_VALUE), DamageMoments.successful(max));
+		}
+		// A max of 1 always deals 1.
+		assertEquals(1.0, DamageMoments.successful(1).mean, 0);
+		assertEquals(0.0, DamageMoments.successful(1).variance(), 1e-12);
+	}
+
+	@Test
 	public void theKnownCase()
 	{
 		// Hit chance p, uniform 0..M: Var = p·M(M+2)/12 + p(1−p)(M/2)².
@@ -150,8 +187,9 @@ public class DamageMomentsTest
 		final double p = 0.72;
 		final int max = 46;
 		final DamageMoments m = CombatCalc.ordinaryMoments(max, p, 1, Integer.MAX_VALUE);
-		assertEquals(p * (max / 2.0), m.mean, 0);
-		assertMatches("ordinary", landing(pmfRoll(0, max, Integer.MAX_VALUE), p), m);
+		// T-156: max/2, and the 0's 1 in max + 1 dealing 1.
+		assertEquals(p * (max / 2.0 + 1.0 / (max + 1)), m.mean, 1e-12);
+		assertMatches("ordinary", landing(successful(0, max, Integer.MAX_VALUE), p), m);
 	}
 
 	@Test
@@ -162,8 +200,8 @@ public class DamageMomentsTest
 		final int max = 46;
 		final int cap = 12;
 		final DamageMoments m = CombatCalc.ordinaryMoments(max, p, 1, cap);
-		assertEquals(p * CombatCalc.cappedAverage(max, cap), m.mean, 0);
-		assertMatches("capped", landing(pmfRoll(0, max, cap), p), m);
+		assertEquals(p * (CombatCalc.cappedAverage(max, cap) + 1.0 / (max + 1)), m.mean, 1e-12);
+		assertMatches("capped", landing(successful(0, max, cap), p), m);
 		assertTrue(m.variance() < CombatCalc.ordinaryMoments(max, p, 1, Integer.MAX_VALUE).variance());
 	}
 
@@ -173,14 +211,15 @@ public class DamageMomentsTest
 		// Three hits on a 3x3, each its own accuracy and damage roll, the max halving rounded down: 51, 25, 12.
 		final double p = 0.7;
 		final DamageMoments m = CombatCalc.ordinaryMoments(51, p, 3, Integer.MAX_VALUE);
-		assertEquals(p * (51 / 2.0) + p * (25 / 2.0) + p * (12 / 2.0), m.mean, 1e-12);
-		final double[] pmf = convolve(convolve(landing(pmfRoll(0, 51, Integer.MAX_VALUE), p),
-			landing(pmfRoll(0, 25, Integer.MAX_VALUE), p)), landing(pmfRoll(0, 12, Integer.MAX_VALUE), p));
+		// T-156: each hit's own 0 pushed up to 1.
+		assertEquals(p * (51 / 2.0 + 1.0 / 52) + p * (25 / 2.0 + 1.0 / 26) + p * (12 / 2.0 + 1.0 / 13), m.mean, 1e-12);
+		final double[] pmf = convolve(convolve(landing(successful(0, 51, Integer.MAX_VALUE), p),
+			landing(successful(0, 25, Integer.MAX_VALUE), p)), landing(successful(0, 12, Integer.MAX_VALUE), p));
 		assertMatches("scythe", pmf, m);
 		// Capped, each hitsplat is capped on its own, as the average has always had it.
 		final DamageMoments capped = CombatCalc.ordinaryMoments(51, p, 3, 20);
-		final double[] cappedPmf = convolve(convolve(landing(pmfRoll(0, 51, 20), p), landing(pmfRoll(0, 25, 20), p)),
-			landing(pmfRoll(0, 12, 20), p));
+		final double[] cappedPmf = convolve(convolve(landing(successful(0, 51, 20), p), landing(successful(0, 25, 20), p)),
+			landing(successful(0, 12, 20), p));
 		assertMatches("capped scythe", cappedPmf, capped);
 	}
 
@@ -196,7 +235,7 @@ public class DamageMomentsTest
 		assertEquals(proc * ruby + (1.0 - proc) * ordinary.mean, m.mean, 0);
 		final double[] fixed = new double[ruby + 1];
 		fixed[ruby] = 1;
-		assertMatches("ruby", mix(proc, fixed, landing(pmfRoll(0, 48, Integer.MAX_VALUE), p)), m);
+		assertMatches("ruby", mix(proc, fixed, landing(successful(0, 48, Integer.MAX_VALUE), p)), m);
 	}
 
 	@Test
@@ -219,9 +258,9 @@ public class DamageMomentsTest
 		final DamageMoments shared = CombatCalc.specMoments(maxima, p, 0, 0, Integer.MAX_VALUE, true);
 		assertEquals(CombatCalc.specAverage(maxima, p, 0, Integer.MAX_VALUE), apart.mean, 0);
 		assertEquals(apart.mean, shared.mean, 0);
-		final double[] one = landing(pmfRoll(0, 30, Integer.MAX_VALUE), p);
+		final double[] one = landing(successful(0, 30, Integer.MAX_VALUE), p);
 		assertMatches("apart", convolve(one, one), apart);
-		final double[] both = convolve(pmfRoll(0, 30, Integer.MAX_VALUE), pmfRoll(0, 30, Integer.MAX_VALUE));
+		final double[] both = convolve(successful(0, 30, Integer.MAX_VALUE), successful(0, 30, Integer.MAX_VALUE));
 		assertMatches("shared", landing(both, p), shared);
 		assertTrue(shared.variance() > apart.variance());
 	}
@@ -320,7 +359,9 @@ public class DamageMomentsTest
 		final double[] pmf = new double[31];
 		for (int rolled = 0; rolled <= 22; rolled++)
 		{
-			pmf[rolled + rolled * 40 / 100] += 1.0 / 23;
+			// T-156: a rolled 0 deals as a 1, and its second splat is 0.
+			final int r = Math.max(1, rolled);
+			pmf[r + r * 40 / 100] += 1.0 / 23;
 		}
 		assertMatches("twinflame", pmf, m.onHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE));
 	}
@@ -333,8 +374,9 @@ public class DamageMomentsTest
 		final double[] pmf = new double[27];
 		for (int rolled = 0; rolled <= 20; rolled++)
 		{
-			pmf[rolled] += 0.75 / 21;
-			pmf[rolled * 130 / 100] += 0.25 / 21;
+			final int r = Math.max(1, rolled);
+			pmf[r] += 0.75 / 21;
+			pmf[r * 130 / 100] += 0.25 / 21;
 		}
 		final DamageMoments onHit = m.onHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE);
 		assertEquals(m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), onHit.mean, 0);
@@ -350,7 +392,7 @@ public class DamageMomentsTest
 		final double[] pmf = new double[50];
 		for (int rolled = 0; rolled <= 33; rolled++)
 		{
-			pmf[m.afterMark(rolled)] += 1.0 / 34;
+			pmf[m.afterMark(Math.max(1, rolled))] += 1.0 / 34;
 		}
 		assertMatches("mark", pmf, m.onHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE));
 	}
