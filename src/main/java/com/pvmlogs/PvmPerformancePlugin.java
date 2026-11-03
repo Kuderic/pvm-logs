@@ -44,6 +44,7 @@ import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
 import net.runelite.api.Projectile;
 import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.AnimationChanged;
@@ -431,6 +432,9 @@ public class PvmPerformancePlugin extends Plugin
 	// The last tick a melee blow at an add of the open boss was booked from its splat (T-086), so its next splat is not
 	// another.
 	private int lastAddBlowTick = Integer.MIN_VALUE;
+	// T-163: the open boss fight's adds no list knows - the spawns seen while it is open, and the player's last attack on
+	// the boss, which a provisional add is released after.
+	private final UnlistedAdds unlistedAdds = new UnlistedAdds();
 	// T-088: the fought target out of view, alive, its fight held open for it; the last tick the client loaded an area
 	// (a teleport); and, after a trip, whether the overhead bar is still to be checked for a fresh one, with the tick the
 	// target was last seen before it.
@@ -1055,7 +1059,7 @@ public class PvmPerformancePlugin extends Plugin
 						hitsplat.getAmount(), npc.getName(), npc.getId());
 					return;
 				}
-				if (isAddOfOpenBoss(npc))
+				if (swattedAddOfOpenBoss(npc, now, isAoeCollateral(npc, previousMineTick)))
 				{
 					// Swatted in passing (T-084): the boss's fight stays open, and the add's damage, unscored, is nobody's.
 					final List<PendingHit> flew = pendingMineHits.remove(npc.getIndex());
@@ -1084,6 +1088,7 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				resumeFight(npc);
 			}
+			noteBossAttacked(npc);
 			// After a trip (T-088): the first overhead bar on the target says whether it is still the one left part-way down.
 			// Read with this splat, before its damage is counted: a fresh one shows more of its bar than the fight has left.
 			if (barCheckOnReturn && npc.getIndex() == current.getTargetIndex())
@@ -2528,7 +2533,8 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final long now = System.currentTimeMillis();
 		// A shot at one of the boss's adds swatted in passing leaves the boss's fight open (T-084: Zulrah's snakelings).
-		if (!isAddOfOpenBoss(npc) && (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex()))
+		if (!swattedAddOfOpenBoss(npc, now, false)
+			&& (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex()))
 		{
 			if (!isFightable(npc))
 			{
@@ -2536,6 +2542,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			startFight(npc, now);
 		}
+		noteBossAttacked(npc);
 		final int lands = landingTick(projectile);
 		pendingMineHits.computeIfAbsent(npc.getIndex(), k -> new ArrayList<>())
 			.add(attackThrownOn(startTick(projectile), lands, npc.getId(), projectileBookedTick(client.getTickCount())));
@@ -4221,6 +4228,16 @@ public class PvmPerformancePlugin extends Plugin
 			// The flame wall is an NPC rather than an object, so it arrives here.
 			olmPhase = phase;
 		}
+		// T-163: what spawns during a boss's fight, and how near the boss, for an add no list knows. Kept only while one is
+		// open; judged only if the player attacks it.
+		if (!Thralls.isThrall(npc.getId()) && current != null && !current.isEnded()
+			&& npc.getIndex() != current.getTargetIndex() && bossFightOpen())
+		{
+			final WorldArea boss = targetNpc.getWorldArea();
+			final WorldArea area = npc.getWorldArea();
+			final int distance = boss == null || area == null ? -1 : boss.distanceTo(area);
+			unlistedAdds.spawned(npc.getIndex(), client.getTickCount(), distance == Integer.MAX_VALUE ? -1 : distance);
+		}
 	}
 
 	/**
@@ -5075,11 +5092,90 @@ public class PvmPerformancePlugin extends Plugin
 		return boss == null ? null : boss.chaseByDistance;
 	}
 
-	/** Whether this npc is an add of the open fight's boss that leaves its fight open (T-084: Zulrah's snakelings). */
-	private boolean isAddOfOpenBoss(NPC npc)
+	/**
+	 * Whether this npc is an add of the open fight's boss that leaves its fight open: one its group lists (T-084: Zulrah's
+	 * snakelings), or one no list knows (T-163, {@link UnlistedAdds}). The second is judged on each attack at it, and a
+	 * release past {@link UnlistedAdds#RELEASE_TICKS} ends the boss's fight here, at the switch, as it would have ended
+	 * without the rule. A splat that is one attack's share across several npcs ({@code collateral}) is never taken as an
+	 * unlisted add's: it stays the extra target it was.
+	 */
+	private boolean swattedAddOfOpenBoss(NPC npc, long now, boolean collateral)
 	{
-		return npc != null && current != null && !current.isEnded() && current.getTargetIndex() != npc.getIndex()
-			&& EncounterGroup.addKeepsBossFight(npc.getId(), current.getTargetId());
+		if (npc == null || current == null || current.isEnded() || current.getTargetIndex() == npc.getIndex())
+		{
+			return false;
+		}
+		if (EncounterGroup.addKeepsBossFight(npc.getId(), current.getTargetId()))
+		{
+			return true;
+		}
+		if (collateral || !bossFightOpen() || !isFightable(npc))
+		{
+			return false;
+		}
+		final String name = Text.removeTags(npc.getName());
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final boolean isBoss = !MonsterRooms.isMonster(name, npc.getId(), false, rules);
+		final int addHp = isBoss ? -1 : fullHitpoints(npc.getId());
+		final int bossHp = current.getMaxHp();
+		final UnlistedAdds.Spawn spawn = unlistedAdds.spawnOf(npc.getIndex());
+		final int tick = client.getTickCount();
+		final UnlistedAdds.Verdict verdict = UnlistedAdds.judge(true, isBoss, name, current.getTargetName(), addHp, bossHp,
+			spawn, tick, unlistedAdds.bossAttackTick());
+		if (verdict == UnlistedAdds.Verdict.ADD)
+		{
+			if (unlistedAdds.addAttacked(npc.getIndex(), npc.getId(), tick, now))
+			{
+				debug.log("%s", UnlistedAdds.line(name, npc.getId(), current.getTargetName(),
+					UnlistedAdds.byName(name, current.getTargetName()), spawn, addHp, bossHp));
+			}
+			return true;
+		}
+		if (verdict == UnlistedAdds.Verdict.RELEASED)
+		{
+			unlistedAdds.releasedAt(tick, now);
+			debug.log("UNLISTED ADD released: %s (npc %d) of %s, the boss not attacked since tick %d, %d ticks (more than %d); "
+				+ "its fight ends at the switch on tick %d", name, npc.getId(), current.getTargetName(),
+				unlistedAdds.bossAttackTick(), tick - unlistedAdds.bossAttackTick(), UnlistedAdds.RELEASE_TICKS,
+				unlistedAdds.switchTick());
+			finalizeFight(false, Math.max(current.getStartMillis(), unlistedAdds.switchMillis()),
+				"a different target was attacked: an add no list knows, " + UnlistedAdds.RELEASE_TICKS
+					+ " ticks with the boss unattacked");
+		}
+		return false;
+	}
+
+	/**
+	 * T-163: a boss's fight is open outside a raid (a boss by the hiscores' list, {@link EncounterGroup#isBossByName}, a
+	 * group or the boss rules: whatever isn't a monster), its boss alive and in view.
+	 */
+	private boolean bossFightOpen()
+	{
+		return current != null && !current.isEnded() && raidType == null && away == null && !current.isMonsterRoom()
+			&& targetNpc != null && targetNpc.getIndex() == current.getTargetIndex() && !targetNpc.isDead()
+			&& !MonsterRooms.isMonster(current.getTargetName(), current.getTargetId(), false,
+				monsterStats == null ? null : monsterStats.rules());
+	}
+
+	/** T-163: the player's own attack on the open fight's target, what a provisional add's release counts from. */
+	private void noteBossAttacked(NPC npc)
+	{
+		if (npc != null && current != null && !current.isEnded() && current.getTargetIndex() == npc.getIndex())
+		{
+			unlistedAdds.bossAttacked(client.getTickCount());
+		}
+	}
+
+	/** Full hitpoints from the monster data, else RuneLite's table; -1 when neither knows. */
+	private int fullHitpoints(int npcId)
+	{
+		final MonsterStatsProvider.MonsterStats stats = monsterStats == null ? null : monsterStats.get(npcId);
+		if (stats != null && stats.getHitpoints() > 0)
+		{
+			return stats.getHitpoints();
+		}
+		final Integer known = npcManager == null ? null : npcManager.getHealth(npcId);
+		return known == null ? -1 : known;
 	}
 
 	/**
@@ -5447,7 +5543,8 @@ public class PvmPerformancePlugin extends Plugin
 			// tick would otherwise take it, with the boss's expectation and no splat to answer it.
 			final boolean onAdd = attackObservedNpcIndex >= 0 && attackObservedNpcId >= 0 && current != null
 				&& !current.isEnded() && current.getTargetIndex() != attackObservedNpcIndex
-				&& EncounterGroup.addKeepsBossFight(attackObservedNpcId, current.getTargetId());
+				&& (EncounterGroup.addKeepsBossFight(attackObservedNpcId, current.getTargetId())
+					|| unlistedAdds.isAccepted(attackObservedNpcIndex));
 			Fight attacker = onAdd ? null : attackerFor(attackObservedNpcIndex, attackTick, current, lastFinished);
 			// A shot lands only on the npc its projectile was aimed at (T-101), unless what threw it hits several. A splat of
 			// mine on another npc in between opened a fight there - a thrall's last 0 on Araxxor, in Eric's 21:40 log - and the
@@ -6643,6 +6740,7 @@ public class PvmPerformancePlugin extends Plugin
 			current.groupAsMonster();
 		}
 		current.noteStartTick(client.getTickCount());
+		unlistedAdds.reset(client.getTickCount());
 		timelines.attach(current);
 		perf.fightStarted();
 		// From the target's stats as the drains left them when the fight opened (T-050); started from its base if nothing
@@ -7796,6 +7894,7 @@ public class PvmPerformancePlugin extends Plugin
 		chase = null;
 		deadInRaid = false;
 		barCheckOnReturn = false;
+		unlistedAdds.reset(Integer.MIN_VALUE);
 		mechanics.finish();
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
 				+ "combatTicks=%d expDamage=%.1f",
