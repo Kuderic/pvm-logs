@@ -264,6 +264,8 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Inject
 	private DefenceDrain drain;
+	// T-160: what lands on a splashed special's target over its window, for the log.
+	private final SplashCheck splashCheck = new SplashCheck();
 
 	// The bosses' damage modifiers (T-057): the windows that change the player's damage.
 	@Inject
@@ -931,6 +933,12 @@ public class PvmPerformancePlugin extends Plugin
 		final Actor actor = event.getActor();
 		final Hitsplat hitsplat = event.getHitsplat();
 		final long now = System.currentTimeMillis();
+		// T-160: anyone's splat on the target of a special booked as a splash, over its landing window.
+		if (actor instanceof NPC)
+		{
+			splashCheck.splat(((NPC) actor).getIndex(), client.getTickCount(), hitsplat.getAmount(),
+				hitsplat.getHitsplatType(), hitsplat.isMine() ? "mine" : hitsplat.isOthers() ? "others'" : "no owner");
+		}
 
 		if (actor instanceof NPC && hitsplat.isMine() && !EncounterGroup.isIgnored(((NPC) actor).getId()))
 		{
@@ -1853,6 +1861,9 @@ public class PvmPerformancePlugin extends Plugin
 	// A thrall's splat: real damage, so it counts towards what the target has left - but none of it is the player's.
 	private void creditThrall(NPC npc, int amount, int tick)
 	{
+		// T-160: nor a special's hit, for its drain.
+		drain.onThrallSplat(npc, amount);
+		splashCheck.thrall(npc.getIndex(), tick, amount);
 		if (current != null && !current.isEnded())
 		{
 			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
@@ -2193,6 +2204,9 @@ public class PvmPerformancePlugin extends Plugin
 			}
 		}
 		thralls.noteThrallSplat(r.npcIndex, tick);
+		// T-160: nor a special's hit, for its drain.
+		drain.onThrallSplat(r.npcIndex, r.amount);
+		splashCheck.thrall(r.npcIndex, tick, r.amount);
 		debug.log("RE-JUDGED hitsplat %d on index %d (was player, thrall p=%.2f): THRALL - its projectile's splat had gone "
 			+ "unclaimed%s", r.amount, r.npcIndex, r.thrallProbability, outcome);
 	}
@@ -3209,6 +3223,9 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
+		// T-160: it drains nothing, whatever lands on its tick; and what does land is logged once its window is over.
+		drain.onSplashedSpecial(p.npc.getIndex(), p.tick);
+		splashCheck.watch(p.special.getDisplayName(), p.npc.getIndex(), p.tick);
 		if (current == null || current.isEnded() || current.getTargetIndex() != p.npc.getIndex())
 		{
 			debug.log("SPLASHED SPECIAL %s thrown on %d at npc index %d: not the open fight's target, not booked",
@@ -6266,6 +6283,11 @@ public class PvmPerformancePlugin extends Plugin
 		trackThrallAndXp();
 		// T-145: a Soul Rend thrown last tick that has paid no experience by now splashed.
 		bookSplashedSpecial(client.getTickCount());
+		// T-160: and a splash's window over: what landed on its target.
+		for (String line : splashCheck.due(client.getTickCount()))
+		{
+			debug.log("%s", line);
+		}
 		// The specials due this tick land their drains before anything works out an expectation (T-049).
 		drain.onGameTick();
 		// Damage-modifier windows that ran out (T-057).
