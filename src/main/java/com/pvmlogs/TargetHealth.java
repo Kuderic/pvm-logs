@@ -517,6 +517,80 @@ class TargetHealth
 	void forget(int index)
 	{
 		byIndex.remove(index);
+		// T-155: and anything parked for it: gone from the scene for good (dead), or found fresh on return.
+		parked.remove(index);
+	}
+
+	/** T-155: a target's count set aside while its fight is over and it lives on ({@link #park}). */
+	static final class Parked
+	{
+		final Entry entry;
+		final int world;
+		final int raid;
+		// The plugin's own tally of damage on it, carried with the count.
+		final int extra;
+
+		Parked(Entry entry, int world, int raid, int extra)
+		{
+			this.entry = entry;
+			this.world = world;
+			this.raid = raid;
+			this.extra = extra;
+		}
+
+		int damage()
+		{
+			return entry.damage;
+		}
+	}
+
+	private static final int MAX_PARKED = 16;
+	private final Map<Integer, Parked> parked = new HashMap<>();
+
+	/**
+	 * T-155: sets this target's count aside, where a fight on it ends with it alive in a raid ({@code raid}, the plugin's
+	 * raid number), so the same npc fought again - the same index and id, on the same world, in the same raid - carries
+	 * on from it ({@link #unpark}). In Eric's Chambers of Xeric of 2026-11-02, Vespula's portal left his scene with each
+	 * of his three deaths there and was fought again on the same index: its kill reconciled 3 against 242, the four
+	 * pieces 248. Olm's left claw likewise, across a death and across a turn to Olm's head. Only the one; anything parked
+	 * from another raid goes.
+	 */
+	void park(int index, int world, int raid, int extra)
+	{
+		final Entry e = byIndex.get(index);
+		if (e == null)
+		{
+			return;
+		}
+		parked.values().removeIf(p -> p.raid != raid);
+		if (parked.size() >= MAX_PARKED)
+		{
+			parked.clear();
+		}
+		parked.put(index, new Parked(e, world, raid, extra));
+	}
+
+	/**
+	 * T-155: the count {@link #park}ed for this npc, put back on its index, or null: none, or another npc (another id, a
+	 * world hop, another raid). Taken either way, as the index now belongs to whatever is on it.
+	 */
+	Parked unpark(int index, int npcId, int world, int raid)
+	{
+		final Parked p = parked.remove(index);
+		if (p == null || p.world != world || p.raid != raid || !p.entry.ids.contains(npcId))
+		{
+			return null;
+		}
+		// What was counted on it while no fight was open (a thrall's last splat), added to what was parked.
+		final Entry since = byIndex.get(index);
+		if (since != null && since != p.entry)
+		{
+			p.entry.damage += since.damage;
+			p.entry.healed += since.healed;
+			p.entry.unseen += since.unseen;
+		}
+		byIndex.put(index, p.entry);
+		return p;
 	}
 
 	void clear()

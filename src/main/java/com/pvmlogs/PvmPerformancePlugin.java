@@ -6528,6 +6528,16 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		// Full hitpoints from the version of the monster data in use, which knows the Chambers and Vardorvis where
 		// RuneLite's table does not; RuneLite's (nullable) as the fallback. The boss health bar, once read, beats both.
+		// T-155: the same npc as a fight in this raid left alive, through the player's death or a turn to another target:
+		// what was counted on it carries on.
+		final TargetHealth.Parked kept = raidType == null ? null
+			: health.unpark(npc.getIndex(), npc.getId(), client.getWorld(), raidCounter);
+		if (kept != null)
+		{
+			damageByIndex.put(npc.getIndex(), kept.extra);
+			debug.log("COUNT KEPT on %s (npc %d, index %d): the %d counted on it before its last fight ended carries on",
+				Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), kept.damage());
+		}
 		final MonsterStatsProvider.MonsterStats stats = monsterStats.get(npc.getId());
 		final Integer known = npcManager.getHealth(npc.getId());
 		final int tableHp = stats != null && stats.getHitpoints() > 0 ? stats.getHitpoints() : known == null ? -1 : known;
@@ -7772,6 +7782,12 @@ public class PvmPerformancePlugin extends Plugin
 			castsAwaiting.clear();
 			combatCalc.forgetConflictionCharge();
 			pendingMineHits.clear();
+			// T-155: in a raid, a target left alive keeps its count for when it's fought again: the room goes on (T-100).
+			if (!died && raidType != null)
+			{
+				health.park(current.getTargetIndex(), client.getWorld(), raidCounter,
+					damageByIndex.getOrDefault(current.getTargetIndex(), 0));
+			}
 			damageByIndex.clear();
 			whileOnAnAdd.clear();
 			health.clear();
