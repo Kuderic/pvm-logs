@@ -117,6 +117,8 @@ final class DrainTracker
 		final List<Integer> splats = new ArrayList<>(2);
 		/** T-143: whether hitpoints experience came on the tick it was thrown: it dealt damage. */
 		final boolean hpXpGiven;
+		/** T-160: booked as a splash (T-145: no experience since its throw), so it drains nothing whatever lands. */
+		boolean splashBooked;
 
 		Throw(int thrownTick, SpecialWeapon weapon, int npcIndex, int npcId, String name, int dueTick,
 			DrainRule.Target target, boolean hpXpGiven)
@@ -246,6 +248,40 @@ final class DrainTracker
 	}
 
 	/**
+	 * T-160: one of the splats {@link #ownSplat} took that wasn't the player's after all: the thrall's (judged so, or
+	 * re-judged within its tick). Taken back from any special due there on this tick. In Eric's duo Yama of 2026-11-02, a
+	 * Soul Rend that splashed on 16972 drained on the thrall's 3 at its landing tick ([16977]: "hit 3 (landed) ...
+	 * reduced by 22 -> 25"), and another on the thrall's 1 ([17332]). Every splat of the player's isMine() reaches
+	 * ownSplat before the thrall is weighed, so it is taken back here.
+	 */
+	void notOwnSplat(int npcIndex, int tick, int amount)
+	{
+		for (Throw t : pending)
+		{
+			if (t.npcIndex == npcIndex && t.dueTick == tick)
+			{
+				t.splats.remove(Integer.valueOf(Math.max(0, amount)));
+			}
+		}
+	}
+
+	/**
+	 * T-160: the player's special thrown on {@code thrownTick} at this npc was booked as a splash (T-145): no experience
+	 * on its tick or after, so it dealt nothing. Whatever lands on its due tick is someone else's; it drains nothing.
+	 */
+	void ownSplashed(int npcIndex, int thrownTick)
+	{
+		for (Throw t : pending)
+		{
+			// Within a tick: the energy can fall a tick before the attack (T-145).
+			if (t.npcIndex == npcIndex && Math.abs(t.thrownTick - thrownTick) <= 1)
+			{
+				t.splashBooked = true;
+			}
+		}
+	}
+
+	/**
 	 * T-147: a draining special by a player outside the RuneLite party, seen from their animation with the weapon in
 	 * hand, aimed at the npc. Its splat is due {@code dueTick}: another player's splat on the npc then (see
 	 * {@link #othersSplat}).
@@ -366,7 +402,8 @@ final class DrainTracker
 				continue;
 			}
 			it.remove();
-			if (t.splats.isEmpty() && splashed(t.weapon, t.hpXpGiven))
+			// T-160: or booked as one, whatever landed on its tick (another's splat, the thrall's).
+			if (t.splashBooked || t.splats.isEmpty() && splashed(t.weapon, t.hpXpGiven))
 			{
 				// T-143: a Soul Rend that splashed: it dealt nothing, so it reduces nothing. A miss, not a skip.
 				apply(ensure(t.npcIndex, t.npcId, t.name, t.target), t.weapon, true, t.thrownTick, now, 0, false);
