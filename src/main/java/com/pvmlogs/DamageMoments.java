@@ -60,6 +60,36 @@ final class DamageMoments
 		return new DamageMoments(max / 2.0, max * (2 * max + 1) / 6.0);
 	}
 
+	/**
+	 * T-156: a player's successful roll from 0 to {@code max}, uncapped, its 0 pushed up to 1 (OSRS Wiki, Successful hit:
+	 * "If the roll is from a player, then 0s are pushed up to 1", since 2024-05-29). The 0's 1 in max + 1 deals 1: mean
+	 * max/2 + 1/(max + 1), E[X²] max(2max+1)/6 + 1/(max + 1). A max of 1 always deals 1.
+	 */
+	static DamageMoments successful(double max)
+	{
+		if (max <= 0)
+		{
+			return ZERO;
+		}
+		final double zero = 1.0 / (max + 1);
+		return new DamageMoments(max / 2.0 + zero, max * (2 * max + 1) / 6.0 + zero);
+	}
+
+	/**
+	 * T-156: {@link #capped(int, int, int)}'s roll as a player's successful one, its 0 pushed up to 1. Only a roll that can
+	 * come to 0 moves (a floor of 1 or more has no 0 to push), and only where the cap lets a 1 through.
+	 */
+	static DamageMoments successful(int min, int trueMax, int cap)
+	{
+		final DamageMoments roll = capped(min, trueMax, cap);
+		if (min > 0 || trueMax <= 0 || cap < 1)
+		{
+			return roll;
+		}
+		final double zero = 1.0 / (trueMax + 1);
+		return new DamageMoments(roll.mean + zero, roll.second + zero);
+	}
+
 	/** {@link CombatCalc#cappedAverage(int, int)}'s roll: 0 to trueMax, everything above the cap landing on it. */
 	static DamageMoments capped(int trueMax, int cap)
 	{

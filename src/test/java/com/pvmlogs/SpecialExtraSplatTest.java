@@ -29,6 +29,15 @@ public class SpecialExtraSplatTest
 		return p;
 	}
 
+	// T-156: the special's melee hit, a player's successful roll: its 0 pushed up to 1.
+	private static double[] successful(int max, int cap)
+	{
+		final double[] p = roll(0, max, cap);
+		p[1] += p[0];
+		p[0] = 0;
+		return p;
+	}
+
 	private static double[] fixed(int value)
 	{
 		final double[] p = new double[value + 1];
@@ -82,10 +91,10 @@ public class SpecialExtraSplatTest
 		final double p = 0.85;
 		// A godsword's special max: 52 x 1.1 = 57.
 		final DamageMoments m = CombatCalc.withExtraSplat(57, p, NONE, SpecialAttack.ANCIENT_GODSWORD);
-		assertMatches("AGS", landing(convolve(roll(0, 57, NONE), fixed(25)), p), m);
-		assertEquals(p * (57 / 2.0 + 25), m.mean, 1e-12);
+		assertMatches("AGS", landing(convolve(successful(57, NONE), fixed(25)), p), m);
+		assertEquals(p * (57 / 2.0 + 1.0 / 58 + 25), m.mean, 1e-12);
 		// Under Verzik's per-hitsplat cap of 10, the 25 is held to 10 like the hit.
-		assertMatches("AGS capped", landing(convolve(roll(0, 57, 10), fixed(10)), p),
+		assertMatches("AGS capped", landing(convolve(successful(57, 10), fixed(10)), p),
 			CombatCalc.withExtraSplat(57, p, 10, SpecialAttack.ANCIENT_GODSWORD));
 	}
 
@@ -94,9 +103,10 @@ public class SpecialExtraSplatTest
 	{
 		final double p = 0.7;
 		final DamageMoments m = CombatCalc.withExtraSplat(48, p, NONE, SpecialAttack.SARADOMIN_SWORD);
-		assertMatches("SS", landing(convolve(roll(0, 48, NONE), roll(1, 16, NONE)), p), m);
-		assertEquals(p * (24 + 8.5), m.mean, 1e-12);
-		assertMatches("SS capped", landing(convolve(roll(0, 48, 10), roll(1, 16, 10)), p),
+		// The lightning's 1 to 16 has no 0 to push.
+		assertMatches("SS", landing(convolve(successful(48, NONE), roll(1, 16, NONE)), p), m);
+		assertEquals(p * (24 + 1.0 / 49 + 8.5), m.mean, 1e-12);
+		assertMatches("SS capped", landing(convolve(successful(48, 10), roll(1, 16, 10)), p),
 			CombatCalc.withExtraSplat(48, p, 10, SpecialAttack.SARADOMIN_SWORD));
 	}
 

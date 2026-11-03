@@ -169,7 +169,9 @@ public class MaggotKingTest
 			double sq = 0;
 			for (int r = 0; r <= maxima[hit]; r++)
 			{
-				final double v = hit == 0 ? r * 3 / 2 : r;
+				// T-156: a successful 0 is pushed up to 1 before the punish's x1.5.
+				final int d = Math.max(1, r);
+				final double v = hit == 0 ? d * 3 / 2 : d;
 				m += accuracy / (maxima[hit] + 1) * v;
 				sq += accuracy / (maxima[hit] + 1) * v * v;
 			}
