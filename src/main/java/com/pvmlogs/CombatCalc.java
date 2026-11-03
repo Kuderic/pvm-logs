@@ -2248,9 +2248,49 @@ class CombatCalc
 			{
 				total += dart.getArange();
 			}
+			if (dizanasSunfire())
+			{
+				total += SUNFIRE_ATTACK;
+			}
 		}
 		return total;
 	}
+
+	/** T-151: Dizana's Sunfire, a charged Dizana's quiver's +10 ranged accuracy and +1 ranged strength (OSRS Wiki). */
+	static final int SUNFIRE_ATTACK = 10;
+	static final int SUNFIRE_STRENGTH = 1;
+
+	/**
+	 * T-151: whether Dizana's Sunfire applies to the attack going out: a charged or blessed Dizana's quiver, or the
+	 * Dizana's max cape, worn, with arrows or bolts in the ammo slot for a weapon that fires them. OSRS Wiki, Dizana's
+	 * quiver, read 2026-11-03: "will gain an additional +1 Ranged Strength and +10 Ranged accuracy", for ammo the quiver
+	 * can store, so not darts, chinchompas or the bow of faerdhinen's; blessed, "a permanent effect". The DPS calc's facts
+	 * agree. The quiver's own ammo slot isn't read here, only the equipment's.
+	 */
+	private boolean dizanasSunfire()
+	{
+		final Loadout gear = gear();
+		return attackStyle().getAttackType() == AttackType.RANGED && ammoSlotFeedsWeapon()
+			&& sunfire(gear.id(EquipmentInventorySlot.CAPE), gear.name(EquipmentInventorySlot.AMMO), weaponCategory());
+	}
+
+	/** T-151: {@link #dizanasSunfire} from the cape, the ammo's name and the weapon's category. */
+	static boolean sunfire(int capeId, String ammoName, WeaponCategory weapon)
+	{
+		if (!SUNFIRE_CAPES.contains(capeId) || ammoName == null)
+		{
+			return false;
+		}
+		final String ammo = ammoName.toLowerCase();
+		return weapon == WeaponCategory.CROSSBOW && ammo.contains("bolt")
+			|| weapon == WeaponCategory.BOW && ammo.contains("arrow");
+	}
+
+	// A charged quiver, a blessed (infinite) one, and the max cape, each with its trouver version (gameval names).
+	private static final Set<Integer> SUNFIRE_CAPES = new HashSet<>(java.util.Arrays.asList(
+		ItemID.DIZANAS_QUIVER_CHARGED, ItemID.DIZANAS_QUIVER_CHARGED_TROUVER,
+		ItemID.DIZANAS_QUIVER_INFINITE, ItemID.DIZANAS_QUIVER_INFINITE_TROUVER,
+		ItemID.SKILLCAPE_MAX_DIZANAS, ItemID.SKILLCAPE_MAX_DIZANAS_TROUVER));
 
 	private ItemEquipmentStats weaponStats()
 	{
@@ -4674,6 +4714,10 @@ class CombatCalc
 			if (dart != null)
 			{
 				total += dart.getRstr();
+			}
+			if (dizanasSunfire())
+			{
+				total += SUNFIRE_STRENGTH;
 			}
 		}
 		return total;

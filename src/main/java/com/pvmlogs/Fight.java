@@ -148,10 +148,9 @@ class Fight
 	private double sumExpectedMaxHit;
 	private int expectedMaxHitSamples;
 	private double sumExpectedAccuracy;
-	// The chance each attack lands a NON-ZERO splat - its accuracy less the 1 in (max + 1) a successful roll has of
-	// dealing nothing - summed over the same attacks, with the sum of p(1-p) beside it: the mean and variance of the
-	// landed count, which StatsCheck tests the actual hits against. The plain accuracy sum above would read a weak
-	// weapon's rolled zeros as misses, and over a few hundred attacks that alone is four standard deviations.
+	// The chance each attack lands a NON-ZERO splat, summed over the same attacks, with the sum of p(1-p) beside it: the
+	// mean and variance of the landed count, which StatsCheck tests the actual hits against. Since T-151 it is the
+	// accuracy itself: a player's successful 0 is pushed up to 1 (landedChance).
 	private double sumExpectedLanded;
 	private double sumExpectedLandedVariance;
 	private double sumExpectedAverageHit;
@@ -445,15 +444,15 @@ class Fight
 	}
 
 	/**
-	 * The chance an attack puts a non-zero splat on the target: a successful roll
-	 * deals 0 to max uniformly, so one in (max + 1) of them reads as a miss. Taken on
-	 * the attack's whole max hit, which for a multi-hit attack slightly understates
-	 * the zeros - the safe side for a test that flags too few hits.
+	 * The chance an attack puts a non-zero splat on the target: its accuracy. T-151: OSRS Wiki, Successful hit, read
+	 * 2026-11-03: "If the roll is from a player, then 0s are pushed up to 1", since 29 May 2024 ("Successful hits of 0
+	 * from a player will now be pushed up to 1", Project Rebalance: Combat Changes). So every successful roll shows.
+	 * This took the 1 in (max + 1) zeros a roll used to have off, which put Eric's expected landings ~2.4% low on every
+	 * boss: Araxxor's +4.9σ over 720 fights was +1.8σ against the plain accuracy.
 	 */
 	static double landedChance(double accuracy, int maxHit)
 	{
-		final double p = Math.max(0, Math.min(1, accuracy));
-		return maxHit > 0 ? p * maxHit / (maxHit + 1.0) : p;
+		return Math.max(0, Math.min(1, accuracy));
 	}
 
 	/** The full hitpoints the game showed for the target, where that beats the table's. Ignored when not positive. */
