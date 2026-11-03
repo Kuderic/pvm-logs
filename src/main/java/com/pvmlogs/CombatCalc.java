@@ -805,11 +805,95 @@ class CombatCalc
 		MonsterStatsProvider.MonsterStats stats = version == null ? null : monsters.get(npcId, version);
 		if (stats == null)
 		{
-			stats = monsters.get(npcId);
+			// T-157: while the other version is being weighed, it stands in for the one in use.
+			stats = versionWeighed != null ? versionWeighed : monsters.get(npcId);
 		}
 		// And the levels a phase adds (T-091: Araxxor enraged), under the drains, which come off the result.
 		final int[] levels = ModifierTracker.levels(mods);
 		return stats == null ? null : stats.withLevels(levels[0], levels[1], levels[2]);
+	}
+
+	/**
+	 * T-157: the bar a version difference must reach before it shows as a warning: the attack's expected damage moved by
+	 * 1% or more. At a fixed max the expected damage moves with the hit chance, so the bar is the hit chance moved by 1% of
+	 * itself (at 0.99, by 0.0099; at 0.5, by 0.005). Under it the fight's Luck moves by less than 1% of E, below a whole
+	 * percent on the panel and far inside one fight's spread; over hundreds of fights it would show in the calibration,
+	 * where a z of 3 on Araxxor took about 1%.
+	 */
+	static final double VERSION_BAR = 0.01;
+
+	/** T-157: the other version, while {@link #checkVersions} works out the hit chance against it; null otherwise. */
+	private MonsterStatsProvider.MonsterStats versionWeighed;
+	/** T-157: ids whose version check this fight has logged; cleared at each fight's start. */
+	private final java.util.Set<Integer> versionsLoggedThisFight = new java.util.HashSet<>();
+
+	/** T-157: whether two hit chances differ by the bar or more, relative to the one in use. */
+	static boolean versionsMatter(double inUse, double other)
+	{
+		if (inUse < 0 || other < 0)
+		{
+			return false;
+		}
+		if (inUse == 0)
+		{
+			return other > 0;
+		}
+		return Math.abs(other - inUse) / inUse >= VERSION_BAR;
+	}
+
+	/**
+	 * T-157: once per scored attack, where the version in use has another it can't be told from (the provider's note), the
+	 * hit chance against each, both at this tick's gear and drains (so a switch between throw and booking isn't read as a
+	 * version difference). Past {@link #VERSION_BAR} the provider shows the note as a warning, for this fight and the
+	 * rest; under it, nothing shows. Nothing is worked out where there's no note, nor once it shows and this fight has
+	 * logged it.
+	 *
+	 * @return the line for the debug log, on each fight's first such attack and when it crosses the bar; null otherwise
+	 */
+	String checkVersions(int npcId)
+	{
+		final MonsterStatsProvider.MonsterStats inUse = monsters.get(npcId);
+		if (inUse == null || inUse.getVersionNote() == null)
+		{
+			return null;
+		}
+		final boolean shown = monsters.versionsShown(npcId);
+		final boolean logged = versionsLoggedThisFight.contains(npcId);
+		if (shown && logged)
+		{
+			return null;
+		}
+		final MonsterStatsProvider.MonsterStats other = monsters.alternative(npcId);
+		if (other == null)
+		{
+			return null;
+		}
+		final double p = hitChance(npcId);
+		final double q;
+		versionWeighed = other;
+		try
+		{
+			q = hitChance(npcId);
+		}
+		finally
+		{
+			versionWeighed = null;
+		}
+		final boolean matters = versionsMatter(p, q);
+		if (matters && !shown)
+		{
+			monsters.versionsMatter(npcId);
+		}
+		if (logged && !(matters && !shown))
+		{
+			return null;
+		}
+		versionsLoggedThisFight.add(npcId);
+		return String.format("VERSIONS npc %d ('%s'): '%s' acc %.4f, '%s' acc %.4f (%+.2f%% of the expected damage): %s"
+				+ " - %s", npcId, inUse.getName(), inUse.getVersion(), p, other.getVersion(), q,
+			p > 0 ? 100 * (q - p) / p : 0,
+			matters ? "past the 1% bar, shown as a warning" : shown ? "already shown" : "under the 1% bar, not shown",
+			inUse.getVersionNote());
 	}
 
 	/**
@@ -4179,6 +4263,7 @@ class CombatCalc
 	void startFight()
 	{
 		fightPeakBoost.clear();
+		versionsLoggedThisFight.clear();
 		memoIdealTick = Integer.MIN_VALUE;
 		slayerKey = null;
 	}
