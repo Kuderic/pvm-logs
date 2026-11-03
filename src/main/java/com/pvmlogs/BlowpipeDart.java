@@ -6,9 +6,11 @@ import java.util.regex.Pattern;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.SpotanimID;
 
 // The dart loaded in a blowpipe. No varbit says which (RuneLite API 1.13.4 has only the dart count), so since T-015 it is
-// read from what the player does: checking the blowpipe, or using darts on it. Until then a dragon dart is assumed.
+// read from what the player does: checking the blowpipe, or using darts on it; since T-150 also from the dart seen in
+// flight, its projectile. Until then a dragon dart is assumed.
 @Getter
 @RequiredArgsConstructor
 public enum BlowpipeDart
@@ -73,5 +75,37 @@ public enum BlowpipeDart
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * T-150: the dart a blowpipe shot carries, from its projectile (RuneLite's gameval {@code SpotanimID}: the darts'
+	 * TRAVEL spot animations), or null for any other. Eric's Adamant shots fly as 230 in every log (10-28 to 11-01); the
+	 * special's own projectile (Toxic Siphon) names no dart, and is not one of these.
+	 */
+	static BlowpipeDart fromProjectile(int projectileId)
+	{
+		switch (projectileId)
+		{
+			case SpotanimID.BRONZE_DART_TRAVEL:
+				return BRONZE;
+			case SpotanimID.IRON_DART_TRAVEL:
+				return IRON;
+			case SpotanimID.STEEL_DART_TRAVEL:
+				return STEEL;
+			case SpotanimID.BLACK_DART_TRAVEL:
+				return BLACK;
+			case SpotanimID.MITHRIL_DART_TRAVEL:
+				return MITHRIL;
+			case SpotanimID.ADAMANT_DART_TRAVEL:
+				return ADAMANT;
+			case SpotanimID.RUNE_DART_TRAVEL:
+				return RUNE;
+			case SpotanimID.AMETHYST_DART_TRAVEL:
+				return AMETHYST;
+			case SpotanimID.II_DRAGON_DART_PROJANIM:
+				return DRAGON;
+			default:
+				return null;
+		}
 	}
 }
