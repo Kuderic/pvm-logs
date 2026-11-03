@@ -46,6 +46,20 @@ class TargetHealth
 {
 	/** A bar reading older than this many ticks is not trusted over the count. */
 	static final int HUD_FRESH_TICKS = 2;
+	/**
+	 * T-161: an npc below full regains a hitpoint every this many ticks. Measured, not sourced (the wiki gives no rate
+	 * for monsters): Eric's Cerberus kills of 2026-11-02 and 11-03 (builds {@code 1e73c42} and {@code 45a1015}, no boss
+	 * bar) each took 3 to 7 more than her 600, every splat paid for in experience, and on all 175 whose count could be
+	 * followed the excess is the ticks from her first damage to the killing blow over 20, rounded down or up (21 misses
+	 * 9 of them, 22 misses 28). Venenatis's 9 to 19 over her 850 on 11-03 run at the same rate.
+	 */
+	static final int REGEN_TICKS = 20;
+	/**
+	 * T-161: the first of them after the npc is first found below full. The game's timer isn't tied to the damage (no one
+	 * offset fits every kill), so where in the 20 the first falls is unknown: halfway, which leaves the count within one
+	 * of what the game gave back.
+	 */
+	static final int REGEN_FIRST_TICKS = 10;
 
 	static final class Entry
 	{
@@ -70,6 +84,10 @@ class TargetHealth
 		int hudId;
 		int damageAtHud;
 		int healedAtHud;
+		// T-161: of the heals, what the count gave back for regeneration ({@link #regenerate}), and the tick it gives
+		// the next.
+		int regenerated;
+		int nextRegenTick = Integer.MIN_VALUE;
 	}
 
 	private final Map<Integer, Entry> byIndex = new HashMap<>();
@@ -115,6 +133,8 @@ class TargetHealth
 		}
 		e.damage = 0;
 		e.healed = 0;
+		e.regenerated = 0;
+		e.nextRegenTick = Integer.MIN_VALUE;
 	}
 
 	/**
@@ -189,6 +209,70 @@ class TargetHealth
 			return maxHp;
 		}
 		return Math.min(maxHp, (maxHp * ratio - 1) / (scale - 1));
+	}
+
+	/**
+	 * T-161: the least hitpoints an npc can have left for its overhead bar to read {@code ratio} of {@code scale} at
+	 * {@code maxHp} full; -1 when it says nothing. The other end of {@link #mostLeftForRatio}: RuneLite's opponent info
+	 * takes the same lower bound (any hitpoints show at least one step; full shows every step).
+	 */
+	static int leastLeftForRatio(int ratio, int scale, int maxHp)
+	{
+		if (ratio < 0 || scale <= 0 || maxHp <= 0)
+		{
+			return -1;
+		}
+		if (ratio == 0)
+		{
+			return 0;
+		}
+		if (scale == 1 || ratio >= scale)
+		{
+			return scale == 1 ? 1 : maxHp;
+		}
+		return Math.max(1, (maxHp * (ratio - 1) + scale - 2) / (scale - 1));
+	}
+
+	/**
+	 * T-161: a tick on the fight's target, alive: below full, it regains a hitpoint every {@link #REGEN_TICKS}, the first
+	 * {@link #REGEN_FIRST_TICKS} after it was first found below full; back at full, the timer stops. Counted as healed,
+	 * so the count, and the cap at what is left, follow it. Nothing once the boss bar has been read for it: the bar shows
+	 * what the game gave back. Returns what it gave back on this tick.
+	 */
+	int regenerate(int index, int tick)
+	{
+		final Entry e = byIndex.get(index);
+		if (e == null || e.hudMax > 0)
+		{
+			return 0;
+		}
+		final int max = fullHp(e);
+		if (max <= 0 || max - e.damage + e.healed >= max)
+		{
+			e.nextRegenTick = Integer.MIN_VALUE;
+			return 0;
+		}
+		if (e.nextRegenTick == Integer.MIN_VALUE)
+		{
+			e.nextRegenTick = tick + REGEN_FIRST_TICKS;
+			return 0;
+		}
+		int gave = 0;
+		while (tick >= e.nextRegenTick && max - e.damage + e.healed < max)
+		{
+			e.healed++;
+			e.regenerated++;
+			e.nextRegenTick += REGEN_TICKS;
+			gave++;
+		}
+		return gave;
+	}
+
+	/** T-161: of {@link #healed}, what the count gave back for regeneration. */
+	int regenerated(int index)
+	{
+		final Entry e = byIndex.get(index);
+		return e == null ? 0 : e.regenerated;
 	}
 
 	/**
@@ -588,6 +672,7 @@ class TargetHealth
 			p.entry.damage += since.damage;
 			p.entry.healed += since.healed;
 			p.entry.unseen += since.unseen;
+			p.entry.regenerated += since.regenerated;
 		}
 		byIndex.put(index, p.entry);
 		return p;
