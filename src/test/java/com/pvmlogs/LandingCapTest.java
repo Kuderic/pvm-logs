@@ -57,7 +57,12 @@ public class LandingCapTest
 	{
 		assertNull(LandingCap.recap(63, 0.8, 20, 300, 35, 35));
 		assertNull(LandingCap.recap(63, 0.8, 20, 300, 35, 40));
-		assertNull(LandingCap.recap(63, 0.8, 20, 300, -1, 25));
+		// T-153: figures read with no cap (capThen unknown) are capped by what is left as they land; not when that is
+		// unknown too, nor when the attack can't deal more than it.
+		final double[] uncapped = LandingCap.recap(63, 0.8, 20, 300, -1, 25);
+		assertTrue(uncapped[0] < 20 && uncapped[0] <= 25);
+		assertNull(LandingCap.recap(63, 0.8, 20, 300, -1, -1));
+		assertNull(LandingCap.recap(20, 0.8, 9, 30, -1, 25));
 		assertNull(LandingCap.recap(63, 0.8, 20, 300, 35, -1));
 		// A certain hit already under what is left.
 		assertNull(LandingCap.recap(29, 1.0, 20.0, 0, 40, 30));

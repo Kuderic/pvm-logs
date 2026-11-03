@@ -29,8 +29,13 @@ final class LandingCap
 	 * The attack's expected mean and variance capped at {@code capNow}, the
 	 * hitpoints left just before it landed, from figures capped at
 	 * {@code capThen}, those left when it was thrown; null when nothing changes:
-	 * either is unknown (less than 0, or {@code capThen} 0), or no less is left
-	 * now. {@code capNow} 0, nothing left, caps it at nothing (T-115).
+	 * {@code capNow} is unknown (less than 0), {@code capThen} is 0, or no less is
+	 * left now (unless the mean is above what is left, which no cap at it
+	 * allows). {@code capNow} 0, nothing left, caps it at nothing (T-115).
+	 * T-153: {@code capThen} unknown (less than 0) is figures read with no cap at
+	 * all - the target not counted yet, or its count run out - which {@code capNow}
+	 * still caps: a shot thrown before its fight opened, at a 4-hitpoint Baboon
+	 * Thrall, was expected to deal 17.2 ([32428] of Eric's raid of 2026-11-02).
 	 */
 	static double[] recap(int maxHit, double chances, double mean, double variance, int capThen, int capNow)
 	{
@@ -43,7 +48,21 @@ final class LandingCap
 			// Nothing left (T-115): dead before it landed, so it can deal nothing, whatever its figures were read at.
 			return mean > 0 || variance > 0 ? new double[]{0, 0} : null;
 		}
-		if (capThen <= 0 || capNow < 0 || capNow >= capThen)
+		if (capNow < 0)
+		{
+			return null;
+		}
+		// T-153: figures expecting more than is left weren't capped at it, whatever capThen says: a fight's opening blow is
+		// scored from the calculator's own figures, which a Baboon Thrall's 4 hadn't capped ([32383]: 10.97 on 4 left).
+		if (capThen < 0 || capThen > 0 && mean > capNow && capNow >= capThen)
+		{
+			if (maxHit > 0 && maxHit <= capNow && mean <= capNow)
+			{
+				return null;
+			}
+			capThen = Math.max(maxHit, capNow + 1);
+		}
+		if (capThen == 0 || capNow >= capThen)
 		{
 			return null;
 		}

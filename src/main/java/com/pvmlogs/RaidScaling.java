@@ -77,19 +77,20 @@ final class RaidScaling
 	 * one); the table's otherwise. The count starts from this where the boss bar isn't read.
 	 * <ul>
 	 * <li>Chambers: times one plus half the party, rounded down ({@link #chambersHitpoints}).</li>
-	 * <li>Tombs: 2% more per five raid levels ({@link #tombsHitpoints}).</li>
+	 * <li>Tombs (T-153): only the bosses and the adds that scale with them, by raid and path level
+	 * ({@link #tombsHitpoints}); every other monster there keeps its table figure.</li>
 	 * </ul>
 	 */
 	static int hitpoints(Client client, int base, int npcId, String version)
 	{
-		if (base <= 0 || !scalesHitpoints(npcId))
-		{
-			return base;
-		}
 		final int toa = tombsRaidLevel(client);
 		if (toa > 0)
 		{
-			return tombsHitpoints(base, toa);
+			return tombsHitpoints(base, npcId, toa, tombsPathLevel(client, npcId), 1);
+		}
+		if (base <= 0 || !scalesHitpoints(npcId))
+		{
+			return base;
 		}
 		if (inChambers(client))
 		{
@@ -97,6 +98,30 @@ final class RaidScaling
 				version != null && version.toLowerCase().contains("challenge"));
 		}
 		return base;
+	}
+
+	/** T-153: what {@link #hitpoints} read for this npc, for the debug log's {@code RAID HP} line; null outside the Tombs. */
+	static String hitpointsBasis(Client client, int npcId)
+	{
+		final int toa = tombsRaidLevel(client);
+		if (toa <= 0)
+		{
+			return null;
+		}
+		if (!tombsScales(npcId))
+		{
+			return String.format("raid level %d; doesn't scale in the Tombs, so %s", toa,
+				npcId == NpcID.TOA_PATH_APMEKEN_BABOON_THRALL ? "the Baboon Thrall's measured " + BABOON_THRALL_HP
+					: "the table's");
+		}
+		final StringBuilder slots = new StringBuilder();
+		for (int varbit : PARTY_SLOTS)
+		{
+			slots.append(slots.length() == 0 ? "" : ",").append(client.getVarbitValue(varbit));
+		}
+		return String.format("raid level %d, path level %s, party taken as 1 (party slots %s)%s", toa,
+			TOMBS_PATH_SCALED.contains(npcId) ? String.valueOf(tombsPathLevel(client, npcId)) : "none",
+			slots, TOMBS_CORE_EJECTED.contains(npcId) ? ", from the core-ejected Warden's " + CORE_EJECTED_HP : "");
 	}
 
 	/**
@@ -143,25 +168,131 @@ final class RaidScaling
 
 	/**
 	 * T-146: whether a raid monster's full hitpoints, counted from the table where the boss bar isn't read, may be short
-	 * of its real figure: in the Tombs, whose party and path level aren't read. A share of its overhead bar is then a
-	 * share of too little, and mustn't lower the count. In the Chambers the figure can only be long (no combat level
-	 * term), which makes the bar's bound looser, the safe side.
+	 * of its real figure. T-153: in the Tombs, a monster that scales ({@link #tombsScales}), whose party isn't read:
+	 * the count runs from a solo figure. A share of its overhead bar is then a share of too little, and mustn't lower
+	 * the count. A Tombs monster that doesn't scale has its table's exactly (Eric's eggs on 35, baboons on 20 to 40). In
+	 * the Chambers the figure can only be long (no combat level term), which makes the bar's bound looser, the safe side.
 	 */
-	static boolean fullMayBeShort(Client client)
+	static boolean fullMayBeShort(Client client, int npcId)
 	{
-		return tombsRaidLevel(client) > 0;
+		return tombsRaidLevel(client) > 0 && tombsScales(npcId);
+	}
+
+	// T-153: the Tombs' monsters whose hitpoints scale, by gameval id. The facts are the DPS calculator's (weirdgloop
+	// osrs-dps-calc, src/lib/constants.ts and src/lib/scaling/TombsOfAmascut.ts, read 2026-11-02; the mechanic is
+	// reproduced, not their code), and Eric's solo raid of 2026-11-02 at raid level 340 is the check: every boss bar
+	// read matches (Zebak 1480, Kephri 400 and 210, Akkha 1070, Ba-Ba 1060, the Obelisk 610, Elidinis' Warden 330 and
+	// 6030, Tumeken's 2080), Akkha's shadows died on 185 four times, and the eggs (35), the swarms (10), the agile
+	// scarabs (30), the path's baboons (20 to 40) and the puzzle's scarab (12) died on their table figures.
+	private static final Set<Integer> TOMBS_PATH_SCALED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		// Akkha, his shadows.
+		NpcID.AKKHA_SPAWN, NpcID.AKKHA_MELEE, NpcID.AKKHA_RANGE, NpcID.AKKHA_MAGE, NpcID.AKKHA_ENRAGE_SPAWN,
+		NpcID.AKKHA_ENRAGE_INITIAL, NpcID.AKKHA_ENRAGE, NpcID.AKKHA_ENRAGE_DUMMY,
+		NpcID.AKKHA_SHADOW, NpcID.AKKHA_SHADOW_ENRAGE, NpcID.AKKHA_SHADOW_ENRAGE_DUMMY,
+		// Ba-Ba.
+		NpcID.TOA_BABA, NpcID.TOA_BABA_COFFIN, NpcID.TOA_BABA_DIGGING,
+		// Kephri, and her overlords. TOA_KEPHRI_BOSS_WEAK isn't on the calculator's list; taken as her other forms are (a
+		// guess: the log saw only her shielded 11719 and her 11721).
+		NpcID.TOA_KEPHRI_BOSS_SHIELDED, NpcID.TOA_KEPHRI_BOSS_WEAK, NpcID.TOA_KEPHRI_BOSS_ENRAGE,
+		NpcID.TOA_KEPHRI_GUARDIAN_MELEE, NpcID.TOA_KEPHRI_GUARDIAN_RANGED, NpcID.TOA_KEPHRI_GUARDIAN_MAGE,
+		// Zebak.
+		NpcID.TOA_ZEBAK, NpcID.TOA_ZEBAK_ENRAGED, NpcID.TOA_ZEBAK_DEAD)));
+	// The Wardens: the raid level, no path level.
+	private static final Set<Integer> TOMBS_RAID_SCALED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		NpcID.TOA_WARDENS_P1_OBELISK_NPC_INACTIVE, NpcID.TOA_WARDENS_P1_OBELISK_NPC, NpcID.TOA_WARDENS_P2_OBELISK_NPC,
+		NpcID.TOA_WARDEN_ELIDINIS_PHASE2_MAGE, NpcID.TOA_WARDEN_ELIDINIS_PHASE2_RANGE,
+		NpcID.TOA_WARDEN_TUMEKEN_PHASE2_MAGE, NpcID.TOA_WARDEN_TUMEKEN_PHASE2_RANGE,
+		NpcID.TOA_WARDEN_ELIDINIS_PHASE3, NpcID.TOA_WARDEN_ELIDINIS_PHASE3_CHARGING,
+		NpcID.TOA_WARDEN_TUMEKEN_PHASE3, NpcID.TOA_WARDEN_TUMEKEN_PHASE3_CHARGING)));
+	// The Wardens with the core out: their own figure, and a tenth of the raid level's scaling.
+	private static final Set<Integer> TOMBS_CORE_EJECTED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		NpcID.TOA_WARDEN_ELIDINIS_PHASE2_EXPOSED, NpcID.TOA_WARDEN_TUMEKEN_PHASE2_EXPOSED)));
+	static final int CORE_EJECTED_HP = 4500;
+	// Measured, not sourced: the Baboon Thrall's table figure is 2 (the monster data's), but every one of Eric's died on a
+	// 4 - seven kills over his two raids of 2026-11-02, at raid levels 340 and 320 ([32422], [32449], [35826]). Here
+	// until the monster data carries it (MonsterStatsProvider is T-152's); whether it is a 4 at every raid level, no log
+	// says.
+	static final int BABOON_THRALL_HP = 4;
+	// The Tombs' party slots (TOA_CLIENT_P0 to P7), logged beside RAID HP so a party's raid can say what they hold. Not
+	// read as the party's size: nothing has shown what they carry.
+	private static final int[] PARTY_SLOTS = {VarbitID.TOA_CLIENT_P0, VarbitID.TOA_CLIENT_P1, VarbitID.TOA_CLIENT_P2,
+		VarbitID.TOA_CLIENT_P3, VarbitID.TOA_CLIENT_P4, VarbitID.TOA_CLIENT_P5, VarbitID.TOA_CLIENT_P6,
+		VarbitID.TOA_CLIENT_P7};
+
+	/** T-153: whether a Tombs monster's hitpoints scale at all: the bosses, Akkha's shadows and Kephri's overlords. */
+	static boolean tombsScales(int npcId)
+	{
+		return TOMBS_PATH_SCALED.contains(npcId) || TOMBS_RAID_SCALED.contains(npcId)
+			|| TOMBS_CORE_EJECTED.contains(npcId);
 	}
 
 	/**
-	 * T-146: the Tombs. OSRS Wiki, read 2026-11-01, Tombs of Amascut: "for every 5 raid levels, an NPC's hitpoints,
-	 * defence, accuracy, and damage are increased by 2% additively". Left out, for want of a reading: the party ("the
-	 * 2nd-3rd member will add 90% of the base health of bosses each", "the 4th and beyond will add 60% each": no varbit
-	 * here gives the party's size) and the path level ("+8%", then "+5%" a level). The bosses show the boss bar, which
-	 * beats the count; a monster that doesn't is counted low on a path past level 0.
+	 * T-153: the path level that scales this npc, from its path's varbit (gameval {@code TOA_CLIENT_CRONDIS_LEVEL} for
+	 * Zebak, {@code _SCABARAS_} Kephri, {@code _HET_} Akkha, {@code _APMEKEN_} Ba-Ba); 0 for the Wardens and the rest.
+	 * That these hold the path's level is read from their names; the bars fit it (Eric's raid: Zebak 1, Kephri 2, Akkha
+	 * 2, Ba-Ba 3), and RAID HP logs it.
 	 */
-	static int tombsHitpoints(int base, int raidLevel)
+	static int tombsPathLevel(Client client, int npcId)
 	{
-		return base * (100 + 2 * (raidLevel / 5)) / 100;
+		if (!TOMBS_PATH_SCALED.contains(npcId))
+		{
+			return 0;
+		}
+		final String group = EncounterGroup.of(npcId);
+		final int varbit = "Zebak".equals(group) ? VarbitID.TOA_CLIENT_CRONDIS_LEVEL
+			: "Kephri".equals(group) ? VarbitID.TOA_CLIENT_SCABARAS_LEVEL
+			: "Akkha".equals(group) ? VarbitID.TOA_CLIENT_HET_LEVEL
+			: "Ba-Ba".equals(group) ? VarbitID.TOA_CLIENT_APMEKEN_LEVEL : -1;
+		return varbit < 0 ? 0 : Math.max(0, Math.min(6, client.getVarbitValue(varbit)));
+	}
+
+	/**
+	 * T-153: a Tombs monster's full hitpoints. Sources:
+	 * <ul>
+	 * <li>OSRS Wiki, Tombs of Amascut, read 2026-11-02: "for every 5 raid levels, an NPC's hitpoints ... are increased by
+	 * 2% additively"; path level: "The first path level will modify most enemy hitpoints and damage by +8%, with every
+	 * additional level modifying these stats by +5%, up to six levels"; the party: "the 2nd-3rd member will add 90% of
+	 * the base health of bosses each", "the 4th and beyond will add 60% each".</li>
+	 * <li>OSRS Wiki, Core: "damage dealt to the core deals five times the damage towards the Warden".</li>
+	 * <li>The DPS calculator's facts (above): which monsters scale; that each step rounds down; the core-ejected
+	 * Wardens' own 4500 and a tenth of the raid level's scaling (6030 at 340, the bar's); and the rounding last: above
+	 * 100, to the nearest 10 above 300, else to the nearest 5 (Akkha's shadows' 186 to 185, the overlords' 106 to 105,
+	 * Kephri's 212 to 210, Akkha's 1066 to 1070).</li>
+	 * </ul>
+	 * Any other npc keeps {@code base}.
+	 */
+	static int tombsHitpoints(int base, int npcId, int raidLevel, int pathLevel, int partySize)
+	{
+		if (!tombsScales(npcId))
+		{
+			return npcId == NpcID.TOA_PATH_APMEKEN_BABOON_THRALL && base > 0 ? BABOON_THRALL_HP : base;
+		}
+		final boolean core = TOMBS_CORE_EJECTED.contains(npcId);
+		int hp = core ? CORE_EJECTED_HP : base;
+		if (hp <= 0)
+		{
+			return base;
+		}
+		final int level = Math.max(0, raidLevel);
+		hp += hp * ((core ? 1 : 4) * level / 10) / 100;
+		final int path = Math.max(0, Math.min(6, pathLevel));
+		if (path >= 1 && TOMBS_PATH_SCALED.contains(npcId))
+		{
+			hp = hp * (100 + 3 + 5 * path) / 100;
+		}
+		final int party = Math.max(1, Math.min(8, partySize));
+		if (party >= 2)
+		{
+			// Tenths: the 2nd and 3rd add 9 each, the 4th on 6 each.
+			final int tenths = 9 * Math.min(2, party - 1) + 6 * Math.max(0, party - 3);
+			hp = hp * (10 + tenths) / 10;
+		}
+		if (hp > 100)
+		{
+			final int to = hp > 300 ? 10 : 5;
+			hp = (hp + to / 2) / to * to;
+		}
+		return hp;
 	}
 
 	/**
