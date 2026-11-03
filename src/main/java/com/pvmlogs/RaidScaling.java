@@ -298,10 +298,54 @@ final class RaidScaling
 	/**
 	 * Tombs: 2% per five raid levels, additively, so 500 is +200%. Defence level
 	 * only - magic does not move, and defence bonuses are armour.
+	 *
+	 * <p>T-152: no longer what the expected figures use: the raid level scales the defence roll, not the level
+	 * ({@link #tombsDefenceRoll}).
 	 */
 	static int tombs(int base, int raidLevel)
 	{
 		return base * (100 + 2 * (raidLevel / 5)) / 100;
+	}
+
+	/**
+	 * T-152: the Tombs monsters whose defence roll the raid level scales: the bosses, Akkha's Shadows, the Obelisk and
+	 * the Wardens. Not Kephri's overlord scarabs, and not the rooms' small monsters (baboons, eggs, the swarm), which the
+	 * raid level doesn't scale at all (T-153: each dies on its table's hitpoints). From the DPS calc's facts
+	 * (weirdgloop/osrs-dps-calc, read 2026-11-02: "toa multiplies rolled values, not stats, except for hp"; its ToA ids,
+	 * less its KEPHRI_OVERLORD_IDS for the defence roll), by RuneLite's gameval names.
+	 */
+	private static final Set<Integer> TOMBS_DEFENCE_ROLL = new HashSet<>(Arrays.asList(
+		NpcID.AKKHA_SPAWN, NpcID.AKKHA_MELEE, NpcID.AKKHA_RANGE, NpcID.AKKHA_MAGE, NpcID.AKKHA_ENRAGE_SPAWN,
+		NpcID.AKKHA_ENRAGE_INITIAL, NpcID.AKKHA_ENRAGE, NpcID.AKKHA_ENRAGE_DUMMY,
+		NpcID.AKKHA_SHADOW, NpcID.AKKHA_SHADOW_ENRAGE, NpcID.AKKHA_SHADOW_ENRAGE_DUMMY,
+		NpcID.TOA_BABA, NpcID.TOA_BABA_COFFIN, NpcID.TOA_BABA_DIGGING,
+		NpcID.TOA_KEPHRI_BOSS_SHIELDED, NpcID.TOA_KEPHRI_BOSS_ENRAGE,
+		NpcID.TOA_ZEBAK, NpcID.TOA_ZEBAK_ENRAGED, NpcID.TOA_ZEBAK_DEAD,
+		NpcID.TOA_WARDENS_P1_OBELISK_NPC_INACTIVE, NpcID.TOA_WARDENS_P1_OBELISK_NPC, NpcID.TOA_WARDENS_P2_OBELISK_NPC,
+		NpcID.TOA_WARDEN_ELIDINIS_PHASE2_MAGE, NpcID.TOA_WARDEN_ELIDINIS_PHASE2_RANGE,
+		NpcID.TOA_WARDEN_TUMEKEN_PHASE2_MAGE, NpcID.TOA_WARDEN_TUMEKEN_PHASE2_RANGE,
+		NpcID.TOA_WARDEN_ELIDINIS_PHASE2_EXPOSED, NpcID.TOA_WARDEN_TUMEKEN_PHASE2_EXPOSED,
+		NpcID.TOA_WARDEN_ELIDINIS_PHASE3, NpcID.TOA_WARDEN_TUMEKEN_PHASE3,
+		NpcID.TOA_WARDEN_ELIDINIS_PHASE3_CHARGING, NpcID.TOA_WARDEN_TUMEKEN_PHASE3_CHARGING));
+
+	/** T-152: whether the raid level scales this monster's defence roll ({@link #TOMBS_DEFENCE_ROLL}). */
+	static boolean tombsScalesDefence(int npcId)
+	{
+		return TOMBS_DEFENCE_ROLL.contains(npcId);
+	}
+
+	/**
+	 * T-152: a Tombs monster's defence roll at a raid level: times (250 + level) / 250, rounded down (2% per 5 levels,
+	 * on the roll: the DPS calc's facts), for {@link #tombsScalesDefence}'s monsters; anything else as it is. The level
+	 * the roll is made from is the monster's own, less drains.
+	 */
+	static int tombsDefenceRoll(int defenceRoll, int npcId, int raidLevel)
+	{
+		if (raidLevel <= 0 || !tombsScalesDefence(npcId))
+		{
+			return defenceRoll;
+		}
+		return (int) ((long) defenceRoll * (250 + raidLevel) / 250);
 	}
 
 		// Chambers: down by the party's hitpoints, up by its size, then multiplied for challenge mode. Each step floors and

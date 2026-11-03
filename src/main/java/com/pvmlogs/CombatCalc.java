@@ -784,11 +784,11 @@ class CombatCalc
 		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
 		if (type.isMelee())
 		{
-			return meleeHitChance(style, type, npc, gear, spec, mods);
+			return meleeHitChance(style, type, npc, gear, spec, mods, npcId);
 		}
 		if (type == AttackType.RANGED)
 		{
-			return rangedHitChance(style, npc, gear, spec, mods);
+			return rangedHitChance(style, npc, gear, spec, mods, npcId);
 		}
 		return magicHitChance(style, npc, gear, npcId, spec, mods);
 	}
@@ -1430,14 +1430,20 @@ class CombatCalc
 	private int defenceLevel(MonsterStatsProvider.MonsterStats npc)
 	{
 		// What the target has left, not what it started with: warhammers and godswords take real levels off it. In the Tombs
-		// the raid level scales the defence roll, so the drain comes off the unscaled level and what is left is scaled
-		// (T-049; DefenceDrain.targetFor tracks the unscaled level there).
-		final int raidLevel = RaidScaling.tombsRaidLevel(client);
-		if (raidLevel > 0)
+		// the raid level scales the defence roll, not the level, so the drain comes off the unscaled level and that is the
+		// level (T-049; DefenceDrain.targetFor tracks the unscaled level there). T-152: the roll is scaled by
+		// tombsDefenceRoll; this used to scale the level, which put Akkha's Shadow's roll 14% low and the baboons' high.
+		if (RaidScaling.tombsRaidLevel(client) > 0)
 		{
-			return RaidScaling.tombs(Math.max(0, npc.getDefenceLevel() - defenceDrained()), raidLevel);
+			return Math.max(0, npc.getDefenceLevel() - defenceDrained());
 		}
 		return Math.max(0, raidScaled(npc) - defenceDrained());
+	}
+
+	/** T-152: a defence roll as the Tombs' raid level leaves it ({@link RaidScaling#tombsDefenceRoll}); outside, as it is. */
+	private int tombsDefenceRoll(int defenceRoll, int npcId)
+	{
+		return RaidScaling.tombsDefenceRoll(defenceRoll, npcId, RaidScaling.tombsRaidLevel(client));
 	}
 
 	/**
@@ -1512,7 +1518,7 @@ class CombatCalc
 	}
 
 	private double meleeHitChance(AttackStyle style, AttackType type,
-		MonsterStatsProvider.MonsterStats npc, double gear, SpecialAttack spec, List<BossRules.ModifierRule> mods)
+		MonsterStatsProvider.MonsterStats npc, double gear, SpecialAttack spec, List<BossRules.ModifierRule> mods, int npcId)
 	{
 		final int effAtk = voidScaled((int) Math.floor(boostedLevel(Skill.ATTACK) * meleeAccuracyPrayer())
 			+ style.attackLevelBonus() + 8, type, false);
@@ -1520,7 +1526,8 @@ class CombatCalc
 			spec));
 		final int defBonus = type == AttackType.STAB ? npc.getDefStab()
 			: type == AttackType.SLASH ? npc.getDefSlash() : npc.getDefCrush();
-		final int defRoll = ModifierTracker.defenceRoll(mods, type.name(), (defenceLevel(npc) + 9) * (defBonus + 64));
+		final int defRoll = ModifierTracker.defenceRoll(mods, type.name(),
+			tombsDefenceRoll((defenceLevel(npc) + 9) * (defBonus + 64), npcId));
 		return meleeHitChanceFrom(attRoll, defRoll);
 	}
 
@@ -1543,7 +1550,7 @@ class CombatCalc
 		// T-141: the Eye of ayak's reduction on what that leaves.
 		final int bonus = magicDefenceBonus(npc, npcId);
 		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.MAGIC.name(),
-			(magicDefenceLevel(npc) + 9) * (bonus + 64));
+			tombsDefenceRoll((magicDefenceLevel(npc) + 9) * (bonus + 64), npcId));
 		if (!hasConflictionGauntlets())
 		{
 			return hitChanceFrom(attRoll, defRoll);
@@ -1641,7 +1648,7 @@ class CombatCalc
 	}
 
 	private double rangedHitChance(AttackStyle style, MonsterStatsProvider.MonsterStats npc,
-		double gear, SpecialAttack spec, List<BossRules.ModifierRule> mods)
+		double gear, SpecialAttack spec, List<BossRules.ModifierRule> mods, int npcId)
 	{
 		final int effRanged = voidScaled((int) Math.floor(boostedLevel(Skill.RANGED) * rangedAccuracyPrayer())
 			+ style.attackLevelBonus() + 8, AttackType.RANGED, false);
@@ -1649,7 +1656,7 @@ class CombatCalc
 		final int attRoll = ModifierTracker.attackRoll(mods, AttackType.RANGED.name(),
 			scaled(attackRoll(effRanged, attackBonus(AttackType.RANGED), gear), spec));
 		final int defRoll = ModifierTracker.defenceRoll(mods, AttackType.RANGED.name(),
-			(defenceLevel(npc) + 9) * (npc.getDefRanged() + 64));
+			tombsDefenceRoll((defenceLevel(npc) + 9) * (npc.getDefRanged() + 64), npcId));
 		return hitChanceFrom(attRoll, defRoll);
 	}
 
@@ -2166,7 +2173,31 @@ class CombatCalc
 			return null;
 		}
 		final ItemStats stats = itemManager.getItemStats(itemId);
-		return stats == null ? null : stats.getEquipment();
+		final ItemEquipmentStats e = stats == null ? null : stats.getEquipment();
+		return itemId == ItemID.KERIS_PARTISAN_AMASCUT ? kerisOfAmascut(e, gearBonuses.inTombsOfAmascut()) : e;
+	}
+
+	/**
+	 * T-152: the Keris partisan of amascut's stats. RuneLite's item stats for it (30891) carry no stab bonus and no
+	 * strength, where the base keris has +58 and +45, so it was scored at +0 both: a max of 31 where its max-hit splats
+	 * read 48 (Eric's 11-02 Tombs). OSRS Wiki, Keris partisan of amascut, read 2026-11-02: "The upgrade greatly enhances
+	 * the weapon's stats when used inside the Tombs of Amascut", stab +108 and strength +67 inside, +58 and +45 outside;
+	 * the DPS calc's equipment data lists the inside figures. The rest is RuneLite's.
+	 */
+	static ItemEquipmentStats kerisOfAmascut(ItemEquipmentStats runelite, boolean inTombs)
+	{
+		final ItemEquipmentStats.ItemEquipmentStatsBuilder b = ItemEquipmentStats.builder()
+			.slot(EquipmentInventorySlot.WEAPON.getSlotIdx())
+			.aslash(-2).acrush(57).amagic(2).prayer(3).aspeed(4);
+		if (runelite != null)
+		{
+			b.slot(runelite.getSlot()).isTwoHanded(runelite.isTwoHanded()).aslash(runelite.getAslash())
+				.acrush(runelite.getAcrush()).amagic(runelite.getAmagic()).arange(runelite.getArange())
+				.dstab(runelite.getDstab()).dslash(runelite.getDslash()).dcrush(runelite.getDcrush())
+				.dmagic(runelite.getDmagic()).drange(runelite.getDrange()).rstr(runelite.getRstr())
+				.mdmg(runelite.getMdmg()).prayer(runelite.getPrayer()).aspeed(runelite.getAspeed());
+		}
+		return b.astab(inTombs ? 108 : 58).str(inTombs ? 67 : 45).build();
 	}
 
 	/** Sum of the worn gear's attack bonus for the type being rolled. */
