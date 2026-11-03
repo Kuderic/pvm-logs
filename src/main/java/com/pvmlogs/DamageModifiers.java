@@ -188,32 +188,28 @@ class DamageModifiers
 		return change;
 	}
 
-	void onGameTick()
+	/**
+	 * Once a tick: windows that ran out, and (T-152) the fight's target's hitpoints for a state that opens on them, the
+	 * P3 Warden's enrage. Only the target is read: the heal that comes with the enrage opens it on a later reading.
+	 */
+	void onGameTick(NPC target)
 	{
 		tracker.tick(client.getTickCount());
-		noteHitpoints();
+		noteHitpoints(target);
 	}
 
-	// T-152: a boss whose state opens on its hitpoints (the P3 Warden's enrage) has them read once a tick.
-	private void noteHitpoints()
+	// T-152: the fight's target, where its state opens on its hitpoints.
+	private void noteHitpoints(NPC target)
 	{
-		final net.runelite.api.WorldView view = client.getTopLevelWorldView();
-		if (view == null)
+		final BossRules.Boss boss = target == null ? null : bossFor(target.getId());
+		if (boss == null || !ModifierTracker.opensOnHitpoints(boss.damageModifiers))
 		{
 			return;
 		}
-		for (NPC npc : view.npcs())
+		final int[] hp = hitpoints.apply(target.getIndex());
+		if (hp != null)
 		{
-			final BossRules.Boss boss = npc == null ? null : bossFor(npc.getId());
-			if (boss == null || !ModifierTracker.opensOnHitpoints(boss.damageModifiers))
-			{
-				continue;
-			}
-			final int[] hp = hitpoints.apply(npc.getIndex());
-			if (hp != null)
-			{
-				tracker.onHitpoints(npc.getIndex(), boss.name, boss.damageModifiers, hp[0], hp[1], client.getTickCount());
-			}
+			tracker.onHitpoints(target.getIndex(), boss.name, boss.damageModifiers, hp[0], hp[1], client.getTickCount());
 		}
 	}
 
