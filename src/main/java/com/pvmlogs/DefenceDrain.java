@@ -288,6 +288,24 @@ class DefenceDrain
 		tracker.othersSplat(npc.getIndex(), client.getTickCount(), amount);
 	}
 
+	/** T-160: one of those splats turned out to be the thrall's: no special of the player's landed with it. */
+	void onThrallSplat(NPC npc, int amount)
+	{
+		tracker.notOwnSplat(npc.getIndex(), client.getTickCount(), amount);
+	}
+
+	/** T-160: as {@link #onThrallSplat}, by index, for a splat re-judged the thrall's within its tick. */
+	void onThrallSplat(int npcIndex, int amount)
+	{
+		tracker.notOwnSplat(npcIndex, client.getTickCount(), amount);
+	}
+
+	/** T-160: the player's special thrown on {@code thrownTick} at this npc splashed (T-145): it drains nothing. */
+	void onSplashedSpecial(int npcIndex, int thrownTick)
+	{
+		tracker.ownSplashed(npcIndex, thrownTick);
+	}
+
 	/** One of the player's own ({@code isMine()}) splats on an npc, before anything has judged it. */
 	void onMyHitsplat(NPC npc, int amount)
 	{

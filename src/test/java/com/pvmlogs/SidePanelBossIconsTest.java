@@ -118,7 +118,7 @@ public class SidePanelBossIconsTest
 		m.put("Judge of Yama", null);
 		m.put("Yama", HiscoreSkill.YAMA);
 		m.put("Abyssal Sire", HiscoreSkill.ABYSSAL_SIRE);
-		m.put("Bork", HiscoreSkill.FRACTURED_ARCHIVE);
+		m.put("Bork", SidePanelBossIcons.FRACTURED_ARCHIVE);
 		m.put("Verzik Vitur", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("Demonic Brutus", HiscoreSkill.BRUTUS);
 		m.put("Doom of Mokhaiotl", HiscoreSkill.DOOM_OF_MOKHAIOTL);
@@ -155,13 +155,13 @@ public class SidePanelBossIconsTest
 		m.put("The Whisperer", HiscoreSkill.THE_WHISPERER);
 		m.put("Calvar'ion", HiscoreSkill.CALVARION);
 		m.put("Vet'ion", HiscoreSkill.VETION);
-		m.put("Archive Guardian", HiscoreSkill.FRACTURED_ARCHIVE);
-		m.put("Ezekiel", HiscoreSkill.FRACTURED_ARCHIVE);
-		m.put("Moia", HiscoreSkill.FRACTURED_ARCHIVE);
-		m.put("Xarth", HiscoreSkill.FRACTURED_ARCHIVE);
-		m.put("Ocellus, phase 1", HiscoreSkill.FRACTURED_ARCHIVE);
-		m.put("Ocellus, phase 2 (The Blade)", HiscoreSkill.FRACTURED_ARCHIVE);
-		m.put("Ocellus, phase 3", HiscoreSkill.FRACTURED_ARCHIVE);
+		m.put("Archive Guardian", SidePanelBossIcons.FRACTURED_ARCHIVE);
+		m.put("Ezekiel", SidePanelBossIcons.FRACTURED_ARCHIVE);
+		m.put("Moia", SidePanelBossIcons.FRACTURED_ARCHIVE);
+		m.put("Xarth", SidePanelBossIcons.FRACTURED_ARCHIVE);
+		m.put("Ocellus, phase 1", SidePanelBossIcons.FRACTURED_ARCHIVE);
+		m.put("Ocellus, phase 2 (The Blade)", SidePanelBossIcons.FRACTURED_ARCHIVE);
+		m.put("Ocellus, phase 3", SidePanelBossIcons.FRACTURED_ARCHIVE);
 		// The rooms it groups (EncounterGroup).
 		m.put("Guardians", HiscoreSkill.CHAMBERS_OF_XERIC);
 		m.put("Lizardman shamans", HiscoreSkill.CHAMBERS_OF_XERIC);
@@ -199,6 +199,21 @@ public class SidePanelBossIconsTest
 		m.put("Cave kraken", null);
 		m.put("Goblin", null);
 		return m;
+	}
+
+	@Test
+	public void theFracturedArchiveIsFoundByEitherName()
+	{
+		// T-162: RuneLite 1.13.6 renamed FRACTURED_ARCHIVE to THE_FRACTURED_ARCHIVE; whichever this RuneLite has.
+		final HiscoreSkill archive = SidePanelBossIcons.FRACTURED_ARCHIVE;
+		assertNotNull(archive);
+		assertTrue(archive.name(), Arrays.asList("THE_FRACTURED_ARCHIVE", "FRACTURED_ARCHIVE").contains(archive.name()));
+		assertEquals(HiscoreSkillType.BOSS, archive.getType());
+		for (String boss : new String[]{"Archive Guardian", "Bork", "Ezekiel", "Moia", "Xarth", "Ocellus, phase 1"})
+		{
+			assertEquals(boss, archive.getSpriteId(), SidePanelBossIcons.sprite(boss, null));
+		}
+		assertNull(SidePanelBossIcons.byName("NOT_A_HISCORE"));
 	}
 
 	@Test

@@ -264,6 +264,8 @@ public class PvmPerformancePlugin extends Plugin
 
 	@Inject
 	private DefenceDrain drain;
+	// T-160: what lands on a splashed special's target over its window, for the log.
+	private final SplashCheck splashCheck = new SplashCheck();
 
 	// The bosses' damage modifiers (T-057): the windows that change the player's damage.
 	@Inject
@@ -492,6 +494,8 @@ public class PvmPerformancePlugin extends Plugin
 	// at 23 (06:38 log, [4230]). Cleared as the npc goes and its index can be reused.
 	private final Map<Integer, Integer> deadSince = new HashMap<>();
 	private final Map<Integer, double[]> expectedByTick = new HashMap<>();
+	// T-158: the index of the target each of those rows was read for (the shown fight's), by tick.
+	private final Map<Integer, Integer> rowIndexByTick = new HashMap<>();
 	// T-107: the same figures, each tick, for the npc the player is attacking when it isn't the shown fight's target - the
 	// first shot at an add before its fight opens. The npc's index rides in the slot after the row's own.
 	private final Map<Integer, double[]> aimedByTick = new HashMap<>();
@@ -850,6 +854,7 @@ public class PvmPerformancePlugin extends Plugin
 		targetSeen.clear();
 		recentTiles.clear();
 		expectedByTick.clear();
+		rowIndexByTick.clear();
 		aimedByTick.clear();
 		// Both re-read from scratch: a stale energy reading across a reset would look like a special the moment the bar came
 		// back lower than it was.
@@ -931,6 +936,12 @@ public class PvmPerformancePlugin extends Plugin
 		final Actor actor = event.getActor();
 		final Hitsplat hitsplat = event.getHitsplat();
 		final long now = System.currentTimeMillis();
+		// T-160: anyone's splat on the target of a special booked as a splash, over its landing window.
+		if (actor instanceof NPC)
+		{
+			splashCheck.splat(((NPC) actor).getIndex(), client.getTickCount(), hitsplat.getAmount(),
+				hitsplat.getHitsplatType(), hitsplat.isMine() ? "mine" : hitsplat.isOthers() ? "others'" : "no owner");
+		}
 
 		if (actor instanceof NPC && hitsplat.isMine() && !EncounterGroup.isIgnored(((NPC) actor).getId()))
 		{
@@ -1853,6 +1864,9 @@ public class PvmPerformancePlugin extends Plugin
 	// A thrall's splat: real damage, so it counts towards what the target has left - but none of it is the player's.
 	private void creditThrall(NPC npc, int amount, int tick)
 	{
+		// T-160: nor a special's hit, for its drain.
+		drain.onThrallSplat(npc, amount);
+		splashCheck.thrall(npc.getIndex(), tick, amount);
 		if (current != null && !current.isEnded())
 		{
 			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
@@ -2193,6 +2207,9 @@ public class PvmPerformancePlugin extends Plugin
 			}
 		}
 		thralls.noteThrallSplat(r.npcIndex, tick);
+		// T-160: nor a special's hit, for its drain.
+		drain.onThrallSplat(r.npcIndex, r.amount);
+		splashCheck.thrall(r.npcIndex, tick, r.amount);
 		debug.log("RE-JUDGED hitsplat %d on index %d (was player, thrall p=%.2f): THRALL - its projectile's splat had gone "
 			+ "unclaimed%s", r.amount, r.npcIndex, r.thrallProbability, outcome);
 	}
@@ -3049,6 +3066,7 @@ public class PvmPerformancePlugin extends Plugin
 			row[EXP_SPEC_VARIANCE] = expectedSpecVariance;
 			row[EXP_CAP] = capLeft(shown.getTargetIndex());
 			expectedByTick.put(client.getTickCount(), row);
+			rowIndexByTick.put(client.getTickCount(), shown.getTargetIndex());
 			modifiersByTick.put(client.getTickCount(), combatCalc.describeBossModifiers(shownId));
 			// T-087: the row above scores the attack going out now with every modifier it lands with. What is shown live
 			// leaves out the ones the player must not be told about - the Maggot King's slam and punish - so the overlay and the side
@@ -3081,6 +3099,7 @@ public class PvmPerformancePlugin extends Plugin
 				drainLuck.snapshot(current, targetIdOn(current, client.getTickCount()), client.getTickCount());
 			}
 			expectedByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
+			rowIndexByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
 			modifiersByTick.keySet().removeIf(t -> client.getTickCount() - t > RECENT_TILES);
 			// Once per target, and again whenever the version in use changes or the defence has moved (Vardorvis's follows his
 			// hitpoints), so a log shows the figures the attacks were judged by as they changed. Not gated on the debug
@@ -3209,6 +3228,9 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return;
 		}
+		// T-160: it drains nothing, whatever lands on its tick; and what does land is logged once its window is over.
+		drain.onSplashedSpecial(p.npc.getIndex(), p.tick);
+		splashCheck.watch(p.special.getDisplayName(), p.npc.getIndex(), p.tick);
 		if (current == null || current.isEnded() || current.getTargetIndex() != p.npc.getIndex())
 		{
 			debug.log("SPLASHED SPECIAL %s thrown on %d at npc index %d: not the open fight's target, not booked",
@@ -3419,6 +3441,13 @@ public class PvmPerformancePlugin extends Plugin
 		// at its hitsplat are an ordinary swing's.
 		final boolean originIsAuthoritative = scoresFromRow(attackObservedFromProjectile || attackFromDrop, beforeSwitch,
 			punishedAttack(), attackDroppedCast, atOrigin, targetId);
+		// T-158: a row read for another npc of the same kind (the shown fight's, the last of a run of monsters) carries that
+		// npc's hitpoints as its cap, not this one's.
+		final boolean fromRow = originIsAuthoritative
+			|| !(attackObservedNpcId == targetId && attackObservedAccuracy >= 0)
+			&& atOrigin != null && (int) atOrigin[EXP_NPC_ID] == targetId;
+		final boolean rowOfAnother = fromRow && rowOfAnotherNpc(atOrigin, rowIndexByTick.get(figuresTick),
+			fight.getTargetIndex());
 		if (originIsAuthoritative)
 		{
 			maxHit = (int) atOrigin[EXP_MAX];
@@ -3519,6 +3548,17 @@ public class PvmPerformancePlugin extends Plugin
 				variance = landed[2];
 			}
 		}
+		// T-158: figures read for another npc: capped at its hitpoints, if at all. Taken back to uncapped, and capped at this
+		// one's as the attack lands. In Eric's log of 2026-11-02 20:17, a blowpipe dart thrown at an undead cow on [7034] was
+		// read with the last cow, dead, as the target: its 0 left read as "capped at nothing", the landing cap passed it over,
+		// and the 8-hitpoint cow took an expected 13.7 ([7036]). The next one, read at -1, was capped ([7038]).
+		if (rowOfAnother)
+		{
+			final double[] uncapped = LandingCap.uncapped(maxHit, expectedChances, averageHit, variance, capThen);
+			averageHit = uncapped[0];
+			variance = uncapped[1];
+			capThen = -1;
+		}
 		debug.log("  scored as %s: max %d, chances %.2f, avg %.2f, var %.1f%s",
 			special ? "a SPECIAL" : "an ordinary attack", maxHit, expectedChances, averageHit, variance,
 			originIsAuthoritative && beforeSwitch ? beforeSwitchNote(figuresTick)
@@ -3566,6 +3606,20 @@ public class PvmPerformancePlugin extends Plugin
 	 * npc the player was attacking when that is this one (same id and index),
 	 * else the shown one as before.
 	 */
+	/**
+	 * T-158: whether the row the figures came from was read for another npc than {@code targetIndex}: an aimed row
+	 * (T-107) names its index; the shown fight's is {@code shownRowIndex}, null where unknown.
+	 */
+	static boolean rowOfAnotherNpc(double[] row, Integer shownRowIndex, int targetIndex)
+	{
+		if (row == null)
+		{
+			return false;
+		}
+		final int index = row.length > EXP_WIDTH ? (int) row[EXP_WIDTH] : shownRowIndex == null ? -1 : shownRowIndex;
+		return index >= 0 && index != targetIndex;
+	}
+
 	static double[] rowFor(double[] shownRow, double[] aimedRow, int targetId, int targetIndex)
 	{
 		if (shownRow != null && (int) shownRow[EXP_NPC_ID] == targetId)
@@ -6272,6 +6326,11 @@ public class PvmPerformancePlugin extends Plugin
 		trackThrallAndXp();
 		// T-145: a Soul Rend thrown last tick that has paid no experience by now splashed.
 		bookSplashedSpecial(client.getTickCount());
+		// T-160: and a splash's window over: what landed on its target.
+		for (String line : splashCheck.due(client.getTickCount()))
+		{
+			debug.log("%s", line);
+		}
 		// The specials due this tick land their drains before anything works out an expectation (T-049).
 		drain.onGameTick();
 		// Damage-modifier windows that ran out (T-057), and the target's hitpoints for a state that opens on them (T-152).
