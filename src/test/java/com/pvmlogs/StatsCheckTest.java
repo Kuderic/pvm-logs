@@ -67,39 +67,43 @@ public class StatsCheckTest
 
 	/** A successful roll deals 0 to max, so one in (max + 1) of them is a zero that reads as a miss. */
 	@Test
-	public void aRolledZeroIsNotALanding()
+	public void aSuccessfulZeroIsPushedToOne()
 	{
-		assertEquals(0.8 * 3 / 4.0, Fight.landedChance(0.8, 3), 1e-12);
+		// T-151: OSRS Wiki, Successful hit: "If the roll is from a player, then 0s are pushed up to 1" (since 2024-05-29),
+		// so every successful roll lands a splat.
+		assertEquals(0.8, Fight.landedChance(0.8, 3), 1e-12);
 		assertEquals(0.8, Fight.landedChance(0.8, 0), 1e-12);
-		assertEquals(1.0 * 40 / 41.0, Fight.landedChance(1.3, 40), 1e-12);
+		assertEquals(1.0, Fight.landedChance(1.3, 40), 1e-12);
 	}
 
 	/**
-	 * A weak weapon over a long fight: max hit 3, 80% accurate, 400 attacks. Each
-	 * successful roll is a zero a quarter of the time, so about 240 land where the
-	 * accuracy alone says 320 - a z near -10 if the zeros were taken for misses.
+	 * A weak weapon over a long fight: max hit 3, 80% accurate, 400 attacks. A successful roll of 0 deals 1, so about
+	 * 320 land, the accuracy. Taking the zeros off as misses, as before T-151, expected 240: a z near +9.
 	 */
 	@Test
-	public void aWeakWeaponsZerosDoNotTrip()
+	public void aWeakWeaponLandsItsAccuracy()
 	{
 		final Random random = new Random(7);
 		final Fight f = new Fight("Goblin", NpcIds.GOBLIN, 1, 5, 0L, null, 0);
 		for (int i = 0; i < 400; i++)
 		{
 			f.recordExpected(3, 0.8, 1.2);
-			final int damage = random.nextDouble() < 0.8 ? random.nextInt(4) : 0;
+			final int damage = random.nextDouble() < 0.8 ? Math.max(1, random.nextInt(4)) : 0;
 			f.recordDamageDealt(damage, i, damage > 0);
 		}
 		assertNull(StatsCheck.accuracyVerdict(f));
-		final double naive = (f.getHits() - f.getSumExpectedAccuracy()) / Math.sqrt(400 * 0.8 * 0.2);
-		assertTrue("the accuracy alone would have read z = " + naive, naive < -4);
+		final double oldRule = 400 * 0.8 * 3 / 4.0;
+		final double naive = (f.getHits() - oldRule) / Math.sqrt(oldRule * (1 - oldRule / 400));
+		assertTrue("the old rule would have read z = " + naive, naive > 4);
 	}
 
 	/** Many fights of honest luck, of every length, accuracy and max hit: at four standard deviations, none trip. */
 	@Test
 	public void honestLuckDoesNotTrip()
 	{
-		final Random random = new Random(20261026);
+		// T-151: SplittableRandom, whose draws in sequence are independent. java.util.Random's aren't quite, and with every
+		// success now landing (a 0 pushed to 1) its stream tripped three honest fights in this seed's 3,000.
+		final java.util.SplittableRandom random = new java.util.SplittableRandom(20261026);
 		int tripped = 0;
 		for (int trial = 0; trial < 3000; trial++)
 		{
@@ -110,7 +114,7 @@ public class StatsCheckTest
 			for (int i = 0; i < attacks; i++)
 			{
 				f.recordExpected(maxHit, accuracy, accuracy * maxHit / 2.0);
-				final int damage = random.nextDouble() < accuracy ? random.nextInt(maxHit + 1) : 0;
+				final int damage = random.nextDouble() < accuracy ? Math.max(1, random.nextInt(maxHit + 1)) : 0;
 				f.recordDamageDealt(damage, i, damage > 0);
 			}
 			if (StatsCheck.accuracyVerdict(f) != null)

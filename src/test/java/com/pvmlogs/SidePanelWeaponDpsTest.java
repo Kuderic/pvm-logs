@@ -137,7 +137,7 @@ public class SidePanelWeaponDpsTest
 		final PanelSnapshot.Source spec = row(tab, "Emberlight", true);
 		assertNull(spec.dps);
 		// T-112 item 6: Emberlight drains on landing, so it reads its landing.
-		assertEquals("2 specs (100% landed, expected 78%)", spec.sub);
+		assertEquals("2 specs (100% landed, expected 80%)", spec.sub);
 		assertTrue(spec.tooltip, spec.tooltip.contains("no DPS: a special is spent by energy, not time"));
 		// The 2:17 kill has a thrall row.
 		final PanelSnapshot.Source thrall = row(SidePanelModel.fight(SidePanelExamples.dead()), "Thrall", false);
@@ -314,27 +314,27 @@ public class SidePanelWeaponDpsTest
 	@Test
 	public void aSpecialThatDrainsOnLandingReadsItsLanding()
 	{
-		// The fixture's Emberlight specials: both landed, at 78% each.
+		// The fixture's Emberlight specials: both landed, at 80% each (T-151: a successful 0 is pushed to 1).
 		final PanelSnapshot.Source ember = row(SidePanelModel.fight(SidePanelExamples.sireWeapons()), "Emberlight", true);
-		assertEquals("2 specs (100% landed, expected 78%)", ember.sub);
-		assertEquals(Arrays.asList("2 specs (100% landed, exp 78%)", "100% landed (exp 78%)", "2 specs (100% landed)",
+		assertEquals("2 specs (100% landed, expected 80%)", ember.sub);
+		assertEquals(Arrays.asList("2 specs (100% landed, exp 80%)", "100% landed (exp 80%)", "2 specs (100% landed)",
 			"2 specs"), ember.subShort);
 		// A warhammer: two specs, one landed.
 		final SidePanelModel.Input dwh = withSpecial(SidePanelExamples.sireWeapons(), "Dragon warhammer",
 			net.runelite.api.gameval.ItemID.DRAGON_WARHAMMER, 2, 1);
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(dwh);
 		final PanelSnapshot.Source two = row(tab, "Dragon warhammer", true);
-		assertEquals("2 specs (50% landed, expected 78%)", two.sub);
+		assertEquals("2 specs (50% landed, expected 80%)", two.sub);
 		assertEquals("47", two.damage);
 		fitsInEverySetting(dwh, tab, two);
 		// One spec, landed and missed.
-		assertEquals("1 spec (landed, expected 78%)", row(SidePanelModel.fight(withSpecial(SidePanelExamples
+		assertEquals("1 spec (landed, expected 80%)", row(SidePanelModel.fight(withSpecial(SidePanelExamples
 			.sireWeapons(), "Elder maul", net.runelite.api.gameval.ItemID.ELDER_MAUL, 1, 1)), "Elder maul", true).sub);
 		final SidePanelModel.Input missed = withSpecial(SidePanelExamples.sireWeapons(), "Elder maul",
 			net.runelite.api.gameval.ItemID.ELDER_MAUL, 1, 0);
 		final PanelSnapshot.FightTab missedTab = SidePanelModel.fight(missed);
 		final PanelSnapshot.Source m = row(missedTab, "Elder maul", true);
-		assertEquals("1 spec (missed, expected 78%)", m.sub);
+		assertEquals("1 spec (missed, expected 80%)", m.sub);
 		fitsInEverySetting(missed, missedTab, m);
 		// Under the stats warning, no chance: only what landed.
 		dwh.warning = "two versions share this HP";
