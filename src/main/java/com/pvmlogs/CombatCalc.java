@@ -1185,6 +1185,7 @@ class CombatCalc
 	DamageMoments averageHitMoments(int npcId)
 	{
 		final double accuracy = hitChance(npcId);
+		final boolean push = pushesZero(npcId);
 		// A boss's damage modifiers (T-057) walk every roll of every hitsplat, so the game's rounding is kept per hit.
 		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
 		if (!mods.isEmpty())
@@ -1196,7 +1197,7 @@ class CombatCalc
 			}
 			final int[] maxima = weaponStyle() == Style.MAGIC ? new int[]{first}
 				: shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId));
-			return ModifierTracker.moments(mods, maxima, accuracy, Math.min(damageCap(npcId), overkillCap(npcId)));
+			return ModifierTracker.moments(mods, maxima, accuracy, Math.min(damageCap(npcId), overkillCap(npcId)), push);
 		}
 		if (weaponStyle() == Style.MAGIC)
 		{
@@ -1222,7 +1223,7 @@ class CombatCalc
 		// A scythe swing is several hits, each rolling its own accuracy and damage, so one attack is expected to deal their
 		// sum. Each max is half the one before ROUNDED DOWN, which is why this walks them rather than multiplying by 1.75: a
 		// 51 max is 51, 25, 12, which is 88 and not 89.25.
-		final DamageMoments ordinary = shapeMoments(ordinaryShape(), averageMax, accuracy, hitsPerAttack(npcId), cap);
+		final DamageMoments ordinary = shapeMoments(ordinaryShape(), averageMax, accuracy, hitsPerAttack(npcId), cap, push);
 
 		final EnchantedBolt bolt = loadedBolt(npcId);
 		if (bolt == null)
@@ -1237,8 +1238,10 @@ class CombatCalc
 				// scaled.
 				return rubyMoments(procChance, EnchantedBolt.rubyDamage(targetCurrentHp(npcId)), ordinary);
 			case DIAMOND:
-				// Also ignores accuracy, but rolls damage normally against a raised max, so a proc always lands.
-				return DamageMoments.uniform(1.15 * averageMax).weighted(procChance)
+				// Also ignores accuracy, but rolls damage normally against a raised max, so a proc always lands. T-156: the DPS
+				// calc pushes its 0 too (an accurate roll from 0).
+				return (push ? DamageMoments.successful(1.15 * averageMax) : DamageMoments.uniform(1.15 * averageMax))
+					.weighted(procChance)
 					.or(ordinary.weighted(1.0 - procChance));
 			default:
 				// Onyx leeches from damage actually dealt, so it needs a hit first.
@@ -1327,42 +1330,70 @@ class CombatCalc
 	 */
 	static DamageMoments shapeMoments(OrdinaryShape shape, double averageMax, double accuracy, int scytheHits, int cap)
 	{
+		return shapeMoments(shape, averageMax, accuracy, scytheHits, cap, true);
+	}
+
+	/**
+	 * As above, each hitsplat's successful 0 pushed up to 1 where {@code push} (T-156): every hitsplat rolls its own
+	 * accuracy and damage, so each has its own 0 to push.
+	 */
+	static DamageMoments shapeMoments(OrdinaryShape shape, double averageMax, double accuracy, int scytheHits, int cap,
+		boolean push)
+	{
 		switch (shape)
 		{
 			case SCYTHE:
-				return ordinaryMoments(averageMax, accuracy, scytheHits, cap);
+				return ordinaryMoments(averageMax, accuracy, scytheHits, cap, push);
 			case SPLIT:
 			{
 				final double first = Math.floor(averageMax / 2.0);
-				return roll(first, cap).landing(accuracy).plus(roll(averageMax - first, cap).landing(accuracy));
+				return roll(first, cap, push).landing(accuracy).plus(roll(averageMax - first, cap, push).landing(accuracy));
 			}
 			case MACUAHUITL:
 			{
 				// The second lands only if the first did and its own roll passes: B1 (Y1 + B2 Y2).
 				final double first = Math.floor(averageMax / 2.0);
-				return roll(first, cap).plus(roll(averageMax - first, cap).landing(accuracy)).landing(accuracy);
+				return roll(first, cap, push).plus(roll(averageMax - first, cap, push).landing(accuracy)).landing(accuracy);
 			}
 			case TWO_FULL:
 			{
-				final DamageMoments arrow = roll(averageMax, cap).landing(accuracy);
+				final DamageMoments arrow = roll(averageMax, cap, push).landing(accuracy);
 				return arrow.plus(arrow);
 			}
 			case TWO_THREE_QUARTERS:
 			{
-				final DamageMoments thrown = roll(averageMax * 0.75, cap).landing(accuracy);
+				final DamageMoments thrown = roll(averageMax * 0.75, cap, push).landing(accuracy);
 				return thrown.plus(thrown);
 			}
 			case THREE_QUARTERS:
-				return roll(averageMax * 0.75, cap).landing(accuracy);
+				return roll(averageMax * 0.75, cap, push).landing(accuracy);
 			default:
-				return ordinaryMoments(averageMax, accuracy, 1, cap);
+				return ordinaryMoments(averageMax, accuracy, 1, cap, push);
 		}
 	}
 
-	// One hitsplat's damage roll from 0 to this max: keeping its fraction uncapped, whole under a cap.
-	private static DamageMoments roll(double max, int cap)
+	/**
+	 * One successful hitsplat's damage roll from 0 to this max: keeping its fraction uncapped, whole under a cap; its 0
+	 * pushed up to 1 where {@code push} (T-156).
+	 */
+	private static DamageMoments roll(double max, int cap, boolean push)
 	{
-		return cap == Integer.MAX_VALUE ? DamageMoments.uniform(max) : DamageMoments.capped((int) max, cap);
+		if (cap == Integer.MAX_VALUE)
+		{
+			return push ? DamageMoments.successful(max) : DamageMoments.uniform(max);
+		}
+		return push ? DamageMoments.successful(0, (int) max, cap) : DamageMoments.capped((int) max, cap);
+	}
+
+	/**
+	 * T-156: whether a player's successful 0, pushed up to 1, still deals 1 on this target. The DPS calc pushes each accurate
+	 * hitsplat after the gear's multipliers and before the target's own share of it (the Corporeal Beast's halving, the
+	 * Chambers' guardians, a raid's damage taken), which the calc folds into the max as {@link #mitigation}: under 1, the 1
+	 * goes back to 0 (⌊1 × share⌋), so nothing is pushed.
+	 */
+	boolean pushesZero(int npcId)
+	{
+		return mitigation(npcId) >= 1.0;
 	}
 
 	/**
@@ -1426,14 +1457,17 @@ class CombatCalc
 	 */
 	static DamageMoments ordinaryMoments(double averageMax, double accuracy, int hits, int cap)
 	{
+		return ordinaryMoments(averageMax, accuracy, hits, cap, true);
+	}
+
+	/** As above, each hit's successful 0 pushed up to 1 where {@code push} (T-156). */
+	static DamageMoments ordinaryMoments(double averageMax, double accuracy, int hits, int cap, boolean push)
+	{
 		DamageMoments total = DamageMoments.ZERO;
 		double max = averageMax;
 		for (int hit = 0; hit < hits; hit++)
 		{
-			final DamageMoments roll = cap == Integer.MAX_VALUE
-				? DamageMoments.uniform(max)
-				: DamageMoments.capped((int) max, cap);
-			total = total.plus(roll.landing(accuracy));
+			total = total.plus(roll(max, cap, push).landing(accuracy));
 			max = Math.floor(max / 2.0);
 		}
 		return total;
@@ -3109,16 +3143,19 @@ class CombatCalc
 		}
 		// T-152: where the boss's modifiers apply to specials (the Wardens' P2 poise, the core's x5), each hitsplat of the
 		// special's maxima goes through them, as an ordinary attack's do.
+		// T-156: a successful 0 is pushed up to 1 (OSRS Wiki, Successful hit) on every special but the claws': the DPS calc
+		// leaves the dragon claws' and the burning claws' outcomes as their pages give them, four misses' 0 or 2 included.
+		final boolean push = pushesZero(npcId) && !spec.cascadingAccuracy();
 		final List<BossRules.ModifierRule> specMods = specialModifiers(npcId);
 		if (!specMods.isEmpty() && !spec.hasFixedDamage())
 		{
 			final int[] maxima = spec.hitMaxima((int) ((spec.hasDamageMultipliers() ? unmitigatedMaxHit(npcId)
 				: unmitigatedSpecialAttackMaxHit(npcId)) * mitigation(npcId)));
 			return ModifierTracker.moments(specMods, maxima, ModifierTracker.accuracy(specMods, accuracy),
-				Math.min(damageCap(npcId), overkillCap(npcId)));
+				Math.min(damageCap(npcId), overkillCap(npcId)), push);
 		}
 		// Pulsate alone: fixed damage that no gear, prayer or mitigation touches, and the only hit Verzik's first phase lets
-		// past its cap.
+		// past its cap. Its floor is half its max, so it has no 0 to push.
 		if (spec.hasFixedDamage())
 		{
 			final int flatMax = spec.fixedMax();
@@ -3144,7 +3181,7 @@ class CombatCalc
 		}
 		if (spec.binomialAccuracy())
 		{
-			return crimsonKistenMoments((int) (unmitigatedMaxHit(npcId) * scale), accuracy, cap);
+			return crimsonKistenMoments((int) (unmitigatedMaxHit(npcId) * scale), accuracy, cap, push);
 		}
 		// A special with no damage multipliers of its own - the fang, the bludgeon, the volatile staff - has already had its
 		// max worked out.
@@ -3160,21 +3197,26 @@ class CombatCalc
 		final int[] maxima = spec.hitMaxima((int) (base * scale));
 		if (spec.splitsMaxInTwo())
 		{
-			return specMoments(new int[]{maxima[0] / 2, maxima[0] - maxima[0] / 2}, accuracy, 0, 0, cap, false);
+			return specMoments(new int[]{maxima[0] / 2, maxima[0] - maxima[0] / 2}, accuracy, 0, 0, cap, false, push);
 		}
 		if (spec.splitsAcrossSuccesses())
 		{
-			return DamageMoments.capped(maxima[0], cap).landing(landChance(accuracy, spec.hits()));
+			// T-156: the Brand's one roll, pushed as one: a 0 split over two or more successes could make more than 1, which
+			// no page read says.
+			final DamageMoments brand = push ? DamageMoments.successful(0, maxima[0], cap)
+				: DamageMoments.capped(maxima[0], cap);
+			return brand.landing(landChance(accuracy, spec.hits()));
 		}
 		if (spec == SpecialAttack.ANCIENT_GODSWORD || spec == SpecialAttack.SARADOMIN_SWORD)
 		{
-			return withExtraSplat(maxima[0], accuracy, cap, spec);
+			return withExtraSplat(maxima[0], accuracy, cap, spec, push);
 		}
 		if (spec == SpecialAttack.DINHS_BULWARK && inMulticombat())
 		{
-			return specMoments(new int[]{maxima[0], maxima[0]}, accuracy, 0, 0, cap, false);
+			return specMoments(new int[]{maxima[0], maxima[0]}, accuracy, 0, 0, cap, false, push);
 		}
-		return specMoments(maxima, accuracy, spec.minFraction(), spec.flatMinimum(), cap, spec.sharedAccuracyRoll());
+		return specMoments(maxima, accuracy, spec.minFraction(), spec.flatMinimum(), cap, spec.sharedAccuracyRoll(),
+			push);
 	}
 
 	/** Saradomin's Lightning's extra Magic damage, "1-16" (wiki, Saradomin sword, read 2026-10-27; T-037). */
@@ -3197,10 +3239,17 @@ class CombatCalc
 	 */
 	static DamageMoments withExtraSplat(int meleeMax, double accuracy, int cap, SpecialAttack spec)
 	{
+		return withExtraSplat(meleeMax, accuracy, cap, spec, true);
+	}
+
+	/** As above, the melee hit's successful 0 pushed up to 1 where {@code push} (T-156); the extra splat has none. */
+	static DamageMoments withExtraSplat(int meleeMax, double accuracy, int cap, SpecialAttack spec, boolean push)
+	{
 		final DamageMoments extra = spec == SpecialAttack.ANCIENT_GODSWORD
 			? DamageMoments.fixed(Math.min(cap, AttackSplats.BLOOD_SACRIFICE_DAMAGE))
 			: DamageMoments.capped(LIGHTNING_MIN, LIGHTNING_MAX, cap);
-		return DamageMoments.capped(0, meleeMax, cap).plus(extra).landing(accuracy);
+		final DamageMoments melee = push ? DamageMoments.successful(0, meleeMax, cap) : DamageMoments.capped(0, meleeMax, cap);
+		return melee.plus(extra).landing(accuracy);
 	}
 
 	// Dragon arrows in the quiver, seeking ones included: Descent of Dragons rather than of Darkness (wiki, Dark bow).
@@ -3277,13 +3326,21 @@ class CombatCalc
 	static DamageMoments specMoments(int[] hitMaxima, double accuracy, double minFraction,
 		int flatMinimum, int cap, boolean sharedRoll)
 	{
+		return specMoments(hitMaxima, accuracy, minFraction, flatMinimum, cap, sharedRoll, true);
+	}
+
+	/** As above, each hitsplat's successful 0 pushed up to 1 where {@code push} (T-156): a floor above 0 has none. */
+	static DamageMoments specMoments(int[] hitMaxima, double accuracy, double minFraction,
+		int flatMinimum, int cap, boolean sharedRoll, boolean push)
+	{
 		double total = 0;
 		DamageMoments independent = DamageMoments.ZERO;
 		DamageMoments rolls = DamageMoments.ZERO;
 		for (int max : hitMaxima)
 		{
-			final int floor = Math.max(flatMinimum, (int) (max * minFraction));
-			final DamageMoments roll = DamageMoments.capped(Math.min(floor, max), max, cap);
+			final int floor = Math.min(Math.max(flatMinimum, (int) (max * minFraction)), max);
+			final DamageMoments roll = push ? DamageMoments.successful(floor, max, cap)
+				: DamageMoments.capped(floor, max, cap);
 			total += accuracy * roll.mean;
 			independent = independent.plus(roll.landing(accuracy));
 			rolls = rolls.plus(roll);
@@ -3309,6 +3366,12 @@ class CombatCalc
 	/** {@link #crimsonKistenAverage} as moments: a mixture over the number of successes, each one band's roll. */
 	static DamageMoments crimsonKistenMoments(int normalMaxHit, double accuracy, int cap)
 	{
+		return crimsonKistenMoments(normalMaxHit, accuracy, cap, true);
+	}
+
+	/** As above, a band's successful 0 pushed up to 1 where {@code push} (T-156): only a max of 1 has a band from 0. */
+	static DamageMoments crimsonKistenMoments(int normalMaxHit, double accuracy, int cap, boolean push)
+	{
 		double expected = 0;
 		double second = 0;
 		for (int hits = 1; hits <= KISTEN_ROLLS; hits++)
@@ -3316,8 +3379,9 @@ class CombatCalc
 			final double weight = binomial(KISTEN_ROLLS, hits)
 				* Math.pow(accuracy, hits) * Math.pow(1.0 - accuracy, KISTEN_ROLLS - hits);
 			final double floor = KISTEN_FLOORS[hits - 1];
-			final DamageMoments band = DamageMoments.capped(
-				(int) (normalMaxHit * floor), (int) (normalMaxHit * (floor + KISTEN_BAND)), cap);
+			final int lo = (int) (normalMaxHit * floor);
+			final int hi = (int) (normalMaxHit * (floor + KISTEN_BAND));
+			final DamageMoments band = push ? DamageMoments.successful(lo, hi, cap) : DamageMoments.capped(lo, hi, cap);
 			expected += weight * band.mean;
 			second += weight * band.second;
 		}

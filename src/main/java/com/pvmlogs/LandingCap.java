@@ -70,8 +70,10 @@ final class LandingCap
 		{
 			return mean <= capNow ? null : new double[]{capNow, Math.max(0, variance)};
 		}
-		final DamageMoments then = DamageMoments.capped(maxHit, capThen).landing(chances);
-		final DamageMoments now = DamageMoments.capped(maxHit, capNow).landing(chances);
+		// T-156: the roll a player's figures are, its successful 0 pushed up to 1. Both caps here are at least 1, so the 1 is
+		// in both and the mean's difference is the same; the variance's moves with the means.
+		final DamageMoments then = DamageMoments.successful(0, maxHit, capThen).landing(chances);
+		final DamageMoments now = DamageMoments.successful(0, maxHit, capNow).landing(chances);
 		final double m = Math.max(0, Math.min(capNow, mean + now.mean - then.mean));
 		final double v = Math.max(0, variance + now.variance() - then.variance());
 		return new double[]{m, v};

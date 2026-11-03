@@ -283,7 +283,8 @@ public class DamageModifierTest
 				for (int s = lo; s <= (two ? max : lo); s++)
 				{
 					final double p = two ? a / ((double) k * k) : a / k;
-					final double v = ModifierTracker.damage(mods, Math.max(r, s), max, true);
+					// T-156: a successful 0 is pushed up to 1 before the modifiers.
+					final double v = ModifierTracker.damage(mods, Math.max(1, Math.max(r, s)), max, true);
 					m += p * v;
 					sq += p * v * v;
 				}

@@ -936,6 +936,17 @@ final class ModifierTracker
 	 */
 	static DamageMoments moments(List<BossRules.ModifierRule> mods, int[] maxima, double accuracy, int cap)
 	{
+		return moments(mods, maxima, accuracy, cap, true);
+	}
+
+	/**
+	 * As above, a successful roll of 0 pushed up to 1 where {@code push} (T-156; OSRS Wiki, Successful hit) before the
+	 * modifiers act on it, as the DPS calc pushes before the target's own transforms. Never in the Wardens' poise band
+	 * ({@link BossRules.ModifierRule#rollMinPercent}), which is its own distribution (T-152), nor on a miss.
+	 */
+	static DamageMoments moments(List<BossRules.ModifierRule> mods, int[] maxima, double accuracy, int cap, boolean push)
+	{
+		final boolean pushZero = push && !hasPoiseBand(mods);
 		final int rolls = rolls(mods);
 		double mean = 0;
 		double variance = 0;
@@ -954,7 +965,7 @@ final class ModifierTracker
 			for (int r = lo; r <= hi; r++)
 			{
 				final double each = accuracy * rollChance(r - lo, hi - lo, rolls);
-				final double v = Math.min(cap, damage(mods, r, max, true, hit));
+				final double v = Math.min(cap, damage(mods, pushZero && r == 0 ? 1 : r, max, true, hit));
 				m += each * v;
 				second += each * v * v;
 			}
@@ -962,6 +973,19 @@ final class ModifierTracker
 			variance += Math.max(0, second - m * m);
 		}
 		return new DamageMoments(mean, variance + mean * mean);
+	}
+
+	// T-156: a roll drawn in the poise's band, whose percents are its own.
+	private static boolean hasPoiseBand(List<BossRules.ModifierRule> mods)
+	{
+		for (BossRules.ModifierRule m : mods)
+		{
+			if (m.rollMinPercent != null || m.rollMaxPercent != null)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** The names, for a log line. */
