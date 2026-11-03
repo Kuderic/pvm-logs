@@ -44,8 +44,8 @@ public class MagicDamageTest
 		m.markPercent = 50;
 		assertEquals(33, m.preHitRoll());
 		assertEquals(49, m.maxHit());
-		// Every roll from 0 to 33, each with its own half added: 24.5, the max over two.
-		assertEquals(24.5, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
+		// Every roll from 0 to 33, each with its own half added: 24.5, the max over two; T-156: the 0 deals 1, 1 in 34.
+		assertEquals(24.5 + 1.0 / 34, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
 	}
 
 	/**
@@ -60,12 +60,12 @@ public class MagicDamageTest
 		duke.markPercent = 50;
 		duke.effectivenessPercent = 70;
 		assertEquals(44, duke.maxHit());
-		assertEquals(21.676470588235293, duke.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
+		assertEquals(21.676470588235293 + 1.0 / 34, duke.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
 		final MagicDamage flare = spell(30, 10);
 		flare.markPercent = 50;
 		flare.effectivenessPercent = 200;
 		assertEquals(65, flare.maxHit());
-		assertEquals(32.5, flare.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
+		assertEquals(32.5 + 1.0 / 34, flare.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
 	}
 
 	/**
@@ -125,7 +125,8 @@ public class MagicDamageTest
 		assertEquals(16.0, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
 		m.tenthMinimum = false;
 		assertEquals(0, m.minHit());
-		assertEquals(15.0, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
+		// T-156: from 0, the 0 deals 1 (1 in 31); from 2 there is no 0 to push.
+		assertEquals(15.0 + 1.0 / 31, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
 	}
 
 	/**
@@ -140,9 +141,10 @@ public class MagicDamageTest
 		assertEquals(22, m.maxHit());
 		assertEquals(8, m.secondMaxHit());
 		assertEquals(30, m.attackMaxHit());
-		assertEquals(15.0, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
+		// T-156: the 0 deals 1 (1 in 23), its second splat 0.
+		assertEquals(15.0 + 1.0 / 23, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
 		// Each splat is held to a per-splat cap on its own.
-		assertEquals(5.043478260869565, m.expectedOnHit(1.0, 3, Integer.MAX_VALUE), DELTA);
+		assertEquals(5.043478260869565 + 1.0 / 23, m.expectedOnHit(1.0, 3, Integer.MAX_VALUE), DELTA);
 	}
 
 	/** Ahrim's: a 25% chance of 30% more on the rolled hit, so 26 is reachable and the average is a little over 10. */
@@ -152,7 +154,8 @@ public class MagicDamageTest
 		final MagicDamage m = spell(20, 0);
 		m.ahrims = true;
 		assertEquals(26, m.maxHit());
-		assertEquals(10.642857142857142, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
+		// T-156: the 0 deals 1 (1 in 21), Ahrim's or not.
+		assertEquals(10.642857142857142 + 1.0 / 21, m.expectedOnHit(1.0, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
 	}
 
 	/** What the target has left caps the attack; its mitigation scales each splat. */
@@ -160,7 +163,8 @@ public class MagicDamageTest
 	public void capsAndMitigation()
 	{
 		final MagicDamage m = spell(20, 0);
-		assertEquals(4.285714285714286, m.expectedOnHit(1.0, Integer.MAX_VALUE, 5), DELTA);
+		// T-156: the 0 deals 1 (1 in 21); halved after it is pushed, as the DPS calc halves, the 1 is 0 again.
+		assertEquals(4.285714285714286 + 1.0 / 21, m.expectedOnHit(1.0, Integer.MAX_VALUE, 5), DELTA);
 		assertEquals(4.761904761904762, m.expectedOnHit(0.5, Integer.MAX_VALUE, Integer.MAX_VALUE), DELTA);
 	}
 

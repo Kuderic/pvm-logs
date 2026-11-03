@@ -42,13 +42,14 @@ public class LandingCapTest
 	{
 		// An axe blow (max 63, lands 84.2%) thrown with 35 left; another player's 10 lands first, leaving 25.
 		final double chances = 0.842;
-		final DamageMoments then = DamageMoments.capped(63, 35).landing(chances);
+		// T-156: a player's successful roll, its 0 pushed up to 1.
+		final DamageMoments then = DamageMoments.successful(0, 63, 35).landing(chances);
 		final double[] at = LandingCap.recap(63, chances, then.mean, then.variance(), 35, 25);
 		// For one uniform roll the re-cap is exact: the roll capped at 25.
-		final DamageMoments now = DamageMoments.capped(63, 25).landing(chances);
+		final DamageMoments now = DamageMoments.successful(0, 63, 25).landing(chances);
 		assertEquals(now.mean, at[0], 1e-9);
 		assertEquals(now.variance(), at[1], 1e-9);
-		assertEquals(chances * CombatCalc.cappedAverage(63, 25), at[0], 1e-9);
+		assertEquals(chances * (CombatCalc.cappedAverage(63, 25) + 1.0 / 64), at[0], 1e-9);
 		assertTrue(at[0] < then.mean);
 	}
 
