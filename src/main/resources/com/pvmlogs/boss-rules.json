@@ -355,11 +355,62 @@
       }
     },
     {
+      "name": "The Wardens, phase 2",
+      "npcIds": [11753, 11754, 11755, 11756, 11757, 11758],
+      "damageModifiers": {
+        "modifiers": [
+          {
+            "name": "poise",
+            "npcIds": [11753, 11754, 11756, 11757],
+            "wardensPoise": true,
+            "specials": true,
+            "source": "T-152. The DPS calc's facts (weirdgloop/osrs-dps-calc, read 2026-11-02): at P2 the accuracy is 1, and the hit is between m% and (m + 20)% of the max, m = 15 + 25 x (max attack roll - defence roll / 3) / 42,000, held to 15 to 40. Jagex: 'Adjusted the damage formula for Phase 2 to benefit less from accuracy and have a lower max ceiling' (Update: Tombs of Amascut: Balance Changes Revisited). Eric's 11-02 poise splats (types 53, 55): 78 of 78 landed; his bowfa's max 50 gave 20 to 30, its max-hit poise splat 30."
+          },
+          {
+            "name": "the core",
+            "npcIds": [11755, 11758],
+            "styles": ["MELEE"],
+            "guaranteedMax": true,
+            "multiply": [5, 1],
+            "specials": true,
+            "source": "T-152. OSRS Wiki, read 2026-11-02, Core: 'damage dealt to the core deals five times the damage towards the Warden, so a hit of 55 would deal 275 damage', and 'Players will always deal their max hit when using melee against the Warden's core.' Eric's 11-02 core hits, type 43: 240 = 5 x 48 (the keris), 210 = 5 x 42 (the dragon dagger)."
+          },
+          {
+            "name": "the core",
+            "npcIds": [11755, 11758],
+            "styles": ["RANGED", "MAGIC"],
+            "multiply": [5, 1],
+            "specials": true,
+            "source": "T-152. OSRS Wiki, Core: five times the damage; the max hit only for melee, so a ranged or magic hit rolls as it would."
+          }
+        ]
+      }
+    },
+    {
       "name": "The Wardens, phase 3",
       "npcIds": [11759, 11760, 11761, 11762, 11763, 11764],
       "defenceDrain": {
         "defenceFloor": 120,
         "source": "OSRS Wiki, read 2026-10-28: Tumeken's Warden / Elidinis' Warden: phase 3 -30 (no lower than 120 of 150), and after the enrage, which resets the base to 180, -60, no lower than 120 again. The enrage keeps the same npc id, so its reset is not seen. DPS calc floor 120 agrees."
+      },
+      "damageModifiers": {
+        "states": [
+          {
+            "name": "enraged",
+            "startOnHpAtMost": 0.05,
+            "startOnHeal": 0.15,
+            "source": "T-152. OSRS Wiki, read 2026-11-02, Tumeken's Warden: 'Upon reducing the Warden below 5% HP for the first time, the Warden will enrage and heal for 20% of its maximum HP.' The heal opens it too, since a bar reading can miss the dip: Eric's 11-02 raid read 127 of 2080 at [33779], then 495 at [33783]. 15% rather than 20%, for a bar read a hit after the heal. Never closes: the enrage stays."
+          }
+        ],
+        "modifiers": [
+          {
+            "name": "enraged",
+            "npcIds": [11761, 11762],
+            "state": "enraged",
+            "version": "Enraged",
+            "source": "T-152. The monster data's 'Enraged' version of the P3 Warden (Defence 180) while enraged, 'Damaged' (150) before; OSRS Wiki, Tumeken's Warden: after the enrage 'the Warden's base defence level is reset to 180'. The drain's own reset to 180 isn't modelled (the same npc id)."
+          }
+        ]
       }
     },
     {

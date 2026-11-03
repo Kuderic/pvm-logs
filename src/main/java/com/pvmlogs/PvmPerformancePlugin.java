@@ -6268,8 +6268,8 @@ public class PvmPerformancePlugin extends Plugin
 		bookSplashedSpecial(client.getTickCount());
 		// The specials due this tick land their drains before anything works out an expectation (T-049).
 		drain.onGameTick();
-		// Damage-modifier windows that ran out (T-057).
-		damageModifiers.onGameTick();
+		// Damage-modifier windows that ran out (T-057), and the target's hitpoints for a state that opens on them (T-152).
+		damageModifiers.onGameTick(targetNpc);
 		// And the windows the boss's uptime allowances ride on, as they stand now (T-074).
 		observeMechanics();
 		// What they and the party's did to the fights' outcome distributions (T-050).

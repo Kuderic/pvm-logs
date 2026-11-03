@@ -188,9 +188,29 @@ class DamageModifiers
 		return change;
 	}
 
-	void onGameTick()
+	/**
+	 * Once a tick: windows that ran out, and (T-152) the fight's target's hitpoints for a state that opens on them, the
+	 * P3 Warden's enrage. Only the target is read: the heal that comes with the enrage opens it on a later reading.
+	 */
+	void onGameTick(NPC target)
 	{
 		tracker.tick(client.getTickCount());
+		noteHitpoints(target);
+	}
+
+	// T-152: the fight's target, where its state opens on its hitpoints.
+	private void noteHitpoints(NPC target)
+	{
+		final BossRules.Boss boss = target == null ? null : bossFor(target.getId());
+		if (boss == null || !ModifierTracker.opensOnHitpoints(boss.damageModifiers))
+		{
+			return;
+		}
+		final int[] hp = hitpoints.apply(target.getIndex());
+		if (hp != null)
+		{
+			tracker.onHitpoints(target.getIndex(), boss.name, boss.damageModifiers, hp[0], hp[1], client.getTickCount());
+		}
 	}
 
 	void forget(NPC npc)

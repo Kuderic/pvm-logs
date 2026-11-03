@@ -130,6 +130,7 @@ public class SidePanelBossIconsTest
 		m.put("Kephri", HiscoreSkill.TOMBS_OF_AMASCUT);
 		m.put("Zebak", HiscoreSkill.TOMBS_OF_AMASCUT);
 		m.put("Obelisk (Tombs of Amascut)", HiscoreSkill.TOMBS_OF_AMASCUT);
+		m.put("The Wardens, phase 2", HiscoreSkill.TOMBS_OF_AMASCUT);
 		m.put("The Wardens, phase 3", HiscoreSkill.TOMBS_OF_AMASCUT);
 		m.put("Nex", HiscoreSkill.NEX);
 		m.put("The Hueycoatl", HiscoreSkill.THE_HUEYCOATL);
