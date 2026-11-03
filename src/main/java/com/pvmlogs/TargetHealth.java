@@ -195,7 +195,8 @@ class TargetHealth
 	 * T-146: the npc's overhead bar read {@code ratio} of {@code scale}: where the count has more left than that can
 	 * be, plus {@code extra} (a splat of the player's landing as it was read, which the reading may or may not show
 	 * yet), the difference was taken where the count didn't see it - other players' damage from before the fight
-	 * opened - and is counted now. Never raises the count; nothing while the boss bar is read. Returns what it added.
+	 * opened - and is counted now. Never raises the count; nothing once the boss bar has been read (T-154). Returns
+	 * what it added.
 	 */
 	int boundByRatio(int index, int npcId, int ratio, int scale, int extra, int tick)
 	{
@@ -203,7 +204,8 @@ class TargetHealth
 		// A full figure that may be short (the Tombs, without the boss bar) makes the bar's share of it too little. T-153:
 		// with the boss bar too: what a Tombs boss's count holds isn't always what its overhead bar shows (Kephri's shield
 		// splats take her first bar's 400 and aren't hitpoints), and the boss bar is read a tick later anyway.
-		if (e == null || hudFresh(e, tick) || e.fullMayBeShort)
+		// T-154: nor on an npc whose boss bar has ever been read: it sees everything, others' damage included.
+		if (e == null || e.hudMax > 0 || e.fullMayBeShort)
 		{
 			return 0;
 		}

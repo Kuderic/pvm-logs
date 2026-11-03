@@ -1024,6 +1024,8 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			final int previousMineTick = lastMineHitsplatTick;
 			lastMineHitsplatTick = client.getTickCount();
+			// T-154: a fight this splat opens reads the overhead bar at the tick's end, not before the splat is counted.
+			openingSplatIndex = npc.getIndex();
 			if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
 			{
 				if (!playerDeath.opensFights(client.getTickCount()))
@@ -1128,8 +1130,9 @@ public class PvmPerformancePlugin extends Plugin
 			// has a SECOND route through recordSplash, which is what proved the cause. Trading a total that is right by luck for
 			// one that is silently short is the worse bargain; the real fix is to match a held sample to its own landing tick.
 			// What it had just before this splat (T-103), for the attack landing now: its own damage is counted further down.
-			// T-146: its overhead bar as the splat lands, the splat itself allowed for (the reading may or may not show it).
-			seeOverheadBar(npc, hitsplat.getAmount(), "as a splat of mine landed");
+			// T-146: its overhead bar as the splat lands. T-154: read at the tick's end, once every splat of this tick is
+			// counted: the bar already shows them all as the first arrives.
+			overheadBarDue(npc, "as a splat of mine landed");
 			noteCapBeforeLanding(npc.getIndex());
 			resolvePendingSample(npc.getIndex());
 			// A cast waiting on an answer has it the moment one of my hitsplats DEALS DAMAGE to the NPC it was aimed at; nothing
@@ -3694,6 +3697,51 @@ public class PvmPerformancePlugin extends Plugin
 		}
 	}
 
+	// T-154: the npc whose splat of mine opened a fight this tick, and the overhead bar read due at the tick's end.
+	private int openingSplatIndex = -1;
+	private int overheadDueIndex = -1;
+	private int overheadDueTick = Integer.MIN_VALUE;
+	private String overheadDueWhen;
+
+	/**
+	 * T-154: the fight's target's overhead bar, to be read at this tick's end ({@link #readOverheadBarIfDue}). The game
+	 * sends the bar with the tick's splats, so as the first of them is handled it already shows every one, and the count
+	 * has none of them yet: at Araxxor [2301] of Eric's log of 2026-11-02 his own opening 25 was "19 taken unseen" on a
+	 * bar of 108/120 (the boss bar 919, the count 944), and then counted as well. Every later Araxxor kill reconciled over
+	 * his full hitpoints by exactly that. By the tick's end every splat of the tick is counted.
+	 */
+	private void overheadBarDue(NPC npc, String when)
+	{
+		final int tick = client.getTickCount();
+		if (overheadDueIndex != npc.getIndex() || tick - overheadDueTick > 1)
+		{
+			overheadDueIndex = npc.getIndex();
+			overheadDueTick = tick;
+			overheadDueWhen = when;
+		}
+	}
+
+	/** T-154: whether a fight opening on this npc now was opened by a splat of the player's on it this tick. */
+	static boolean openedBySplat(int openingSplatIndex, int lastMineSplatTick, int npcIndex, int tick)
+	{
+		return openingSplatIndex == npcIndex && lastMineSplatTick == tick;
+	}
+
+	/** T-154: the read {@link #overheadBarDue} left for the tick's end, on the fight's target only. */
+	private void readOverheadBarIfDue()
+	{
+		final int index = overheadDueIndex;
+		final String when = overheadDueWhen;
+		overheadDueIndex = -1;
+		// The tick it was due, or the one after should that tick's end have come before its splats.
+		if (index < 0 || client.getTickCount() - overheadDueTick > 1 || current == null || current.isEnded()
+			|| current.getTargetIndex() != index || targetNpc == null || targetNpc.getIndex() != index)
+		{
+			return;
+		}
+		seeOverheadBar(targetNpc, 0, when + ", read at the tick's end");
+	}
+
 	/** Notes the first tick an npc is seen dead (T-115). */
 	private void noteDead(NPC npc, int tick)
 	{
@@ -6209,6 +6257,8 @@ public class PvmPerformancePlugin extends Plugin
 		// Before anything asks for the target's stats: the bar decides which version of a boss this is, and what it has left
 		// moves Vardorvis's defence.
 		readHealthBar();
+		// T-154: and its overhead bar, where a splat of mine landed this tick, now that the tick's splats are all counted.
+		readOverheadBarIfDue();
 		// The target seen dead by the tick's end, for a blow landing next tick (T-115).
 		noteDead(targetNpc, client.getTickCount());
 		logTaskMismatch(combatCalc.onSlayerTick(client.getTickCount()));
@@ -6494,8 +6544,16 @@ public class PvmPerformancePlugin extends Plugin
 			raidHpNote = String.format("  RAID HP: %d full, %s the table's %d%s", raidHp,
 				raidHp != tableHp ? "scaled for the raid from" : "as", tableHp, basis == null ? "" : " (" + basis + ")");
 		}
-		// T-146: its overhead bar, where the game shows one: damage from before the fight opened.
-		seeOverheadBar(npc, 0, "as the fight opened");
+		// T-146: its overhead bar, where the game shows one: damage from before the fight opened. T-154: opened by a splat of
+		// the player's, at the tick's end, once it is counted: the bar shows it already, the count doesn't yet.
+		if (openedBySplat(openingSplatIndex, lastMineHitsplatTick, npc.getIndex(), client.getTickCount()))
+		{
+			overheadBarDue(npc, "as the fight opened");
+		}
+		else
+		{
+			seeOverheadBar(npc, 0, "as the fight opened");
+		}
 		// Tags stripped: some names carry colour markup and it was reaching the CSV verbatim, "<col=00ffff>Rubble</col>" and
 		// all.
 		mechanics.reset();
