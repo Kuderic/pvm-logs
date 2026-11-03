@@ -3526,6 +3526,12 @@ public class PvmPerformancePlugin extends Plugin
 				: originIsAuthoritative && attackFromDrop ? " (from its drop's row on tick " + figuresTick + ")"
 				: originIsAuthoritative && atOrigin.length > EXP_WIDTH
 					? " (from tick " + figuresTick + "'s row for the npc it was aimed at)" : "");
+		// T-157: versions of the target that can't be told apart warn only where they'd change the figures (one check an attack).
+		final String versions = combatCalc.checkVersions(targetId);
+		if (versions != null)
+		{
+			debug.log("  %s", versions);
+		}
 		// Only an ordinary one-splat attack's max can be checked against a single splat (T-056).
 		final boolean checkable = !special && combatCalc.maxIsOneSplat();
 		if (attackObservedLag == MELEE_BOOKING_LAG || attackObservedSplash)

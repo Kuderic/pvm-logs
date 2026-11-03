@@ -96,10 +96,13 @@ public class MonsterVersionTest
 	@Test
 	public void phasesThatShareHitpointsCarryAWarning()
 	{
-		final MonsterStatsProvider.Choice wardens = choose(11761, 880, -1);
+		// T-157: the choice carries the other version and a note on it; the warning shows only once the expected figures say
+		// the difference matters (CombatCalc.checkVersions, SuccessfulVersionsTest). Without a rule that switches to it:
+		final MonsterStatsProvider.Choice wardens = MonsterStatsProvider.choose(versions(11761), null, 880, -1);
 		assertEquals("Damaged", wardens.stats.getVersion());
-		assertNotNull(wardens.stats.getWarning());
-		assertTrue(wardens.stats.getWarning().contains("Enraged"));
+		assertNull(wardens.stats.getWarning());
+		assertEquals("Enraged", wardens.stats.getAlternative().getVersion());
+		assertTrue(wardens.stats.getVersionNote().contains("phases this plugin does not track"));
 		// T-135: Yama's phase 3 is a boss modifier now: the rule's default is the Normal version, with no warning.
 		final MonsterStatsProvider.Choice yama = choose(14176, -1, -1);
 		assertEquals("Normal", yama.stats.getVersion());

@@ -827,6 +827,26 @@ class BossRules
 	}
 
 	/**
+	 * T-157: whether one of this boss's damage modifiers names this version of the monster data, so the rule switches to it
+	 * itself (the Wardens' Enraged, Yama's Phase 3, the Maggot King's Nearby) and a version left beside it is tracked.
+	 */
+	static boolean switchesToVersion(Boss boss, String version)
+	{
+		if (boss == null || version == null || boss.damageModifiers == null || boss.damageModifiers.modifiers == null)
+		{
+			return false;
+		}
+		for (ModifierRule m : boss.damageModifiers.modifiers)
+		{
+			if (m != null && version.equalsIgnoreCase(m.version))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Which version of the boss this is: the one whose full hitpoints the game has
 	 * shown, then the rule's default, then the first listed. Null when the rule
 	 * lists none.

@@ -229,7 +229,38 @@ class MonsterStatsProvider
 	{
 		final Parsed d = data;
 		final Choice choice = resolve(d, npcId);
-		return choice == null ? null : applyRules(d, npcId, choice.stats);
+		if (choice == null)
+		{
+			return null;
+		}
+		final MonsterStats stats = applyRules(d, npcId, choice.stats);
+		// T-157: versions left that can't be told apart warn only once the expected figures say they matter.
+		return stats.getVersionNote() != null && d.materialVersions.contains(npcId)
+			? stats.withWarning(stats.getVersionNote()) : stats;
+	}
+
+	/**
+	 * T-157: the other version left where the one in use can't be told from it (same hitpoints, other defences), with
+	 * its rules applied as {@link #get(int)} applies them; null where there is none.
+	 */
+	MonsterStats alternative(int npcId)
+	{
+		final Parsed d = data;
+		final Choice choice = resolve(d, npcId);
+		final MonsterStats other = choice == null ? null : choice.stats.getAlternative();
+		return other == null ? null : applyRules(d, npcId, other);
+	}
+
+	/** T-157: whether this id's version note is shown as a warning: the expected figures said the versions matter. */
+	boolean versionsShown(int npcId)
+	{
+		return data.materialVersions.contains(npcId);
+	}
+
+	/** T-157: the versions left for this id would change the expected figures past the bar, so the note shows. */
+	void versionsMatter(int npcId)
+	{
+		data.materialVersions.add(npcId);
 	}
 
 	/**
@@ -275,7 +306,9 @@ class MonsterStatsProvider
 		return String.format("Monster data: '%s'%s, %d hp, defence %d now (%s), xp bonus x%.3f%s; rules %s",
 			now.getName(), now.getVersion().isEmpty() ? "" : " (" + now.getVersion() + ")", now.getHitpoints(),
 			now.getDefenceLevel(), left < 0 ? "hitpoints not known yet" : left + " hp left", now.getXpMultiplier(),
-			" - " + choice.reason + (now.getWarning() == null ? "" : "; WARNING: " + now.getWarning()),
+			" - " + choice.reason + (now.getWarning() == null ? "" : "; WARNING: " + now.getWarning())
+				+ (now.getVersionNote() == null || d.materialVersions.contains(npcId) ? ""
+				: "; " + now.getVersionNote() + " (not shown: the difference hasn't mattered yet)"),
 			d.rules.provenance());
 	}
 
@@ -291,7 +324,7 @@ class MonsterStatsProvider
 		final List<MonsterStats> exact = d.versionsById.get(npcId);
 		if (exact != null && !exact.isEmpty())
 		{
-			return pickVersion(d, npcId, exact);
+			return pickVersion(d, npcId, exact, false);
 		}
 		final Integer alias = ALIASES.get(npcId);
 		if (alias != null)
@@ -299,7 +332,7 @@ class MonsterStatsProvider
 			final List<MonsterStats> aliased = d.versionsById.get(alias);
 			if (aliased != null && !aliased.isEmpty())
 			{
-				return pickVersion(d, npcId, aliased);
+				return pickVersion(d, npcId, aliased, false);
 			}
 		}
 		if (npcId < 0 || d.byName.isEmpty())
@@ -314,7 +347,10 @@ class MonsterStatsProvider
 			// Awakened form.
 			final NPCComposition composition = client.getNpcDefinition(npcId);
 			final String name = composition == null ? null : composition.getName();
-			named = composition == null ? null : d.byName.get(normalise(name));
+			final List<MonsterStats> all = composition == null ? null : d.byName.get(normalise(name));
+			// T-157: monsters that share a name are told apart by what the game says of this one: its combat level first.
+			final int level = composition == null ? -1 : composition.getCombatLevel();
+			named = all == null ? null : byCombatLevel(all, level);
 			if (named != null)
 			{
 				d.byUnknownId.put(npcId, named);
@@ -327,11 +363,34 @@ class MonsterStatsProvider
 				debug.log(named == null
 						? "NO MONSTER STATS for npc %d ('%s'): no id, no alias and no name match - nothing will be expected "
 							+ "against this target"
-						: "monster stats for npc %d ('%s') resolved by NAME, not by id",
-					npcId, name);
+						: "monster stats for npc %d ('%s') resolved by NAME, not by id: %d of its %d entries have its combat "
+							+ "level %d",
+					npcId, name, named == null ? 0 : named.size(), all == null ? 0 : all.size(), level);
 			}
 		}
-		return named == null || named.isEmpty() ? null : pickVersion(d, npcId, named);
+		return named == null || named.isEmpty() ? null : pickVersion(d, npcId, named, true);
+	}
+
+	/**
+	 * T-157: the entries of one name whose combat level is this one, where any is; all of them where none is or the level
+	 * isn't known. A name is shared by different monsters (the Goblins of combat level 2, 5 and 13), not one monster's
+	 * phases.
+	 */
+	static List<MonsterStats> byCombatLevel(List<MonsterStats> named, int combatLevel)
+	{
+		if (combatLevel <= 0)
+		{
+			return named;
+		}
+		final List<MonsterStats> level = new ArrayList<>();
+		for (MonsterStats s : named)
+		{
+			if (s.getCombatLevel() == combatLevel)
+			{
+				level.add(s);
+			}
+		}
+		return level.isEmpty() ? named : level;
 	}
 
 	/**
@@ -380,7 +439,7 @@ class MonsterStatsProvider
 	}
 
 	/** One of the versions listed under an id, by the evidence the plugin has right now. Logged once per reading. */
-	private Choice pickVersion(Parsed d, int npcId, List<MonsterStats> versions)
+	private Choice pickVersion(Parsed d, int npcId, List<MonsterStats> versions, boolean byName)
 	{
 		final int observed = health.observedMaxForId(npcId);
 		int hint = -1;
@@ -389,11 +448,13 @@ class MonsterStatsProvider
 			final Integer known = npcManager.getHealth(npcId);
 			hint = known == null ? -1 : known;
 		}
-		final Choice choice = choose(versions, d.rules.forNpc(npcId), observed, hint);
+		final Choice choice = choose(versions, d.rules.forNpc(npcId), observed, hint, byName);
 		if (versions.size() > 1 && d.versionLogged.add(((long) npcId << 32) | Math.max(0, observed)))
 		{
-			debug.log("monster stats for npc %d: %d versions under this id, using '%s' (%d hp) - %s", npcId,
-				versions.size(), choice.stats.getVersion(), choice.stats.getHitpoints(), choice.reason);
+			debug.log("monster stats for npc %d: %d %s, using '%s' (%d hp) - %s%s", npcId, versions.size(),
+				byName ? "monsters of its name and combat level" : "versions under this id", choice.stats.getVersion(),
+				choice.stats.getHitpoints(), choice.reason,
+				choice.stats.getVersionNote() == null ? "" : "; " + choice.stats.getVersionNote());
 		}
 		return choice;
 	}
@@ -409,6 +470,30 @@ class MonsterStatsProvider
 	 * </ol>
 	 */
 	static Choice choose(List<MonsterStats> versions, BossRules.Boss boss, int observedMaxHp, int hintHp)
+	{
+		return choose(versions, boss, observedMaxHp, hintHp, false);
+	}
+
+	/**
+	 * As above; {@code byName} where the versions are every monster of the npc's name (and combat level) rather than the
+	 * entries under its id. T-157: where a boss rule switches to the other version itself (a damage modifier naming it:
+	 * the Wardens' Enraged, Yama's Phase 3, the Maggot King's Nearby), the version is tracked, so nothing is left to note.
+	 */
+	static Choice choose(List<MonsterStats> versions, BossRules.Boss boss, int observedMaxHp, int hintHp,
+		boolean byName)
+	{
+		final Choice choice = chooseFrom(versions, boss, observedMaxHp, hintHp, byName);
+		final MonsterStats other = choice.stats.getAlternative();
+		if (other != null && BossRules.switchesToVersion(boss, other.getVersion()))
+		{
+			return new Choice(choice.stats.withAlternative(null, null), choice.reason + "; the boss rule switches to '"
+				+ other.getVersion() + "' itself");
+		}
+		return choice;
+	}
+
+	private static Choice chooseFrom(List<MonsterStats> versions, BossRules.Boss boss, int observedMaxHp, int hintHp,
+		boolean byName)
 	{
 		if (versions.size() == 1)
 		{
@@ -428,7 +513,7 @@ class MonsterStatsProvider
 				}
 			}
 		}
-		return chooseVersion(versions, observedMaxHp, hintHp);
+		return chooseVersion(versions, observedMaxHp, hintHp, byName);
 	}
 
 	/**
@@ -443,10 +528,17 @@ class MonsterStatsProvider
 	 *
 	 * <p>Where versions share hitpoints but not defences (the wardens' Damaged and
 	 * Enraged, the Maggot King's Roaring, Yama's third phase) no reading can tell them
-	 * apart: those are phases. The first is used and the result carries a warning
-	 * saying so.
+	 * apart: under one id, those are phases. The first is used and the result carries
+	 * the other with a note saying so (T-157: shown as a warning only once the
+	 * expected figures say the difference matters, {@link CombatCalc#checkVersions}).
+	 * Found by name, they are different monsters sharing it, and the note says that.
 	 */
 	static Choice chooseVersion(List<MonsterStats> versions, int observedMaxHp, int hintHp)
+	{
+		return chooseVersion(versions, observedMaxHp, hintHp, false);
+	}
+
+	static Choice chooseVersion(List<MonsterStats> versions, int observedMaxHp, int hintHp, boolean byName)
 	{
 		MonsterStats chosen = null;
 		String reason = null;
@@ -476,9 +568,12 @@ class MonsterStatsProvider
 		{
 			if (s != chosen && s.getHitpoints() == chosen.getHitpoints() && !sameDefences(s, chosen))
 			{
-				return new Choice(chosen.withWarning(String.format("versions '%s' and '%s' share this id and hitpoints but "
-					+ "not defences, which are phases this plugin does not track; using '%s'",
-					chosen.getVersion(), s.getVersion(), chosen.getVersion())), reason);
+				final String note = byName
+					? String.format("monsters named '%s' share this hitpoints but not defences ('%s' and '%s'); using '%s'",
+						chosen.getName(), chosen.getVersion(), s.getVersion(), chosen.getVersion())
+					: String.format("versions '%s' and '%s' share this id and hitpoints but not defences, which are phases "
+						+ "this plugin does not track; using '%s'", chosen.getVersion(), s.getVersion(), chosen.getVersion());
+				return new Choice(chosen.withAlternative(s, note), reason);
 			}
 		}
 		return new Choice(chosen, reason);
@@ -698,6 +793,8 @@ class MonsterStatsProvider
 		final Set<Long> versionLogged = java.util.concurrent.ConcurrentHashMap.newKeySet();
 		/** Ids already reported to the debug log, so an unknown monster says so once rather than on every attack. */
 		final Set<Integer> logged = java.util.concurrent.ConcurrentHashMap.newKeySet();
+		/** T-157: ids whose version note the expected figures have shown to matter; a new snapshot starts empty. */
+		final Set<Integer> materialVersions = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
 		Parsed(Map<Integer, List<MonsterStats>> versionsById, Map<String, List<MonsterStats>> byName, BossRules rules)
 		{
@@ -745,6 +842,7 @@ class MonsterStatsProvider
 				warningFor(m, boss, variant))
 				.withDrainFacts(m.skills.attack, m.skills.strength, m.skills.ranged,
 					boss != null && boss.defenceDrain != null && boss.defenceDrain.magicUsesDefence);
+			stats.combatLevel = m.level;
 			versions.computeIfAbsent(m.id, k -> new ArrayList<>()).add(stats);
 			names.computeIfAbsent(normalise(stats.getName()), k -> new ArrayList<>()).add(stats);
 		}
@@ -798,6 +896,14 @@ class MonsterStatsProvider
 		private int rangedLevel;
 		/** It rolls magic defence off its Defence level, not its Magic (T-049: Ice demon, Verzik; boss-rules.json). */
 		private boolean magicUsesDefence;
+		/** The data's combat level (T-157), 0 where it gives none. */
+		private int combatLevel;
+		/**
+		 * T-157: another version this one can't be told from (same hitpoints, other defences), or null; and the note
+		 * saying so, which shows as a warning only once the expected figures say the difference matters.
+		 */
+		private MonsterStats alternative;
+		private String versionNote;
 		/**
 		 * Why this target's expected figures should not be trusted, or null: a phase
 		 * a rule names as unmodelled, placeholder stats, versions that cannot be told
@@ -848,6 +954,9 @@ class MonsterStatsProvider
 			copy.strengthLevel = strength;
 			copy.rangedLevel = ranged;
 			copy.magicUsesDefence = magicUsesDefence;
+			copy.combatLevel = combatLevel;
+			copy.alternative = alternative;
+			copy.versionNote = versionNote;
 			return copy;
 		}
 
@@ -857,6 +966,20 @@ class MonsterStatsProvider
 			copy.strengthLevel = strengthLevel;
 			copy.rangedLevel = rangedLevel;
 			copy.magicUsesDefence = magicUsesDefence;
+			copy.combatLevel = combatLevel;
+			copy.alternative = alternative;
+			copy.versionNote = versionNote;
+			return copy;
+		}
+
+		/** T-157: this entry with the version it can't be told from and the note on it; null and null for none. */
+		MonsterStats withAlternative(MonsterStats other, String note)
+		{
+			final MonsterStats copy = carry(new MonsterStats(name, size, hitpoints, defenceLevel, magicLevel,
+				offensiveMagic, defStab, defSlash, defCrush, defMagic, defRanged, weaknessElement, weaknessSeverity,
+				attributes, xpMultiplier, version, drainImmune, warning));
+			copy.alternative = other;
+			copy.versionNote = other == null ? null : note;
 			return copy;
 		}
 
@@ -974,6 +1097,8 @@ class MonsterStatsProvider
 		int id;
 		String name;
 		String version;
+		/** The combat level (T-157: what tells apart monsters that share a name). */
+		int level;
 		int size;
 		Skills skills;
 		Offensive offensive;
