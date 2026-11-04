@@ -477,6 +477,9 @@ public class PvmPerformancePlugin extends Plugin
 	private double attackObservedSpecAverageHit = -1;
 	private double attackObservedVariance = -1;
 	private double attackObservedSpecVariance = -1;
+	// T-161: the hitpoints the observed figures were capped at, as they were read: the booking comes after the splat, and
+	// by then a killing blow has taken the count to nothing.
+	private int attackObservedCap = -1;
 	// The expected figures as they stood on each of the last few ticks, so an attack can be scored with the loadout that
 	// actually threw it. Each row carries the ordinary figures AND the special's, because which of the two an attack needs
 	// is not known until it is booked - see sampleExpected.
@@ -3422,6 +3425,7 @@ public class PvmPerformancePlugin extends Plugin
 			attackObservedAccuracy = -1;
 			attackObservedAverageHit = -1;
 			attackObservedVariance = -1;
+			attackObservedCap = -1;
 			return;
 		}
 		int maxHit = expectedMaxHit;
@@ -3475,6 +3479,11 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		else if (attackObservedNpcId == targetId && attackObservedAccuracy >= 0)
 		{
+			// T-161: capped at what was left when they were read, not at the booking: a melee blow is booked by its splat, and
+			// its killing one left the count at nothing - "-1 when its figures were read", so the landing cap took figures
+			// already capped at 9 for uncapped and scored the blow 0 ([9799] of Eric's 11-02 log, 7.35 -> 0.00; 123
+			// such blows in his logs of 11-02 and 11-03).
+			capThen = attackObservedCap;
 			maxHit = attackObservedMaxHit;
 			accuracy = attackObservedAccuracy;
 			averageHit = attackObservedAverageHit;
@@ -3611,6 +3620,7 @@ public class PvmPerformancePlugin extends Plugin
 		attackObservedAccuracy = -1;
 		attackObservedAverageHit = -1;
 		attackObservedVariance = -1;
+		attackObservedCap = -1;
 	}
 
 	/**
@@ -3813,6 +3823,61 @@ public class PvmPerformancePlugin extends Plugin
 			return;
 		}
 		seeOverheadBar(targetNpc, 0, when + ", read at the tick's end");
+	}
+
+	// T-161: the gap the last HP ABOVE COUNT line gave, so the next is written only when it changes.
+	private int hpAboveCountGap;
+
+	/**
+	 * T-161: the fight's target, alive and in view, regains a hitpoint every {@link TargetHealth#REGEN_TICKS} below full
+	 * ({@link TargetHealth#regenerate}), outside a raid. Cerberus's kills each took 3 to 7 more than her 600, and
+	 * Venenatis's 9 to 19 more than her 850, at that rate. And, everywhere, its overhead bar read at the tick's end (the
+	 * fight's target only, never the scene): where it shows more left than the count allows, the HP ABOVE COUNT line
+	 * says how much, so a later log can check the rate. Logged, not taken: a splat counted on the tick the bar hasn't
+	 * caught up with reads the same way.
+	 */
+	private void regenerateTarget()
+	{
+		final NPC npc = targetNpc;
+		if (current == null || current.isEnded() || away != null || npc == null || npc.getIndex() != current.getTargetIndex()
+			|| npc.isDead())
+		{
+			return;
+		}
+		final int index = npc.getIndex();
+		final int tick = client.getTickCount();
+		if (raidType == null)
+		{
+			final int gave = health.regenerate(index, tick);
+			if (gave > 0)
+			{
+				debug.log("REGEN %s (npc %d, index %d): +%d, a hitpoint every %d ticks below full; %d given back this fight's "
+						+ "count, %d left (counted)", Text.removeTags(npc.getName()), npc.getId(), index, gave,
+					TargetHealth.REGEN_TICKS, health.regenerated(index), health.countedRemaining(index));
+			}
+		}
+		final int ratio = npc.getHealthRatio();
+		final int scale = npc.getHealthScale();
+		final int full = health.trustedMaxHp(index);
+		final int counted = health.countedRemaining(index);
+		if (ratio <= 0 || scale <= 0 || full <= 0 || counted < 0 || health.lastHudMax(index) > 0)
+		{
+			return;
+		}
+		final int least = TargetHealth.leastLeftForRatio(ratio, scale, full);
+		final int gap = least - counted;
+		if (gap <= 0)
+		{
+			hpAboveCountGap = 0;
+			return;
+		}
+		if (gap != hpAboveCountGap)
+		{
+			hpAboveCountGap = gap;
+			debug.log("HP ABOVE COUNT on %s (npc %d, index %d): its overhead bar at %d/%d, so at least %d left; the count has "
+					+ "%d, %d under it (regenerated %d so far, %d ticks into the fight)", Text.removeTags(npc.getName()),
+				npc.getId(), index, ratio, scale, least, counted, gap, health.regenerated(index), tick - current.getStartTick());
+		}
 	}
 
 	/** Notes the first tick an npc is seen dead (T-115). */
@@ -6053,6 +6118,7 @@ public class PvmPerformancePlugin extends Plugin
 		attackObservedSpecAverageHit = meanOf(special);
 		attackObservedVariance = varianceOf(ordinary);
 		attackObservedSpecVariance = varianceOf(special);
+		attackObservedCap = capLeft(npc.getIndex());
 		// A weapon swapped on a tick is not wielded until the next one, so an attack thrown on the tick of a switch used what
 		// was held before it. The client shows the new weapon immediately, which is why the figures have to come from the
 		// tick before the change rather than from now. This holds for every switch, not only one that lands on a melee
@@ -6097,6 +6163,7 @@ public class PvmPerformancePlugin extends Plugin
 			attackObservedSpecAverageHit = earlier[EXP_SPEC_AVERAGE];
 			attackObservedVariance = earlier[EXP_VARIANCE];
 			attackObservedSpecVariance = earlier[EXP_SPEC_VARIANCE];
+			attackObservedCap = (int) earlier[EXP_CAP];
 		}
 		// The boost as it stood at the throw (T-065), where the attack is seen ticks after it: a potion drunk while a shot was
 		// in the air did not boost it, nor one drunk on the tick a melee blow's splat landed. A cast seen on its own tick has
@@ -6422,6 +6489,8 @@ public class PvmPerformancePlugin extends Plugin
 		readHealthBar();
 		// T-154: and its overhead bar, where a splat of mine landed this tick, now that the tick's splats are all counted.
 		readOverheadBarIfDue();
+		// T-161: what the target has regained, and whether its overhead bar shows more left than the count.
+		regenerateTarget();
 		// The target seen dead by the tick's end, for a blow landing next tick (T-115).
 		noteDead(targetNpc, client.getTickCount());
 		logTaskMismatch(combatCalc.onSlayerTick(client.getTickCount()));
@@ -6747,6 +6816,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		current.noteStartTick(client.getTickCount());
 		unlistedAdds.reset(client.getTickCount());
+		hpAboveCountGap = 0;
 		timelines.attach(current);
 		perf.fightStarted();
 		// From the target's stats as the drains left them when the fight opened (T-050); started from its base if nothing
@@ -7649,6 +7719,8 @@ public class PvmPerformancePlugin extends Plugin
 		// ones a fight is checked by.
 		final int counted = health.damageCounted(index);
 		final int healed = health.healed(index);
+		// T-161: of it, what the count gave back for regeneration.
+		final int regenerated = health.regenerated(index);
 		final int net = counted - healed;
 		// T-108: what the room's boss took while the player was on an add, booked to its fight before, so in no line's terms.
 		final int onAnAdd = whileOnAnAdd.getOrDefault(index, 0);
@@ -7657,12 +7729,14 @@ public class PvmPerformancePlugin extends Plugin
 		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + room %s "
 				+ "+ others %d + unclassified %d" + (unseen > 0 ? " + seen only on its bar " + unseen : "")
 				+ (current.getPassedOn() > 0 ? " + the core's passed on " + current.getPassedOn() : "")
-				+ ", healed %d%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
+				+ ", healed %d%s%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
 				+ "read %d, now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
 			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),
 			current.getDotDamage(), current.getRoomDamage() + reconcileRoomSplit(current), current.getOthersDamage(),
 			current.getUnclassifiedDamage(), current.getHealed(),
+			regenerated == 0 ? "" : String.format(" + regenerated %d (a hitpoint every %d ticks below full)", regenerated,
+				TargetHealth.REGEN_TICKS),
 			onAnAdd == 0 ? "" : String.format(" (the room so far, taken while the player was on another target: %d)",
 				onAnAdd),
 			counted, healed, net, full, fullFrom,
