@@ -207,7 +207,8 @@ class LoadoutOverlay extends OverlayPanel
 		{
 			l.specMaxHit = plugin.getExpectedSpecMaxHit();
 			l.specAccuracy = plugin.getExpectedSpecAccuracy();
-			l.specAverage = plugin.getExpectedSpecAverageHit();
+			// T-159: the gear's figure, not capped at the hp left.
+			l.specAverage = plugin.getExpectedSpecAverageShown();
 			l.specExtra = plugin.getExpectedSpecExtra();
 			// Every extra the plugin counts today is a burn (T-030).
 			l.specExtraKind = "burn";

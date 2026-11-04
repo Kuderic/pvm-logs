@@ -1197,7 +1197,7 @@ class CombatCalc
 			}
 			final int[] maxima = weaponStyle() == Style.MAGIC ? new int[]{first}
 				: shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId));
-			return ModifierTracker.moments(mods, maxima, accuracy, Math.min(damageCap(npcId), overkillCap(npcId)), push);
+			return ModifierTracker.moments(mods, maxima, accuracy, hitCap(npcId), push);
 		}
 		if (weaponStyle() == Style.MAGIC)
 		{
@@ -1209,7 +1209,8 @@ class CombatCalc
 				return null;
 			}
 			// T-028: the variance from the same walk, the miss as the accuracy roll in front of it.
-			return magic.onHit(mitigation(npcId), damageCap(npcId), overkillCap(npcId)).landing(accuracy);
+			return magic.onHit(mitigation(npcId), damageCap(npcId), capFor(Integer.MAX_VALUE, overkillCap(npcId), gearRate))
+				.landing(accuracy);
 		}
 		// Averages, not best cases: a keris crit or an ahrim's proc raises the max hit but only lifts sustained damage by a
 		// few percent.
@@ -1219,7 +1220,7 @@ class CombatCalc
 		{
 			return null;
 		}
-		final int cap = Math.min(damageCap(npcId), overkillCap(npcId));
+		final int cap = hitCap(npcId);
 		// A scythe swing is several hits, each rolling its own accuracy and damage, so one attack is expected to deal their
 		// sum. Each max is half the one before ROUNDED DOWN, which is why this walks them rather than multiplying by 1.75: a
 		// 51 max is 51, 25, 12, which is 88 and not 89.25.
@@ -2474,15 +2475,66 @@ class CombatCalc
 	 *
 	 * <p>Ordinary attacks only. A special is not sustained, so folding one in
 	 * would describe a rotation nobody can keep up.
+	 *
+	 * <p>T-159: the gear's rate, not held to the hitpoints the target has left
+	 * ({@link #overkillCap}): on a goblin it read 3.56 at 5 hp left and fell with
+	 * every hit, where the gear's 8.7 stays. A boss's own cap ({@link #damageCap}:
+	 * Verzik's first phase, the Hueycoatl's tail) binds at any hp, so it stays.
+	 * Display only (the overlay, the side panel's Loadout card, the log line and
+	 * {@code ::loadout}); the expected damage scored is {@link #averageHitMoments},
+	 * capped.
 	 */
 	double expectedDps(int npcId)
 	{
-		final double average = averageHit(npcId);
+		final double average = gearRate(() -> averageHit(npcId));
 		if (average < 0)
 		{
 			return -1;
 		}
 		return dpsFrom(average, attackSpeedTicks());
+	}
+
+	/**
+	 * T-159: one special's expected damage as the overlay shows it: the gear's, not held to the hitpoints the target has
+	 * left, a boss's own cap kept. The scored figure is {@link #specialAttackMoments}, capped. -1 where there is none.
+	 */
+	double specialAttackAverageShown(int npcId)
+	{
+		final DamageMoments m = gearRate(() -> specialAttackMoments(npcId));
+		return m == null ? -1 : m.mean;
+	}
+
+	/** T-159: while set, the hitpoints the target has left cap nothing: for the figures shown as the gear's rate. */
+	private boolean gearRate;
+
+	/** The most one hitsplat of an attack going out now can deal: {@link #capFor} of the boss's cap and the hp left. */
+	private int hitCap(int npcId)
+	{
+		return capFor(damageCap(npcId), overkillCap(npcId), gearRate);
+	}
+
+	/**
+	 * T-159: the cap a hitsplat is held to: the boss's own ({@link #damageCap}: Verzik's first phase, the Hueycoatl's
+	 * tail), which binds at any hp, and what the target has left ({@link #overkillCap}), which scoring keeps and the gear's
+	 * rate leaves out.
+	 */
+	static int capFor(int bossCap, int hpLeft, boolean gearRate)
+	{
+		return gearRate ? bossCap : Math.min(bossCap, hpLeft);
+	}
+
+	private <T> T gearRate(java.util.function.Supplier<T> figure)
+	{
+		final boolean was = gearRate;
+		gearRate = true;
+		try
+		{
+			return figure.get();
+		}
+		finally
+		{
+			gearRate = was;
+		}
 	}
 
 	/**
@@ -3116,7 +3168,7 @@ class CombatCalc
 			out[AT_SPEC_ACCURACY] = spec == null ? hitChance(npcId) : spec.alwaysHits() ? 1.0 : hitChance(npcId, spec);
 			final int specMax = specialAttackMaxHit(npcId);
 			out[AT_SPEC_MAX] = specMax > 0 ? specMax : maxHit(npcId);
-			out[AT_CAP] = Math.min(damageCap(npcId), overkillCap(npcId));
+			out[AT_CAP] = hitCap(npcId);
 			out[AT_MAGIC_DEFENCE] = magicDefenceBonus(monsters.get(npcId), npcId);
 			return out;
 		}
@@ -3152,7 +3204,7 @@ class CombatCalc
 			final int[] maxima = spec.hitMaxima((int) ((spec.hasDamageMultipliers() ? unmitigatedMaxHit(npcId)
 				: unmitigatedSpecialAttackMaxHit(npcId)) * mitigation(npcId)));
 			return ModifierTracker.moments(specMods, maxima, ModifierTracker.accuracy(specMods, accuracy),
-				Math.min(damageCap(npcId), overkillCap(npcId)), push);
+				hitCap(npcId), push);
 		}
 		// Pulsate alone: fixed damage that no gear, prayer or mitigation touches, and the only hit Verzik's first phase lets
 		// past its cap. Its floor is half its max, so it has no 0 to push.
@@ -3915,7 +3967,8 @@ class CombatCalc
 		final double accuracy = hitChance(npcId);
 		lines.add(accuracy < 0
 			? String.format("Max hit %d, no accuracy without target stats", maxHit(npcId))
-			: String.format("Max hit %d%s, accuracy %.1f%% (lands %.1f%%), avg hit %.2f, dps %.2f",
+			: String.format("Max hit %d%s, accuracy %.1f%% (lands %.1f%%), avg hit %.2f (as scored: capped at the hp left), "
+				+ "dps %.2f (the gear's rate: not capped at the hp left)",
 				maxHit(npcId), scytheBreakdown(npcId), accuracy * 100,
 				landChance(npcId) * 100, averageHit(npcId), expectedDps(npcId)));
 
