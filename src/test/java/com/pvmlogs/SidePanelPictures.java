@@ -102,6 +102,11 @@ public final class SidePanelPictures
 			partyTab(out);
 			return;
 		}
+		if (args.length > 1 && "unshared".equals(args[1]))
+		{
+			partyNotSharing(out);
+			return;
+		}
 		if (args.length > 1 && "alldps".equals(args[1]))
 		{
 			allYourDamage(out);
@@ -1674,6 +1679,36 @@ public final class SidePanelPictures
 				waiting.partySize = 3;
 				write(dir, "i-in-a-party-before-anyone-shares", scale, party(waiting, null, -1, null, scale));
 				write(dir, "j-not-in-a-party", scale, party(SidePanelPartyExamples.notInParty(), null, -1, null, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-167: party members not running Luck vs Skill, by name and picture: one taking others as about theirs; two
+	 * listed with one combined row; one beside sharing members; listed out of a fight. Normal, Smooth and Larger, 1x/2x.
+	 */
+	private static void partyNotSharing(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-duo-partner-not-running-it", scale, party(SidePanelPartyExamples.yamaDuoNotSharing(), null,
+					-1, null, scale));
+				write(dir, "b-trio-two-not-running-it", scale, party(SidePanelPartyExamples.trioTwoNotSharing(), null, -1,
+					null, scale));
+				write(dir, "c-toa-one-not-running-it", scale, party(SidePanelPartyExamples.toaOneNotSharing(), null, -1,
+					null, scale));
+				write(dir, "d-out-of-a-fight", scale, party(SidePanelPartyExamples.waitingWithMembers(), null, -1, null,
+					scale));
 			}
 		}
 		smooth = false;

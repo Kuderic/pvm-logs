@@ -144,7 +144,8 @@ final class SidePanelPartyMeter extends JComponent
 		final PanelSnapshot.PartyRow r = rows.get(i);
 		if (r.others)
 		{
-			return SidePanelParty.OTHERS_NOTE;
+			// T-167: others, others taken as members', or a member listed without figures: each says what it is.
+			return r.tip != null ? r.tip : SidePanelParty.OTHERS_NOTE;
 		}
 		return (r.you ? "You" : r.name) + ": " + r.dmg[0] + " damage, " + r.dmg[1] + " dps, " + r.dmg[2]
 			+ " of the party's. Click for their Fight panels below.";
@@ -207,8 +208,12 @@ final class SidePanelPartyMeter extends JComponent
 		int longest = 0;
 		for (PanelSnapshot.PartyRow r : rows)
 		{
-			longest = Math.max(longest, SidePanelStyle.metrics(g, r.you ? bold : body).stringWidth(r.name
-				+ (r.left ? " (left)" : "")));
+			// T-167: a member listed without figures has no values beside them: their name doesn't take the columns' room.
+			if (!r.listed)
+			{
+				longest = Math.max(longest, SidePanelStyle.metrics(g, r.you ? bold : body).stringWidth(r.name
+					+ (r.left ? " (left)" : "")));
+			}
 		}
 		// T-128: with any Discord picture on the board, every member's row keeps a picture's room, so names line up.
 		final boolean pictures = anyPicture();
@@ -231,7 +236,7 @@ final class SidePanelPartyMeter extends JComponent
 		{
 			final PanelSnapshot.PartyRow r = rows.get(i);
 			final int y = i * rh;
-			final boolean muted = r.others || r.left;
+			final boolean muted = r.others && !r.person() || r.left;
 			// The bar behind the row: the member's colour dimmed under the text, a solid edge on the left.
 			g.setColor(SidePanelStyle.alpha(r.colour, r.left ? 0.18 : r.you ? 0.30 : r.others ? 0.45 : 0.42));
 			g.fillRect(0, y + 1, (int) Math.round(w * r.fill), rh - 2);
@@ -253,10 +258,25 @@ final class SidePanelPartyMeter extends JComponent
 			final FontMetrics fn = SidePanelStyle.metrics(g, r.you ? bold : body);
 			g.setColor(muted ? SidePanelStyle.MUTED : r.you ? SidePanelStyle.VALUE : SidePanelStyle.BODY);
 			final String name = r.name + (r.left ? " (left)" : "");
-			final String shown = cut(name, fn, nameRoom);
+			// T-167: a listed member's row has no values: the name and its hint take the row.
+			final int room = r.listed ? w - nameX - 3 : nameRoom;
+			final String shown = cut(name, fn, room);
 			cutNames += shown.equals(name) ? 0 : 1;
 			g.drawString(shown, nameX, y + bodyBase);
-			if (pictures && !r.others)
+			if (r.hint != null && shown.equals(name))
+			{
+				// T-167: muted after the name, its shorter form where it doesn't fit; never cut, and never at the name's cost.
+				g.setFont(small);
+				final int x0 = nameX + fn.stringWidth(name) + fs.stringWidth(" ");
+				final String hint = fit(r.hint, r.hintShort, fs, room - (x0 - nameX));
+				if (!hint.isEmpty())
+				{
+					g.setColor(SidePanelStyle.MUTED);
+					g.drawString(hint, x0, y + smallBase);
+				}
+				lastHints.put(r.id, hint);
+			}
+			if (pictures && r.person())
 			{
 				picture(g, r, NAME_X - 1, y + (rh - picture) / 2, picture);
 			}
@@ -368,6 +388,31 @@ final class SidePanelPartyMeter extends JComponent
 			r += show[c] ? cw[c] + GAP : 0;
 		}
 		return r;
+	}
+
+	/** T-167: the hint each row drew at the last paint, by id, for the fit tests; empty where none fitted. */
+	private final java.util.Map<Long, String> lastHints = new java.util.HashMap<>();
+
+	String lastHint(long id)
+	{
+		return lastHints.get(id);
+	}
+
+	/** T-167: {@code hint}, or the first of its shorter forms that fits {@code room}; empty where none does. */
+	static String fit(String hint, List<String> shorter, FontMetrics f, int room)
+	{
+		if (f.stringWidth(hint) <= room)
+		{
+			return hint;
+		}
+		for (String s : shorter)
+		{
+			if (f.stringWidth(s) <= room)
+			{
+				return s;
+			}
+		}
+		return "";
 	}
 
 	/** The name cut with LedgerRows' mark to what the columns leave. */

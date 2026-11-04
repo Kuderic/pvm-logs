@@ -355,9 +355,16 @@ final class SidePanelPartyTab extends JPanel
 		clearMember();
 		if (!t.sharing)
 		{
-			final JPanel card = SidePanelParts.card(0);
+			final JPanel card = SidePanelParts.card(t.rows.isEmpty() ? 0 : 5);
 			card.add(new SidePanelParts.Paragraph(t.empty, SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL,
 				SidePanelStyle.CONTENT_WIDTH - 14));
+			if (!t.rows.isEmpty())
+			{
+				// T-167: the members who haven't shared, by name and picture, with no figures.
+				meter = new SidePanelPartyMeter(this::select);
+				meter.set(t.rows);
+				card.add(meter);
+			}
 			add(new SidePanelSection("party", "Party", PanelSnapshot.Text.NONE, card, folds));
 			revalidate();
 			repaint();
@@ -700,6 +707,11 @@ final class SidePanelPartyTab extends JPanel
 	{
 		if (!t.sharing)
 		{
+			// T-167: a listed member's new name or picture: a repaint.
+			if (meter != null)
+			{
+				meter.set(t.rows);
+			}
 			return;
 		}
 		if (roomSegment != null)
