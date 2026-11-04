@@ -317,6 +317,8 @@ public class PvmPerformancePlugin extends Plugin
 	private double expectedVariance = -1;
 	private double expectedSpecVariance = -1;
 	private double expectedDps = -1;
+	/** T-159: the special's expected damage as the overlay shows it, not capped at the hp left; the scored one is above. */
+	private double expectedSpecAverageShown = -1;
 	private SpecialAttack specialAttack;
 	// What the loadout's figures are for, named for the overlay (T-016): weapon, and spell when one is cast.
 	private String attackName;
@@ -3060,6 +3062,7 @@ public class PvmPerformancePlugin extends Plugin
 			expectedSpecMaxHit = combatCalc.specialAttackMaxHit(shownId);
 			expectedSpecAccuracy = combatCalc.specialAttackLandChance(shownId);
 			expectedSpecAverageHit = meanOf(special);
+			expectedSpecAverageShown = combatCalc.specialAttackAverageShown(shownId);
 			expectedSpecExtra = combatCalc.specialExtraAverage(shownId);
 			expectedVariance = varianceOf(ordinary);
 			expectedSpecVariance = varianceOf(special);
@@ -3095,6 +3098,7 @@ public class PvmPerformancePlugin extends Plugin
 					expectedSpecMaxHit = combatCalc.specialAttackMaxHit(shownId);
 					expectedSpecAccuracy = combatCalc.specialAttackLandChance(shownId);
 					expectedSpecAverageHit = meanOf(shownSpecial);
+					expectedSpecAverageShown = combatCalc.specialAttackAverageShown(shownId);
 					expectedVariance = varianceOf(shownOrdinary);
 					expectedSpecVariance = varianceOf(shownSpecial);
 				}
@@ -3127,7 +3131,8 @@ public class PvmPerformancePlugin extends Plugin
 				// An accuracy of -1 means the monster data had nothing for this id: without the target's defence there is no
 				// hit chance, and without a hit chance there is no expected damage and no expected dps. That is what an
 				// overlay showing a max hit and nothing under it is saying.
-				debug.log("expected vs %s (npc %d%s): max %d, acc %.3f, avg %.2f, dps %.2f%s%s",
+				// T-159: avg is as scored, capped at the hp left; dps is the gear's rate, uncapped, as the overlay shows it.
+				debug.log("expected vs %s (npc %d%s): max %d, acc %.3f, avg %.2f (capped at the hp left), gear's dps %.2f%s%s",
 					shown.getTargetName(), expectedForNpcId,
 					judgedBy == null ? "" : String.format(", '%s' def %d, %d hp left (%s)", version, defence,
 						health.remaining(shown.getTargetIndex(), client.getTickCount()),
@@ -3148,6 +3153,7 @@ public class PvmPerformancePlugin extends Plugin
 			expectedSpecMaxHit = combatCalc.specialAttackMaxHit(-1);
 			expectedSpecAccuracy = -1;
 			expectedSpecAverageHit = -1;
+			expectedSpecAverageShown = -1;
 			expectedSpecExtra = -1;
 			expectedVariance = -1;
 			expectedSpecVariance = -1;
@@ -8393,6 +8399,12 @@ public class PvmPerformancePlugin extends Plugin
 	double getExpectedSpecAverageHit()
 	{
 		return expectedSpecAverageHit;
+	}
+
+	/** T-159: the special's expected damage as the overlay shows it, not capped at the hp left (-1 where there's none). */
+	double getExpectedSpecAverageShown()
+	{
+		return expectedSpecAverageShown;
 	}
 
 	/** See expectedSpecExtra (T-030). */
