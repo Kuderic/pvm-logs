@@ -2144,6 +2144,18 @@ class CombatCalc
 		return attackName(weapon, spell == null ? null : spell.getDisplayName());
 	}
 
+	/**
+	 * T-166: the spell an attack thrown on {@code heldTick} cast, as that tick's reading of the loadout had it (the plugin
+	 * keeps one a tick, with the figures the attack is scored from); {@code atBooking} only where that tick wasn't read. A
+	 * cast is booked by its splat or its drop a few ticks after it left, by when the style can read the next weapon's: a
+	 * Purging staff's Dark Demonbane on the Judge of Yama ([1131] of Eric's 2026-11-04 log) was booked at [1134] off the
+	 * staff's melee style, and keyed "Purging staff" beside 170 "Dark Demonbane".
+	 */
+	static Spell spellAtThrow(java.util.Map<Integer, Spell> byTick, int heldTick, Spell atBooking)
+	{
+		return byTick != null && byTick.containsKey(heldTick) ? byTick.get(heldTick) : atBooking;
+	}
+
 	/** See {@link #attackName()}: either may be null. */
 	static String attackName(String weapon, String spell)
 	{

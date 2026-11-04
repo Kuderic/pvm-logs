@@ -392,17 +392,30 @@ final class FightTimeline
 	/** The attack just booked was the special: marks it and its tick. */
 	void markLatestSpecial()
 	{
+		markLatestSpecial(null);
+	}
+
+	/**
+	 * As above, named for the weapon whose special it is (T-166): a special is the weapon's, whatever the row it was scored
+	 * from was casting. Null keeps the name it was booked with.
+	 */
+	void markLatestSpecial(String weapon)
+	{
 		final long t0 = PerfProbe.start(probe);
-		markLatestSpecialTimed();
+		markLatestSpecialTimed(weapon);
 		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
 	}
 
-	private void markLatestSpecialTimed()
+	private void markLatestSpecialTimed(String weapon)
 	{
 		final Attack attack = latest();
 		if (attack != null)
 		{
 			attack.special = true;
+			if (weapon != null && !weapon.isEmpty())
+			{
+				attack.key = weapon;
+			}
 			setState(attack.tick, SPECIAL);
 		}
 	}

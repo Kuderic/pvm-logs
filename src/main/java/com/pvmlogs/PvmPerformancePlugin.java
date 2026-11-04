@@ -559,6 +559,9 @@ public class PvmPerformancePlugin extends Plugin
 	// The weapon held at the end of each recent tick, so an attack's splats are counted for the weapon that threw it: a
 	// special is thrown with the claws, which are usually swapped out again before their splats land.
 	private final Map<Integer, Integer> weaponByTick = new HashMap<>();
+	// T-166: the spell the attack on each recent tick casts (null for none), from the same reading as that tick's figures: a
+	// cast is booked ticks later, by which time the style can read the next weapon's.
+	private final Map<Integer, Spell> spellByTick = new HashMap<>();
 	// This tick's splats counted beyond their attack's splats, logged once the tick's re-judging is done.
 	private final List<ExtraSplat> extrasThisTick = new ArrayList<>();
 	// Recoil and vengeance (T-017 Part B): which hits taken they have answered. The ring worn at the end of each recent
@@ -873,6 +876,7 @@ public class PvmPerformancePlugin extends Plugin
 		specEnergy = -1;
 		recentSpecDrops.clear();
 		weaponByTick.clear();
+		spellByTick.clear();
 		extrasThisTick.clear();
 		engagedNpcs.clear();
 		ringByTick.clear();
@@ -3034,6 +3038,7 @@ public class PvmPerformancePlugin extends Plugin
 		// to the new weapon's speed.
 		speedByTick.put(client.getTickCount(), combatCalc.attackSpeedTicks());
 		weaponByTick.put(client.getTickCount(), combatCalc.equippedWeaponId());
+		spellByTick.put(client.getTickCount(), combatCalc.timelineSpell());
 		ringByTick.put(client.getTickCount(), wornRingId());
 		setupByTick.put(client.getTickCount(), new double[]{combatCalc.isPotted() ? 1 : 0, combatCalc.boostShare(),
 			combatCalc.isDrained() ? 1 : 0});
@@ -3045,6 +3050,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			speedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			weaponByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
+			spellByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			ringByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			setupByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 		}
@@ -3545,16 +3551,19 @@ public class PvmPerformancePlugin extends Plugin
 				? client.getTickCount() : attackOriginTick + 1);
 		if (special)
 		{
-			// The special's weapon, for the fight's record (T-110).
-			fight.context().specWeapons = FightContext.addOnce(fight.context().specWeapons, combatCalc.itemLabel(
-				weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick), combatCalc.equippedWeaponId())));
+			// The special's weapon, for the fight's record (T-110), and the name the Damage card gives it (T-166).
+			final String specWeaponName = combatCalc.itemLabel(
+				weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick), combatCalc.equippedWeaponId()));
+			fight.context().specWeapons = FightContext.addOnce(fight.context().specWeapons, specWeaponName);
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
 			unspentSpecDrops.remove(unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick));
 			expectDelayedSplat(fight, attackTick);
 			final FightTimeline line = timelines.of(fight);
 			if (line != null)
 			{
-				line.markLatestSpecial();
+				// T-166: named for the weapon whose special it is, not the row's attack: the Eye of ayak's Soul Rend scored from
+				// the Purging staff's row was "Dark Demonbane (special)".
+				line.markLatestSpecial(specWeaponName);
 			}
 			// A special the table doesn't know is scored with the ordinary figures, its max included: the line read "max 0"
 			// beside the ordinary average (T-050, an Emberlight on the Sire).
@@ -4208,7 +4217,15 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final Integer held = weaponByTick.get(heldTick);
 		final int weapon = held != null ? held : combatCalc.equippedWeaponId();
-		final Spell spell = combatCalc.timelineSpell();
+		// T-166: the spell as the throw's tick read it, not the booking's: a Purging staff's Dark Demonbane booked by its
+		// drop three ticks later read the staff's melee style by then, and was keyed "Purging staff".
+		final Spell now = combatCalc.timelineSpell();
+		final Spell spell = CombatCalc.spellAtThrow(spellByTick, heldTick, now);
+		if (spell != now)
+		{
+			debug.log("TIMELINE attack thrown tick %d named by the throw's spell %s (the booking reads %s)", thrownTick,
+				spell == null ? "none" : spell.getDisplayName(), now == null ? "none" : now.getDisplayName());
+		}
 		final Integer speed = speedByTick.get(heldTick);
 		line.describeLatest(CombatCalc.attackName(combatCalc.itemLabel(weapon), spell == null ? null : spell.getDisplayName()),
 			weapon, spell, combatCalc.timelineStyle(), thrownTick, speed != null ? speed : combatCalc.attackSpeedTicks());
