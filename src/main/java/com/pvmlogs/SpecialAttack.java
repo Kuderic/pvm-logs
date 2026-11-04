@@ -441,6 +441,30 @@ enum SpecialAttack
 		}
 	}
 
+	/** What a saved special's key ends with ({@code FightTimeline.Attack.rowKey}). */
+	static final String SPECIAL_SUFFIX = " (special)";
+
+	/**
+	 * T-166: a saved weapon key as it should read. Kills saved before T-166 keyed a special by the attack name of the row
+	 * it was scored from, so where that row cast a spell the Eye of ayak's Soul Rend was "Dark Demonbane (special)". Where
+	 * a saved special's key names a spell and the record's {@code specWeapons} has exactly one weapon, that weapon is the
+	 * special's: "Eye of Ayak (special)". Anything else is kept as saved: with no weapon, or two, nothing says which.
+	 */
+	static String savedKey(String key, java.util.List<String> specWeapons)
+	{
+		if (key == null || !key.endsWith(SPECIAL_SUFFIX) || specWeapons == null || specWeapons.size() != 1)
+		{
+			return key;
+		}
+		final String name = key.substring(0, key.length() - SPECIAL_SUFFIX.length());
+		final String weapon = specWeapons.get(0);
+		if (Spell.forDisplayName(name) == null || weapon == null || weapon.isEmpty())
+		{
+			return key;
+		}
+		return weapon + SPECIAL_SUFFIX;
+	}
+
 	/**
 	 * The spec for an equipped weapon, or null if it has none that changes the
 	 * max hit. An id not in the table is looked up again as its base item, by

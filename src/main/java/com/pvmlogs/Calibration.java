@@ -345,7 +345,9 @@ final class Calibration
 					for (Map.Entry<String, FightContext.Weapon> e : c.weapons.entrySet())
 					{
 						final FightContext.Weapon w = e.getValue();
-						final Group wg = group(weapons, "weapon", boss, e.getKey(), build);
+						// T-166: a special saved under its row's spell reads as its weapon's.
+						final Group wg = group(weapons, "weapon", boss, SpecialAttack.savedKey(e.getKey(), c.specWeapons),
+							build);
 						wg.fights++;
 						wg.seen(f.getStartMillis());
 						wg.add(w.damage, w.expected, w.variance);
