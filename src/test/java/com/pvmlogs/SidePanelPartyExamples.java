@@ -255,6 +255,53 @@ final class SidePanelPartyExamples
 		return in;
 	}
 
+	// ---- T-167: members not running Luck vs Skill ----
+
+	/** Eric's duo Yama (2026-11-04): you share, your partner doesn't run the plugin; their damage is others'. */
+	static SidePanelParty.Input yamaDuoNotSharing()
+	{
+		final SidePanelParty.Input in = input("Yama", 233, false, null, 9_870);
+		in.partySize = 2;
+		in.members.add(member(SidePanelParty.YOU_ID, "you", true, 0, figures("Yama", true, 11_240, 10_960, 388, 0.62, 4,
+			0.92, 14, attacks(TWISTED_BOW, 150, 112, 11_240, 10_960, false)), 388));
+		in.members.get(0).avatar = picture(1, 'Y');
+		in.unshared.add(new SidePanelParty.Unshared(77, "Ash Kettle", picture(6, 'A')));
+		return in;
+	}
+
+	/** A trio where only you share: two members listed, one combined row for what they did between them. */
+	static SidePanelParty.Input trioTwoNotSharing()
+	{
+		final SidePanelParty.Input in = input("Nex", 252, false, null, 27_400);
+		in.partySize = 3;
+		in.members.add(member(SidePanelParty.YOU_ID, "you", true, 0, figures("Nex", true, 15_310, 14_890, 420, 0.55, 2,
+			0.91, 20, attacks(TWISTED_BOW, 168, 121, 15_310, 14_890, false)), 420));
+		in.unshared.add(new SidePanelParty.Unshared(81, "Moss Pike", picture(4, 'M')));
+		in.unshared.add(new SidePanelParty.Unshared(82, "Brindle", null));
+		return in;
+	}
+
+	/** The ToA room with a fourth member who doesn't run the plugin: others becomes about theirs. */
+	static SidePanelParty.Input toaOneNotSharing()
+	{
+		final SidePanelParty.Input in = toa();
+		in.partySize = 4;
+		in.unshared.add(new SidePanelParty.Unshared(23, "Old Tam", null));
+		return in;
+	}
+
+	/** In a party of 3 out of a fight: nobody has shared yet, so both members are listed by name. */
+	static SidePanelParty.Input waitingWithMembers()
+	{
+		final SidePanelParty.Input in = new SidePanelParty.Input();
+		in.inParty = true;
+		in.partySize = 3;
+		in.partyKey = 42;
+		in.unshared.add(new SidePanelParty.Unshared(81, "Moss Pike", picture(4, 'M')));
+		in.unshared.add(new SidePanelParty.Unshared(82, "Brindle", null));
+		return in;
+	}
+
 	/** A 4-minute fight played through the plugin's calls, as a member's room message brings it (T-128). */
 	static SidePanelTimelineExamples.Built longRoom()
 	{

@@ -93,7 +93,7 @@ final class PanelSnapshot
 			this.clock = clock;
 		}
 
-		private PartyTab(String empty)
+		private PartyTab(String empty, List<PartyRow> listed)
 		{
 			this.sharing = false;
 			this.empty = empty;
@@ -101,7 +101,8 @@ final class PanelSnapshot
 			this.partyDps = "";
 			this.wholeRaid = null;
 			this.after = false;
-			this.rows = Collections.emptyList();
+			// T-167: the party's members who haven't shared, listed under the line.
+			this.rows = list(listed);
 			this.othersNote = null;
 			this.ticks = 1;
 			this.clock = "";
@@ -109,7 +110,13 @@ final class PanelSnapshot
 
 		static PartyTab empty(String why)
 		{
-			return new PartyTab(why);
+			return new PartyTab(why, null);
+		}
+
+		/** T-167: empty, with the members who haven't shared listed by name. */
+		static PartyTab empty(String why, List<PartyRow> listed)
+		{
+			return new PartyTab(why, listed);
 		}
 
 		/** The members' ids in order, others as -1: a member drilled into stays while their id is here. */
@@ -127,7 +134,7 @@ final class PanelSnapshot
 		String structure()
 		{
 			// T-129: an empty tab's line is its structure: joining a party changes it.
-			return !sharing ? "empty|" + empty : "rows" + rows.size() + (wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room")
+			return !sharing ? "empty|" + empty + (rows.isEmpty() ? "" : "|listed" + rows.size()) : "rows" + rows.size() + (wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room")
 				+ (after ? "|after" : "") + (othersNote == null ? "" : "|n");
 		}
 
@@ -178,6 +185,16 @@ final class PanelSnapshot
 		final int[] seriesDamage;
 		/** The click-in view; null for others. */
 		final PartyBreakdown breakdown;
+		/**
+		 * T-167: muted after the name, its shorter forms after it, longest first, for a narrow row: {@code about} on others
+		 * taken as members', {@code not running Luck vs Skill} on a member listed without figures. Null for none.
+		 */
+		final String hint;
+		final List<String> hintShort;
+		/** T-167: the row's tooltip: others, and a member listed without figures or taken as others. Null for a member's. */
+		final String tip;
+		/** T-167: a party member listed without figures, as others is: no click, no values. */
+		final boolean listed;
 		/** T-128: their Discord picture; null for none, when the colour swatch stands in. */
 		java.awt.image.BufferedImage avatar;
 		/** T-128: their Fight tab, for the member opened; null otherwise. */
@@ -211,12 +228,17 @@ final class PanelSnapshot
 			this.seriesTicks = seriesTicks;
 			this.seriesDamage = seriesDamage;
 			this.breakdown = breakdown;
+			this.hint = null;
+			this.hintShort = Collections.emptyList();
+			this.tip = null;
+			this.listed = false;
 		}
 
-		private PartyRow(double fill, String[] dmg, int[][] series, Color colour)
+		private PartyRow(long id, String name, String hint, List<String> hintShort, String tip, boolean listed,
+			double fill, String[] dmg, int[][] series, Color colour)
 		{
-			this.id = OTHERS_ID;
-			this.name = "others";
+			this.id = id;
+			this.name = name;
 			this.you = false;
 			this.left = false;
 			this.others = true;
@@ -229,11 +251,45 @@ final class PanelSnapshot
 			this.seriesTicks = series[0];
 			this.seriesDamage = series[1];
 			this.breakdown = null;
+			this.hint = hint;
+			this.hintShort = list(hintShort);
+			this.tip = tip;
+			this.listed = listed;
 		}
 
 		static PartyRow others(double fill, String[] dmg, int[][] series, Color colour)
 		{
-			return new PartyRow(fill, dmg, series, colour);
+			return new PartyRow(OTHERS_ID, "others", null, null, SidePanelParty.OTHERS_NOTE, false, fill, dmg, series,
+				colour);
+		}
+
+		/**
+		 * T-167: others, taken as the damage of the members not running Luck vs Skill: one by name and picture, or two
+		 * or more as {@code N members} ({@code id} {@link #OTHERS_ID}). Labelled {@code about}, its values muted as others'.
+		 */
+		static PartyRow about(long id, String name, java.awt.image.BufferedImage avatar, String tip, double fill,
+			String[] dmg, int[][] series, Color colour)
+		{
+			final PartyRow r = new PartyRow(id, name, SidePanelParty.ABOUT, Collections.<String>singletonList(""), tip,
+				false, fill, dmg, series, colour);
+			r.avatar = avatar;
+			return r;
+		}
+
+		/** T-167: a party member without figures, by name and picture: no bar, no values, no line on the chart. */
+		static PartyRow listed(long id, String name, java.awt.image.BufferedImage avatar, String hint,
+			List<String> hintShort, String tip)
+		{
+			final PartyRow r = new PartyRow(id, name, hint, hintShort, tip, true, 0, new String[]{"", "", ""},
+				new int[][]{new int[0], new int[0]}, SidePanelParty.OTHERS);
+			r.avatar = avatar;
+			return r;
+		}
+
+		/** T-167: a person's row (a member, or others taken as one), not the plain others: it keeps a picture's place. */
+		boolean person()
+		{
+			return !others || id != OTHERS_ID;
 		}
 
 		/** The meter's values for {@code m}. */

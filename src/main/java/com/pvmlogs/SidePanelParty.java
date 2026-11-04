@@ -53,6 +53,43 @@ final class SidePanelParty
 	 */
 	static final String OTHERS_NOTE = "others: damage on the targets no sharing member accounts for: members not running "
 		+ "Luck vs Skill.";
+	/**
+	 * T-167 (Eric, 2026-11-04: "still list them even if they arent running luck vs skill"): a party member with nothing on
+	 * the board, under their name. Outside a fight they may simply not have fought yet.
+	 */
+	static final String NOT_RUNNING = "not running Luck vs Skill";
+	static final List<String> NOT_RUNNING_SHORT = java.util.Arrays.asList("no Luck vs Skill", "");
+	static final String NO_FIGURES_YET = "no figures yet";
+	static final List<String> NO_FIGURES_YET_SHORT = Collections.singletonList("");
+	/** T-167: after the name of {@code others} taken as the members' who don't share. */
+	static final String ABOUT = "about";
+
+	/**
+	 * T-167: before others' damage where it's taken as members': {@code ~9,870}, so the estimate shows on the row even
+	 * where {@link #ABOUT} doesn't fit beside the name.
+	 */
+	static final String APPROX = "~";
+
+	/** T-167: the note under the meter, and the row's tooltip, for others taken as one member's. */
+	static String aboutOne(String name)
+	{
+		return "about: damage no sharing member accounts for, taken as " + name + "'s (not running Luck vs Skill). "
+			+ "Players outside the party, and thralls, are in it too.";
+	}
+
+	/** T-167: the same for two or more, whose damage can't be told apart. */
+	static String aboutMany(int n)
+	{
+		return "about: damage no sharing member accounts for, between the " + n + " members not running Luck vs Skill; "
+			+ "it can't be split. Players outside the party, and thralls, are in it too.";
+	}
+
+	/** T-167: two or more members not running Luck vs Skill: their combined row's name. */
+	static String members(int n)
+	{
+		return n + " members";
+	}
+
 	/** An attack row the sender summed the rest into (T-124's {@link LuckVsSkillUpdate#MAX_ROWS}). */
 	static final String OTHER_ATTACKS = "Other attacks";
 	static final String YOU_NAME = "you";
@@ -105,6 +142,41 @@ final class SidePanelParty
 		}
 	}
 
+	/**
+	 * T-167: a party member who hasn't shared anything: in RuneLite's party, not on the board. Their name and picture as
+	 * the party has them, held in the snapshot only.
+	 */
+	static final class Unshared
+	{
+		final long id;
+		final String name;
+		final java.awt.image.BufferedImage avatar;
+
+		Unshared(long id, String name, java.awt.image.BufferedImage avatar)
+		{
+			this.id = id;
+			this.name = name == null || name.isEmpty() ? "Party member" : name;
+			this.avatar = avatar;
+		}
+	}
+
+	/**
+	 * T-167: the party's members who haven't shared: everyone in {@code party} but you ({@code localId}, also the dev
+	 * loopback's echo) and those on the board ({@code onBoard}), in the party's order.
+	 */
+	static List<Unshared> unshared(List<Unshared> party, long localId, java.util.Set<Long> onBoard)
+	{
+		final List<Unshared> out = new ArrayList<>();
+		for (Unshared m : party)
+		{
+			if (m.id != localId && !onBoard.contains(m.id))
+			{
+				out.add(m);
+			}
+		}
+		return out;
+	}
+
 	/** What the panel read: the scope on show, its members, and the damage no member accounts for. */
 	static final class Input
 	{
@@ -127,6 +199,8 @@ final class SidePanelParty
 		long partyKey;
 		/** Item names, for the attack rows; the id's number without one. */
 		IntFunction<String> itemNames = id -> "item " + id;
+		/** T-167: the party's members who haven't shared anything, in the party's order. */
+		final List<Unshared> unshared = new ArrayList<>();
 	}
 
 	// ---- the model ----
@@ -139,27 +213,61 @@ final class SidePanelParty
 		{
 			sharing |= !m.you;
 		}
-		if (!sharing || in.scope == null)
+		final List<Unshared> unshared = in.inParty ? in.unshared : Collections.<Unshared>emptyList();
+		if (!sharing && unshared.isEmpty() || in.scope == null)
 		{
-			// T-129: out of a party; in one before anyone has shared; shared, but nothing of yours on show yet.
+			// T-129: out of a party; in one before anyone has shared; shared, but nothing of yours on show yet. T-167: the
+			// members who haven't shared listed under it, by name.
+			final List<PanelSnapshot.PartyRow> listed = new ArrayList<>(unshared.size());
+			for (Unshared u : unshared)
+			{
+				listed.add(PanelSnapshot.PartyRow.listed(u.id, u.name, u.avatar, NO_FIGURES_YET, NO_FIGURES_YET_SHORT,
+					u.name + " hasn't shared anything with your party yet: their figures show here once their fight starts, "
+						+ "if they run Luck vs Skill."));
+			}
 			return PanelSnapshot.PartyTab.empty(!in.inParty ? NOT_IN_PARTY : in.shared == 0 && !sharing
-				? waiting(in.partySize) : !sharing ? NOBODY : NOTHING_YET).party(in.partyKey);
+				? waiting(in.partySize) : !sharing ? NOBODY : NOTHING_YET, listed).party(in.partyKey);
 		}
 		final int others = others(in.othersDamage, in.members);
 		final int total = total(in.members, others);
 		final List<Member> order = sorted(in.members);
 		final int top = Math.max(others, order.get(0).figures.all());
 		final double seconds = Math.max(0.6, in.seconds);
-		final List<PanelSnapshot.PartyRow> rows = new ArrayList<>(order.size() + 1);
+		final List<PanelSnapshot.PartyRow> rows = new ArrayList<>(order.size() + unshared.size() + 1);
 		for (int i = 0; i < order.size(); i++)
 		{
 			final Member m = order.get(i);
 			rows.add(row(m, i + 1, order.size(), top, total, seconds, in));
 		}
-		if (others > 0)
+		final String[] othersDmg = {compact(others), "", share(others, total)};
+		final String[] aboutDmg = {APPROX + compact(others), "", share(others, total)};
+		String note = others > 0 ? OTHERS_NOTE : null;
+		if (unshared.size() == 1 && others > 0)
 		{
-			rows.add(PanelSnapshot.PartyRow.others(fill(others, top), new String[]{compact(others), "", share(others, total)},
+			// T-167: one member not running Luck vs Skill: others is theirs, about (players outside the party are in it).
+			final Unshared u = unshared.get(0);
+			note = aboutOne(u.name);
+			rows.add(PanelSnapshot.PartyRow.about(u.id, u.name, u.avatar, note, fill(others, top), aboutDmg,
 				otherSeries(in), OTHERS));
+		}
+		else
+		{
+			// T-167: listed by name, without figures; two or more share one others row, which can't be split.
+			for (Unshared u : unshared)
+			{
+				rows.add(PanelSnapshot.PartyRow.listed(u.id, u.name, u.avatar, NOT_RUNNING, NOT_RUNNING_SHORT,
+					u.name + " is in your party but not running Luck vs Skill: nothing of theirs is shared."));
+			}
+			if (others > 0 && unshared.size() > 1)
+			{
+				note = aboutMany(unshared.size());
+				rows.add(PanelSnapshot.PartyRow.about(PanelSnapshot.PartyRow.OTHERS_ID, members(unshared.size()), null,
+					note, fill(others, top), aboutDmg, otherSeries(in), OTHERS));
+			}
+			else if (others > 0)
+			{
+				rows.add(PanelSnapshot.PartyRow.others(fill(others, top), othersDmg, otherSeries(in), OTHERS));
+			}
 		}
 		int ticks = 1;
 		for (Member m : in.members)
@@ -167,7 +275,7 @@ final class SidePanelParty
 			ticks = Math.max(ticks, m.ticks.length == 0 ? 0 : m.ticks[m.ticks.length - 1]);
 		}
 		return new PanelSnapshot.PartyTab(in.scope, String.format(Locale.ENGLISH,
-			"party %.1f dps", total / seconds), in.wholeRaid, !in.live, rows, others > 0 ? OTHERS_NOTE : null, ticks,
+			"party %.1f dps", total / seconds), in.wholeRaid, !in.live, rows, note, ticks,
 			LedgerRows.duration(seconds)).party(in.partyKey);
 	}
 

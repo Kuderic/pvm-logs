@@ -403,7 +403,8 @@ class PvmPerformancePanel extends PluginPanel
 			// T-129: joining or leaving a party, or a member coming or going, rebuilds the Party tab at once, in or out of
 			// a fight; on the other tabs, nothing.
 			tab == PARTY_TAB ? partyState() : null,
-			board == null || board.isEmpty() ? null : avatars());
+			// T-167: on the Party tab the party key holds the pictures and names, from the same read of the members.
+			tab == PARTY_TAB || board == null || board.isEmpty() ? null : avatars());
 		final boolean force = dirty;
 		final boolean sameShape = shape.equals(lastShape);
 		if (!due(force, fighting, sameShape, config == null || config.panelLive(), ticks - builtAt))
@@ -781,6 +782,22 @@ class PvmPerformancePanel extends PluginPanel
 			return m == null ? null : m.getDisplayName();
 		});
 		in.shared = views.size();
+		if (!light && in.inParty && partyMembers != null)
+		{
+			// T-167: the members who haven't shared, from this tick's read for the party key (no read of its own).
+			final java.util.Set<Long> onBoard = new java.util.HashSet<>();
+			for (PartyBoard.View v : views)
+			{
+				onBoard.add(v.memberId);
+			}
+			final net.runelite.client.party.PartyMember me = localMember(party);
+			final List<SidePanelParty.Unshared> all = new ArrayList<>(partyMembers.size());
+			for (net.runelite.client.party.PartyMember m : partyMembers)
+			{
+				all.add(new SidePanelParty.Unshared(m.getMemberId(), m.getDisplayName(), m.getAvatar()));
+			}
+			in.unshared.addAll(SidePanelParty.unshared(all, me == null ? Long.MIN_VALUE : me.getMemberId(), onBoard));
+		}
 		if (views.isEmpty())
 		{
 			partySlots.clear();
@@ -909,9 +926,19 @@ class PvmPerformancePanel extends PluginPanel
 		return SidePanelModel.fight(in);
 	}
 
-	/** T-129: whether the player is in a party, which, and its members, as they stand; two reads of PartyService. */
+	/**
+	 * T-167: the party's members as the last party key read them (the Party tab's, each tick it shows), for its list of
+	 * members who haven't shared; null out of a party, or after a read that clashed. Client thread.
+	 */
+	private List<net.runelite.client.party.PartyMember> partyMembers;
+
+	/**
+	 * T-129: whether the player is in a party, which, and its members, as they stand; two reads of PartyService. T-167:
+	 * with each member's picture and name, so one arriving later rebuilds the tab, and the members kept for its list.
+	 */
 	private List<Object> partyState()
 	{
+		partyMembers = null;
 		final net.runelite.client.party.PartyService party = instance(plugin, net.runelite.client.party.PartyService.class);
 		if (party == null || !party.isInParty())
 		{
@@ -923,12 +950,35 @@ class PvmPerformancePanel extends PluginPanel
 			// A member came or went mid-read: a change, so the tab builds now and reads them again next tick.
 			return changing();
 		}
+		partyMembers = members;
 		final List<Long> ids = new ArrayList<>(members.size());
+		final List<Object> looks = new ArrayList<>(members.size() * 2);
 		for (net.runelite.client.party.PartyMember m : members)
 		{
 			ids.add(m.getMemberId());
+			looks.add(look(m.getAvatar(), m.getDisplayName()));
 		}
-		return partyState(true, party.getPartyId(), ids);
+		return partyState(true, party.getPartyId(), ids, looks);
+	}
+
+	/**
+	 * T-167: a member's picture and name in the party key, without holding either: the picture's identity, the name's
+	 * hash (the key is never written anywhere, but a name needn't sit in it).
+	 */
+	static List<Integer> look(java.awt.image.BufferedImage avatar, String name)
+	{
+		return Arrays.asList(avatar == null ? 0 : System.identityHashCode(avatar), name == null ? 0 : name.hashCode());
+	}
+
+	/** T-167: the party key with each member's {@link #look}, so a picture or name arriving later rebuilds the tab. */
+	static List<Object> partyState(boolean inParty, long partyId, List<Long> members, List<Object> looks)
+	{
+		final List<Object> out = new ArrayList<>(partyState(inParty, partyId, members));
+		if (inParty)
+		{
+			out.add(new ArrayList<>(looks));
+		}
+		return out;
 	}
 
 	/**
