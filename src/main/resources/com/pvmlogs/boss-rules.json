@@ -195,7 +195,8 @@
               "MAGIC"
             ],
             "guaranteedMax": true,
-            "source": "T-135. OSRS Wiki, read 2026-10-31: Void flare: 'players are guaranteed a maximum hit when attacking them with magic or Standard Ranged weapons'; Yama/Strategies: 'using magic attacks or the scorching bow will always deal their max hit'. The DPS calc (c1f7737) has them in ALWAYS_MAX_HIT_MONSTERS for every style. Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f): each phase 1-2 flare's first hit a max-hit splat of 77 ([8095], [8240], [8248], [9797]), the calc's Mark-boosted max."
+            "specials": true,
+            "source": "T-135. OSRS Wiki, read 2026-10-31: Void flare: 'players are guaranteed a maximum hit when attacking them with magic or Standard Ranged weapons'; Yama/Strategies: 'using magic attacks or the scorching bow will always deal their max hit'. The DPS calc (c1f7737) has them in ALWAYS_MAX_HIT_MONSTERS for every style. Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f): each phase 1-2 flare's first hit a max-hit splat of 77 ([8095], [8240], [8248], [9797]), the calc's Mark-boosted max. T-168. A magic special too: the Purging staff's Scatter ashes, 'uses the best demonbane spell the player can cast' (OSRS Wiki, Purging staff, read 2026-11-04). The DPS calc's ALWAYS_MAX_HIT_MONSTERS replaces the whole attack's distribution with its max, special or not (PlayerVsNPCCalc, read 2026-11-04). Eric's 8 at Void Flares (2026-11-04 01:54 log) each killed its flare: 71 on 71 left, 60 on 60."
           },
           {
             "name": "guaranteed max, standard ranged",
@@ -225,7 +226,8 @@
           {
             "name": "guaranteed max",
             "guaranteedMax": true,
-            "source": "T-135. OSRS Wiki, read 2026-10-31: Judge of Yama: 'Attacks made on the judge always land as both successful and maximum hits'; it prays against the last style used ('so two forms of combat are required'), which isn't read here, so an attack into its prayer would be scored at the max too. The DPS calc (c1f7737) has 14180 in ALWAYS_MAX_HIT_MONSTERS for every style. Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f): 45 of Eric's 50 splats on it max-hit splats (type 43), none a 0."
+            "specials": true,
+            "source": "T-135. OSRS Wiki, read 2026-10-31: Judge of Yama: 'Attacks made on the judge always land as both successful and maximum hits'; it prays against the last style used ('so two forms of combat are required'), which isn't read here, so an attack into its prayer would be scored at the max too. The DPS calc (c1f7737) has 14180 in ALWAYS_MAX_HIT_MONSTERS for every style. Eric's log of 2026-10-31 (pvm-debug-20261031-140202, build 2d9270f): 45 of Eric's 50 splats on it max-hit splats (type 43), none a 0. T-168. A special too: the wiki's 'Attacks made on the judge always land as both successful and maximum hits' names no exception, and the DPS calc's ALWAYS_MAX_HIT_MONSTERS replaces the whole attack's distribution with its max, special or not (PlayerVsNPCCalc, read 2026-11-04)."
           }
         ]
       }

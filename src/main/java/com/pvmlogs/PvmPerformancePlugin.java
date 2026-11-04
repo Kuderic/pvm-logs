@@ -6445,13 +6445,25 @@ public class PvmPerformancePlugin extends Plugin
 	 * drains defence, and every special needs booking against its own expected
 	 * damage rather than the ordinary attack's.
 	 */
+	/**
+	 * Whether the special energy moving from {@code previous} to {@code energy} is a special going out: it fell. A first
+	 * reading (previous below 0) can't say; a rise never is one. T-168: that includes the Purging staff's refund on a kill
+	 * ("the special attack energy used is refunded", OSRS Wiki, Purging staff), which comes back as a rise and books
+	 * nothing; the next special is a fall from the refunded energy. Eric's 8 Scatter ashes at Void Flares (2026-11-04
+	 * 01:54 log) were each booked once, the pairs three ticks apart at [3063]/[3066] and [3137]/[3140] too.
+	 */
+	static boolean specialFired(int previous, int energy)
+	{
+		return previous >= 0 && energy < previous;
+	}
+
 	private void noteSpecialEnergy()
 	{
 		final int energy = client.getVarpValue(VarPlayerID.SA_ENERGY);
 		final int previous = specEnergy;
 		specEnergy = energy;
 		// A first reading cannot be compared against anything, and energy that went up is regeneration rather than a special.
-		if (previous >= 0 && energy < previous)
+		if (specialFired(previous, energy))
 		{
 			final int specFiredTick = client.getTickCount();
 			// T-145: the weapon in hand as the energy falls threw it, as DefenceDrain reads it.
