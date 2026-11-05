@@ -3462,8 +3462,11 @@ public class PvmPerformancePlugin extends Plugin
 		// row while it was in hand has the spell's.
 		// A melee punish takes its throw's row too (T-086): the punish window is the tick it was thrown on, and figures read
 		// at its hitsplat are an ordinary swing's.
+		// T-165: a melee blow seen a tick after its throw takes its throw's row as well: the prayer flicked off on the tick
+		// between scored it without Piety (9 MAX EXCEEDED in Eric's logs of 11-02 and 11-03, each "PRAYER at the throw up,
+		// when the attack was seen not up": Cerberus's 57 against the 51 read then, his 61 with it).
 		final boolean originIsAuthoritative = scoresFromRow(attackObservedFromProjectile || attackFromDrop, beforeSwitch,
-			punishedAttack(), attackDroppedCast, atOrigin, targetId);
+			punishedAttack() || meleeFromThrow(), attackDroppedCast, atOrigin, targetId);
 		// T-158: a row read for another npc of the same kind (the shown fight's, the last of a run of monsters) carries that
 		// npc's hitpoints as its cap, not this one's.
 		final boolean fromRow = originIsAuthoritative
@@ -4674,7 +4677,27 @@ public class PvmPerformancePlugin extends Plugin
 		// Not the throw's row for a shot that dropped a spell click that never cast: that tick's figures were worked out
 		// with the click in hand, so the bow's 35 was judged against Shadow Rush's 14 (Eric's 05:01 log, [314]-[317]).
 		return scoringTick(attackFiguresTick, (attackObservedFromProjectile || attackFromDrop) && !attackDroppedCast,
-			punishedAttack(), expectedByTick.containsKey(attackThrownTick), attackThrownTick, attackOriginTick);
+			punishedAttack() || meleeFromThrow(), expectedByTick.containsKey(attackThrownTick), attackThrownTick,
+			attackOriginTick);
+	}
+
+	/**
+	 * T-165: whether the attack being booked is a melee blow seen after its throw's tick: scored from the throw's row, as
+	 * a punish is (T-086), not from figures read when it was seen. The prayer, the boost and the target's state are the
+	 * throw's; the tick after may have the prayer flicked off.
+	 */
+	private boolean meleeFromThrow()
+	{
+		return isMeleeBlow(attackObservedFromProjectile, attackFromDrop, attackObservedFromCast, attackIsMechanic,
+			attackThrownTick, attackOriginTick);
+	}
+
+	/** T-165: a blow, not a shot, a cast or a mechanic, thrown on an earlier tick than it was seen on. */
+	static boolean isMeleeBlow(boolean fromProjectile, boolean fromDrop, boolean fromCast, boolean mechanic, int thrownTick,
+		int originTick)
+	{
+		return !fromProjectile && !fromDrop && !fromCast && !mechanic && thrownTick != Integer.MIN_VALUE
+			&& thrownTick < originTick;
 	}
 
 	/** Whether the attack being booked is a melee punish (T-086): thrown on its tick, and proven by no cast or shot. */
