@@ -101,6 +101,8 @@ class ThrallTracker
 	static final int ANIMATION_LATEST = 2;
 	// A projectile's splat lands on the tick it is first seen. Its predicted landing tick is not used: it was a tick late
 	// on 3 of 223, and the splat never was. A tick of slack after, none before.
+	// T-171: unless it is predicted to land two or more ticks on: then the splat lands on that tick, and the window is the
+	// tick before it and its own ({@link #window}).
 	static final int PROJECTILE_LATE = 1;
 	// How close to our thrall a projectile naming no source must leave from to be its own.
 	static final int PROJECTILE_SOURCE_RADIUS = 2;
@@ -316,7 +318,7 @@ class ThrallTracker
 		{
 			if (p[0] == index && tick - p[2] <= PROJECTILE_LATE)
 			{
-				addProjectileDue(p[1], p[2]);
+				addProjectileDue(p[1], p[2], p.length > 3 ? p[3] : p[2]);
 			}
 		}
 		unownedProjectiles.clear();
@@ -381,27 +383,71 @@ class ThrallTracker
 	 */
 	void onThrallProjectile(int fromThrallIndex, int targetIndex, int tick)
 	{
+		onThrallProjectile(fromThrallIndex, targetIndex, tick, tick);
+	}
+
+	/**
+	 * T-171: as above, with the tick the client predicts it lands on. At Zebak in Eric's duo Tombs of 2026-11-04 (build
+	 * {@code 8e328d6}) the thrall stood beside the player at range, its projectiles were predicted to land two ticks on, and
+	 * 70 of the 78 non-zero splats no shot of his made came on that tick: past the old window of the first-seen tick and
+	 * the next, so the thrall side read "no projectile" (rate 0.001), its 1-3s were judged his, 17 were booked as UNSEEN
+	 * SHOTs, and the fight read 158 hits of 163 against 115 expected.
+	 */
+	void onThrallProjectile(int fromThrallIndex, int targetIndex, int tick, int landsTick)
+	{
 		if (targetIndex < 0 || fromThrallIndex < 0)
 		{
 			return;
 		}
+		final int[] w = window(tick, landsTick);
 		if (released != null && fromThrallIndex == released[0] && tick - released[2] <= PROJECTILE_LATE)
 		{
 			// Ours, seen as it went (T-101): its splat still lands as its own.
-			lastProjectiles.add(new int[]{targetIndex, tick, tick + PROJECTILE_LATE, released[1]});
+			lastProjectiles.add(new int[]{targetIndex, w[0], w[1], released[1]});
 			return;
 		}
 		if (fromThrallIndex != ownedIndex)
 		{
 			// Not ours, or not ours yet: a first thrall, or a recast's, can fire before it is claimed.
 			unownedProjectiles.removeIf(p -> tick - p[2] > PROJECTILE_LATE);
-			unownedProjectiles.add(new int[]{fromThrallIndex, targetIndex, tick});
+			unownedProjectiles.add(new int[]{fromThrallIndex, targetIndex, tick, landsTick});
 			return;
 		}
-		addProjectileDue(targetIndex, tick);
+		addProjectileDue(targetIndex, tick, landsTick);
+	}
+
+	/**
+	 * T-171: the ticks a thrall projectile first seen on {@code tick} can land its splat on: that tick and the next, as
+	 * measured (T-003); or, predicted to land two or more ticks on, the tick before {@code landsTick} and its own.
+	 */
+	static int[] window(int tick, int landsTick)
+	{
+		if (landsTick - tick >= 2)
+		{
+			return new int[]{landsTick - 1, landsTick};
+		}
+		return new int[]{tick, tick + PROJECTILE_LATE};
+	}
+
+	/** T-171: whether a thrall projectile of ours is due to land a splat on this npc on this tick. */
+	boolean projectileDueOn(int targetIndex, int tick)
+	{
+		for (Due d : due)
+		{
+			if (d.fromProjectile && d.targetIndex == targetIndex && tick >= d.earliest && tick <= d.latest)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void addProjectileDue(int targetIndex, int tick)
+	{
+		addProjectileDue(targetIndex, tick, tick);
+	}
+
+	private void addProjectileDue(int targetIndex, int tick, int landsTick)
 	{
 		lastObservedTick = tick;
 		lastProjectileTick = tick;
@@ -414,7 +460,8 @@ class ThrallTracker
 				break;
 			}
 		}
-		final Due d = new Due(targetIndex, tick, tick, tick + PROJECTILE_LATE);
+		final int[] w = window(tick, landsTick);
+		final Due d = new Due(targetIndex, tick, w[0], w[1]);
 		d.fromProjectile = true;
 		due.add(d);
 	}
@@ -536,7 +583,9 @@ class ThrallTracker
 		final List<Integer> out = new ArrayList<>();
 		for (Due d : due)
 		{
-			if (d.fromProjectile && d.attackTick == tick)
+			// T-171: or, predicted to land two or more ticks on, on that tick.
+			final int lands = d.latest - d.attackTick <= PROJECTILE_LATE ? d.attackTick : d.latest;
+			if (d.fromProjectile && lands == tick)
 			{
 				out.add(d.targetIndex);
 			}

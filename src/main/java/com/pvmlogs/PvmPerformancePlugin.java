@@ -1226,7 +1226,11 @@ public class PvmPerformancePlugin extends Plugin
 			// A ranged or magic splat that arrived as no projectile of mine: one whose projectile was not taken as mine, which
 			// target switching causes (T-021: the Abyssal Sire's respiratory systems on 78, 82 and 100, each paid for by a
 			// Ranged drop four ticks before). Booked from the drop's tick when the experience paid for it.
-			final int shot = arrivedFromFlight ? Integer.MIN_VALUE : unseenShotThrown(npc.getIndex(), tick, paidOnTick);
+			// T-171: never a splat our thrall's projectile is due to land: a thrall's 1-3 is no shot of the player's.
+			final boolean thrallDue = thralls.hasThrall() && hitsplat.getAmount() <= thralls.maxHit()
+				&& thralls.projectileDueOn(npc.getIndex(), tick);
+			final int shot = arrivedFromFlight || thrallDue ? Integer.MIN_VALUE
+				: unseenShotThrown(npc.getIndex(), tick, paidOnTick);
 			// Paid for by Ranged or Magic, it was a shot or a cast whatever is in hand now (T-136: a Purging staff cast at the
 			// Judge of Yama, landing with the Emberlight back in hand, was booked as a melee blow two ticks after its throw).
 			final boolean paidAsShot = shot != Integer.MIN_VALUE && paidByShot;
@@ -2510,7 +2514,7 @@ public class PvmPerformancePlugin extends Plugin
 			// Ours name no source in practice, so the thrall it left from beside decides. Either way it is nobody's attack of
 			// mine.
 			thralls.onThrallProjectile(source instanceof NPC ? ((NPC) source).getIndex() : thrallLeftFrom(projectile),
-				((NPC) target).getIndex(), client.getTickCount());
+				((NPC) target).getIndex(), client.getTickCount(), lands);
 			return;
 		}
 		if (!isProjectileMine(projectile, me, target))
@@ -6685,6 +6689,14 @@ public class PvmPerformancePlugin extends Plugin
 	private void handleGameStateChanged(GameStateChanged event)
 	{
 		final GameState state = event.getGameState();
+		// T-171: in a fight or a raid, every change of the game's state, so a disconnect (CONNECTION_LOST), a relog or a hop
+		// shows in the log: Eric's at [74540]-[74804] of his duo Tombs left no line.
+		if (current != null && !current.isEnded() || currentRaid != null)
+		{
+			debug.log("GAME STATE %s at tick %d%s%s", state, client.getTickCount(),
+				current != null && !current.isEnded() ? ", in the fight on " + current.getTargetName() : "",
+				currentRaid != null ? ", in a raid" : "");
+		}
 		if (state == GameState.LOADING)
 		{
 			// A teleport loads the new area: what tells a trip away from a boss leaving view (T-088).
