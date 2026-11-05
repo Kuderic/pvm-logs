@@ -1207,6 +1207,8 @@ public class PvmPerformancePlugin extends Plugin
 			// The core's damage passed on lands its attack, but deals none of its own: the core's splat carries that.
 			final int weaponDamage = passedOn ? 0 : hitsplat.getAmount();
 			current.recordDamageDealt(weaponDamage, now, countsLanding(landedAttack, current.isScored()));
+			// T-172: the poise, on the warden with her core in (the passed-on deals no weapon damage of its own).
+			current.recordWardensDamage(npc.getId(), weaponDamage);
 			if (passedOn)
 			{
 				current.recordPassedOn(hitsplat.getAmount());
@@ -3616,6 +3618,12 @@ public class PvmPerformancePlugin extends Plugin
 				: originIsAuthoritative && attackFromDrop ? " (from its drop's row on tick " + figuresTick + ")"
 				: originIsAuthoritative && atOrigin.length > EXP_WIDTH
 					? " (from tick " + figuresTick + "'s row for the npc it was aimed at)" : "");
+		// T-172: the poise band it was scored in, with the share and rolls it came from.
+		final String poise = combatCalc.poiseBand(targetId);
+		if (poise != null)
+		{
+			debug.log("  %s", poise);
+		}
 		// T-157: versions of the target that can't be told apart warn only where they'd change the figures (one check an attack).
 		final String versions = combatCalc.checkVersions(targetId);
 		if (versions != null)
@@ -3632,16 +3640,20 @@ public class PvmPerformancePlugin extends Plugin
 			final double[] at = cappedAtLanding(maxHit, expectedChances, averageHit, variance, capThen,
 				fight.getTargetIndex());
 			fight.recordExpected(maxHit, expectedChances, at[0], at[1]);
+			// T-172: and to its part of the Wardens' phase 2, by the npc it was scored against.
+			fight.recordWardensExpected(targetId, at[0], at[1]);
 			trip(fight).recordExpected(expectedChances, at[0], at[1]);
 			drainLuck.booked(fight, figuresTick, client.getTickCount(), special, specWeapon, at[0], at[1], certain);
 		}
 		else
 		{
 			final FightTimeline line = timelines.of(fight);
-			pendingSamples.add(new PendingSample(fight,
+			final PendingSample pending = new PendingSample(fight,
 				fight.getTargetIndex(), client.getTickCount(), maxHit, expectedChances, averageHit, variance,
 				line == null ? null : line.latest(), checkable, checkable ? combatCalc.wornNow() : null,
-				figuresTick, special, specWeapon, capThen, certain, checkable ? combatCalc.blowpipeDartInUse() : null));
+				figuresTick, special, specWeapon, capThen, certain, checkable ? combatCalc.blowpipeDartInUse() : null);
+			pending.scoredNpcId = targetId;
+			pendingSamples.add(pending);
 		}
 		// Spent: they describe one attack, not the next.
 		attackObservedNpcId = -1;
@@ -4011,6 +4023,8 @@ public class PvmPerformancePlugin extends Plugin
 		private final int capThen;
 		// T-149: a special certain to land (Tekton's first warhammer or elder maul), booked at a landing's figures.
 		private final boolean certain;
+		/** T-172: the npc the attack was scored against, for the Wardens' phase 2 parts; -1 unknown. */
+		private int scoredNpcId = -1;
 		// T-150: the blowpipe dart its max was worked out with, for the stale-dart line; null for any other weapon.
 		private final String dart;
 
@@ -4066,6 +4080,7 @@ public class PvmPerformancePlugin extends Plugin
 					line.expectNextFor(sample.attack);
 				}
 				sample.fight.recordExpected(sample.maxHit, sample.accuracy, averageHit, variance);
+				sample.fight.recordWardensExpected(sample.scoredNpcId, averageHit, variance);
 				drainLuck.booked(sample.fight, sample.madeTick, client.getTickCount(), sample.special, sample.specWeapon,
 					averageHit, variance, sample.certain);
 			}
@@ -7776,6 +7791,8 @@ public class PvmPerformancePlugin extends Plugin
 		health.damage(npc.getIndex(), npc.getId(), damage, tick);
 		noteElementalKill(npc, tick);
 		current.recordExtraTarget(damage, now, newTarget, landed);
+		// T-172: the core, at its own value, as the Wardens' phase 2's core part.
+		current.recordWardensDamage(npc.getId(), damage);
 		noteMonsterHit(npc, damage);
 		// The attack whose splat on the fight's target it lands beside (T-059): a chinchompa's collateral otherwise waited for
 		// the next damage and went to whatever attack was latest by then. With no splat on the target this tick, the latest.
@@ -7805,8 +7822,10 @@ public class PvmPerformancePlugin extends Plugin
 			}
 		}
 		debug.log("AoE %d on %s (npc %d, index %d) joins the attack on %s: newTarget=%b landed=%b%s",
-			damage, npc.getName(), npc.getId(), npc.getIndex(), current.getTargetName(), newTarget, landed,
-			ownRoll ? "" : ", a share of its one roll: no expectation of its own");
+			damage, Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), current.getTargetName(), newTarget, landed,
+			WardensPhase2.isCore(npc.getId()) ? ", the Wardens' core: its hit at its own value, expected as the attack on her "
+				+ "core (T-172)"
+			: ownRoll ? "" : ", a share of its one roll: no expectation of its own");
 	}
 
 	/**

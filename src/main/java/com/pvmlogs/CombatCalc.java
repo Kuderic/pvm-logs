@@ -758,8 +758,36 @@ class CombatCalc
 		{
 			poiseRolling = false;
 		}
-		return lastAttackRoll < 0 ? mods
-			: ModifierTracker.withPoise(mods, ModifierTracker.wardensPoisePercent(lastAttackRoll, lastDefenceRoll));
+		if (lastAttackRoll < 0)
+		{
+			return mods;
+		}
+		lastPoisePercent = ModifierTracker.wardensPoisePercent(lastAttackRoll, lastDefenceRoll);
+		lastPoiseRolls[0] = lastAttackRoll;
+		lastPoiseRolls[1] = lastDefenceRoll;
+		return ModifierTracker.withPoise(mods, lastPoisePercent);
+	}
+
+	// T-172: the share, and the rolls it came from, the last poise was worked out at: for the scored line.
+	private int lastPoisePercent = -1;
+	private final int[] lastPoiseRolls = {-1, -1};
+
+	/**
+	 * T-172: the Wardens' P2 poise band as the last attack's figures had it, for the log: the share m, the attack and
+	 * defence rolls it came from, the max it was a share of, and the band. Null where there's no poise. In Eric's duo raid
+	 * of 2026-11-04 eight max-poise splats (type 55) came one above the band's top, 20 on 19 and 17 on 16, the bowfa's 30
+	 * on 30 not; a top rounded up, a max one higher or a share one higher each fit, and the log gave none of the three.
+	 */
+	String poiseBand(int npcId)
+	{
+		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
+		if (lastPoisePercent < 0 || mods.isEmpty() || !ModifierTracker.isPoiseBand(mods))
+		{
+			return null;
+		}
+		final int max = (int) (unmitigatedMaxHit(npcId) * mitigation(npcId));
+		return String.format("poise %d%% (attack roll %d, defence roll %d) of max %d: %d to %d", lastPoisePercent,
+			lastPoiseRolls[0], lastPoiseRolls[1], max, ModifierTracker.rollFloor(mods, max), ModifierTracker.max(mods, max));
 	}
 
 	/** T-152: the boss's modifiers that apply to a special too (the Wardens' P2 and core); empty for most. */

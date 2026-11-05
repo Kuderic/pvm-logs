@@ -975,6 +975,12 @@ final class ModifierTracker
 		return new DamageMoments(mean, variance + mean * mean);
 	}
 
+	/** T-172: whether these modifiers draw the roll in the poise's band (its share already worked out). */
+	static boolean isPoiseBand(List<BossRules.ModifierRule> mods)
+	{
+		return hasPoiseBand(mods);
+	}
+
 	// T-156: a roll drawn in the poise's band, whose percents are its own.
 	private static boolean hasPoiseBand(List<BossRules.ModifierRule> mods)
 	{

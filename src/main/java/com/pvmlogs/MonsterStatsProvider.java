@@ -360,12 +360,18 @@ class MonsterStatsProvider
 				// Both halves are worth a line. A miss means no accuracy and no expected damage against this target at all; a
 				// name match means the figures came from an entry recorded under another id, which is right for a monster that
 				// walks and fights under several ids and wrong for one whose forms differ.
-				debug.log(named == null
+				// T-172: the Wardens' core is her part, not a target of its own: the attacks on it are scored as the attack on
+				// her core (WardensPhase2). Its name comes tagged ("<col=00ffff>Core</col>").
+				final String shown = name == null ? null : Text.removeTags(name);
+				debug.log(named == null && WardensPhase2.isCore(npcId)
+						? "monster stats for npc %d ('%s'): none of its own - the Wardens' core, expected as the attack on her "
+							+ "core (T-172)"
+						: named == null
 						? "NO MONSTER STATS for npc %d ('%s'): no id, no alias and no name match - nothing will be expected "
 							+ "against this target"
 						: "monster stats for npc %d ('%s') resolved by NAME, not by id: %d of its %d entries have its combat "
 							+ "level %d",
-					npcId, name, named == null ? 0 : named.size(), all == null ? 0 : all.size(), level);
+					npcId, shown, named == null ? 0 : named.size(), all == null ? 0 : all.size(), level);
 			}
 		}
 		return named == null || named.isEmpty() ? null : pickVersion(d, npcId, named, true);
