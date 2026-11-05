@@ -88,6 +88,15 @@ class TargetHealth
 		// the next.
 		int regenerated;
 		int nextRegenTick = Integer.MIN_VALUE;
+		// T-164: the tick it was first found below full, and whether its boss bar has shown it regaining a hitpoint.
+		int belowFullSince = Integer.MIN_VALUE;
+		boolean regenSeen;
+		// T-164: a bar read after a long gap, to be settled at the tick's end against the reading before it.
+		boolean settleDue;
+		int gapHp;
+		int gapDamage;
+		int gapHealed;
+		int gapTick;
 	}
 
 	private final Map<Integer, Entry> byIndex = new HashMap<>();
@@ -135,6 +144,7 @@ class TargetHealth
 		e.healed = 0;
 		e.regenerated = 0;
 		e.nextRegenTick = Integer.MIN_VALUE;
+		e.belowFullSince = Integer.MIN_VALUE;
 	}
 
 	/**
@@ -236,20 +246,39 @@ class TargetHealth
 	/**
 	 * T-161: a tick on the fight's target, alive: below full, it regains a hitpoint every {@link #REGEN_TICKS}, the first
 	 * {@link #REGEN_FIRST_TICKS} after it was first found below full; back at full, the timer stops. Counted as healed,
-	 * so the count, and the cap at what is left, follow it. Nothing once the boss bar has been read for it: the bar shows
-	 * what the game gave back. Returns what it gave back on this tick.
+	 * so the count, and the cap at what is left, follow it. Returns what it gave back on this tick.
+	 *
+	 * <p>T-164: a boss with a bar only once the bar has shown it regaining one ({@link #hud}), and from then on at the
+	 * bar's own ticks. Not every npc regenerates: the Leviathan's six kills on 2026-11-03 took exactly its 900, its bar
+	 * never rising, while Venenatis's rose by 1 every 20 ticks (Eric's log of 2026-11-03 15:32). An npc without a bar can't
+	 * show it, so it is taken to regenerate, as Cerberus does (T-161).
 	 */
 	int regenerate(int index, int tick)
 	{
 		final Entry e = byIndex.get(index);
-		if (e == null || e.hudMax > 0)
+		if (e == null)
 		{
 			return 0;
+		}
+		if (e.settleDue)
+		{
+			final int before = e.regenerated;
+			settleGap(index, e, tick);
+			return e.regenerated - before;
 		}
 		final int max = fullHp(e);
 		if (max <= 0 || max - e.damage + e.healed >= max)
 		{
 			e.nextRegenTick = Integer.MIN_VALUE;
+			e.belowFullSince = Integer.MIN_VALUE;
+			return 0;
+		}
+		if (e.belowFullSince == Integer.MIN_VALUE)
+		{
+			e.belowFullSince = tick;
+		}
+		if (e.hudMax > 0 && !e.regenSeen)
+		{
 			return 0;
 		}
 		if (e.nextRegenTick == Integer.MIN_VALUE)
@@ -266,6 +295,113 @@ class TargetHealth
 			gave++;
 		}
 		return gave;
+	}
+
+	/** T-164: the most a reading with nothing counted since can rise and be taken for regeneration: two of its ticks. */
+	static final int MAX_REGEN_STEP = 2;
+
+	/**
+	 * T-164: the bar, read with no splat counted since its last reading, shows more left than that one less what was
+	 * given back since: the npc regained it. Credited as regenerated (with any of its 20-tick steps since it was first
+	 * found below full that fell on a tick with a splat, so the bar never showed them on their own), and the timer set to
+	 * the bar's tick. Outside a raid only (the plugin's {@code regenerates}), where a bar can fill for other reasons (the
+	 * P2 Warden's poise, T-153).
+	 *
+	 * <p>Read after a long gap (a hold through the player's death, an idle pause, a logout), it is settled at the tick's
+	 * end instead ({@link #settleGap}), once that tick's splats are counted: the bar shows a splat before the count has
+	 * it (T-154), and the player's first hit on the return is on that tick.
+	 */
+	private void regainedByBar(Entry e, int npcId, int hp, int base, int tick)
+	{
+		if (e.hudMax != base || e.hudHp < 0 || e.hudId != npcId || e.hudTick == Integer.MIN_VALUE || e.settleDue)
+		{
+			return;
+		}
+		if (tick - e.hudTick > REGEN_TICKS)
+		{
+			e.settleDue = true;
+			e.gapHp = e.hudHp;
+			e.gapDamage = e.damageAtHud;
+			e.gapHealed = e.healedAtHud;
+			e.gapTick = e.hudTick;
+			return;
+		}
+		if (e.damage != e.damageAtHud)
+		{
+			return;
+		}
+		final int gained = hp - (e.hudHp + (e.healed - e.healedAtHud));
+		if (gained > 0 && gained <= MAX_REGEN_STEP)
+		{
+			credit(e, gained, e.hudTick, tick);
+		}
+	}
+
+	/**
+	 * T-164: a long gap between readings, settled: the steps the timer owes are given back, and what the bar shows beyond
+	 * them is regained too (the game's ticks may not run while logged out: Venenatis rose 173 -> 195 across a logout of
+	 * 181 ticks, [18978] to [19319] of Eric's 15:32 log), or, short of them, was taken by someone else while the player
+	 * was away (hers fell 418 -> 405 across the player's death, [22359] to [22699], with 17 steps due).
+	 */
+	private void settleGap(int index, Entry e, int tick)
+	{
+		e.settleDue = false;
+		final int max = fullHp(e);
+		final int owedBefore = e.regenerated;
+		if (e.regenSeen && e.nextRegenTick != Integer.MIN_VALUE)
+		{
+			while (tick >= e.nextRegenTick && max - e.damage + e.healed < max)
+			{
+				e.healed++;
+				e.regenerated++;
+				e.nextRegenTick += REGEN_TICKS;
+			}
+		}
+		final int counted = (e.damage - e.gapDamage) - (e.healed - e.gapHealed);
+		final int gained = e.hudHp - (e.gapHp - counted);
+		if (notes.size() < MAX_NOTES)
+		{
+			notes.add(String.format("HP SETTLED: npc index %d's bar %d on tick %d against %d on tick %d, %d counted since: %d of "
+					+ "its 20-tick steps given back, and %s", index, e.hudHp, tick, e.gapHp, e.gapTick, e.damage - e.gapDamage,
+				e.regenerated - owedBefore, gained > 0 ? gained + " more regained" : gained < 0 ? -gained
+					+ " taken by someone else while the player was away" : "nothing else"));
+		}
+		if (gained < 0)
+		{
+			e.damage -= gained;
+			e.unseen -= gained;
+		}
+		else if (gained > 0)
+		{
+			// The rise across the gap is regained, but says nothing of the timer's phase: one known stands, and one not yet
+			// seen is still waiting for the bar's first rise on its own, its earlier steps counted from here.
+			e.healed += gained;
+			e.regenerated += gained;
+			if (!e.regenSeen)
+			{
+				e.belowFullSince = tick;
+			}
+		}
+	}
+
+	/**
+	 * T-164: {@code gained} regained between a reading on {@code lastRead} and one on {@code tick}, with, the first time,
+	 * its earlier steps 20 ticks apart back from this one, since it was first below full and up to that reading: each
+	 * fell on a tick with a splat, or the bar would have shown it.
+	 */
+	private static void credit(Entry e, int gained, int lastRead, int tick)
+	{
+		int missed = 0;
+		if (!e.regenSeen && e.belowFullSince != Integer.MIN_VALUE)
+		{
+			final int fromK = Math.max(1, (tick - lastRead + REGEN_TICKS - 1) / REGEN_TICKS);
+			final int toK = (tick - e.belowFullSince) / REGEN_TICKS;
+			missed = Math.max(0, toK - fromK + 1);
+		}
+		e.healed += gained + missed;
+		e.regenerated += gained + missed;
+		e.regenSeen = true;
+		e.nextRegenTick = tick + REGEN_TICKS;
 	}
 
 	/** T-161: of {@link #healed}, what the count gave back for regeneration. */
@@ -340,11 +476,21 @@ class TargetHealth
 	 */
 	void hud(int index, int npcId, int hp, int base, int tick)
 	{
+		hud(index, npcId, hp, base, tick, false);
+	}
+
+	/** As above; {@code regenerates}: outside a raid, where a rise with nothing counted is the npc regaining (T-164). */
+	void hud(int index, int npcId, int hp, int base, int tick, boolean regenerates)
+	{
 		if (base <= 0 || hp < 0 || hp > base)
 		{
 			return;
 		}
 		final Entry e = entry(index, npcId, tick);
+		if (regenerates)
+		{
+			regainedByBar(e, npcId, hp, base, tick);
+		}
 		if (e.hudMax > 0 && e.hudMax != base)
 		{
 			switchPool(index, e, base, tick);
