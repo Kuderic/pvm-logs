@@ -880,6 +880,8 @@ class PvmPerformancePanel extends PluginPanel
 				continue;
 			}
 			m.slot = partySlots.getOrDefault(v.memberId, 0);
+			// T-169: the loopback's echo of your own figures: shown, never counted.
+			m.echo = SidePanelParty.echo(v.memberId, v.name, me == null ? Long.MIN_VALUE : me.getMemberId());
 			final net.runelite.client.party.PartyMember pm = memberById(party, v.memberId);
 			m.avatar = pm == null ? null : pm.getAvatar();
 			if (!light && !raidScope)

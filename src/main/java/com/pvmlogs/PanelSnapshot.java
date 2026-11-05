@@ -195,6 +195,14 @@ final class PanelSnapshot
 		final String tip;
 		/** T-167: a party member listed without figures, as others is: no click, no values. */
 		final boolean listed;
+		/** T-169: the dev loopback's echo of your own figures: shown, never counted in the Fight tab's line. */
+		boolean echo;
+
+		PartyRow echo(boolean echo)
+		{
+			this.echo = echo;
+			return this;
+		}
 		/** T-128: their Discord picture; null for none, when the colour swatch stands in. */
 		java.awt.image.BufferedImage avatar;
 		/** T-128: their Fight tab, for the member opened; null otherwise. */
