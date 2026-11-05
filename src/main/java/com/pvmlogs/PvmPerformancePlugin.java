@@ -443,6 +443,10 @@ public class PvmPerformancePlugin extends Plugin
 	private BossAway away;
 	// T-164: the held fight's count was parked at a logout (which clears every count), to be put back on the return.
 	private boolean heldCountParked;
+	// T-174: the tick the game's kill message came for the open fight's boss, and the npc it was on: a boss leaving view on
+	// that tick, or the next, has died.
+	private int killMessageTick = Integer.MIN_VALUE;
+	private int killMessageIndex = -1;
 	// T-164: whether the player stood in an instance on the last tick: what a hold left on a loading screen was in.
 	private boolean instancedLastTick;
 	/** T-164: the "raid" a count held outside a raid is parked under ({@link TargetHealth#park}). */
@@ -5424,12 +5428,27 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void closeRoomOnDeath(NPC npc, boolean fell, long now)
 	{
-		if (currentEncounter != null && currentEncounter.closesOnDeathOf(npc.getId(), npc.getIndex(), fell))
+		closeRoomOnDeath(npc.getId(), npc.getIndex(), npc.getName(), fell, now);
+	}
+
+	private void closeRoomOnDeath(int npcId, int npcIndex, String name, boolean fell, long now)
+	{
+		if (currentEncounter != null && currentEncounter.closesOnDeathOf(npcId, npcIndex, fell))
 		{
-			debug.log("DEATH of %s (npc %d, index %d)%s: room '%s' closed with %d fights", npc.getName(), npc.getId(),
-				npc.getIndex(), fell ? ", fallen" : "", currentEncounter.getName(), currentEncounter.getFights().size());
+			debug.log("DEATH of %s (npc %d, index %d)%s: room '%s' closed with %d fights", name, npcId, npcIndex,
+				fell ? ", fallen" : "", currentEncounter.getName(), currentEncounter.getFights().size());
 			closeRoom(now);
 		}
+	}
+
+	/**
+	 * T-174: whether an npc leaving view on {@code tick} has died by its kill message: the message for the fight on it
+	 * came on that tick or the one before.
+	 */
+	static boolean killedByMessage(int messageTick, int messageIndex, int npcIndex, int tick)
+	{
+		return messageIndex == npcIndex && messageTick != Integer.MIN_VALUE && tick - messageTick >= 0
+			&& tick - messageTick <= 1;
 	}
 
 	// Ends the room open now on its kill. Ended rather than dropped, so the kill stays on the overlay to read.
@@ -5603,17 +5622,25 @@ public class PvmPerformancePlugin extends Plugin
 	private void handleNpcDespawned(NpcDespawned event)
 	{
 		final NPC npc = event.getNpc();
+		// T-174: gone on the tick of its kill message, or the next, is dead, whatever its dead flag says.
+		final boolean byMessage = !npc.isDead()
+			&& killedByMessage(killMessageTick, killMessageIndex, npc.getIndex(), client.getTickCount());
+		if (byMessage)
+		{
+			debug.log("DEATH of %s (npc %d, index %d) by its kill message on tick %d: gone from view, not held",
+				npc.getName(), npc.getId(), npc.getIndex(), killMessageTick);
+		}
 		// Before the fight on it is closed: whether it was the player's target, for the slayer table's check (T-090).
 		if (npc.isDead())
 		{
 			logTaskMismatch(combatCalc.onNpcDiedForSlayer(npc, current != null && current.getTargetIndex() == npc.getIndex(),
 				client.getTickCount()));
 		}
-		closeOnDespawn(npc);
+		closeOnDespawn(npc, byMessage);
 		deadSince.remove(npc.getIndex());
 		elementalsDown.remove(npc.getIndex());
 		// After the fight on it is closed. Whatever was fighting it: a death a party member landed counts as well.
-		if (npc.isDead())
+		if (npc.isDead() || byMessage)
 		{
 			closeRoomOnDeath(npc, false, System.currentTimeMillis());
 		}
@@ -5626,7 +5653,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 	}
 
-	private void closeOnDespawn(NPC npc)
+	private void closeOnDespawn(NPC npc, boolean killedByMessage)
 	{
 		if (Thralls.isThrall(npc.getId()))
 		{
@@ -5658,7 +5685,7 @@ public class PvmPerformancePlugin extends Plugin
 		// hitpoints at [7712] of Eric's first Yama log (Eric's 199 and the partner's 201 of its 400), played 9042, and
 		// despawned at [7717] not flagged dead: held as gone alive (T-088), its eleven ticks went uncounted and Yama's fight
 		// waited for a target switch.
-		final boolean dead = diedOnDespawn(npc.isDead(), current.getTargetIndex() == npc.getIndex()
+		final boolean dead = diedOnDespawn(npc.isDead() || killedByMessage, current.getTargetIndex() == npc.getIndex()
 			? health.remaining(npc.getIndex(), client.getTickCount()) : -1);
 		if (current.getTargetIndex() == npc.getIndex() && !dead && away != null && away.npcIndex == npc.getIndex())
 		{
@@ -7102,6 +7129,8 @@ public class PvmPerformancePlugin extends Plugin
 			current.groupAsMonster();
 		}
 		current.noteStartTick(client.getTickCount());
+		killMessageTick = Integer.MIN_VALUE;
+		killMessageIndex = -1;
 		unlistedAdds.reset(client.getTickCount());
 		hpAboveCountGap = 0;
 		timelines.attach(current);
@@ -8439,6 +8468,23 @@ public class PvmPerformancePlugin extends Plugin
 			onto.context().gameDurationTicks = ticks;
 		}
 		debug.log("KILL MESSAGE on %s: %s", onto.getTargetName(), kc >= 0 ? "kill count " + kc : "duration " + ticks + " ticks");
+		// T-174: the kill message on the fight still open is its boss's death, whatever the view says. At the Wardens' P3 the
+		// message came and the warden left view on the same tick ([84909] of Eric's 11-04 log, and [27395] of his 11-03):
+		// held as gone alive, its fight ran on 99 ticks to an idle close.
+		if (onto == current && !current.isEnded())
+		{
+			killMessageTick = client.getTickCount();
+			killMessageIndex = current.getTargetIndex();
+			if (away != null && away.npcIndex == current.getTargetIndex())
+			{
+				// Gone from view a moment before the message: dead at the tick it went.
+				final int index = away.npcIndex;
+				final int id = away.npcId;
+				final long at = away.millis;
+				finalizeFight(true, at, "target died: its kill message came as it left view");
+				closeRoomOnDeath(id, index, onto.getTargetName(), false, at);
+			}
+		}
 		if (onto.isEnded())
 		{
 			saveHistory();
