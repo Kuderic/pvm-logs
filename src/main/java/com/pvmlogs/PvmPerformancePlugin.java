@@ -441,6 +441,12 @@ public class PvmPerformancePlugin extends Plugin
 	// (a teleport); and, after a trip, whether the overhead bar is still to be checked for a fresh one, with the tick the
 	// target was last seen before it.
 	private BossAway away;
+	// T-164: the held fight's count was parked at a logout (which clears every count), to be put back on the return.
+	private boolean heldCountParked;
+	// T-164: whether the player stood in an instance on the last tick: what a hold left on a loading screen was in.
+	private boolean instancedLastTick;
+	/** T-164: the "raid" a count held outside a raid is parked under ({@link TargetHealth#park}). */
+	static final int HELD_OUTSIDE_RAID = Integer.MIN_VALUE;
 	// T-097: the run back to a boss come back into view after a burrow, until the next attack.
 	private BossAway.Chase chase;
 	// T-100: the player's own death, from either signal, once a life.
@@ -3858,6 +3864,10 @@ public class PvmPerformancePlugin extends Plugin
 		if (raidType == null)
 		{
 			final int gave = health.regenerate(index, tick);
+			for (String note : health.drainNotes())
+			{
+				debug.log(note);
+			}
 			if (gave > 0)
 			{
 				debug.log("REGEN %s (npc %d, index %d): +%d, a hitpoint every %d ticks below full; %d given back this fight's "
@@ -5104,6 +5114,7 @@ public class PvmPerformancePlugin extends Plugin
 		final GameState state = client.getGameState();
 		away = new BossAway(npc.getId(), npc.getIndex(), current.getTargetName(), client.getWorld(), tick,
 			System.currentTimeMillis(), BossAway.playerLeft(state, lastLoadingTick, tick), lastBossAnim);
+		away.instanced = instancedLastTick;
 		debug.log("OUT OF VIEW %s (npc %d, index %d) on world %d at tick %d: %s", away.name, away.npcId, away.npcIndex,
 			away.world, tick, away.why(state, lastLoadingTick));
 		// A boss part left alive on a trip (T-100): a fresh one under another index on the return is a new attempt.
@@ -5111,6 +5122,59 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			currentEncounter.noteLeftAlive(npc.getIndex(), npc.getId());
 		}
+	}
+
+	/**
+	 * T-164: whether the open fight can be held for the player's return ({@link BossAway#resumable}): a boss, outside a
+	 * raid, alive, with something counted on it.
+	 */
+	private boolean canHold()
+	{
+		if (current == null || current.isEnded() || current.getAttempts() == 0)
+		{
+			return false;
+		}
+		final int index = current.getTargetIndex();
+		final boolean targetDead = targetNpc != null && targetNpc.getIndex() == index && targetNpc.isDead();
+		final int left = health.remaining(index, client.getTickCount());
+		final int full = current.getMaxHp();
+		final boolean hurt = left >= 0 && full > 0 ? left < full : current.getDamageDealt() + current.getThrallDamage() > 0;
+		return BossAway.resumable(raidType != null, current.isMonsterRoom(), EncounterGroup.isUnscored(current.getTargetId()),
+			targetDead, hurt);
+	}
+
+	/** T-164: the npc id a hold waits for: the target's as last seen, its form now. */
+	private int heldId()
+	{
+		return targetLiveId > 0 ? targetLiveId : current.getTargetId();
+	}
+
+	/** T-164: the HOLD line. */
+	private void logHold()
+	{
+		debug.log("HOLD %s (npc %d, index %d) on world %d from tick %d: %s; carried on if fought again on this index and world "
+				+ "within %d ticks (or %d s) and its bar still shows it hurt, %d left (counted); in an instance %b",
+			away.name, away.npcId, away.npcIndex, away.world, away.tick, away.describe(), BossAway.TIMEOUT_TICKS,
+			BossAway.TIMEOUT_MILLIS / 1000, health.remaining(away.npcIndex, client.getTickCount()), client.isInInstancedRegion());
+	}
+
+	/** T-164: the held fight's count, parked at a logout, back on its index; whether there was one to put back. */
+	private boolean restoreHeldCount(int npcId)
+	{
+		if (!heldCountParked || away == null)
+		{
+			return false;
+		}
+		heldCountParked = false;
+		final TargetHealth.Parked kept = health.unpark(away.npcIndex, npcId, client.getWorld(), HELD_OUTSIDE_RAID);
+		if (kept == null)
+		{
+			return false;
+		}
+		damageByIndex.put(away.npcIndex, kept.extra);
+		debug.log("COUNT KEPT on %s (npc %d, index %d): the %d counted on it before the logout carries on", away.name, npcId,
+			away.npcIndex, kept.damage());
+		return true;
 	}
 
 	/**
@@ -5122,6 +5186,8 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		final int tick = client.getTickCount();
 		final int from = current.getTargetIndex();
+		// T-164: after a logout, the count kept for it.
+		restoreHeldCount(npc.getId());
 		final int to = npc.getIndex();
 		if (from != to)
 		{
@@ -5153,8 +5219,8 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		debug.log("%s %s (npc %d): index %d%s on world %d, %d ticks after it was last seen%s", away.playerLeft ? "RESUME"
 				: "BACK IN VIEW", away.name, npc.getId(), from, from != to ? " -> " + to : "", client.getWorld(), tick - away.tick,
-			away.playerLeft ? String.format(" (trip %d of this fight, %d s away, left out of its time)", current.getTrips(),
-				gone / 1000) : "");
+			away.playerLeft ? String.format(" (trip %d of this fight, %d s away, left out of its time; held: %s)",
+				current.getTrips(), gone / 1000, away.describe()) : "");
 		targetNpc = npc;
 		targetLiveId = npc.getId();
 		combatCalc.setTarget(npc);
@@ -5425,6 +5491,20 @@ public class PvmPerformancePlugin extends Plugin
 			deadInRaid = true;
 			return;
 		}
+		// T-164: a boss left alive and hurt, outside a raid, is held for the return rather than ended: fought again on the
+		// same index and world within the window, the fight carries on with its count; otherwise the room ends here, as
+		// the death ended it before (T-100), when the hold runs out or another target is fought.
+		if (canHold() && !instancedLastTick && (away == null || away.resumableAfterLeaving()))
+		{
+			current.markPlayerDied();
+			away = away == null ? new BossAway(heldId(), current.getTargetIndex(), current.getTargetName(), client.getWorld(),
+				tick, now, true, lastBossAnim, BossAway.Cause.PLAYER_DIED, true) : away.withPlayerDied(tick, now);
+			chase = null;
+			logHold();
+			endRoom(setAsideRun, now, "the player died");
+			setAsideRun = null;
+			return;
+		}
 		final Encounter room = currentEncounter;
 		final boolean inRoom = current != null && !current.isEnded() && room != null && room.getFights().contains(current);
 		if (current != null && !current.isEnded())
@@ -5547,6 +5627,14 @@ public class PvmPerformancePlugin extends Plugin
 		// waited for a target switch.
 		final boolean dead = diedOnDespawn(npc.isDead(), current.getTargetIndex() == npc.getIndex()
 			? health.remaining(npc.getIndex(), client.getTickCount()) : -1);
+		if (current.getTargetIndex() == npc.getIndex() && !dead && away != null && away.npcIndex == npc.getIndex())
+		{
+			// T-164: already held (the player's death, an idle pause): the respawn's loading screen, or the walk away, takes it
+			// out of view, and the hold goes on.
+			debug.log("OUT OF VIEW %s (npc %d, index %d) at tick %d: already held (%s)", away.name, npc.getId(), npc.getIndex(),
+				client.getTickCount(), away.describe());
+			return;
+		}
 		if (current.getTargetIndex() == npc.getIndex() && !dead && PlayerDeath.holdsOnDespawn(playerDeath.isDead()))
 		{
 			// Gone alive (T-088): a burrow, or the player leaving on a trip. Held, not finished. Never after a death (T-100):
@@ -5581,10 +5669,12 @@ public class PvmPerformancePlugin extends Plugin
 		final boolean attacked = attackObservedTick == client.getTickCount();
 		attackObservedTick = -1;
 		// A held fight whose target never came back ends as left, at the tick it was last seen (T-088).
-		if (away != null && current != null && !current.isEnded() && away.timedOut(client.getTickCount()))
+		if (away != null && current != null && !current.isEnded() && away.timedOut(client.getTickCount(),
+			System.currentTimeMillis()))
 		{
-			finalizeFight(false, away.millis, String.format("its target out of view since tick %d, %d ticks: left",
-				away.tick, client.getTickCount() - away.tick));
+			finalizeFight(false, away.millis, String.format("its target %s since tick %d, %d ticks: left",
+				away.cause == BossAway.Cause.OUT_OF_VIEW ? "out of view" : "held (" + away.describe() + ")", away.tick,
+				client.getTickCount() - away.tick));
 			away = null;
 		}
 
@@ -6508,6 +6598,8 @@ public class PvmPerformancePlugin extends Plugin
 
 	private void handleGameTick(GameTick tick)
 	{
+		// T-164: where the player stands, for a hold a loading screen or a death leaves on the next.
+		instancedLastTick = client.isInInstancedRegion();
 		if (!dartLoaded)
 		{
 			dartLoaded = true;
@@ -6645,8 +6737,33 @@ public class PvmPerformancePlugin extends Plugin
 				// uncounted.
 				if (idle > FIGHT_TIMEOUT_TICKS * 600L && !isTargeting(current.getTargetIndex()))
 				{
-					finalizeFight(false, current.getLastActivityMillis(),
-						"idle " + (idle / 600L) + " ticks with no damage either way");
+					// T-164: a boss left hurt is paused from its last activity, held for the return, rather than ended; one held
+					// already as gone from the player's view (a burrow) becomes a pause too. A pause already held stays.
+					if (away != null && away.playerLeft && away.resumableAfterLeaving())
+					{
+						// Held: its own timeout decides.
+					}
+					else if (canHold() && (away == null || away.resumableAfterLeaving()))
+					{
+						final int lastTick = client.getTickCount() - (int) (idle / 600L);
+						if (away == null)
+						{
+							away = new BossAway(heldId(), current.getTargetIndex(), current.getTargetName(), client.getWorld(),
+								lastTick, current.getLastActivityMillis(), true, lastBossAnim, BossAway.Cause.IDLE, false);
+							// Standing idle beside it: the instance, if any, is still there (instanced stays false).
+						}
+						else
+						{
+							away = away.pausedFrom(lastTick, current.getLastActivityMillis(), BossAway.Cause.IDLE);
+						}
+						chase = null;
+						logHold();
+					}
+					else
+					{
+						finalizeFight(false, current.getLastActivityMillis(),
+							"idle " + (idle / 600L) + " ticks with no damage either way");
+					}
 				}
 			}
 		}
@@ -6706,13 +6823,33 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			// Possibly another account next, with its own blowpipe.
 			dartLoaded = false;
-			if (current != null && !current.isEnded())
+			// T-164: a logout from a boss left alive and hurt, outside a raid, holds its fight for the login: its count parked,
+			// as every count is cleared below, and its room left open. A hop is another world, so another boss.
+			final boolean keepHold = state == GameState.LOGIN_SCREEN && canHold() && !instancedLastTick
+				&& (away == null || away.resumableAfterLeaving());
+			if (keepHold)
+			{
+				final long last = current.getLastActivityMillis();
+				final int lastTick = client.getTickCount() - (int) Math.max(0, (System.currentTimeMillis() - last) / 600L);
+				away = away != null ? away.pausedFrom(lastTick, last, BossAway.Cause.LOGGED_OUT)
+					: new BossAway(heldId(), current.getTargetIndex(), current.getTargetName(), client.getWorld(), lastTick, last,
+						true, lastBossAnim, BossAway.Cause.LOGGED_OUT, false);
+				health.park(current.getTargetIndex(), client.getWorld(), HELD_OUTSIDE_RAID,
+					damageByIndex.getOrDefault(current.getTargetIndex(), 0));
+				heldCountParked = true;
+				chase = null;
+				logHold();
+			}
+			else if (current != null && !current.isEnded())
 			{
 				// A held fight ends as left, at the tick its target was last seen (T-088): a hop is a different boss.
 				finalizeFight(false, away != null ? away.millis : current.getLastActivityMillis(), away != null
 					? "logged out or hopped while its target was out of view since tick " + away.tick : "logged out or hopped");
 			}
-			away = null;
+			if (!keepHold)
+			{
+				away = null;
+			}
 			barCheckOnReturn = false;
 			playerDeath.clear();
 			deadInRaid = false;
@@ -6720,7 +6857,10 @@ public class PvmPerformancePlugin extends Plugin
 			// room time: one Hueycoatl room in a real export ran 33,541 seconds across a night's sleep and swallowed two
 			// kills, because a room only ends at its loot drop and nothing else was closing it.
 			// A boss's room left without its kill carries a boundary, so History keeps it apart from the next attempt (T-100).
-			endRoomLeft(currentEncounter, System.currentTimeMillis(), state == GameState.LOGIN_SCREEN ? "logged out" : "hopped");
+			if (!keepHold)
+			{
+				endRoomLeft(currentEncounter, System.currentTimeMillis(), state == GameState.LOGIN_SCREEN ? "logged out" : "hopped");
+			}
 			endRoom(setAsideRun, System.currentTimeMillis(), state == GameState.LOGIN_SCREEN ? "logged out" : "hopped");
 			setAsideRun = null;
 			monsterRooms.clear();
@@ -7887,7 +8027,7 @@ public class PvmPerformancePlugin extends Plugin
 						+ "read %d left, the bar says %d",
 					previousFull, base, current.getTargetName(), liveId, index, health.countedRemaining(index), hp);
 			}
-			health.hud(index, liveId, hp, base, client.getTickCount());
+			health.hud(index, liveId, hp, base, client.getTickCount(), raidType == null);
 		}
 	}
 
@@ -7993,6 +8133,13 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void finalizeFight(boolean died, long now, String reason, boolean keepCounts)
 	{
+		// T-164: a hold ending here: its count put back if a logout parked it, and a death in it ends the room below.
+		final BossAway held = away;
+		if (held != null)
+		{
+			restoreHeldCount(held.npcId);
+		}
+		heldCountParked = false;
 		// Whatever ends a fight ends its hold (T-088), and its chase (T-097), and a death's uncounted ticks (T-100). A chase still
 		// running is one of the fight's mechanic windows (T-110).
 		if (chase != null && current.getAttempts() > 0)
@@ -8086,6 +8233,19 @@ public class PvmPerformancePlugin extends Plugin
 			damageByIndex.remove(index);
 			whileOnAnAdd.remove(index);
 			health.forget(index);
+		}
+		// T-164: held through the player's death, or a logout, and never fought again: the room ends as the death or the
+		// logout ended it before (T-100), not a kill.
+		if (held != null && (held.playerDied || held.cause == BossAway.Cause.LOGGED_OUT) && currentEncounter != null
+			&& !currentEncounter.isEnded() && !currentEncounter.isMonsterRoom() && currentEncounter.getFights().contains(current))
+		{
+			final Fight last = currentEncounter.closeWithoutKill(now, held.playerDied ? "died" : "left");
+			if (last != null && held.playerDied)
+			{
+				last.markPlayerDied();
+			}
+			debug.log("ROOM '%s' ended (%s and didn't come back to it): not a kill, %d fights", currentEncounter.getName(),
+				held.playerDied ? "the player died at it" : "the player logged out", currentEncounter.getFights().size());
 		}
 		// Nothing is being fought, so no drain should be read against anything.
 		combatCalc.setTarget(null);

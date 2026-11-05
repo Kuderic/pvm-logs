@@ -92,14 +92,65 @@ public class RegenerationTest
 	}
 
 	@Test
-	public void theBossBarSeesItInstead()
+	public void aBossWithABarRegainsOnlyOnceItsBarShowsIt()
+	{
+		// T-164: the Leviathan's bar never rose (its kills took exactly 900): nothing given back.
+		final TargetHealth h = new TargetHealth();
+		h.setTableMaxHp(INDEX, 12214, 900, 0);
+		h.damage(INDEX, 12214, 50, 1);
+		h.hud(INDEX, 12214, 850, 900, 1, true);
+		for (int tick = 1; tick <= 200; tick++)
+		{
+			h.regenerate(INDEX, tick);
+		}
+		assertEquals(0, h.regenerated(INDEX));
+	}
+
+	@Test
+	public void venenatisRegainsAtHerBarsTicks()
+	{
+		// T-164: Venenatis's bar rose by 1 every 20 ticks, with nothing counted between readings ([3577], [3617], [3637]...
+		// of Eric's log of 2026-11-03 15:32).
+		final int ven = 6610;
+		final TargetHealth h = new TargetHealth();
+		h.setTableMaxHp(INDEX, ven, 850, 100);
+		h.damage(INDEX, ven, 30, 100);
+		h.hud(INDEX, ven, 820, 850, 100, true);
+		h.regenerate(INDEX, 100);
+		// A rise she took on a tick with a splat goes unseen on its own: 104's 20-tick step.
+		h.damage(INDEX, ven, 10, 104);
+		h.hud(INDEX, ven, 811, 850, 104, true);
+		for (int tick = 101; tick < 124; tick++)
+		{
+			h.regenerate(INDEX, tick);
+		}
+		assertEquals("the bar not yet seen rising: nothing", 0, h.regenerated(INDEX));
+		// [124]: up by 1, nothing counted since: that, and the step at 104 the splat hid.
+		h.hud(INDEX, ven, 812, 850, 124, true);
+		assertEquals(2, h.regenerated(INDEX));
+		h.regenerate(INDEX, 124);
+		assertEquals("not twice on the bar's tick", 2, h.regenerated(INDEX));
+		// From then on at her ticks, splats or not: 144, 164.
+		h.damage(INDEX, ven, 20, 144);
+		for (int tick = 125; tick <= 170; tick++)
+		{
+			h.regenerate(INDEX, tick);
+		}
+		assertEquals(4, h.regenerated(INDEX));
+		// The bar read after the count gave one back shows it: not taken twice.
+		h.hud(INDEX, ven, 794, 850, 171, true);
+		assertEquals(4, h.regenerated(INDEX));
+		assertEquals(56, h.damageCounted(INDEX) - h.healed(INDEX));
+	}
+
+	@Test
+	public void inARaidARisingBarIsNotRegeneration()
 	{
 		final TargetHealth h = new TargetHealth();
-		h.setTableMaxHp(INDEX, CERBERUS, 600, 0);
-		h.hud(INDEX, CERBERUS, 550, 600, 1);
-		h.damage(INDEX, CERBERUS, 50, 1);
-		h.regenerate(INDEX, 1);
-		assertEquals(0, h.regenerate(INDEX, 100));
+		h.setTableMaxHp(INDEX, 6610, 850, 0);
+		h.damage(INDEX, 6610, 30, 0);
+		h.hud(INDEX, 6610, 820, 850, 0, false);
+		h.hud(INDEX, 6610, 821, 850, 20, false);
 		assertEquals(0, h.regenerated(INDEX));
 	}
 
