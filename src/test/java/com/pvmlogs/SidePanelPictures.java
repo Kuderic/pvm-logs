@@ -1709,6 +1709,9 @@ public final class SidePanelPictures
 					null, scale));
 				write(dir, "d-out-of-a-fight", scale, party(SidePanelPartyExamples.waitingWithMembers(), null, -1, null,
 					scale));
+				// T-169: Eric's duo with the dev echo on: the partner's about is others', not 0.
+				write(dir, "e-duo-with-the-dev-echo", scale, party(SidePanelPartyExamples.zebakDuoWithEcho(), null, -1,
+					null, scale));
 			}
 		}
 		smooth = false;

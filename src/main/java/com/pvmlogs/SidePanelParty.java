@@ -127,6 +127,11 @@ final class SidePanelParty
 		PanelSnapshot.FightTab fight;
 		/** T-128: {@link #fight} is from their live update: the rest comes when their room ends. */
 		boolean fightLive;
+		/**
+		 * T-169: the dev loopback's member ({@link PartyBoard#ECHO_NAME}, {@link PartyBoard#LOCAL_NAME}): your own figures
+		 * shown back, for testing. Shown, but never counted: not taken from others, not in the total, not ranked.
+		 */
+		boolean echo;
 
 		Member(long id, String name, boolean you, LuckVsSkillUpdate figures)
 		{
@@ -158,6 +163,15 @@ final class SidePanelParty
 			this.name = name == null || name.isEmpty() ? "Party member" : name;
 			this.avatar = avatar;
 		}
+	}
+
+	/**
+	 * T-169: whether a board member is the dev loopback's: your own party id, or the name the loopback gives it (the
+	 * local copy's id is -1 where the party had no local member yet).
+	 */
+	static boolean echo(long memberId, String name, long localId)
+	{
+		return memberId == localId || PartyBoard.ECHO_NAME.equals(name) || PartyBoard.LOCAL_NAME.equals(name);
 	}
 
 	/**
@@ -234,10 +248,22 @@ final class SidePanelParty
 		final int top = Math.max(others, order.get(0).figures.all());
 		final double seconds = Math.max(0.6, in.seconds);
 		final List<PanelSnapshot.PartyRow> rows = new ArrayList<>(order.size() + unshared.size() + 1);
-		for (int i = 0; i < order.size(); i++)
+		// T-169: ranked among the members counted: the echo takes your place, being your figures.
+		int counted = 0;
+		int yourRank = 1;
+		for (Member m : order)
 		{
-			final Member m = order.get(i);
-			rows.add(row(m, i + 1, order.size(), top, total, seconds, in));
+			if (!m.echo)
+			{
+				counted++;
+				yourRank = m.you ? counted : yourRank;
+			}
+		}
+		int rank = 0;
+		for (Member m : order)
+		{
+			rank += m.echo ? 0 : 1;
+			rows.add(row(m, m.echo ? yourRank : rank, counted, top, total, seconds, in));
 		}
 		final String[] othersDmg = {compact(others), "", share(others, total)};
 		final String[] aboutDmg = {APPROX + compact(others), "", share(others, total)};
@@ -295,7 +321,7 @@ final class SidePanelParty
 		final PanelSnapshot.PartyBreakdown breakdown = new PanelSnapshot.PartyBreakdown(m.you ? "You" : m.name, place,
 			attacks(f, seconds, in.itemNames), summary(f, !in.live));
 		return new PanelSnapshot.PartyRow(m.id, name, m.you, m.left, m.colour(), fill(all, top), dmg, luck, exec,
-			luckColour, m.ticks, m.damage, breakdown).with(m.avatar, m.fight, m.fightLive);
+			luckColour, m.ticks, m.damage, breakdown).with(m.avatar, m.fight, m.fightLive).echo(m.echo);
 	}
 
 	/** The members, biggest damage first; the player first among equals. */
@@ -309,14 +335,15 @@ final class SidePanelParty
 
 	/**
 	 * The damage no sharing member accounts for: other players' hits less the members' own, all of it (T-134: their
-	 * thrall's splats reach you as another player's too). Never negative.
+	 * thrall's splats reach you as another player's too). Never negative. T-169: never less the dev loopback's echo,
+	 * whose figures are your own and never among other players' hits (Eric, 2026-11-05: a duo partner read 0).
 	 */
 	static int others(int othersDamage, List<Member> members)
 	{
 		long members_ = 0;
 		for (Member m : members)
 		{
-			if (!m.you)
+			if (!m.you && !m.echo)
 			{
 				members_ += m.figures.all();
 			}
@@ -329,7 +356,8 @@ final class SidePanelParty
 		long t = Math.max(0, others);
 		for (Member m : members)
 		{
-			t += m.figures.all();
+			// T-169: the echo is your figures again: counted once, as you.
+			t += m.echo ? 0 : m.figures.all();
 		}
 		return (int) Math.min(Integer.MAX_VALUE, t);
 	}
@@ -352,7 +380,7 @@ final class SidePanelParty
 		String share = "";
 		for (PanelSnapshot.PartyRow r : t.rows)
 		{
-			if (r.others)
+			if (r.others || r.echo)
 			{
 				continue;
 			}

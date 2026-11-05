@@ -561,14 +561,36 @@ final class SidePanelPartyExamples
 	/** The loopback: you and your echo, the same updates, on one axis. */
 	static SidePanelParty.Input withEcho()
 	{
-		final SidePanelParty.Input in = input("Araxxor", 129, false, null, 2_960);
+		// T-169: solo with the loopback, nobody else hit the boss: other players' hits are 0 (your own are never among
+		// them). It read 2,960 before, which only came to 0 because the echo was taken from it.
+		final SidePanelParty.Input in = input("Araxxor", 129, false, null, 0);
 		final SidePanelParty.Member you = member(SidePanelParty.YOU_ID, "you", true, 0, figures("Araxxor", true, 2_960,
 			2_880, 215, 0.5, -1, 0.91, 6, attacks(TWISTED_BOW, 52, 41, 2_960, 2_880, false)), 215);
 		in.members.add(you);
-		final SidePanelParty.Member echo = new SidePanelParty.Member(31, PartyBoard.ECHO_NAME, false, you.figures);
+		in.members.add(echoOf(you, 31));
+		return in;
+	}
+
+	/** T-169: the dev loopback's member: your own figures, under the echo's name, marked as the panel marks it. */
+	static SidePanelParty.Member echoOf(SidePanelParty.Member you, long partyId)
+	{
+		final SidePanelParty.Member echo = new SidePanelParty.Member(partyId, PartyBoard.ECHO_NAME, false, you.figures);
 		echo.ticks = you.ticks;
 		echo.damage = you.damage;
-		in.members.add(echo);
+		echo.echo = true;
+		return echo;
+	}
+
+	/** T-169: Eric's duo Tombs with the dev echo on: his partner doesn't run the plugin, and he out-damages them. */
+	static SidePanelParty.Input zebakDuoWithEcho()
+	{
+		final SidePanelParty.Input in = input("Zebak", 96, false, false, 1_381);
+		in.partySize = 2;
+		final SidePanelParty.Member you = member(SidePanelParty.YOU_ID, "you", true, 0, figures("Zebak", true, 1_634,
+			1_590, 160, 0.55, 1, 0.92, 4, attacks(TWISTED_BOW, 30, 22, 1_634, 1_590, false)), 160);
+		in.members.add(you);
+		in.members.add(echoOf(you, 31));
+		in.unshared.add(new SidePanelParty.Unshared(77, "Ash Kettle", picture(6, 'A')));
 		return in;
 	}
 }
