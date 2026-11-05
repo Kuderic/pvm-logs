@@ -559,6 +559,9 @@ public class PvmPerformancePlugin extends Plugin
 	// The weapon held at the end of each recent tick, so an attack's splats are counted for the weapon that threw it: a
 	// special is thrown with the claws, which are usually swapped out again before their splats land.
 	private final Map<Integer, Integer> weaponByTick = new HashMap<>();
+	// T-170: whether the combat tab showed a melee weapon on each tick, for whether the weapon held then could have thrown
+	// an attack of the kind seen.
+	private final Map<Integer, Boolean> meleeByTick = new HashMap<>();
 	// T-166: the spell the attack on each recent tick casts (null for none), from the same reading as that tick's figures: a
 	// cast is booked ticks later, by which time the style can read the next weapon's.
 	private final Map<Integer, Spell> spellByTick = new HashMap<>();
@@ -876,6 +879,7 @@ public class PvmPerformancePlugin extends Plugin
 		specEnergy = -1;
 		recentSpecDrops.clear();
 		weaponByTick.clear();
+		meleeByTick.clear();
 		spellByTick.clear();
 		extrasThisTick.clear();
 		engagedNpcs.clear();
@@ -3038,6 +3042,7 @@ public class PvmPerformancePlugin extends Plugin
 		// to the new weapon's speed.
 		speedByTick.put(client.getTickCount(), combatCalc.attackSpeedTicks());
 		weaponByTick.put(client.getTickCount(), combatCalc.equippedWeaponId());
+		meleeByTick.put(client.getTickCount(), combatCalc.isMeleeEquipped());
 		spellByTick.put(client.getTickCount(), combatCalc.timelineSpell());
 		ringByTick.put(client.getTickCount(), wornRingId());
 		setupByTick.put(client.getTickCount(), new double[]{combatCalc.isPotted() ? 1 : 0, combatCalc.boostShare(),
@@ -3050,6 +3055,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			speedByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			weaponByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
+			meleeByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			spellByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			ringByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
 			setupByTick.keySet().removeIf(t -> client.getTickCount() - t > SWITCH_HISTORY_TICKS);
@@ -6149,6 +6155,24 @@ public class PvmPerformancePlugin extends Plugin
 		// staff's 36). Shots and casts keep T-065's rule.
 		attackSwitchTick = switchSinceThrow(switchSearchFrom(attackThrownTick, meleeBlow), client.getTickCount(),
 			gearChangeTicks);
+		// T-170: unless what was held before the switch couldn't have thrown it: a shot after switching back from the
+		// Soulflame horn, whose special only enticed, was scored as the horn's (Eric's duo Tombs of 2026-11-04, [72672] and
+		// [74124]: a 33 against the horn's max 21, the bow's XP on its throw).
+		if (attackSwitchTick != Integer.MIN_VALUE)
+		{
+			final int before = heldTick(attackSwitchTick, attackThrownTick);
+			final int after = attackSwitchTick;
+			// The horn is a melee weapon whatever the combat tab has caught up with (a 5-tick crush, OSRS Wiki).
+			final Boolean heldMelee = weaponByTick.getOrDefault(before, -1) == ItemID.SOULFLAME_HORN ? Boolean.TRUE
+				: settledMelee(before);
+			if (!couldHaveThrown(fromProjectile, meleeBlow, heldMelee))
+			{
+				debug.log("  SWITCH BACK: the %s held on tick %d, before the switch on %d, can't have thrown this %s: scored as "
+						+ "thrown with the %s", itemName(weaponByTick.getOrDefault(before, -1)), before, after,
+					fromProjectile ? "shot" : "blow", itemName(weaponByTick.getOrDefault(after, combatCalc.equippedWeaponId())));
+				attackSwitchTick = Integer.MIN_VALUE;
+			}
+		}
 		// What it was thrown with decides whether another npc's splat in its window is its splash (T-092).
 		lastAttackSplashes = hitsSeveralTargets(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackThrownTick),
 			combatCalc.equippedWeaponId()), combatCalc.isMeleeEquipped() ? null : combatCalc.activeSpellName());
@@ -6218,6 +6242,54 @@ public class PvmPerformancePlugin extends Plugin
 			}
 		}
 		return earliest == Integer.MAX_VALUE ? Integer.MIN_VALUE : earliest;
+	}
+
+	/**
+	 * T-170: whether a fall in special energy is the Soulflame horn's Entice: the horn in hand, or held on the tick before
+	 * by a player who has already switched to a weapon with no special of its own (a switch back made on the same tick).
+	 */
+	static boolean isEntice(int weaponNow, int weaponBefore, boolean nowHasSpecial)
+	{
+		return weaponNow == ItemID.SOULFLAME_HORN || weaponBefore == ItemID.SOULFLAME_HORN && !nowHasSpecial;
+	}
+
+	/** T-170: an item's name for the log, or its id when there is none. */
+	private String itemName(int itemId)
+	{
+		if (itemId <= 0)
+		{
+			return "nothing";
+		}
+		final net.runelite.api.ItemComposition item = itemManager == null ? null : itemManager.getItemComposition(itemId);
+		return item == null ? "item " + itemId : item.getName() + " #" + itemId;
+	}
+
+	/**
+	 * T-170: whether the combat tab showed a melee weapon on {@code tick}, where the weapon then had been held since the
+	 * tick before (the tab lags a swap by a tick); null when it can't say.
+	 */
+	private Boolean settledMelee(int tick)
+	{
+		final Integer weapon = weaponByTick.get(tick);
+		final Integer before = weaponByTick.get(tick - 1);
+		return weapon == null || !weapon.equals(before) ? null : meleeByTick.get(tick);
+	}
+
+	/**
+	 * T-170: whether a weapon held as a melee weapon ({@code heldMelee}) or not could have thrown an attack seen as a
+	 * projectile or as a melee blow: a melee weapon throws no projectile, and a bow strikes no blow. Unknown says yes.
+	 */
+	static boolean couldHaveThrown(boolean fromProjectile, boolean meleeBlow, Boolean heldMelee)
+	{
+		if (heldMelee == null)
+		{
+			return true;
+		}
+		if (fromProjectile)
+		{
+			return !heldMelee;
+		}
+		return !meleeBlow || heldMelee;
 	}
 
 	/**
@@ -6454,6 +6526,17 @@ public class PvmPerformancePlugin extends Plugin
 		if (previous >= 0 && energy < previous)
 		{
 			final int specFiredTick = client.getTickCount();
+			// T-170: the Soulflame horn's Entice is no attack: it enchants up to three other players' next melee attack (25%
+			// each, OSRS Wiki, Soulflame horn) and deals nothing. Its fall pairs with no attack, so the shot after the switch
+			// back isn't booked as a special.
+			final int heldBefore = weaponByTick.getOrDefault(specFiredTick - 1, -1);
+			if (isEntice(combatCalc.equippedWeaponId(), heldBefore,
+				SpecialAttack.forItem(combatCalc.equippedWeaponId()) != null))
+			{
+				debug.log("SPECIAL Entice (Soulflame horn) on tick %d: energy %d -> %d, %d other player(s) enticed; no attack, "
+					+ "nothing booked", specFiredTick, previous / 10, energy / 10, (previous - energy) / 250);
+				return;
+			}
 			// T-145: the weapon in hand as the energy falls threw it, as DefenceDrain reads it.
 			final SpecialAttack thrown = SpecialAttack.forItem(combatCalc.equippedWeaponId());
 			if (thrown != null)
