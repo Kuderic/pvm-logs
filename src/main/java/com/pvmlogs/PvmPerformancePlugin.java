@@ -865,6 +865,8 @@ public class PvmPerformancePlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		// T-178: before anything is cleared, the last save finishes.
+		finishHistorySave();
 		wsClient.unregisterMessage(LuckVsSkillUpdate.class);
 		wsClient.unregisterMessage(LuckVsSkillRoom.class);
 		partyBoard.clear();
@@ -6954,6 +6956,13 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		// T-177: last tick's bar fall as the target left view, now its attack is booked.
 		settleFallAsItLeft();
+		// T-178: the history didn't read and a copy was loaded: said once, in game.
+		final String notice = historyNotice;
+		if (notice != null)
+		{
+			historyNotice = null;
+			client.addChatMessage(ChatMessageType.CONSOLE, PvmPerformanceConfig.DISPLAY_NAME, notice, null);
+		}
 		// Before anything asks for the target's stats: the bar decides which version of a boss this is, and what it has left
 		// moves Vardorvis's defence.
 		readHealthBar();
@@ -8850,36 +8859,39 @@ public class PvmPerformancePlugin extends Plugin
 	/** How long after a kill its messages may still come (T-110): the loot and the messages follow within a few ticks. */
 	static final long KILL_MESSAGE_MILLIS = 15_000;
 
-	private Filepath historyFile()
-	{
-		final Filepath dir = dataDirectory;
-		return dir == null ? null : dir.joinSegment("history.json");
-	}
+	// T-178: history.json, saved whole and never saved over when it didn't load. Made by loadHistory, on the executor.
+	private volatile HistoryStore historyStore;
+	// T-178: the last save queued, which shutDown lets finish.
+	private volatile java.util.concurrent.Future<?> lastHistorySave;
+	// T-178: said in chat once, on the next tick: the history didn't read and a copy was loaded.
+	private volatile String historyNotice;
+	static final long HISTORY_SAVE_WAIT_MILLIS = 3_000;
 
 	private void loadHistory()
 	{
-		final Filepath file = historyFile();
-		if (file == null || !file.exists())
+		final Filepath dir = dataDirectory;
+		if (dir == null)
 		{
 			return;
 		}
+		final HistoryStore store = new HistoryStore(dir, gson);
+		historyStore = store;
 		try
 		{
-			final String json;
-			try (InputStream in = file.openInputStream())
+			final HistoryStore.Loaded loaded = store.load(System.currentTimeMillis());
+			// Everything the file holds, even past the budgets (T-093): an older file lost nothing by loading. The budgets trim
+			// a kind only when a fight of it is next added.
+			history.addAll(java.util.Arrays.asList(loaded.fights));
+			debug.log("%s", loaded.line);
+			if (loaded.source != null && !HistoryStore.FILE.equals(loaded.source) || loaded.notice != null)
 			{
-				json = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+				log.warn("Luck vs Skill: {}", loaded.line);
 			}
-			final Fight[] loaded = gson.fromJson(json, Fight[].class);
-			if (loaded != null)
-			{
-				// Everything the file holds, even past the budgets (T-093): an older file lost nothing by loading. The budgets trim
-				// a kind only when a fight of it is next added.
-				history.addAll(java.util.Arrays.asList(loaded));
-			}
+			historyNotice = loaded.notice;
 		}
-		catch (Exception e)
+		catch (RuntimeException e)
 		{
+			debug.log("HISTORY couldn't be loaded: %s", e);
 			log.warn("PvM Logs: could not load history", e);
 		}
 		if (panel != null)
@@ -8892,23 +8904,42 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		// Snapshot now so a later shutdown/clear can't race the write.
 		final List<Fight> snapshot = new ArrayList<>(history);
-		executor.execute(() ->
+		lastHistorySave = executor.submit(() ->
 		{
+			final HistoryStore store = historyStore;
+			if (store == null)
+			{
+				return;
+			}
 			try
 			{
-				final Filepath file = historyFile();
-				if (file == null)
-				{
-					return;
-				}
-				file.getParent().createDirectories();
-				file.write(gson.toJson(snapshot).getBytes(StandardCharsets.UTF_8));
+				store.save(snapshot);
 			}
 			catch (IOException | RuntimeException e)
 			{
+				debug.log("HISTORY couldn't be saved: %s", e.getMessage());
 				log.warn("PvM Logs: could not save history", e);
 			}
 		});
+	}
+
+	/** T-178: the last save queued gets to finish before the plugin goes (a crash mid-save still leaves a whole file). */
+	private void finishHistorySave()
+	{
+		final java.util.concurrent.Future<?> save = lastHistorySave;
+		if (save == null)
+		{
+			return;
+		}
+		try
+		{
+			save.get(HISTORY_SAVE_WAIT_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS);
+		}
+		catch (InterruptedException | java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e)
+		{
+			// Not finished: the file on disk is still the last whole one (HistoryStore writes beside it, then moves).
+			log.warn("PvM Logs: the last history save didn't finish before shutdown", e);
+		}
 	}
 
 	// The tick a projectile was fired on, from the cycle it started. Cycles run at 20ms and ticks at 600, so thirty of the
