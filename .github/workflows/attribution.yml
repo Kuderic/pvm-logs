@@ -1,0 +1,77 @@
+# Fails a pull request whose description carries a Claude Code footer or a session link, or one of whose commits has a
+# Claude-Session: line (CLAUDE.md, "Attribution"; T-179). The repo is public, and the harness adds those lines by
+# default. Editing the description re-runs it, so deleting the line turns it green.
+#
+# The description is untrusted text: it reaches the script only through an environment variable, never through ${{ }}
+# inside run:, and is never echoed at the start of a line (where the runner would read it as a workflow command). The job
+# has read-only permissions and no secrets.
+name: Attribution
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: attribution-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  attribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The description
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # A Claude Code footer (with or without its link), a session link, or a Claude-Session: line.
+          pattern='generated (with|by) \[?claude code|claude\.ai/code/session|^[[:space:]]*claude-session:'
+          found=$(printf '%s\n' "$PR_BODY" | tr -d '\r' | grep -n -i -E "$pattern" || true)
+          if [ -z "$found" ]; then
+            echo "The description has no Claude Code footer and no session link."
+            exit 0
+          fi
+          echo "The repo is public: PR descriptions end with their own content (CLAUDE.md, \"Attribution\")."
+          echo "Delete these lines from the description; editing it re-runs this check:"
+          while IFS= read -r hit; do
+            n=${hit%%:*}
+            echo "::error title=Attribution::Line $n of the PR description has a Claude Code footer or a session link. Delete it."
+            echo "  line $n: ${hit#*:}"
+          done <<< "$found"
+          exit 1
+
+      # The commits are checked even when the description failed, so one run names everything to fix.
+      - uses: actions/checkout@v5
+        if: ${{ !cancelled() }}
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: The commits
+        if: ${{ !cancelled() }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Co-Authored-By: Claude … stays allowed; a Claude-Session: line or a session link doesn't.
+          pattern='^[[:space:]]*claude-session:|claude\.ai/code/session'
+          bad=0
+          for sha in $(git rev-list "$BASE..$HEAD"); do
+            found=$(git log -1 --format=%B "$sha" | tr -d '\r' | grep -n -i -E "$pattern" || true)
+            if [ -n "$found" ]; then
+              bad=1
+              short=$(git rev-parse --short "$sha")
+              echo "::error title=Attribution::Commit $short has a Claude-Session: line or a session link in its message. Reword the commit without it."
+              while IFS= read -r hit; do
+                echo "  $short, line ${hit%%:*}: ${hit#*:}"
+              done <<< "$found"
+            fi
+          done
+          if [ "$bad" = 0 ]; then
+            echo "No commit in the PR has a Claude-Session: line or a session link."
+          fi
+          exit "$bad"
