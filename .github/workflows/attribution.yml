@@ -43,13 +43,16 @@ jobs:
           done <<< "$found"
           exit 1
 
+      # The commits are checked even when the description failed, so one run names everything to fix.
       - uses: actions/checkout@v5
+        if: ${{ !cancelled() }}
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: The commits
+        if: ${{ !cancelled() }}
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
