@@ -112,6 +112,11 @@ public final class SidePanelPictures
 			allYourDamage(out);
 			return;
 		}
+		if (args.length > 1 && "wardens".equals(args[1]))
+		{
+			wardensTargets(out);
+			return;
+		}
 		if (args.length > 1 && "drains".equals(args[1]))
 		{
 			drainsCard(out);
@@ -1822,6 +1827,31 @@ public final class SidePanelPictures
 					SidePanelDrainsExamples.magicOffDefence(), true), scale, "defence"));
 				write(dir, "g-old-kill-todays-card", scale, card(SidePanelDrainsExamples.kill(SidePanelDrainsExamples.old(),
 					false), scale, "defence"));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-173: the Wardens room's Targets card: by phase, phase 2's poise, core and passed-on under it, Elidinis' Warden
+	 * damaged and Tumeken's; an old record. Normal, Smooth and Larger, 1x and 2x.
+	 */
+	private static void wardensTargets(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-elidinis-damaged", scale, card(SidePanelWardensExamples.room(true, true), scale, "targets"));
+				write(dir, "b-tumeken-damaged", scale, card(SidePanelWardensExamples.room(false, true), scale, "targets"));
+				write(dir, "c-old-record", scale, card(SidePanelWardensExamples.room(true, false), scale, "targets"));
 			}
 		}
 		smooth = false;

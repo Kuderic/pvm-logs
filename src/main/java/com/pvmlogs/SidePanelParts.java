@@ -699,8 +699,9 @@ final class SidePanelParts
 		{
 			super(new SidePanelStack(4));
 			setBackground(SidePanelStyle.CARD);
-			setBorder(new EmptyBorder(SidePanelStyle.CARD_PAD_V, SidePanelStyle.CARD_PAD_H, SidePanelStyle.CARD_PAD_V,
-				SidePanelStyle.CARD_PAD_H));
+			// T-173: a part of the row above (the Wardens' phase 2's poise, core, passed on) is set in under it.
+			setBorder(new EmptyBorder(SidePanelStyle.CARD_PAD_V, SidePanelStyle.CARD_PAD_H + (row.part ? PART_INSET : 0),
+				SidePanelStyle.CARD_PAD_V, SidePanelStyle.CARD_PAD_H));
 			top = new Line(row.name, row.value);
 			add(top);
 			final JPanel bottom = new JPanel(new BorderLayout(6, 0));
@@ -716,9 +717,19 @@ final class SidePanelParts
 		{
 			top.set(row.name, row.suffix, row.value);
 			sub.set(row.sub);
+			// T-173: where the name or sub-line doesn't fit, a shorter form rather than a cut.
+			top.left.setShort(row.nameShort);
+			sub.setShort(row.subShort);
 			chip.set(row.chip, row.chipFill);
+			if (row.tip != null || getToolTipText() != null)
+			{
+				setToolTipText(row.tip);
+			}
 		}
 	}
+
+	/** T-173: how far a part's row sits in from the row it belongs to. */
+	static final int PART_INSET = 10;
 
 	/**
 	 * A damage source row, loa-logs style (spec 3.1): the share painted behind the
