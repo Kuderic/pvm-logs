@@ -201,6 +201,22 @@ final class EncounterGroup
 			&& UNSCORED.contains(addId) && !UNSCORED.contains(bossId);
 	}
 
+	/**
+	 * T-175: whether this npc is one of its group's boss forms (a one-boss group's part, scored), not an add: Akkha's melee,
+	 * ranged and magic forms, Ba-Ba's, the Wardens'.
+	 */
+	static boolean isBossForm(int npcId)
+	{
+		final Falls rule = falls(npcId);
+		return rule != null && rule.kind == FallKind.ONE_BOSS && rule.boss.contains(npcId) && !UNSCORED.contains(npcId);
+	}
+
+	/** T-175: whether two ids are forms of one boss ({@link #isBossForm}, the same group): the same npc in another form. */
+	static boolean sameBoss(int npcId, int otherId)
+	{
+		return npcId == otherId || sameGroup(npcId, otherId) && isBossForm(npcId) && isBossForm(otherId);
+	}
+
 	/** Every group's name, for the audit test. */
 	static Set<String> groupNames()
 	{
@@ -382,8 +398,11 @@ final class EncounterGroup
 			// T-153: and phase three's energy siphons, also "Energy Siphon" in game (see UNSCORED).
 			NpcID.WARDENS_P3_ORB_BLUE, NpcID.WARDENS_P3_ORB_RED);
 
+		// T-175: and her last form, in her coffin below a third of her hitpoints (11779, from [1756] of Eric's raid of
+		// 2026-11-05 17:22, her bar 308 of 990 carried on): without it, the fight opened on her after a baboon had no group,
+		// started its count again and lost her path level (a kill of 266 against her 990).
 		put(groups, "Ba-Ba",
-			NpcID.TOA_BABA, NpcID.TOA_BABA_DIGGING, NpcID.TOA_BABA_BABOON, NpcID.TOA_BABA_BOULDER,
+			NpcID.TOA_BABA, NpcID.TOA_BABA_DIGGING, NpcID.TOA_BABA_COFFIN, NpcID.TOA_BABA_BABOON, NpcID.TOA_BABA_BOULDER,
 			NpcID.TOA_BABA_BOULDER_WEAK);
 
 		// The Hueycoatl is one snake in many pieces - a head that changes id as it is broken, enraged and defeated, a tail
@@ -643,6 +662,10 @@ final class EncounterGroup
 			// no fight, the boss's stays open, and the tick spent on one is the boss's.
 			NpcID.TOA_BABA_BOULDER, NpcID.TOA_BABA_BOULDER_WEAK,
 			NpcID.WARDENS_P3_ORB_BLUE, NpcID.WARDENS_P3_ORB_RED,
+			// T-175: and Ba-Ba's baboons, which went for the sarcophagi: each one Eric hit was a fight of its own and split hers
+			// (2 splits in his raid of 2026-11-05, more in those of 11-02 and 11-04). Every landed hit killed one ("capped at
+			// landing: 10 left", 10 of its 10 each time), so their luck is noise; the tick spent on one is hers.
+			NpcID.TOA_BABA_BABOON,
 			// The Royal Titans' elementals (T-061): a +70 magic attack bonus hits them every time, 75 Magic kills one in a cast,
 			// and an opposing wall or Elemental Blast destroys one outright (wiki, Royal Titans/Strategies). Scored, they would
 			// read as luck the way the Sire's respiratory systems did. The time on them counts.
@@ -827,7 +850,7 @@ final class EncounterGroup
 		oneBoss(rules, "Kephri", NpcID.TOA_KEPHRI_BOSS_SHIELDED, NpcID.TOA_KEPHRI_BOSS_WEAK,
 			NpcID.TOA_KEPHRI_BOSS_ENRAGE);
 		separate(rules, "Baboons");
-		oneBoss(rules, "Ba-Ba", NpcID.TOA_BABA, NpcID.TOA_BABA_DIGGING);
+		oneBoss(rules, "Ba-Ba", NpcID.TOA_BABA, NpcID.TOA_BABA_DIGGING, NpcID.TOA_BABA_COFFIN);
 		// The Wardens, as before: their obelisks, the wardens' forms and cores, one fight in phases. Unchanged for want of a
 		// log of them.
 		oneBossAll(rules, "Wardens");

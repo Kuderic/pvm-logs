@@ -807,7 +807,7 @@ class TargetHealth
 	Parked unpark(int index, int npcId, int world, int raid)
 	{
 		final Parked p = parked.remove(index);
-		if (p == null || p.world != world || p.raid != raid || !p.entry.ids.contains(npcId))
+		if (p == null || p.world != world || p.raid != raid || !wornBy(p.entry, npcId))
 		{
 			return null;
 		}
@@ -822,6 +822,43 @@ class TargetHealth
 		}
 		byIndex.put(index, p.entry);
 		return p;
+	}
+
+	/**
+	 * T-175: the id it comes back in is one it wore, or another form of the same boss: Akkha left the scene as his melee
+	 * form at [2145] of Eric's raid of 2026-11-05 17:22 and came back as his ranged one at [2189].
+	 */
+	private static boolean wornBy(Entry e, int npcId)
+	{
+		if (e.ids.contains(npcId))
+		{
+			return true;
+		}
+		for (int id : e.ids)
+		{
+			if (EncounterGroup.sameBoss(id, npcId))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * T-175: a boss form leaving the scene alive in a raid while another of its room's targets is fought: its count is
+	 * {@link #park}ed for its return and taken off its index. Akkha teleports away during each shadow; his count was
+	 * forgotten there, so the next piece on him started from 0 (198 lost at [2189] of Eric's raid of 2026-11-05 17:22, and
+	 * up to 1736 of 2170 in the duo raids). Nothing to park: whatever is parked for it stands.
+	 */
+	boolean parkGone(int index, int world, int raid, int extra)
+	{
+		if (!byIndex.containsKey(index))
+		{
+			return false;
+		}
+		park(index, world, raid, extra);
+		byIndex.remove(index);
+		return true;
 	}
 
 	void clear()
