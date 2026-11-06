@@ -733,6 +733,22 @@ class TargetHealth
 		return e == null ? -1 : e.hudHp;
 	}
 
+	/**
+	 * T-177: what a boss bar reading of {@code hp} of {@code base}, naming {@code npcId}, shows taken from this npc since
+	 * its last reading that the count hasn't seen: its last reading, less what was counted since, less this one. 0 where
+	 * the bar has never named it, names another id or pool, or shows nothing more.
+	 */
+	int unseenFall(int index, int npcId, int hp, int base)
+	{
+		final Entry e = byIndex.get(index);
+		if (e == null || e.hudHp < 0 || e.hudMax != base || e.hudId != npcId || hp < 0)
+		{
+			return 0;
+		}
+		final int expected = e.hudHp - (e.damage - e.damageAtHud) + (e.healed - e.healedAtHud);
+		return Math.max(0, expected - hp);
+	}
+
 	/** The npc on this index has left the scene; the server may give its index to the next one. */
 	/** The same target back under another index (T-088): what was counted on it goes with it. */
 	void move(int fromIndex, int toIndex)

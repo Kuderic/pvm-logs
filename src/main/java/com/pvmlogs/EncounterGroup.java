@@ -636,6 +636,11 @@ final class EncounterGroup
 			NpcID.TOBQUEST_HESPORI_HEALER_ACTIVE,
 			NpcID.TOBQUEST_HESPORI_HEALER_INACTIVE,
 			NpcID.TOA_KEPHRI_SHIELD_SCARAB,
+			// T-177: Kephri's eggs: "Players will always inflict their maximum hit on the eggs regardless of their combat style"
+			// (wiki, Egg (Tombs of Amascut), read 2026-11-06; 35 hitpoints, -100 in every defence). All 18 of Eric's splats on
+			// one in his raid of 2026-11-05 were 35, five of them over the plugin's max ("MAX EXCEEDED 35 > 33"): scored as
+			// rolls, they read as luck. The time on them counts.
+			NpcID.KEPHRI_EGG_HATCH, NpcID.KEPHRI_EGG_EXPLODE,
 			// T-153: Ba-Ba's boulders, attacked between her attacks ("Players will always hit their Ranged max hit on the
 			// cracked version", wiki, Boulder (Tombs of Amascut): six of Eric's 27s on 27 hitpoints, read as luck), and the
 			// Wardens' phase three energy siphons ("objects", 1 hitpoint solo, "players are guaranteed to hit it with melee",

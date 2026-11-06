@@ -431,6 +431,13 @@ public class PvmPerformancePlugin extends Plugin
 	private boolean attackIsPunish;
 	private final ArrayDeque<Integer> punishAnimTicks = new ArrayDeque<>();
 	private int lastBossAnim = Integer.MIN_VALUE;
+	// T-177: the core's damage passed on to a Warden on this tick (its total, the fight and the warden's id), and the tick
+	// of the player's last splat on the core: a passed-on with no core splat beside it is a core hit the client never showed.
+	private int passedOnTick = Integer.MIN_VALUE;
+	private int passedOnAmount;
+	private int passedOnNpcId = -1;
+	private Fight passedOnFight;
+	private int coreSplatTick = Integer.MIN_VALUE;
 	// The last tick a melee blow at an add of the open boss was booked from its splat (T-086), so its next splat is not
 	// another.
 	private int lastAddBlowTick = Integer.MIN_VALUE;
@@ -1216,6 +1223,7 @@ public class PvmPerformancePlugin extends Plugin
 			if (passedOn)
 			{
 				current.recordPassedOn(hitsplat.getAmount());
+				notePassedOn(npc.getId(), hitsplat.getAmount());
 			}
 			noteMonsterHit(npc, hitsplat.getAmount());
 			if (!passedOn)
@@ -1355,6 +1363,134 @@ public class PvmPerformancePlugin extends Plugin
 	{
 		return (npcId == NpcID.TOA_WARDEN_ELIDINIS_PHASE2_EXPOSED || npcId == NpcID.TOA_WARDEN_TUMEKEN_PHASE2_EXPOSED)
 			&& amount >= 5 && amount % 5 == 0;
+	}
+
+	/**
+	 * T-177: whether a Warden going from {@code fromId} to {@code toId} is her core closing: from her exposed form back to
+	 * her poise ones. At [84213] and [84315] of Eric's duo Tombs of 2026-11-04 (build {@code 8e328d6}) an attack thrown at
+	 * the core two ticks before was still in the air: it made no splat anywhere and her bar didn't move, but it was resolved
+	 * by her next splat, poise, and scored as the core's certain 48 against a 0.
+	 */
+	static boolean coreClosed(int fromId, int toId)
+	{
+		return (fromId == NpcID.TOA_WARDEN_ELIDINIS_PHASE2_EXPOSED || fromId == NpcID.TOA_WARDEN_TUMEKEN_PHASE2_EXPOSED)
+			&& WardensPhase2.kindOf(toId) == WardensPhase2.Kind.POISE;
+	}
+
+	/**
+	 * T-177: the attacks scored against the core still in the air at this warden, nulled as an attack whose target died in
+	 * the air is ({@link #dropPendingSamples}): nothing expected and out of the accuracy's count, its tick still spent.
+	 */
+	private int nullCoreAttacksInTheAir(int npcIndex)
+	{
+		int nulled = 0;
+		for (Iterator<PendingSample> it = pendingSamples.iterator(); it.hasNext(); )
+		{
+			final PendingSample sample = it.next();
+			if (!landsNowhere(sample.npcIndex, sample.scoredNpcId, npcIndex))
+			{
+				continue;
+			}
+			it.remove();
+			nulled++;
+			if (sample.fight != null)
+			{
+				sample.fight.recordAttackNulled();
+				if (sample.fight.isScored())
+				{
+					trip(sample.fight).recordAttackNulled();
+				}
+			}
+		}
+		return nulled;
+	}
+
+	/** T-177: whether an attack scored against {@code scoredNpcId} lands on a warden wearing {@code liveId}, core closed. */
+	static boolean coreClosedFor(int scoredNpcId, int liveId)
+	{
+		return WardensPhase2.kindOf(scoredNpcId) == WardensPhase2.Kind.CORE
+			&& WardensPhase2.kindOf(liveId) == WardensPhase2.Kind.POISE;
+	}
+
+	/** T-177: whether an attack in the air at this index, scored against this npc, lands nowhere as her core closes. */
+	static boolean landsNowhere(int sampleIndex, int scoredNpcId, int closingIndex)
+	{
+		return sampleIndex == closingIndex && WardensPhase2.kindOf(scoredNpcId) == WardensPhase2.Kind.CORE;
+	}
+
+	private void notePassedOn(int npcId, int amount)
+	{
+		final int tick = client.getTickCount();
+		if (passedOnTick != tick)
+		{
+			settleUnseenCoreHit(true);
+			passedOnTick = tick;
+			passedOnAmount = 0;
+		}
+		passedOnAmount += amount;
+		passedOnNpcId = npcId;
+		passedOnFight = current;
+	}
+
+	/**
+	 * T-177: a core hit passed on to a Warden whose own splat on the core never came: its damage is the passed-on's
+	 * fifth, so the core's part adds up. Eric's killing hit at [84419] of his 11-04 log: her last 200 passed on, and no
+	 * splat on the core (the passed-on, 5940, is 5 x the core's 1148 and that hit's 40). Settled once that tick's splats
+	 * are all in (the next tick's start at the latest), or now, as the fight closes.
+	 */
+	private void settleUnseenCoreHit(boolean now)
+	{
+		if (passedOnTick == Integer.MIN_VALUE)
+		{
+			return;
+		}
+		final int tick = client.getTickCount();
+		if (coreSplatTick == passedOnTick)
+		{
+			passedOnTick = Integer.MIN_VALUE;
+			return;
+		}
+		if (!now && tick <= passedOnTick)
+		{
+			return;
+		}
+		final int core = unseenCoreHit(passedOnAmount);
+		final Fight fight = passedOnFight;
+		passedOnTick = Integer.MIN_VALUE;
+		if (fight == null || fight.isEnded() || core <= 0)
+		{
+			return;
+		}
+		final long millis = System.currentTimeMillis();
+		fight.recordExtraTarget(core, millis, false, false);
+		fight.recordWardensDamage(passedOnNpcId, core);
+		if (fight.isScored())
+		{
+			trip(fight).recordExtraTarget(core, false, false, millis);
+		}
+		debug.log("CORE HIT UNSEEN: %d passed on to %s (npc %d) with no splat of the player's on the core that tick: its %d, "
+			+ "a fifth (wiki, Core), counted as the core's", passedOnAmount, fight.getTargetName(), passedOnNpcId, core);
+	}
+
+	/** T-177: the core hit a passed-on total was, five times over (wiki, Core). */
+	static int unseenCoreHit(int passedOn)
+	{
+		return passedOn > 0 ? passedOn / 5 : 0;
+	}
+
+	// T-177: the P2 warden's collapse before her core comes out, and how long it plays before she turns.
+	static final int WARDEN_COLLAPSE_ANIM = 9670;
+	static final int WARDEN_COLLAPSE_TICKS = 8;
+
+	/**
+	 * T-177: whether this is the P2 warden, her core in, starting her collapse. In all five of Eric's collapses (11-04
+	 * [84267] and [84385]; 11-05 [3304], [3394] and [3515]) a 0 came on her 3 to 7 ticks after our thrall's last projectile
+	 * at her was due to land, on the tick she turned, with its projectile having found no splat: three of them with no attack
+	 * of the player's in the air. They were judged his at thrall rate 0.001, against poise's certain hit.
+	 */
+	static boolean wardenCollapses(int npcId, int anim)
+	{
+		return anim == WARDEN_COLLAPSE_ANIM && WardensPhase2.kindOf(npcId) == WardensPhase2.Kind.POISE;
 	}
 
 	/** T-153: a splat of {@link #notAnAttack}: counted on the target, in no one's damage, and opening no fight. */
@@ -4060,6 +4196,9 @@ public class PvmPerformancePlugin extends Plugin
 	// which is a real miss.
 	private void resolvePendingSample(int npcIndex)
 	{
+		// T-177: the form the npc wears as the splat lands, for an attack on the Wardens' core booked as it closed.
+		final int liveId = current != null && !current.isEnded() && current.getTargetIndex() == npcIndex
+			? targetIdOn(current, client.getTickCount()) : -1;
 		for (int i = 0; i < pendingSamples.size(); i++)
 		{
 			final PendingSample sample = pendingSamples.get(i);
@@ -4068,6 +4207,23 @@ public class PvmPerformancePlugin extends Plugin
 				continue;
 			}
 			pendingSamples.remove(i);
+			// T-177: one scored against her core, landing with it closed (booked on the closing tick, after the change: [3442]
+			// of Eric's 11-05 log): it landed nowhere, and this splat is the next attack's.
+			if (coreClosedFor(sample.scoredNpcId, liveId))
+			{
+				if (sample.fight != null)
+				{
+					sample.fight.recordAttackNulled();
+					if (sample.fight.isScored())
+					{
+						trip(sample.fight).recordAttackNulled();
+					}
+				}
+				debug.log("CORE CLOSED before the attack thrown on tick %d landed: it landed nowhere, no damage and nothing "
+					+ "expected", sample.madeTick);
+				i--;
+				continue;
+			}
 			maxHits.scored(sample.fight, sample.npcIndex, client.getTickCount(), sample.maxHit, sample.checkable,
 				sample.worn, sample.dart);
 			// Capped at what was left as it landed, not as it was thrown (T-103).
@@ -4424,6 +4580,18 @@ public class PvmPerformancePlugin extends Plugin
 			// not a splash: left in place it resolves as one and arms the gauntlets against an enemy that never dodged anything.
 			// Only the pending cast is fooled - the experience is paid whether the damage lands or is nulled.
 			castsAwaiting.removeIf(cast -> cast.npcIndex == npc.getIndex());
+		}
+		// T-177: the Wardens' core closing: an attack on it still in the air lands nowhere.
+		final int oldId = event.getOld() == null ? -1 : event.getOld().getId();
+		if (coreClosed(oldId, npc.getId()))
+		{
+			final int nulled = nullCoreAttacksInTheAir(npc.getIndex());
+			if (nulled > 0)
+			{
+				debug.log("CORE CLOSED on %s (npc %d -> %d, index %d) at tick %d: %d attack%s on the core still in the air land "
+						+ "nowhere: no damage and nothing expected, the time spent on %s kept", Text.removeTags(npc.getName()), oldId,
+					npc.getId(), npc.getIndex(), client.getTickCount(), nulled, nulled == 1 ? "" : "s", nulled == 1 ? "it" : "them");
+			}
 		}
 		// A boss never removed from the scene announces its defeat by changing into a beaten form. That is the kill, and it
 		// beats waiting for loot: in a group there may be no drop for this player at all. Another NPC of the group falling
@@ -4892,6 +5060,12 @@ public class PvmPerformancePlugin extends Plugin
 		debug.log("BOSS ANIM %s (npc %d, index %d): %d at tick %d (was %s)", current.getTargetName(), npc.getId(),
 			npc.getIndex(), anim, tick, lastBossAnim == Integer.MIN_VALUE ? "not seen" : String.valueOf(lastBossAnim));
 		lastBossAnim = anim;
+		// T-177: the P2 warden's collapse before her core comes out: our thrall's projectile at her lands as a 0 when she
+		// turns.
+		if (wardenCollapses(npc.getId(), anim))
+		{
+			thralls.holdThroughCollapse(npc.getIndex(), tick, tick + WARDEN_COLLAPSE_TICKS);
+		}
 		final BossRules.MeleePunish punish = punishRuleFor(npc.getId());
 		if (punish != null && anim == punish.onBossAnim)
 		{
@@ -6757,6 +6931,8 @@ public class PvmPerformancePlugin extends Plugin
 			dartLoaded = true;
 			loadRememberedDart();
 		}
+		// T-177: last tick's bar fall as the target left view, now its attack is booked.
+		settleFallAsItLeft();
 		// Before anything asks for the target's stats: the bar decides which version of a boss this is, and what it has left
 		// moves Vardorvis's defence.
 		readHealthBar();
@@ -6764,6 +6940,8 @@ public class PvmPerformancePlugin extends Plugin
 		readOverheadBarIfDue();
 		// T-161: what the target has regained, and whether its overhead bar shows more left than the count.
 		regenerateTarget();
+		// T-177: a core hit passed on to a Warden that the client never showed on the core.
+		settleUnseenCoreHit(false);
 		// The target seen dead by the tick's end, for a blow landing next tick (T-115).
 		noteDead(targetNpc, client.getTickCount());
 		logTaskMismatch(combatCalc.onSlayerTick(client.getTickCount()));
@@ -7822,6 +8000,10 @@ public class PvmPerformancePlugin extends Plugin
 		current.recordExtraTarget(damage, now, newTarget, landed);
 		// T-172: the core, at its own value, as the Wardens' phase 2's core part.
 		current.recordWardensDamage(npc.getId(), damage);
+		if (WardensPhase2.isCore(npc.getId()))
+		{
+			coreSplatTick = tick;
+		}
 		noteMonsterHit(npc, damage);
 		// The attack whose splat on the fight's target it lands beside (T-059): a chinchompa's collateral otherwise waited for
 		// the next damage and went to whatever attack was latest by then. With no splat on the target this tick, the latest.
@@ -8181,6 +8363,11 @@ public class PvmPerformancePlugin extends Plugin
 					: named ? "AMBIGUOUS: " + sameId + " npcs with this id and the count says " + counted
 						+ ", so the count is used" : "not ours");
 		}
+		// T-177: the target left view this tick as an attack of mine landed on it: its splat never came, but the bar shows it.
+		if (!ours && !disabled && away != null && away.npcIndex == index && away.tick == client.getTickCount())
+		{
+			noteFallAsItLeft(index, barNpc, hp, base);
+		}
 		if (ours)
 		{
 			// A new full hitpoints on the bar mid-fight is a phase with its own pool (or a different version than the one
@@ -8195,6 +8382,68 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			health.hud(index, liveId, hp, base, client.getTickCount(), raidType == null);
 		}
+	}
+
+	// T-177: a boss bar's fall on the tick the target left view, waiting for the attack landing then to be booked: its tick,
+	// index, the id the bar named and the fall; null for none.
+	private int[] fallAsItLeft;
+
+	private void noteFallAsItLeft(int index, int barNpc, int hp, int base)
+	{
+		final int fall = health.unseenFall(index, barNpc, hp, base);
+		fallAsItLeft = fall > 0 ? new int[]{client.getTickCount(), index, barNpc, fall, hp, base} : null;
+	}
+
+	/**
+	 * T-177: Akkha teleporting away as a shot of mine landed: no splat, but his boss bar, still naming him, fell by the
+	 * hit. In Eric's raid of 2026-11-05 17:22 the shot thrown at [2512] landed at [2514] as he left view, his bar 149 ->
+	 * 101, and was scored at an expected 19.80 against a 0, his count 48 short to the kill; at [82846] of the 11-04 log,
+	 * 624 -> 590. Booked as that shot's hit, where the fall is one it could deal. Asked once that tick's attacks are
+	 * booked: at the next tick's start, or as the fight closes.
+	 */
+	private void settleFallAsItLeft()
+	{
+		final int[] f = fallAsItLeft;
+		fallAsItLeft = null;
+		if (f == null)
+		{
+			return;
+		}
+		final int tick = f[0];
+		final int index = f[1];
+		final int barNpc = f[2];
+		final int fall = f[3];
+		PendingSample landing = null;
+		for (PendingSample sample : pendingSamples)
+		{
+			if (sample.npcIndex == index && sample.tick == tick)
+			{
+				landing = sample;
+				break;
+			}
+		}
+		final Fight fight = landing == null ? null : landing.fight;
+		if (fight == null || fight.isEnded() || !hitUnseenAsItLeft(fall, landing.maxHit))
+		{
+			return;
+		}
+		final long now = System.currentTimeMillis();
+		fight.recordDamageDealt(fall, now, countsLanding(true, fight.isScored()));
+		if (fight.isScored())
+		{
+			trip(fight).recordAttempt(fall, true, now);
+		}
+		damageByIndex.merge(index, fall, Integer::sum);
+		health.damage(index, barNpc, fall, tick);
+		resolvePendingSample(index);
+		debug.log("HIT UNSEEN on %s (npc %d, index %d): my attack landing on tick %d as it left view made no splat; its bar "
+			+ "fell %d (to %d of %d), booked as that hit", fight.getTargetName(), barNpc, index, tick, fall, f[4], f[5]);
+	}
+
+	/** T-177: whether a bar's fall, unseen, is the hit of an attack of mine landing then (its max, or -1 for none). */
+	static boolean hitUnseenAsItLeft(int fall, int maxHit)
+	{
+		return fall > 0 && maxHit > 0 && fall <= maxHit;
 	}
 
 	/** How many npcs in the scene wear this id, by composition or as they stand. */
@@ -8299,6 +8548,10 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void finalizeFight(boolean died, long now, String reason, boolean keepCounts)
 	{
+		// T-177: the last tick's core hit, if its splat never came, before the fight's figures close; and a hit its bar showed
+		// as the target left view.
+		settleUnseenCoreHit(true);
+		settleFallAsItLeft();
 		// T-164: a hold ending here: its count put back if a logout parked it, and a death in it ends the room below.
 		final BossAway held = away;
 		if (held != null)
