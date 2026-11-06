@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.function.IntFunction;
 
 /**
- * T-125: the Party tab's model (Eric's pick, option B, 2026-10-31). Every member of the RuneLite party who runs Luck vs
+ * T-125: the party's model (Eric's pick, option B, 2026-10-31; on the Fight tab since T-176). Every member of the RuneLite party who runs Luck vs
  * Skill as a row of the meter: their damage, DPS and share, a bar filled to their share of the top member's damage, in
  * their colour; then {@code others}, the damage on the room's targets that no sharing member accounts for. After a room,
  * Luck and Execution too. Clicking a member shows their breakdown: their attack rows, Luck, Execution and its parts, and
@@ -219,7 +219,7 @@ final class SidePanelParty
 
 	// ---- the model ----
 
-	/** The Party tab for {@code in}. */
+	/** The party's block on the Fight tab for {@code in} (T-176; it was the Party tab). */
 	static PanelSnapshot.PartyTab party(Input in)
 	{
 		boolean sharing = false;
@@ -366,32 +366,6 @@ final class SidePanelParty
 	static double fill(int damage, int top)
 	{
 		return top <= 0 ? 0 : Math.max(0, Math.min(1, (double) damage / top));
-	}
-
-	/** The Fight tab's line, which opens the Party tab: {@code you 2nd of 5 · 38%}; null with no one sharing. */
-	static String fightLine(PanelSnapshot.PartyTab t)
-	{
-		if (!t.sharing)
-		{
-			return null;
-		}
-		int members = 0;
-		int rank = 0;
-		String share = "";
-		for (PanelSnapshot.PartyRow r : t.rows)
-		{
-			if (r.others || r.echo)
-			{
-				continue;
-			}
-			members++;
-			if (r.you)
-			{
-				rank = members;
-				share = r.dmg[2];
-			}
-		}
-		return rank == 0 ? null : "you " + ordinal(rank) + " of " + members + " · " + share;
 	}
 
 	// ---- the breakdown ----

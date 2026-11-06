@@ -41,7 +41,8 @@ public final class SidePanelRepaintRepro
 			frame[0].setSize(new Dimension(260, 1000));
 			frame[0].setVisible(true);
 			panel[0].apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, null));
-			panel[0].tabs().select(panel[0].tabs().getTab(tab));
+			// T-176: "tab 3" is the Fight tab in a party (the Party tab's gone).
+			panel[0].tabs().select(panel[0].tabs().getTab(tab == 3 ? 0 : tab));
 		});
 		final List<Long> after = new ArrayList<>();
 		final List<Long> passTotals = new ArrayList<>();
@@ -49,15 +50,15 @@ public final class SidePanelRepaintRepro
 		for (int i = 0; i < 60; i++)
 		{
 			party.run(PvmPerformancePanel.UPDATE_TICKS);
-			final PanelSnapshot s = tab == 3 ? party.partySnapshot() : party.fightSnapshot();
+			final PanelSnapshot s = tab == 3 ? party.snapshot() : party.fightSnapshot();
 			final int before = timing.passes().size();
-			final SidePanelBuffer buffer = tab == 3 ? panel[0].partyTab().buffer() : panel[0].fightTab().buffer();
+			final SidePanelBuffer buffer = panel[0].fightTab().buffer();
 			final int paintsBefore = buffer.paints();
 			final long[] ended = new long[1];
 			final long[] marker = new long[1];
 			SwingUtilities.invokeAndWait(() ->
 			{
-				timing.applying(tab == 3 ? "Party" : "Fight");
+				timing.applying(tab == 3 ? "Fight in a party" : "Fight");
 				panel[0].apply(s);
 				ended[0] = System.nanoTime();
 				SwingUtilities.invokeLater(() -> marker[0] = System.nanoTime());

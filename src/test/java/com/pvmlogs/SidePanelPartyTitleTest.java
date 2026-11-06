@@ -16,25 +16,24 @@ import org.junit.After;
 import org.junit.Test;
 
 /**
- * T-132 (Eric, 2026-10-31 11:11): the Party tab's heading is the member's picture and name only; their part is tinted
- * toward their colour; the room's title block is on top of the tab and a member's panels start at the tiles; a member's
- * Damage card has the boss · adds · all switch from their room message; the label reads "party" in a RuneLite party.
+ * T-132 (Eric, 2026-10-31 11:11), on the Fight tab since T-176: a member's heading is their picture and name only; their
+ * part is tinted toward their colour; the room's title is the Fight tab's own, above the party, and a member's panels
+ * start at the tiles; a member's Damage card has the boss · adds · all switch from their room message; the label reads
+ * "party" in a RuneLite party.
  */
 public class SidePanelPartyTitleTest
 {
 	@After
 	public void reset()
 	{
-		SidePanelPartyTab.tint = SidePanelPartyTab.Tint.AREA;
-		SidePanelPartyTab.tintYours = false;
+		SidePanelPartySection.tint = SidePanelPartySection.Tint.AREA;
 		SidePanelFightTab.resetTarget();
 	}
 
 	private static PvmPerformancePanel panel(SidePanelParty.Input in)
 	{
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
-		p.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, SidePanelParty.party(in)));
-		p.tabs().select(p.tabs().getTab(3));
+		p.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
 		return p;
 	}
 
@@ -44,8 +43,9 @@ public class SidePanelPartyTitleTest
 	public void theHeadingIsThePictureAndTheNameOnly()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
-		final SidePanelPartyTab tab = p.partyTab();
-		assertEquals("you", tab.heading().left.getText());
+		final SidePanelPartySection tab = p.partySection();
+		// T-176: yours have no heading: nobody's selected.
+		assertNull(tab.heading());
 		tab.select(22);
 		assertEquals("Brindle", tab.heading().left.getText());
 		final Container card = tab.heading().getParent().getParent();
@@ -61,17 +61,17 @@ public class SidePanelPartyTitleTest
 			{
 				texts.add(((SidePanelParts.Paragraph) c).text());
 			}
-			if (c instanceof SidePanelPartyTab.Picture)
+			if (c instanceof SidePanelPartySection.Picture)
 			{
 				pictures++;
-				assertEquals(SidePanelPartyTab.HEADING_PICTURE, c.getPreferredSize().width);
+				assertEquals(SidePanelPartySection.HEADING_PICTURE, c.getPreferredSize().width);
 			}
 		}
 		assertEquals(1, pictures);
 		// Her name and nothing else: no " · Fight panels", no place, no hint.
 		assertEquals(Arrays.asList("Brindle", ""), texts);
 		// The hint is the meter's tooltip.
-		assertEquals(SidePanelPartyTab.SWITCH_HINT, tab.meter().getToolTipText());
+		assertEquals(SidePanelPartySection.SWITCH_HINT, tab.meter().getToolTipText());
 	}
 
 	// ---- 2. The tint ----
@@ -80,7 +80,7 @@ public class SidePanelPartyTitleTest
 	public void theTintFollowsTheSelectionAndIsntSetPerTick()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
-		final SidePanelPartyTab tab = p.partyTab();
+		final SidePanelPartySection tab = p.partySection();
 		// Yours plain by default.
 		assertNull(tab.tintedToward());
 		assertFalse(tab.memberArea().isOpaque());
@@ -88,7 +88,7 @@ public class SidePanelPartyTitleTest
 		final Color brindle = tab.chart() == null ? null : rowColour(p, 22);
 		assertEquals(brindle, tab.tintedToward());
 		assertTrue(tab.memberArea().isOpaque());
-		assertEquals(SidePanelPartyTab.tinted(SidePanelStyle.PANEL, brindle, SidePanelPartyTab.AREA_TINT),
+		assertEquals(SidePanelPartySection.tinted(SidePanelStyle.PANEL, brindle, SidePanelPartySection.AREA_TINT),
 			tab.memberArea().getBackground());
 		// Snapshots with the same shape: the tint isn't set again.
 		final int tints = tab.tints();
@@ -101,19 +101,19 @@ public class SidePanelPartyTitleTest
 		tab.select(22);
 		assertNull(tab.tintedToward());
 		assertFalse(tab.memberArea().isOpaque());
-		assertEquals(SidePanelPartyTab.AREA_PAD, tab.memberArea().getInsets().top);
+		assertEquals(SidePanelPartySection.AREA_PAD, tab.memberArea().getInsets().top);
 	}
 
 	@Test
-	public void theCardsOptionTintsTheirCardsAndYoursCanBeTintedToo()
+	public void theCardsOptionTintsTheirCards()
 	{
-		SidePanelPartyTab.tint = SidePanelPartyTab.Tint.CARDS;
-		SidePanelPartyTab.tintYours = true;
+		SidePanelPartySection.tint = SidePanelPartySection.Tint.CARDS;
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
-		final SidePanelPartyTab tab = p.partyTab();
-		assertEquals(SidePanelParty.YOU, tab.tintedToward());
+		final SidePanelPartySection tab = p.partySection();
+		// T-176: yours are the Fight tab's own, never tinted.
+		assertNull(tab.tintedToward());
 		tab.select(22);
-		final Color card = SidePanelPartyTab.tinted(SidePanelStyle.CARD, rowColour(p, 22), SidePanelPartyTab.CARD_TINT);
+		final Color card = SidePanelPartySection.tinted(SidePanelStyle.CARD, rowColour(p, 22), SidePanelPartySection.CARD_TINT);
 		int tinted = 0;
 		for (Component c : all(tab.memberArea()))
 		{
@@ -130,10 +130,10 @@ public class SidePanelPartyTitleTest
 	{
 		for (Color m : SidePanelParty.COLOURS)
 		{
-			final double onArea = contrast(SidePanelStyle.MUTED, SidePanelPartyTab.tinted(SidePanelStyle.PANEL, m,
-				SidePanelPartyTab.AREA_TINT));
-			final double onCard = contrast(SidePanelStyle.MUTED, SidePanelPartyTab.tinted(SidePanelStyle.CARD, m,
-				SidePanelPartyTab.CARD_TINT));
+			final double onArea = contrast(SidePanelStyle.MUTED, SidePanelPartySection.tinted(SidePanelStyle.PANEL, m,
+				SidePanelPartySection.AREA_TINT));
+			final double onCard = contrast(SidePanelStyle.MUTED, SidePanelPartySection.tinted(SidePanelStyle.CARD, m,
+				SidePanelPartySection.CARD_TINT));
 			assertTrue(m + " area " + onArea, onArea >= 4.0);
 			assertTrue(m + " card " + onCard, onCard >= 4.3);
 		}
@@ -145,52 +145,61 @@ public class SidePanelPartyTitleTest
 	public void theRoomsTitleIsOnTopAndAMembersPanelsStartAtTheTiles()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
-		final SidePanelPartyTab tab = p.partyTab();
-		final SidePanelFightTab title = tab.title();
+		final SidePanelPartySection tab = p.partySection();
+		final SidePanelFightTab fight = p.fightTab();
+		// T-176: the title is the Fight tab's own, above the party.
+		final Component title = titleOf(fight);
 		assertNotNull(title);
-		// The title block alone, above the meter.
-		final List<Component> order = Arrays.asList(tab.getComponents());
-		assertTrue(order.indexOf(title) < order.indexOf(SidePanelPictures.sectionOf(tab, "party")));
-		assertTrue(texts(title).toString(), texts(title).stream().anyMatch(x -> x.startsWith("Zebak")));
-		assertTrue(texts(title).contains("2:09"));
-		assertTrue(texts(title).toString(), texts(title).stream().anyMatch(x -> x.contains("900 HP")));
-		assertNull(SidePanelPictures.sectionOf(title, "damage"));
-		// Your panels below, and hers on a click: no title block, the tiles first.
-		for (Long open : new Long[]{null, 22L})
-		{
-			if (open != null)
-			{
-				tab.select(open);
-			}
-			final SidePanelFightTab panels = tab.memberFight();
-			assertFalse(texts(panels).stream().anyMatch(x -> x.startsWith("Zebak")));
-			assertFalse(texts(panels).stream().anyMatch(x -> x.contains("900 HP")));
-			assertTrue(texts(panels).contains("Luck"));
-			assertTrue(texts(panels).contains("Damage/expected"));
-			assertNotNull(SidePanelPictures.sectionOf(panels, "damage"));
-		}
+		assertTrue(SidePanelPartyMemberViewTest.place(fight, title) < SidePanelPartyMemberViewTest.place(fight,
+			tab.top()));
+		assertTrue(texts((Container) title).toString(), texts((Container) title).stream().anyMatch(x -> x.startsWith(
+			"Zebak")));
+		// Hers on a click: no title of her own, the tiles first.
+		tab.select(22L);
+		final SidePanelFightTab panels = tab.memberFight();
+		assertFalse(texts(panels).stream().anyMatch(x -> x.startsWith("Zebak")));
+		assertFalse(texts(panels).stream().anyMatch(x -> x.contains("900 HP")));
+		assertTrue(texts(panels).contains("Luck"));
+		assertTrue(texts(panels).contains("Damage/expected"));
+		assertNotNull(SidePanelPictures.sectionOf(panels, "damage"));
+		// The title stays the Fight tab's, still above.
+		assertSame(title.getClass(), titleOf(fight).getClass());
 		// The meter's header: the party's DPS, the room's name and clock left to the title.
-		assertTrue(texts(SidePanelPictures.sectionOf(tab, "party")).contains("party 79.1 dps"));
+		assertTrue(texts(SidePanelPictures.sectionOf(tab.top(), "party")).contains("party 79.1 dps"));
 	}
 
+	/** The Fight tab's first child that holds the room's name: its title block. */
+	private static Component titleOf(SidePanelFightTab fight)
+	{
+		for (Component c : fight.getComponents())
+		{
+			if (c instanceof Container && texts((Container) c).stream().anyMatch(x -> x.startsWith("Zebak")))
+			{
+				return c;
+			}
+		}
+		return null;
+	}
+
+	/** T-176: the party on the Fight tab through ten minutes of snapshots: neither the tab nor the party's block rebuilds. */
 	@Test
-	public void theTitleClockIsSetInPlace()
+	public void nothingRebuildsWhileTheShapeHolds()
 	{
 		final SidePanelPartyLagTest.Party party = new SidePanelPartyLagTest.Party();
 		party.run(130);
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
-		p.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, null));
-		p.tabs().select(p.tabs().getTab(3));
-		p.apply(party.partySnapshot());
-		final SidePanelFightTab title = p.partyTab().title();
-		final int builds = title.builds();
-		for (int i = 0; i < 10; i++)
+		p.apply(party.snapshot());
+		final int builds = p.fightTab().builds();
+		final int top = p.partySection().rebuilds();
+		final int member = p.partySection().memberRebuilds();
+		for (int i = 0; i < 100; i++)
 		{
 			party.run(PvmPerformancePanel.UPDATE_TICKS);
-			p.apply(party.partySnapshot());
+			p.apply(party.snapshot());
 		}
-		assertSame(title, p.partyTab().title());
-		assertEquals(builds, title.builds());
+		assertEquals(builds, p.fightTab().builds());
+		assertEquals(top, p.partySection().rebuilds());
+		assertEquals(member, p.partySection().memberRebuilds());
 	}
 
 	// ---- 4. A member's Damage switch ----
@@ -221,8 +230,8 @@ public class SidePanelPartyTitleTest
 		}
 		// On the Party tab: the switch on her card, and "adds" shows her araxyte rows.
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.araxxorWithAdds());
-		p.partyTab().select(22);
-		final SidePanelFightTab hers = p.partyTab().memberFight();
+		p.partySection().select(22);
+		final SidePanelFightTab hers = p.partySection().memberFight();
 		hers.pick(1);
 		assertTrue(texts(hers).contains("adds"));
 		assertTrue(texts(hers).contains("Zaryte crossbow"));
@@ -331,12 +340,12 @@ public class SidePanelPartyTitleTest
 	{
 		for (Color m : SidePanelParty.COLOURS)
 		{
-			final double lifted = contrast(SidePanelStyle.MUTED_ON_TINT, SidePanelPartyTab.tinted(SidePanelStyle.PANEL, m,
-				SidePanelPartyTab.AREA_TINT));
+			final double lifted = contrast(SidePanelStyle.MUTED_ON_TINT, SidePanelPartySection.tinted(SidePanelStyle.PANEL, m,
+				SidePanelPartySection.AREA_TINT));
 			assertTrue(m + " " + lifted, lifted >= 4.6);
 		}
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
-		final SidePanelPartyTab tab = p.partyTab();
+		final SidePanelPartySection tab = p.partySection();
 		assertEquals(0, lifted(tab.memberArea()));
 		tab.select(22);
 		final int onTint = lifted(tab.memberArea());
@@ -380,7 +389,7 @@ public class SidePanelPartyTitleTest
 
 	private static Color rowColour(PvmPerformancePanel p, long id)
 	{
-		return p.partyTab().meter() == null ? null : ((PanelSnapshot) p.shown()).party.row(id).colour;
+		return p.partySection().meter() == null ? null : ((PanelSnapshot) p.shown()).party.row(id).colour;
 	}
 
 	private static List<String> texts(Container c)

@@ -206,7 +206,7 @@ public interface PvmPerformanceConfig extends Config
 	// list.
 	@ConfigSection(
 		name = "Side panel",
-		description = "The side panel's Fight, History, Trip and Party tabs",
+		description = "The side panel's Fight, History and Trip tabs",
 		position = 2
 	)
 	String SIDE_PANEL_SECTION = "sidePanel";
@@ -265,7 +265,7 @@ public interface PvmPerformanceConfig extends Config
 
 	/**
 	 * T-124: send the player's own figures to their RuneLite party, for the
-	 * side panel's Party tab. On by default, as RuneLite's DPS Counter shares
+	 * party on the side panel's Fight tab (T-176; it was the Party tab). On by default, as RuneLite's DPS Counter shares
 	 * when it's on. Off, nothing is sent; others' figures are still shown.
 	 * T-125 (Orchestrator, 2026-10-31): in the Side panel section, beside the
 	 * tab it feeds, rather than in Data &amp; debugging, which is closed by

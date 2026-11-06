@@ -33,7 +33,7 @@ final class PanelSnapshot
 		this(fight, trip, null);
 	}
 
-	/** T-125: the Party tab; null when it wasn't built. */
+	/** T-125: the party, on the Fight tab since T-176; null when it wasn't read. */
 	final PartyTab party;
 
 	PanelSnapshot(FightTab fight, TripTab trip, PartyTab party)
@@ -43,10 +43,10 @@ final class PanelSnapshot
 		this.party = party;
 	}
 
-	// ---- T-125: the Party tab ----
+	// ---- T-125: the party (on the Fight tab since T-176) ----
 
 	/**
-	 * The Party tab: the meter's rows (members biggest damage first, {@code others} last), its header, and what the
+	 * The party: the meter's rows (members biggest damage first, {@code others} last), its header, and what the
 	 * Damage over time chart needs. With no one sharing, {@link #sharing} is false and {@link #empty} says why.
 	 */
 	static final class PartyTab
@@ -1147,10 +1147,6 @@ final class PanelSnapshot
 		final Loadout loadout;
 		final ListRow lastFight;
 		final Empty empty;
-		/** T-125: the Party tab's line under the tiles, {@code you 2nd of 5 · 38%}; null with no one sharing. */
-		final String partyLine;
-		/** T-128: your Discord picture beside it; null for none. */
-		final java.awt.image.BufferedImage partyAvatar;
 		/**
 		 * T-099: the Damage card's Boss, Adds and All views, in that order, in a room with a boss and adds that took
 		 * damage; null for no switch. {@link #damage} and {@link #chart} are All's until {@link #showing} picks one.
@@ -1183,8 +1179,6 @@ final class PanelSnapshot
 			loadout = b.loadout;
 			lastFight = b.lastFight;
 			empty = b.empty;
-			partyLine = b.partyLine;
-			partyAvatar = b.partyAvatar;
 			byTarget = b.byTarget == null ? null : list(b.byTarget);
 			target = -1;
 		}
@@ -1214,8 +1208,6 @@ final class PanelSnapshot
 			loadout = t.loadout;
 			lastFight = t.lastFight;
 			empty = t.empty;
-			partyLine = t.partyLine;
-			partyAvatar = t.partyAvatar;
 			byTarget = t.byTarget;
 			target = i;
 		}
@@ -1251,7 +1243,6 @@ final class PanelSnapshot
 					.append(budget.note == null ? "" : "n");
 			}
 			s.append(tiles == null ? "" : "|T");
-			s.append(partyLine == null ? "" : "|P");
 			s.append(curve == null ? "" : "|c");
 			s.append(noCurve == null ? "" : "|nc");
 			s.append(execution == null ? "" : "|e" + execution.parts.size());
@@ -1497,9 +1488,6 @@ final class PanelSnapshot
 		ListRow lastFight;
 		Empty empty;
 		List<TargetView> byTarget;
-		String partyLine;
-		java.awt.image.BufferedImage partyAvatar;
-
 		FightTab build()
 		{
 			return new FightTab(this);

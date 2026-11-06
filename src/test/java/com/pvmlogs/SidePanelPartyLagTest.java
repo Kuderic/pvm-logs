@@ -2,6 +2,7 @@ package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -13,9 +14,9 @@ import net.runelite.api.gameval.ItemID;
 import org.junit.Test;
 
 /**
- * T-130 review: the Party tab must cost what the Fight tab does. Its header no longer lays out on every apply, it paints
- * through the same software buffer as the other tabs, and your panels on it are sent their chart incrementally, with
- * their own bookkeeping. Measured against the Fight tab on the same fight, a snapshot every 5 ticks.
+ * T-130 review, T-176: the party must cost what the Fight tab does alone. Since T-176 it's on the Fight tab: the meter
+ * and the party's chart above your panels, which are the Fight tab's own (one copy, its chart sent incrementally). The
+ * same fight on the Fight tab solo and in a party of four, a snapshot every 5 ticks.
  */
 public class SidePanelPartyLagTest
 {
@@ -112,9 +113,7 @@ public class SidePanelPartyLagTest
 		final Live[] them = {new Live(31), new Live(22), new Live(25)};
 		final String[] names = {"Quillon", "Vey", "Old Tam"};
 		final SidePanelWeaponRows rows = new SidePanelWeaponRows();
-		final SidePanelWeaponRows partyRows = new SidePanelWeaponRows();
 		final PvmPerformancePanel.ChartBook fightBook = new PvmPerformancePanel.ChartBook();
-		final PvmPerformancePanel.ChartBook partyBook = new PvmPerformancePanel.ChartBook();
 		final SidePanelMemberFight.Panels panels = new SidePanelMemberFight.Panels();
 		int lastSent;
 
@@ -134,10 +133,19 @@ public class SidePanelPartyLagTest
 
 		PanelSnapshot fightSnapshot()
 		{
-			return new PanelSnapshot(SidePanelModel.fight(you.input(rows, fightBook.from(key(),
-				you.view().states.length))), null);
+			final PanelSnapshot.FightTab fight = SidePanelModel.fight(you.input(rows, fightBook.from(key(),
+				you.view().states.length)));
+			lastSent = fight.chart.length - fight.chart.from;
+			return new PanelSnapshot(fight, null);
 		}
 
+		/** T-176: what the panel builds on the Fight tab in a party: your Fight tab and the party, together. */
+		PanelSnapshot snapshot()
+		{
+			return new PanelSnapshot(fightSnapshot().fight, null, partySnapshot().party);
+		}
+
+		/** The party alone: your row as you send it, every member's panels attached as the panel attaches them. */
 		PanelSnapshot partySnapshot()
 		{
 			final SidePanelParty.Input in = new SidePanelParty.Input();
@@ -150,10 +158,6 @@ public class SidePanelPartyLagTest
 			in.shared = them.length;
 			in.itemNames = SidePanelPartyExamples::itemName;
 			in.members.add(member(SidePanelParty.YOU_ID, SidePanelParty.YOU_NAME, true, you, 0));
-			final SidePanelModel.Input yours = you.input(partyRows, partyBook.from(key(), you.view().states.length));
-			final PanelSnapshot.FightTab fight = SidePanelModel.fight(yours);
-			lastSent = fight.chart.length - fight.chart.from;
-			in.members.get(0).fight = fight;
 			for (int i = 0; i < them.length; i++)
 			{
 				final SidePanelParty.Member m = member(60 + i, names[i], false, them[i], i);
@@ -174,96 +178,100 @@ public class SidePanelPartyLagTest
 		}
 	}
 
+	/** T-176: in a party, your panels are the Fight tab's own: one copy, its chart sent incrementally, as solo. */
 	@Test
-	public void yourPanelsOnThePartyTabAreSentTheirChartIncrementally()
+	public void yourPanelsInAPartyAreSentTheirChartIncrementally()
 	{
 		final Party party = new Party();
 		party.run(130);
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
-		p.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, null));
-		p.tabs().select(p.tabs().getTab(3));
-		p.apply(party.partySnapshot());
+		p.apply(party.snapshot());
 		assertEquals("the first is whole", party.you.view().states.length, party.lastSent);
-		final SidePanelFightTab yours = p.partyTab().memberFight();
-		assertNotNull(yours);
-		final int builds = p.partyTab().rebuilds();
+		assertNull("yours are the Fight tab's", p.partySection().memberFight());
+		final int builds = p.fightTab().builds();
 		while (party.you.tick < 1000)
 		{
 			party.run(PvmPerformancePanel.UPDATE_TICKS);
-			p.apply(party.partySnapshot());
+			p.apply(party.snapshot());
 			// Only what's new, and the few ticks resent behind it.
 			assertTrue("sent " + party.lastSent, party.lastSent <= PvmPerformancePanel.UPDATE_TICKS
 				+ PvmPerformancePanel.CHART_RESEND);
 		}
-		assertEquals(builds, p.partyTab().rebuilds());
+		assertEquals(builds, p.fightTab().builds());
 		// The copy is the whole series, as one sent from the start would make it.
 		final SidePanelChartData whole = new SidePanelChartData();
 		whole.apply(SidePanelModel.fight(party.you.input(new SidePanelWeaponRows(), 0)).chart);
-		final SidePanelChartData copy = yours.chartData();
+		final SidePanelChartData copy = p.fightTab().chartData();
 		assertEquals(whole.length(), copy.length());
 		for (int i = 0; i < whole.length(); i++)
 		{
 			assertEquals("tick " + i, whole.damage(i), copy.damage(i), 0f);
 		}
-		// The Fight tab's bookkeeping is its own: its first build on this scope is still whole.
-		assertEquals(0, party.fightBook.from(party.key(), party.you.view().states.length));
 	}
 
 	/**
-	 * The 10:35 log had the Party tab's "panel repaint after apply" at ~29 ms p50 against the Fight tab's ~6 ms, a layout
-	 * pass on nearly every apply from the header's short forms, and no software render. The same fight on both tabs, ten
-	 * minutes of snapshots: the Party tab now lays out about as rarely as the Fight tab, paints through its buffer, and
-	 * its apply and paint are printed beside the Fight tab's.
+	 * T-130 review had the Party tab's "panel repaint after apply" at ~29 ms p50 against the Fight tab's ~6 ms in the
+	 * 10:35 log, then fixed. T-176 moves the party onto the Fight tab, open during fights. The same fight, ten minutes of
+	 * snapshots, on the Fight tab solo and in a party of four (the meter, the party's chart folded and open, your panels
+	 * below): the build, apply and paint printed side by side, the layout passes held near solo's.
 	 */
 	@Test
-	public void thePartyTabCostsWhatTheFightTabDoes()
+	public void theFightTabInAPartyCostsWhatItDoesSolo()
 	{
 		final Party party = new Party();
 		party.run(130);
-		final PvmPerformancePanel onFight = new PvmPerformancePanel(null, null, null, null);
-		onFight.setSize(242, 1000);
-		final PvmPerformancePanel onParty = new PvmPerformancePanel(null, null, null, null);
-		onParty.setSize(242, 1000);
-		onFight.apply(party.fightSnapshot());
-		onParty.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, null));
-		onParty.tabs().select(onParty.tabs().getTab(3));
-		onParty.apply(party.partySnapshot());
-		final JComponent fightTab = onFight.fightTab();
-		final JComponent partyTab = onParty.partyTab();
-		settle(fightTab);
+		final PvmPerformancePanel solo = new PvmPerformancePanel(null, null, null, null);
+		solo.setSize(242, 1000);
+		final PvmPerformancePanel inParty = new PvmPerformancePanel(null, null, null, null);
+		inParty.setSize(242, 1000);
+		// The party's chart opened (it's folded by default): the dearer case.
+		final PvmPerformancePanel opened = new PvmPerformancePanel(null, null, null, null);
+		opened.setSize(242, 1000);
+		solo.apply(party.fightSnapshot());
+		inParty.apply(party.snapshot());
+		opened.apply(party.snapshot());
+		SidePanelPictures.sectionOf(opened.partySection().top(), SidePanelPartySection.PARTY_CHART).toggle();
+		final JComponent soloTab = solo.fightTab();
+		final JComponent partyTab = inParty.fightTab();
+		final JComponent openTab = opened.fightTab();
+		settle(soloTab);
 		settle(partyTab);
-		final List<Long> fightApply = new ArrayList<>();
+		settle(openTab);
+		final List<Long> openApply = new ArrayList<>();
+		final List<Long> openPaint = new ArrayList<>();
+		final List<Long> soloApply = new ArrayList<>();
 		final List<Long> partyApply = new ArrayList<>();
-		final List<Long> fightPaint = new ArrayList<>();
+		final List<Long> soloPaint = new ArrayList<>();
 		final List<Long> partyPaint = new ArrayList<>();
-		final List<Long> fightBuild = new ArrayList<>();
+		final List<Long> soloBuild = new ArrayList<>();
 		final List<Long> partyBuild = new ArrayList<>();
-		int fightLayouts = 0;
+		int soloLayouts = 0;
 		int partyLayouts = 0;
 		int updates = 0;
+		final int builds = inParty.fightTab().builds();
 		while (party.you.tick < 1000)
 		{
 			party.run(PvmPerformancePanel.UPDATE_TICKS);
 			long b0 = System.nanoTime();
 			final PanelSnapshot f = party.fightSnapshot();
-			fightBuild.add(System.nanoTime() - b0);
+			soloBuild.add(System.nanoTime() - b0);
 			b0 = System.nanoTime();
-			final PanelSnapshot q = party.partySnapshot();
-			partyBuild.add(System.nanoTime() - b0);
+			final PanelSnapshot q = new PanelSnapshot(f.fight, null, party.partySnapshot().party);
+			partyBuild.add(System.nanoTime() - b0 + soloBuild.get(soloBuild.size() - 1));
 			updates++;
 			int before = SidePanelParts.relayouts;
 			long t0 = System.nanoTime();
-			onFight.apply(f);
-			fightApply.add(System.nanoTime() - t0);
+			solo.apply(f);
+			soloApply.add(System.nanoTime() - t0);
 			if (SidePanelParts.relayouts != before)
 			{
-				fightLayouts++;
-				settle(fightTab);
+				soloLayouts++;
+				settle(soloTab);
 			}
-			fightPaint.add(paint(fightTab));
+			soloPaint.add(paint(soloTab));
 			before = SidePanelParts.relayouts;
 			t0 = System.nanoTime();
-			onParty.apply(q);
+			inParty.apply(q);
 			partyApply.add(System.nanoTime() - t0);
 			if (SidePanelParts.relayouts != before)
 			{
@@ -271,20 +279,31 @@ public class SidePanelPartyLagTest
 				settle(partyTab);
 			}
 			partyPaint.add(paint(partyTab));
+			before = SidePanelParts.relayouts;
+			t0 = System.nanoTime();
+			opened.apply(q);
+			openApply.add(System.nanoTime() - t0);
+			if (SidePanelParts.relayouts != before)
+			{
+				settle(openTab);
+			}
+			openPaint.add(paint(openTab));
 		}
-		System.out.println(String.format("T-130 review, %d updates over ten minutes, on the same fight:%n"
-				+ "  Fight tab: build p50 %.2f ms, apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms, layout asked %d times%n"
-				+ "  Party tab: build p50 %.2f ms, apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms, layout asked %d times",
-			updates, ms(fightBuild, 0.5), ms(fightApply, 0.5), ms(fightApply, 0.99), ms(fightPaint, 0.5),
-			ms(fightPaint, 0.99), fightLayouts, ms(partyBuild, 0.5), ms(partyApply, 0.5), ms(partyApply, 0.99),
-			ms(partyPaint, 0.5), ms(partyPaint, 0.99), partyLayouts));
+		System.out.println(String.format("T-176, %d updates over ten minutes, on the same fight:%n"
+				+ "  Fight tab solo:       build p50 %.2f ms, apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms, layout asked %d times%n"
+				+ "  Fight tab in a party: build p50 %.2f ms, apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms, layout asked %d times%n"
+				+ "  ... its chart opened:                    apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms",
+			updates, ms(soloBuild, 0.5), ms(soloApply, 0.5), ms(soloApply, 0.99), ms(soloPaint, 0.5),
+			ms(soloPaint, 0.99), soloLayouts, ms(partyBuild, 0.5), ms(partyApply, 0.5), ms(partyApply, 0.99),
+			ms(partyPaint, 0.5), ms(partyPaint, 0.99), partyLayouts, ms(openApply, 0.5), ms(openApply, 0.99),
+			ms(openPaint, 0.5), ms(openPaint, 0.99)));
 		assertTrue(updates >= 170);
-		// Before: a layout pass on nearly every apply. Now a handful more than the Fight tab's (the meter's and the
-		// header's values gaining a digit as four members' damage grows), never one an apply.
-		assertTrue("party layouts " + partyLayouts + " against the Fight tab's " + fightLayouts,
-			partyLayouts <= fightLayouts + 12);
-		// Through the buffer, as the other tabs.
-		assertTrue(onParty.partyTab().buffer().imageSize().width > 0);
+		// No rebuild while the shape holds, and a handful more layout passes than solo (the meter's values gaining a
+		// digit as four members' damage grows), never one an apply.
+		assertEquals(builds, inParty.fightTab().builds());
+		assertTrue("party layouts " + partyLayouts + " against solo's " + soloLayouts, partyLayouts <= soloLayouts + 12);
+		// Through the Fight tab's buffer, as solo.
+		assertTrue(inParty.fightTab().buffer().imageSize().width > 0);
 	}
 
 	/** The header's clock ticking inside its short forms lays nothing out; only the shortest form's width does. */

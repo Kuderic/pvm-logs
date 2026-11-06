@@ -92,9 +92,9 @@ public class SidePanelPartyNotSharingTest
 		assertEquals(Arrays.asList("Moss Pike", "you", "Brindle", "Old Tam"), names(t));
 		assertEquals("~1,830", t.rows.get(3).dmg[0]);
 		// T-167 part 3: the Fight tab's line counts the members who share, as the tab ranks them.
-		assertEquals("you 2nd of 3 · 29%", SidePanelParty.fightLine(t));
+		assertEquals("you 2nd of 3 · 29%", SidePanelPartyExamples.fightLine(t));
 		final PanelSnapshot.PartyTab before = SidePanelParty.party(SidePanelPartyExamples.toa());
-		assertEquals(SidePanelParty.fightLine(before), SidePanelParty.fightLine(t));
+		assertEquals(SidePanelPartyExamples.fightLine(before), SidePanelPartyExamples.fightLine(t));
 	}
 
 	@Test
@@ -149,7 +149,7 @@ public class SidePanelPartyNotSharingTest
 		assertTrue(t.structure().contains("listed2"));
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.apply(new PanelSnapshot(null, null, t));
-		assertNotNull(p.partyTab().meter());
+		assertNotNull(p.partySection().meter());
 		// Out of a party, nothing is listed.
 		final SidePanelParty.Input out = SidePanelPartyExamples.waitingWithMembers();
 		out.inParty = false;
@@ -179,7 +179,7 @@ public class SidePanelPartyNotSharingTest
 		// The tab: the same snapshot again builds nothing; a picture arriving repaints the meter, no rebuild.
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(SidePanelPartyExamples.yamaDuoNotSharing())));
-		final int built = p.partyTab().rebuilds();
+		final int built = p.partySection().rebuilds();
 		for (int i = 0; i < 5; i++)
 		{
 			p.apply(new PanelSnapshot(null, null, SidePanelParty.party(SidePanelPartyExamples.yamaDuoNotSharing())));
@@ -187,12 +187,12 @@ public class SidePanelPartyNotSharingTest
 		final SidePanelParty.Input noPicture = SidePanelPartyExamples.yamaDuoNotSharing();
 		noPicture.unshared.set(0, new SidePanelParty.Unshared(77, "Ash Kettle", null));
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(noPicture)));
-		assertEquals(built, p.partyTab().rebuilds());
+		assertEquals(built, p.partySection().rebuilds());
 		// Out of a fight too.
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(SidePanelPartyExamples.waitingWithMembers())));
-		final int waiting = p.partyTab().rebuilds();
+		final int waiting = p.partySection().rebuilds();
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(SidePanelPartyExamples.waitingWithMembers())));
-		assertEquals(waiting, p.partyTab().rebuilds());
+		assertEquals(waiting, p.partySection().rebuilds());
 	}
 
 	@Test
@@ -216,9 +216,8 @@ public class SidePanelPartyNotSharingTest
 						{
 							final PanelSnapshot.PartyTab t = SidePanelParty.party(in);
 							p.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, t));
-							p.tabs().select(p.tabs().getTab(3));
-							SidePanelPictures.draw(p.tabs(), p.partyTab(), scale);
-							final SidePanelPartyMeter m = p.partyTab().meter();
+							SidePanelPictures.draw(p.tabs(), p.fightTab(), scale);
+							final SidePanelPartyMeter m = p.partySection().meter();
 							final String where = larger + " " + smooth + " " + scale + " " + t.rows.size() + " rows: ";
 							if (m.cutNames() > 0)
 							{

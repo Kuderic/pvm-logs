@@ -83,11 +83,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 
 		/** A room picked in the whole raid's Rooms list: This room, on it. */
 		void showRaidRoom(int index);
-
-		/** T-125: the Fight tab's party line was clicked: the Party tab. */
-		default void openParty()
-		{
-		}
 	}
 
 	/** Every action a no-op, for tests and renders. */
@@ -143,8 +138,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private boolean reserved;
 
 	/**
-	 * T-132: which of the tab's parts this one shows. The Party tab puts the room's title block on top of the tab
-	 * ({@link #TITLE}) and each member's panels below, from the four tiles on ({@link #BODY}).
+	 * T-132: which of the tab's parts this one shows: all of it; the room's title block alone ({@link #TITLE}); or from
+	 * the four tiles on ({@link #BODY}), as a party member's panels are (T-176).
 	 */
 	enum Parts
 	{
@@ -152,6 +147,37 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	}
 
 	private Parts parts = Parts.ALL;
+	/**
+	 * T-176: the party, on the live Fight tab only: its block after the title, and a selected member's panels in place of
+	 * yours. Null on every other Fight tab (History's saved kill, a member's panels).
+	 */
+	private SidePanelPartySection party;
+
+	/** T-176: the party's blocks, placed by this tab; it rebuilds when they come, go, or a member's panels take yours'. */
+	void setParty(SidePanelPartySection p)
+	{
+		party = p;
+		structure = null;
+		if (p != null)
+		{
+			p.setOnPlacement(this::placed);
+		}
+	}
+
+	/** T-176: the party's blocks may have come, gone or changed places: the last snapshot again. */
+	void partyChanged()
+	{
+		placed();
+	}
+
+	/** T-176: a click on the meter changed what's placed: the last snapshot again, which rebuilds only if it did. */
+	private void placed()
+	{
+		if (last != null)
+		{
+			apply(last);
+		}
+	}
 
 	/** T-132: shows only these parts from the next snapshot on. */
 	void setParts(Parts p)
@@ -200,7 +226,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final FightTab tab = snapshot.showing(target);
 		// The chart's tail goes into the copy every snapshot, whatever else changes, so no tick is skipped.
 		chartData.apply(tab.chart);
-		final String s = tab.structure();
+		// T-176: where the party's blocks go is part of the structure: they come or go, or a member's panels take yours'.
+		final String s = tab.structure() + (party == null ? "" : party.placement());
 		if (!s.equals(structure))
 		{
 			final long started = PerfProbe.start(perf);
@@ -291,14 +318,24 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		stripView = null;
 		updaters.clear();
 		statusLine = null;
+		final boolean partyOn = party != null && !party.placement().isEmpty();
 		switch (tab.state)
 		{
 			case EMPTY:
+				// T-176: in a party, the party's line and the members listed, above the empty state's tools.
+				if (partyOn)
+				{
+					add(party.top());
+				}
 				empty(tab);
 				break;
 			case PRE_ATTACK:
 				raidSwitch(tab);
 				header(tab);
+				if (partyOn)
+				{
+					add(party.top());
+				}
 				banner(tab);
 				loadout(tab);
 				lastFight(tab);
@@ -309,7 +346,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				}
 				break;
 			default:
-				// T-132: the Party tab's top: the room's title block alone.
+				// T-132: the room's title block alone.
 				if (parts == Parts.TITLE)
 				{
 					header(tab);
@@ -318,17 +355,27 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				// One order for both: the live order, with the after-fight sections slotted in (spec 3.1).
 				// T-112 (Eric, 2026-10-30): the tiles, then Damage and Luck, then where the time went and Execution, then
 				// the rest. One order live and after: a section that only exists after the fight just isn't there live.
-				// T-132: a member's panels on the Party tab start at the tiles: the title is the tab's, on top.
+				// T-132: a member's panels start at the tiles: the title is the tab's, above.
 				if (parts == Parts.ALL)
 				{
 					raidSwitch(tab);
 					header(tab);
 				}
+				// T-176: in a party, the party between the title and the tiles; with a member selected, their heading and
+				// panels in place of yours.
+				if (partyOn)
+				{
+					add(party.top());
+					if (party.memberShown())
+					{
+						add(party.member());
+						break;
+					}
+				}
 				banner(tab);
 				unscored(tab);
 				// The tiles under the header, the at-a-glance summary (Eric's pick, 07:45).
 				tiles(tab);
-				partyLine(tab);
 				damage(tab);
 				curve(tab);
 				budget(tab);
@@ -647,51 +694,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				{
 					views.get(i).setToolTipText(tip);
 				}
-			}
-		});
-	}
-
-	/**
-	 * T-125: one line under the tiles with someone in the party sharing, {@code Party · you 2nd of 5 · 38%}, which opens
-	 * the Party tab (Eric's pick, option B).
-	 */
-	private void partyLine(FightTab tab)
-	{
-		if (tab.partyLine == null)
-		{
-			return;
-		}
-		final JPanel card = SidePanelParts.card(0);
-		final SidePanelParts.Line line = new SidePanelParts.Line(Text.title("Party", SidePanelStyle.VALUE),
-			Text.small(tab.partyLine + "  ›", SidePanelStyle.SECONDARY));
-		// T-128: your Discord picture before it, when RuneLite has one; nothing otherwise.
-		final SidePanelPartyTab.Picture picture = new SidePanelPartyTab.Picture(tab.partyAvatar, SidePanelStyle.CARD, 12);
-		picture.setVisible(tab.partyAvatar != null);
-		final JPanel row = new JPanel(new java.awt.BorderLayout(5, 0));
-		row.setOpaque(false);
-		row.add(picture, java.awt.BorderLayout.WEST);
-		row.add(line, java.awt.BorderLayout.CENTER);
-		card.add(row);
-		card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		card.setToolTipText("Your party's damage beside yours, on the Party tab");
-		card.addMouseListener(new MouseAdapter()
-		{
-			@Override
-			public void mouseClicked(MouseEvent e)
-			{
-				actions.openParty();
-			}
-		});
-		add(card);
-		updaters.add(t ->
-		{
-			line.set(Text.title("Party", SidePanelStyle.VALUE), null, Text.small(t.partyLine + "  ›",
-				SidePanelStyle.SECONDARY));
-			picture.set(t.partyAvatar, SidePanelStyle.CARD);
-			if (picture.isVisible() != (t.partyAvatar != null))
-			{
-				picture.setVisible(t.partyAvatar != null);
-				row.revalidate();
 			}
 		});
 	}

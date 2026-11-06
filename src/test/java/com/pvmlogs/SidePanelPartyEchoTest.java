@@ -63,7 +63,7 @@ public class SidePanelPartyEchoTest
 			assertEquals(at, off.partyDps, on.partyDps);
 			assertEquals(at, off.othersNote, on.othersNote);
 			// The Fight tab's line: your rank, of the members counted, and your share.
-			assertEquals(at, SidePanelParty.fightLine(off), SidePanelParty.fightLine(on));
+			assertEquals(at, SidePanelPartyExamples.fightLine(off), SidePanelPartyExamples.fightLine(on));
 			// Every row but the echo's reads as it did, in the same order.
 			final List<PanelSnapshot.PartyRow> counted = new ArrayList<>();
 			for (PanelSnapshot.PartyRow r : on.rows)
@@ -102,7 +102,7 @@ public class SidePanelPartyEchoTest
 		final SidePanelParty.Input toa = SidePanelPartyExamples.toa();
 		assertEquals(1_830, SidePanelParty.others(toa.othersDamage, toa.members));
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(toa);
-		assertEquals("you 2nd of 3 · 29%", SidePanelParty.fightLine(t));
+		assertEquals("you 2nd of 3 · 29%", SidePanelPartyExamples.fightLine(t));
 		for (PanelSnapshot.PartyRow r : t.rows)
 		{
 			assertFalse(r.name, r.echo);
@@ -129,7 +129,7 @@ public class SidePanelPartyEchoTest
 		{
 			assertFalse(r.name, r.others);
 		}
-		assertEquals("you 1st of 1 · 100%", SidePanelParty.fightLine(t));
+		assertEquals("you 1st of 1 · 100%", SidePanelPartyExamples.fightLine(t));
 	}
 
 	/** {@code in} with the dev echo of your own figures added, as the loopback shows it. */

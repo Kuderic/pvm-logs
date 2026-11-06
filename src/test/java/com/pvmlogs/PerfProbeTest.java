@@ -205,10 +205,10 @@ public class PerfProbeTest
 			PerfProbe.panelLabel(PerfProbe.panelState(true, 2, false, true)));
 		assertEquals("open on History, Update during fights on, Charts off",
 			PerfProbe.panelLabel(PerfProbe.panelState(true, 1, true, false)));
-		// T-130 review: the Party tab is its own, not Trip, and its states fit.
-		assertEquals("open on Party, Update during fights on, Charts on",
-			PerfProbe.panelLabel(PerfProbe.panelState(true, 3, true, true)));
-		assertTrue(PerfProbe.panelState(true, 3, true, true) < PerfProbe.PANEL_STATES);
+		// T-176: three tabs again (the party's on the Fight tab), and every state fits.
+		assertEquals("open on Fight, Update during fights on, Charts on",
+			PerfProbe.panelLabel(PerfProbe.panelState(true, 0, true, true)));
+		assertEquals(PerfProbe.PANEL_STATES - 1, PerfProbe.panelState(true, 2, true, true));
 		final PerfProbe probe = new PerfProbe();
 		probe.setOn(true);
 		probe.fightStartedAt(0);

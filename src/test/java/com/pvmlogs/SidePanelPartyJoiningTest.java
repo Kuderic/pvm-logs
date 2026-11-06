@@ -71,24 +71,46 @@ public class SidePanelPartyJoiningTest
 		assertEquals(SidePanelParty.NOTHING_YET, SidePanelParty.party(in).empty);
 	}
 
+	/**
+	 * T-176: joining a party with someone in it puts the party's line on the Fight tab at the next snapshot, the member
+	 * listed (T-167); leaving takes it off, with nothing left behind.
+	 */
 	@Test
-	public void theEmptyTabFollowsThePartyOnTheNextSnapshot()
+	public void theFightTabFollowsThePartyOnTheNextSnapshot()
 	{
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		final SidePanelParty.Input out = new SidePanelParty.Input();
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(out)));
+		assertFalse(waiting(p));
+		final int solo = p.fightTab().getComponentCount();
 		final SidePanelParty.Input joined = new SidePanelParty.Input();
 		joined.inParty = true;
 		joined.partySize = 2;
 		joined.partyKey = 42;
+		joined.unshared.add(new SidePanelParty.Unshared(77, "Ash Kettle", null));
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(joined)));
+		assertTrue(waiting(p));
+		// Alone in a party (nobody to list): nothing, as solo.
+		final SidePanelParty.Input alone = new SidePanelParty.Input();
+		alone.inParty = true;
+		alone.partySize = 1;
+		alone.partyKey = 42;
+		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(alone)));
+		assertFalse(waiting(p));
+		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(out)));
+		assertFalse(waiting(p));
+		assertEquals(solo, p.fightTab().getComponentCount());
+	}
+
+	private static boolean waiting(PvmPerformancePanel p)
+	{
 		boolean waiting = false;
-		for (java.awt.Component c : all(p.partyTab()))
+		for (java.awt.Component c : all(p.fightTab()))
 		{
 			waiting |= c instanceof SidePanelParts.Paragraph && ((SidePanelParts.Paragraph) c).text().startsWith(
-				"In a party of 2.");
+				"In a party");
 		}
-		assertTrue(waiting);
+		return waiting;
 	}
 
 	private static List<java.awt.Component> all(java.awt.Container c)
