@@ -308,12 +308,8 @@ final class SidePanelModel
 	/** Everything the Fight tab needs, read on the client thread. */
 	static final class Input
 	{
-		/** T-125: the Party tab's line, {@code you 2nd of 5 · 38%}; null with no one in the party sharing. */
-		String partyLine;
-		/** T-128: your Discord picture beside it; null for none. */
-		java.awt.image.BufferedImage partyAvatar;
 		/**
-		 * T-130 review: whose figures these are, for a party member's Fight panels on the Party tab ({@code Brindle}):
+		 * T-130 review: whose figures these are, for a party member's Fight panels on the Fight tab ({@code Brindle}):
 		 * the Damage card reads {@code 2,400 Brindle's}, the chart's legend {@code Brindle 2,400}. Null for your own.
 		 */
 		String whose;
@@ -1222,9 +1218,6 @@ final class SidePanelModel
 		b.state = !after ? PanelSnapshot.State.LIVE
 			: in.killed && !raid ? PanelSnapshot.State.DEAD : PanelSnapshot.State.ENDED;
 		b.wholeRaid = in.wholeRaid;
-		// T-125: the Party tab's line under the tiles, with someone in the party sharing.
-		b.partyLine = in.partyLine;
-		b.partyAvatar = in.partyAvatar;
 		final LedgerRows.Scope s = in.scope;
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(s);
 		final boolean warning = in.warning != null;

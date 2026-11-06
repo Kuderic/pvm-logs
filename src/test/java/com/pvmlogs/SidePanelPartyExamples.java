@@ -266,6 +266,12 @@ final class SidePanelPartyExamples
 			0.92, 14, attacks(TWISTED_BOW, 150, 112, 11_240, 10_960, false)), 388));
 		in.members.get(0).avatar = picture(1, 'Y');
 		in.unshared.add(new SidePanelParty.Unshared(77, "Ash Kettle", picture(6, 'A')));
+		// T-176: your own Fight panels, the Fight tab's, under the party: a kill of yours named for the room.
+		final SidePanelModel.Input yours = SidePanelExamples.dead();
+		yours.name = "Yama";
+		yours.scoredName = "Yama";
+		yours.inParty = true;
+		in.members.get(0).fight = SidePanelModel.fight(yours);
 		return in;
 	}
 
@@ -569,6 +575,36 @@ final class SidePanelPartyExamples
 		in.members.add(you);
 		in.members.add(echoOf(you, 31));
 		return in;
+	}
+
+	/**
+	 * Your rank among the members who share, as the meter ranks them, and your share: {@code you 2nd of 5 · 38%}; null
+	 * with no one sharing. It was the Fight tab's party line before T-176 moved the meter onto the Fight tab; the tests
+	 * keep it to check the ranks never count others, a listed member or the dev echo.
+	 */
+	static String fightLine(PanelSnapshot.PartyTab t)
+	{
+		if (!t.sharing)
+		{
+			return null;
+		}
+		int members = 0;
+		int rank = 0;
+		String share = "";
+		for (PanelSnapshot.PartyRow r : t.rows)
+		{
+			if (r.others || r.echo)
+			{
+				continue;
+			}
+			members++;
+			if (r.you)
+			{
+				rank = members;
+				share = r.dmg[2];
+			}
+		}
+		return rank == 0 ? null : "you " + SidePanelParty.ordinal(rank) + " of " + members + " · " + share;
 	}
 
 	/** T-169: the dev loopback's member: your own figures, under the echo's name, marked as the panel marks it. */

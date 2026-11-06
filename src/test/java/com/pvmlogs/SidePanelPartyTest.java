@@ -43,16 +43,13 @@ public class SidePanelPartyTest
 		assertFalse(nobody.sharing);
 		// T-129: in a party before anyone else has shared, it says so plainly.
 		assertEquals(SidePanelParty.waiting(0), nobody.empty);
-		assertNull(SidePanelParty.fightLine(nobody));
+		assertNull(SidePanelPartyExamples.fightLine(nobody));
 		assertEquals(SidePanelParty.NOT_IN_PARTY, SidePanelParty.party(SidePanelPartyExamples.notInParty()).empty);
 		final PanelSnapshot.PartyTab toa = SidePanelParty.party(SidePanelPartyExamples.toa());
 		assertTrue(toa.sharing);
-		assertEquals("you 2nd of 3 · 29%", SidePanelParty.fightLine(toa));
-		// The Fight tab shows the line only when there is one.
+		assertEquals("you 2nd of 3 · 29%", SidePanelPartyExamples.fightLine(toa));
+		// T-176: the Fight tab's party line is gone: the meter is on the Fight tab itself.
 		assertFalse(SidePanelModel.fight(SidePanelExamples.dead()).structure().contains("|P"));
-		final SidePanelModel.Input kill = SidePanelExamples.dead();
-		kill.partyLine = SidePanelParty.fightLine(toa);
-		assertEquals("you 2nd of 3 · 29%", SidePanelModel.fight(kill).partyLine);
 	}
 
 	@Test
@@ -62,7 +59,7 @@ public class SidePanelPartyTest
 		assertEquals(Arrays.asList("Moss Pike", "you", "Brindle", "others"), names(t));
 		assertEquals("Zebak", t.where);
 		assertEquals("2:09", t.clock);
-		assertEquals("2:09 · party 79.1 dps", SidePanelPartyTab.headerRight(t));
+		assertEquals("2:09 · party 79.1 dps", SidePanelPartySection.headerRight(t));
 		// 3,420 + 2,960 + 1,990 + others 1,830 = 10,200 over 129 s.
 		assertEquals("party 79.1 dps", t.partyDps);
 		final PanelSnapshot.PartyRow top = t.rows.get(0);
@@ -199,15 +196,21 @@ public class SidePanelPartyTest
 	{
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, SidePanelParty.party(in)));
-		p.tabs().select(p.tabs().getTab(3));
 		return p;
 	}
 
 	@Test
-	public void thePanelHasAFourthTabNamedParty()
+	public void thePanelHasThreeTabs()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toa());
-		assertEquals(4, p.tabs().getComponentCount());
+		// T-176: Fight, History, Trip: the party's on the Fight tab.
+		assertEquals(3, p.tabs().getComponentCount());
+		final List<String> names = new ArrayList<>();
+		for (Component c : p.tabs().getComponents())
+		{
+			names.add(((javax.swing.JLabel) c).getText());
+		}
+		assertEquals(Arrays.asList("Fight", "History", "Trip"), names);
 		// In the client the tabs are in RuneLite's look and feel's font, the RuneScape one (as the renders set it up); a
 		// test's default is Java's Dialog, wider on some machines. Installing the look and feel here would change it for
 		// every test after, so the tabs get its font.
@@ -215,8 +218,8 @@ public class SidePanelPartyTest
 		{
 			c.setFont(net.runelite.client.ui.FontManager.getRunescapeFont());
 		}
-		SidePanelPictures.draw(p.tabs(), p.partyTab(), 1);
-		// Every tab on one row at the sidebar's width: the fourth didn't wrap out of sight.
+		SidePanelPictures.draw(p.tabs(), p.fightTab(), 1);
+		// Every tab on one row at the sidebar's width.
 		final int y = p.tabs().getComponent(0).getY();
 		for (Component c : p.tabs().getComponents())
 		{
@@ -230,7 +233,7 @@ public class SidePanelPartyTest
 	public void clickingAMemberSelectsThemAndAgainGoesBackToYou()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toa());
-		final SidePanelPartyTab tab = p.partyTab();
+		final SidePanelPartySection tab = p.partySection();
 		assertEquals(SidePanelParty.YOU_ID, tab.selected());
 		tab.select(22);
 		assertEquals(22, tab.selected());
@@ -257,7 +260,7 @@ public class SidePanelPartyTest
 	public void theSwitchPicksTheColumnsAfterTheRoomAndGoesBackToDamageLive()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toa());
-		final SidePanelPartyTab tab = p.partyTab();
+		final SidePanelPartySection tab = p.partySection();
 		tab.pick(SidePanelParty.Metric.LUCK);
 		assertEquals(SidePanelParty.Metric.LUCK, tab.meter().metric());
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(SidePanelPartyExamples.tobLive())));
@@ -268,7 +271,7 @@ public class SidePanelPartyTest
 	public void noRebuildOnAHoverOrANewSnapshotOfTheSameShape()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.tobLive());
-		final SidePanelPartyTab tab = p.partyTab();
+		final SidePanelPartySection tab = p.partySection();
 		final int built = tab.rebuilds();
 		final SidePanelPartyMeter meter = tab.meter();
 		// Five ticks on: everyone's damage up, the same members.
@@ -313,15 +316,14 @@ public class SidePanelPartyTest
 							{
 								p.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null,
 									SidePanelParty.party(in)));
-								p.tabs().select(p.tabs().getTab(3));
 								if (open != null)
 								{
-									p.partyTab().select(open);
+									p.partySection().select(open);
 								}
-								SidePanelPictures.draw(p.tabs(), p.partyTab(), scale);
+								SidePanelPictures.draw(p.tabs(), p.fightTab(), scale);
 								final String at = (larger ? "larger " : "") + (smooth ? "smooth " : "normal ") + scale
 									+ "× " + in.scope + (open == null ? "" : " opened") + ": ";
-								for (Component c : all(p.partyTab()))
+								for (Component c : all(p.fightTab()))
 								{
 									if (c instanceof SidePanelText && ((SidePanelText) c).lastShown() != null)
 									{
@@ -330,7 +332,7 @@ public class SidePanelPartyTest
 											t.lastShown().contains(LedgerRows.CUT));
 									}
 								}
-								final SidePanelPartyMeter meter = p.partyTab().meter();
+								final SidePanelPartyMeter meter = p.partySection().meter();
 								if (meter != null)
 								{
 									assertEquals(at + "names cut", 0, meter.cutNames());
@@ -365,8 +367,8 @@ public class SidePanelPartyTest
 			p.setText(true, true);
 			try
 			{
-				SidePanelPictures.draw(p.tabs(), p.partyTab(), 1);
-				for (Component c : all(p.partyTab()))
+				SidePanelPictures.draw(p.tabs(), p.fightTab(), 1);
+				for (Component c : all(p.fightTab()))
 				{
 					if (c instanceof SidePanelText && ((SidePanelText) c).lastShown() != null)
 					{
@@ -387,7 +389,7 @@ public class SidePanelPartyTest
 	public void namesAreNeverSaved() throws IOException
 	{
 		final Path src = Paths.get("src/main/java/com/pvmlogs");
-		for (String file : new String[]{"SidePanelParty.java", "SidePanelPartyTab.java", "SidePanelPartyMeter.java",
+		for (String file : new String[]{"SidePanelParty.java", "SidePanelPartySection.java", "SidePanelPartyMeter.java",
 			"SidePanelPartyChart.java"})
 		{
 			final String s = new String(Files.readAllBytes(src.resolve(file)), StandardCharsets.UTF_8);

@@ -119,7 +119,7 @@ final class SidePanelText extends JComponent
 
 	/** The width the text and its second run take. */
 	/**
-	 * T-132: on a tinted background (the Party tab's selected member), muted text is drawn a little lighter, so it keeps
+	 * T-132: on a tinted background (the selected party member's part, T-132), muted text is drawn a little lighter, so it keeps
 	 * the contrast it has on the plain panel. Set with the tint, never per tick.
 	 */
 	private boolean lifted;

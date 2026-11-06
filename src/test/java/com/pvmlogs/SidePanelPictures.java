@@ -112,6 +112,11 @@ public final class SidePanelPictures
 			allYourDamage(out);
 			return;
 		}
+		if (args.length > 1 && "fightparty".equals(args[1]))
+		{
+			fightTabInAParty(out);
+			return;
+		}
 		if (args.length > 1 && "wardens".equals(args[1]))
 		{
 			wardensTargets(out);
@@ -1649,19 +1654,11 @@ public final class SidePanelPictures
 					null, scale));
 				write(dir, "b-member-selected-after-their-room", scale, party(SidePanelPartyExamples.toaYouAndBrindle(),
 					22L, -1, null, scale));
-				// T-132: the tint options. The default: the area behind the member's part toward their colour, yours plain.
-				SidePanelPartyTab.tintYours = true;
-				write(dir, "a2-option-yours-tinted-too", scale, party(SidePanelPartyExamples.toaYouAndBrindle(), null, -1,
-					null, scale));
-				SidePanelPartyTab.tintYours = false;
-				SidePanelPartyTab.tint = SidePanelPartyTab.Tint.CARDS;
+				// T-132: the tint options. The default: the area behind the member's part toward their colour.
+				SidePanelPartySection.tint = SidePanelPartySection.Tint.CARDS;
 				write(dir, "b2-option-cards-tinted", scale, party(SidePanelPartyExamples.toaYouAndBrindle(), 22L, -1, null,
 					scale));
-				SidePanelPartyTab.tintYours = true;
-				write(dir, "a3-option-cards-tinted-yours-too", scale, party(SidePanelPartyExamples.toaYouAndBrindle(), null,
-					-1, null, scale));
-				SidePanelPartyTab.tintYours = false;
-				SidePanelPartyTab.tint = SidePanelPartyTab.Tint.AREA;
+				SidePanelPartySection.tint = SidePanelPartySection.Tint.AREA;
 				// T-132: a member's Damage card on adds, from her room message.
 				SidePanelFightTab.useTarget(1);
 				write(dir, "k-member-damage-on-adds", scale, party(SidePanelPartyExamples.araxxorWithAdds(), 22L, -1, null,
@@ -1835,6 +1832,61 @@ public final class SidePanelPictures
 	}
 
 	/**
+	 * T-176: the whole Fight tab in a party, for Eric: a duo whose partner doesn't run the plugin; a party of 5 live, with
+	 * nobody selected and with a member selected; a party of 3 after the room with a member's panels; and solo, as before.
+	 * Normal, Smooth and Larger, 1x and 2x.
+	 */
+	private static void fightTabInAParty(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-duo-partner-not-running-it", scale, party(SidePanelPartyExamples.yamaDuoNotSharing(), null,
+					-1, null, scale));
+				write(dir, "b-party-of-5-nobody-selected", scale, party(SidePanelPartyExamples.tobQuillonLive(), null, -1,
+					null, scale));
+				write(dir, "c-party-of-5-member-selected", scale, party(SidePanelPartyExamples.tobQuillonLive(), 31L, -1,
+					null, scale));
+				write(dir, "d-party-of-3-member-after-their-room", scale, party(SidePanelPartyExamples.toaYouAndBrindle(),
+					22L, -1, null, scale));
+				write(dir, "e-party-chart-opened-hovered", scale, partyChartOpen(SidePanelPartyExamples.tobQuillonLive(),
+					scale));
+				write(dir, "f-solo-as-before", scale, fightTab(SidePanelExamples.dead(), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-176: the Fight tab in a party with the party's Damage over time opened (folded by default) and hovered. */
+	private static BufferedImage partyChartOpen(SidePanelParty.Input in, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
+		sectionOf(panel.partySection().top(), SidePanelPartySection.PARTY_CHART).toggle();
+		draw(panel.tabs(), panel.fightTab(), scale);
+		panel.partySection().chart().setHover(120);
+		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/** T-176: the Fight tab alone, solo. */
+	private static BufferedImage fightTab(SidePanelModel.Input in, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
+		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/**
 	 * T-173: the Wardens room's Targets card: by phase, phase 2's poise, core and passed-on under it, Elidinis' Warden
 	 * damaged and Tumeken's; an old record. Normal, Smooth and Larger, 1x and 2x.
 	 */
@@ -1859,14 +1911,16 @@ public final class SidePanelPictures
 		SidePanelStyle.setText(false, false);
 	}
 
-	/** The Party tab on {@code in}: {@code open} a member's breakdown, {@code hover} a tick of the chart, a metric picked. */
+	/**
+	 * The Fight tab in a party on {@code in} (T-176; it was the Party tab): {@code open} a member's panels, {@code hover} a
+	 * tick of the party's chart (opened), a metric picked. Your panels are the example's, else a kill of yours.
+	 */
 	static BufferedImage party(SidePanelParty.Input in, Long open, int hover, SidePanelParty.Metric metric, double scale)
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 		styled(panel);
-		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, SidePanelParty.party(in)));
-		panel.tabs().select(panel.tabs().getTab(3));
-		final SidePanelPartyTab tab = panel.partyTab();
+		panel.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
+		final SidePanelPartySection tab = panel.partySection();
 		if (open != null)
 		{
 			tab.select(open);
@@ -1875,13 +1929,13 @@ public final class SidePanelPictures
 		{
 			tab.pick(metric);
 		}
-		final BufferedImage first = draw(panel.tabs(), tab, scale);
+		final BufferedImage first = draw(panel.tabs(), panel.fightTab(), scale);
 		if (hover < 0 || tab.chart() == null)
 		{
 			return first;
 		}
 		tab.chart().setHover(hover);
-		return draw(panel.tabs(), tab, scale);
+		return draw(panel.tabs(), panel.fightTab(), scale);
 	}
 
 	/** One section of the Fight tab, cut out of its render: its header and card. */

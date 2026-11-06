@@ -18,7 +18,7 @@ import java.util.List;
 import javax.swing.JComponent;
 
 /**
- * T-125: the Party tab's Damage over time. A line a member in their colour, the player's own bold and white on top,
+ * T-125: the party's Damage over time (on the Fight tab since T-176). A line a member in their colour, the player's own bold and white on top,
  * {@code others} dashed grey. Hovering draws T-112's line at that moment and a readout of every member's damage there,
  * painted over the chart: a hover never lays anything out (T-046). Drilled into a member, the other lines fade.
  */

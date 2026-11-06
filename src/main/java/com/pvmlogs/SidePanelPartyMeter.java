@@ -15,7 +15,7 @@ import java.util.function.LongConsumer;
 import javax.swing.JComponent;
 
 /**
- * T-125: the Party tab's meter. One row a member, biggest damage first, a bar behind each filled to its share of the
+ * T-125: the party's meter (on the Fight tab since T-176). One row a member, biggest damage first, a bar behind each filled to its share of the
  * top member's damage in the member's colour with a solid edge, the player's own row bold and white, {@code others}
  * last in grey; the value columns on the right, by the header's switch. One component paints every row: a board change
  * is one repaint, never a layout, and a hover only repaints (T-046). Clicking a member opens their breakdown.

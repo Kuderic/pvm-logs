@@ -933,7 +933,7 @@ final class SidePanelMemberFight
 	}
 
 	/**
-	 * T-128, T-130 review: party members' Fight panels for the Party tab, every member's (not only the one selected), so a
+	 * T-128, T-130 review: party members' Fight panels for the Fight tab's party (T-176), every member's (not only the one selected), so a
 	 * click shows theirs at once and never the compact breakdown first. Once their room has ended, the Fight tab's own
 	 * model on their room message, built once per message; mid-fight, what their live update can fill (a few cards, built
 	 * each time). Without either (their room's message still on its way, or a sender from before T-128), none, and the

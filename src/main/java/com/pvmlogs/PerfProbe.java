@@ -186,8 +186,8 @@ final class PerfProbe
 	private volatile boolean fighting;
 
 	// Which panel state each tick of the fight was in (panelState's codes), in the order first seen.
-	// T-130 review: four tabs; the Party tab had read as Trip.
-	static final int PANEL_STATES = 17;
+	// T-176: three tabs again (the party's on the Fight tab).
+	static final int PANEL_STATES = 13;
 	private final int[] panelTicks = new int[PANEL_STATES];
 	private final int[] panelOrder = new int[PANEL_STATES];
 	private int panelSeen;
@@ -631,11 +631,11 @@ final class PerfProbe
 	/**
 	 * The side panel's state as a number, so a tick's note allocates nothing:
 	 * 0 closed, else 1 + tab x 4 + Update during fights x 2 + Charts, the tab
-	 * 0 Fight, 1 History, 2 Trip, 3 Party.
+	 * 0 Fight, 1 History, 2 Trip.
 	 */
 	static int panelState(boolean open, int tab, boolean live, boolean charts)
 	{
-		return !open ? 0 : 1 + Math.max(0, Math.min(3, tab)) * 4 + (live ? 2 : 0) + (charts ? 1 : 0);
+		return !open ? 0 : 1 + Math.max(0, Math.min(2, tab)) * 4 + (live ? 2 : 0) + (charts ? 1 : 0);
 	}
 
 	static String panelLabel(int state)
@@ -646,7 +646,7 @@ final class PerfProbe
 		}
 		final int s = state - 1;
 		return String.format("open on %s, Update during fights %s, Charts %s",
-			new String[]{"Fight", "History", "Trip", "Party"}[s / 4], (s & 2) != 0 ? "on" : "off", (s & 1) != 0 ? "on" : "off");
+			new String[]{"Fight", "History", "Trip"}[s / 4], (s & 2) != 0 ? "on" : "off", (s & 1) != 0 ? "on" : "off");
 	}
 
 	/** Which panel state this tick of the fight was in ({@link #panelState}). */

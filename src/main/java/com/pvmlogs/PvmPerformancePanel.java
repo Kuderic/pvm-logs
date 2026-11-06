@@ -40,9 +40,8 @@ class PvmPerformancePanel extends PluginPanel
 	private final SidePanelFightTab fightTab;
 	private final SidePanelHistoryTab historyTab;
 	private final SidePanelTripTab tripTab;
-	/** T-125: the Party tab (Eric's pick, option B). */
-	private final SidePanelPartyTab partyTab;
-	private final MaterialTab partyButton;
+	/** T-176: the party, on the Fight tab (it was the Party tab, T-125). */
+	private final SidePanelPartySection partySection;
 	private final MaterialTabGroup tabs;
 	private final MaterialTab fightButton;
 	private final MaterialTab historyButton;
@@ -54,7 +53,7 @@ class PvmPerformancePanel extends PluginPanel
 	// Swing's thread writes these, the client thread reads them.
 	private volatile boolean active;
 	private volatile boolean dirty = true;
-	/** T-128: the Party tab's member opened (Swing writes, the client thread reads), or none. */
+	/** T-128: the member selected on the Fight tab's meter (Swing writes, the client thread reads), or none. */
 	private volatile long partySelected = SidePanelParty.YOU_ID;
 	/** The room/raid switch as the player left it; null until they touch it, so the overlay's setting decides. */
 	private volatile Boolean wholeRaid;
@@ -70,11 +69,8 @@ class PvmPerformancePanel extends PluginPanel
 	private Fight averageHistoryHead;
 	private LedgerHistory.Average average;
 	private LedgerHistory.Spread luckRemoved;
-	/** T-130 review: where each copy of the chart was last sent to: the Fight tab's, and the Party tab's copy of yours. */
-	private final ChartBook fightChart = new ChartBook();
-	private final ChartBook partyChart = new ChartBook();
-	/** The one {@link #charts} goes by: the Fight tab's, but for while your panels for the Party tab are read. */
-	private ChartBook chartBook = fightChart;
+	/** T-130 review: where the Fight tab's copy of the chart was last sent to. */
+	private final ChartBook chartBook = new ChartBook();
 	/** The Damage rows' sums, kept between snapshots so a long fight's build costs what a short one's does (T-046). */
 	private final SidePanelWeaponRows weaponRows = new SidePanelWeaponRows();
 	/** T-095: the trip's rooms less its runs, as one room, and what it was built from. */
@@ -103,11 +99,19 @@ class PvmPerformancePanel extends PluginPanel
 	 * switch and a fold update at once.
 	 */
 	static final int UPDATE_TICKS = 5;
-	/** The tabs, as {@link #visibleTab} holds them. */
+	/**
+	 * T-176: the sections folded until they're opened: the party's Damage over time, now on the Fight tab above the tiles.
+	 * Its id stays {@code partyChart}; it's kept open under {@code partyChart.opened}. A fold saved as folded before still
+	 * reads folded, and one left open reads folded, the new default.
+	 */
+	static final java.util.Set<String> FOLDED_BY_DEFAULT = java.util.Collections.singleton(
+		SidePanelPartySection.PARTY_CHART);
+	static final String OPENED = ".opened";
+
+	/** The tabs, as {@link #visibleTab} holds them. T-176: the Party tab's gone; the party is on the Fight tab. */
 	static final int FIGHT_TAB = 0;
 	static final int HISTORY_TAB = 1;
 	static final int TRIP_TAB = 2;
-	static final int PARTY_TAB = 3;
 
 	/** The tab on show (Swing's thread writes it): only its part of a snapshot is built (T-046). */
 	private volatile int visibleTab = FIGHT_TAB;
@@ -167,13 +171,21 @@ class PvmPerformancePanel extends PluginPanel
 			@Override
 			public boolean isFolded(String id)
 			{
-				return stored.isFolded(id);
+				// T-176: a section folded by default is folded until it's opened, which is kept under its own key.
+				return FOLDED_BY_DEFAULT.contains(id) ? !stored.isFolded(id + OPENED) : stored.isFolded(id);
 			}
 
 			@Override
 			public void setFolded(String id, boolean folded)
 			{
-				stored.setFolded(id, folded);
+				if (FOLDED_BY_DEFAULT.contains(id))
+				{
+					stored.setFolded(id + OPENED, !folded);
+				}
+				else
+				{
+					stored.setFolded(id, folded);
+				}
 				requestUpdate();
 			}
 		};
@@ -182,18 +194,18 @@ class PvmPerformancePanel extends PluginPanel
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
 			: new HistorySource(), actions, folds);
 		tripTab = new SidePanelTripTab(actions, folds);
-		// T-130: the member selected on the Party tab.
-		partyTab = new SidePanelPartyTab(actions, folds, icons, id ->
+		// T-130: the member selected on the meter. T-176: the party's blocks, placed by the Fight tab.
+		partySection = new SidePanelPartySection(actions, folds, icons, id ->
 		{
 			partySelected = id;
 			requestUpdate();
 		});
+		fightTab.setParty(partySection);
 		// T-114: the Calibration report button only with Debug logging on.
 		historyTab.setDebug(config != null && config.debugLogging());
 		fightTab.setPerf(perf);
 		historyTab.setPerf(perf);
 		tripTab.setPerf(perf);
-		partyTab.setPerf(perf);
 		// T-133: Swing's whole repaint pass timed, in a dev client started with -PrepaintTiming only.
 		repaintTiming = SidePanelRepaintTiming.installIfAsked(perf);
 
@@ -202,15 +214,10 @@ class PvmPerformancePanel extends PluginPanel
 		tabs = new MaterialTabGroup(display);
 		tabs.setBorder(new EmptyBorder(4, SidePanelStyle.SIDE_BORDER, 0, SidePanelStyle.SIDE_BORDER));
 		tabs.setBackground(SidePanelStyle.PANEL);
-		// T-125: four tabs fit only with the gaps between them closed up: RuneLite's own (8 px, each tab padded 10 px)
-		// wrap the fourth out of sight.
-		tabs.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 0, 0));
+		// T-176: three tabs again, so RuneLite's own gaps (T-125 closed them up for a fourth).
 		final MaterialTab fight = new MaterialTab("Fight", tabs, scroll(fightTab, perf));
 		final MaterialTab history = new MaterialTab("History", tabs, scroll(historyTab, perf));
 		final MaterialTab trip = new MaterialTab("Trip", tabs, scroll(tripTab, perf));
-		final MaterialTab party = new MaterialTab("Party", tabs, scroll(partyTab, perf));
-		party.setOnSelectEvent(() -> show(PARTY_TAB));
-		partyButton = party;
 		fight.setOnSelectEvent(() -> show(FIGHT_TAB));
 		history.setOnSelectEvent(() ->
 		{
@@ -223,7 +230,6 @@ class PvmPerformancePanel extends PluginPanel
 		tabs.addTab(fight);
 		tabs.addTab(history);
 		tabs.addTab(trip);
-		tabs.addTab(party);
 		// Opens on Fight, and never switches on its own (spec 3).
 		tabs.select(fight);
 
@@ -395,16 +401,17 @@ class PvmPerformancePanel extends PluginPanel
 		// T-125: the party's board changes whatever the player is doing.
 		final PartyBoard board = plugin.getPartyBoard();
 		final boolean fighting = fight != null && !over && !pre;
+		final boolean onFight = tab == FIGHT_TAB;
 		final List<Object> shape = Arrays.asList(fight, over, pre, room, raid, whole,
 			history.size(), head, trip.getStartMillis(), tab,
 			// T-130 review: during your fight, a member's update waits for the next snapshot (every 5 ticks), as your own
 			// figures do: members' updates come at their own ticks, so a 4-man party's would build nearly every tick.
-			board == null || fighting ? 0L : board.revision(), partySelected,
-			// T-129: joining or leaving a party, or a member coming or going, rebuilds the Party tab at once, in or out of
-			// a fight; on the other tabs, nothing.
-			tab == PARTY_TAB ? partyState() : null,
-			// T-167: on the Party tab the party key holds the pictures and names, from the same read of the members.
-			tab == PARTY_TAB || board == null || board.isEmpty() ? null : avatars());
+			// T-176: the party is the Fight tab's; the Trip tab never builds for it.
+			board == null || fighting || !onFight ? 0L : board.revision(), partySelected,
+			// T-129: joining or leaving a party, or a member coming or going, rebuilds the party's block at once, in or out
+			// of a fight. T-167: with each member's picture and name, from the same read. One read of the members a tick,
+			// as the Party tab had: out of a party, none (isInParty is a field).
+			onFight ? partyState() : null);
 		final boolean force = dirty;
 		final boolean sameShape = shape.equals(lastShape);
 		if (!due(force, fighting, sameShape, config == null || config.panelLive(), ticks - builtAt))
@@ -428,23 +435,16 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			snapshot = new PanelSnapshot(null, SidePanelModel.trip(readTrip(trip, history, head, fighting ? display : null)));
 		}
-		else if (tab == PARTY_TAB)
-		{
-			snapshot = new PanelSnapshot(null, null, SidePanelParty.party(readParty(fight, display, room, raid, whole, pre,
-				false)));
-		}
 		else
 		{
 			final SidePanelModel.Input in = read(fight, display, room, raid, whole, pre, history);
-			// T-125: the Party tab's line under the tiles, with someone in the party sharing.
-			if (board != null && !board.isEmpty())
-			{
-				final SidePanelParty.Input party = readParty(fight, display, room, raid, whole, pre, true);
-				in.partyLine = SidePanelParty.fightLine(SidePanelParty.party(party));
-				// T-128: your own picture beside it.
-				in.partyAvatar = party.members.isEmpty() ? null : party.members.get(0).avatar;
-			}
-			snapshot = new PanelSnapshot(SidePanelModel.fight(in), null);
+			// T-176: the party with the Fight tab, in a party or with the board holding anyone (the dev loopback's echo
+			// too); out of one, an empty party, so the party's block goes.
+			// A read that clashed with a member coming or going (rare) keeps what's shown, and reads again next tick.
+			final PanelSnapshot.PartyTab party = partyMembers != null || board != null && !board.isEmpty()
+				? SidePanelParty.party(readParty(fight, display, room, raid, whole, pre, false))
+				: partyClashed ? null : SidePanelParty.party(new SidePanelParty.Input());
+			snapshot = new PanelSnapshot(SidePanelModel.fight(in), null, party);
 		}
 		PerfProbe.stop(perf, PerfProbe.Slot.PANEL_BUILD, building);
 		SwingUtilities.invokeLater(() -> apply(snapshot));
@@ -643,7 +643,7 @@ class PvmPerformancePanel extends PluginPanel
 	/**
 	 * T-036: a copy of the chart on Swing's side, and what it has been sent: each snapshot sends the series from a few
 	 * ticks behind the last one's end on the same scope, else from 0, which starts the copy over. T-130 review: one per
-	 * copy, as the Fight tab's chart and the Party tab's copy of your panels each keep their own. Client thread.
+	 * copy. Client thread.
 	 */
 	static final class ChartBook
 	{
@@ -747,7 +747,7 @@ class PvmPerformancePanel extends PluginPanel
 		return out;
 	}
 
-	// ---- T-125: the Party tab ----
+	// ---- T-125: the party (on the Fight tab since T-176) ----
 
 	/** Each member's colour, by the order they were first seen, kept while the board has anyone on it. Client thread. */
 	private final java.util.Map<Long, Integer> partySlots = new java.util.HashMap<>();
@@ -758,7 +758,7 @@ class PvmPerformancePanel extends PluginPanel
 	private final java.util.Map<Integer, String> itemNames = new java.util.HashMap<>();
 
 	/**
-	 * T-125: the Party tab's input. The player's own row is {@link PartyShare#build}'s, the same as what they send; the
+	 * T-125: the party's input. The player's own row is {@link PartyShare#build}'s, the same as what they send; the
 	 * members' are the board's, for the room on show (by its name, updated since it started) or summed over the raid.
 	 * {@code light}: the Fight tab's line only, without attack rows or series. Client thread.
 	 */
@@ -848,13 +848,7 @@ class PvmPerformancePanel extends PluginPanel
 			raidScope ? SidePanelParty.sum(mine) : mine.get(0));
 		final net.runelite.client.party.PartyMember me = localMember(party);
 		you.avatar = me == null ? null : me.getAvatar();
-		if (!light)
-		{
-			// T-130: your Fight panels under the party, the Fight tab's own build for the room or raid on show. Built
-			// here only while the Party tab shows (the Fight tab builds only while it shows), so never twice. T-132: built
-			// whoever is selected: the tab's title block on top is theirs, and your panels stay current for a click back.
-			you.fight = yourFightPanels(fight, display, room, raid, whole);
-		}
+		// T-176: your Fight panels are the Fight tab's own, under the party: no second build of them here.
 		if (!light)
 		{
 			final int[][] series = SidePanelParty.series((raidScope ? FightTimeline.raid(raid, plugin.getTimelines())
@@ -907,32 +901,12 @@ class PvmPerformancePanel extends PluginPanel
 	}
 
 	/**
-	 * T-130: the Fight tab's own input and model for the scope on show. T-130 review: with the Party tab's own incremental
-	 * chart bookkeeping, as the Fight tab's: each build sends the chart only from a few ticks behind what the Party tab's
-	 * copy of your panels last had (they're kept for the tab's life, and every snapshot reaches them), and the Fight tab's
-	 * bookkeeping is left as it was, so its next build sends it what it hasn't had.
-	 */
-	private PanelSnapshot.FightTab yourFightPanels(Fight fight, Encounter display, Encounter room, Raid raid,
-		boolean whole)
-	{
-		chartBook = partyChart;
-		final SidePanelModel.Input in;
-		try
-		{
-			in = read(fight, display, room, raid, whole, false, plugin.getHistory());
-		}
-		finally
-		{
-			chartBook = fightChart;
-		}
-		return SidePanelModel.fight(in);
-	}
-
-	/**
-	 * T-167: the party's members as the last party key read them (the Party tab's, each tick it shows), for its list of
+	 * T-167: the party's members as the last party key read them (the Fight tab's, each tick it shows), for its list of
 	 * members who haven't shared; null out of a party, or after a read that clashed. Client thread.
 	 */
 	private List<net.runelite.client.party.PartyMember> partyMembers;
+	/** T-176: this tick's read of the members clashed with one coming or going: the party's block stays as it was. */
+	private boolean partyClashed;
 
 	/**
 	 * T-129: whether the player is in a party, which, and its members, as they stand; two reads of PartyService. T-167:
@@ -941,6 +915,7 @@ class PvmPerformancePanel extends PluginPanel
 	private List<Object> partyState()
 	{
 		partyMembers = null;
+		partyClashed = false;
 		final net.runelite.client.party.PartyService party = instance(plugin, net.runelite.client.party.PartyService.class);
 		if (party == null || !party.isInParty())
 		{
@@ -950,6 +925,7 @@ class PvmPerformancePanel extends PluginPanel
 		if (members == null)
 		{
 			// A member came or went mid-read: a change, so the tab builds now and reads them again next tick.
+			partyClashed = true;
 			return changing();
 		}
 		partyMembers = members;
@@ -1038,7 +1014,7 @@ class PvmPerformancePanel extends PluginPanel
 		return java.util.Collections.<Object>singletonList(new Object());
 	}
 
-	/** T-129: the Party tab's party key: whether in one, which, and who's in it; equal while none of those changed. */
+	/** T-129: the party key: whether in one, which, and who's in it; equal while none of those changed. */
 	static List<Object> partyState(boolean inParty, long partyId, List<Long> members)
 	{
 		if (!inParty)
@@ -1053,27 +1029,6 @@ class PvmPerformancePanel extends PluginPanel
 
 	/** T-128, T-130 review: members' Fight panels, a room's built once per message. Client thread. */
 	private final SidePanelMemberFight.Panels memberPanels = new SidePanelMemberFight.Panels();
-
-	/** T-128: the party's pictures as they stand, so one arriving later is a new build. */
-	private List<Object> avatars()
-	{
-		final net.runelite.client.party.PartyService party = instance(plugin, net.runelite.client.party.PartyService.class);
-		if (party == null)
-		{
-			return null;
-		}
-		final List<net.runelite.client.party.PartyMember> members = copy(party.getMembers());
-		if (members == null)
-		{
-			return changing();
-		}
-		final List<Object> out = new ArrayList<>(members.size());
-		for (net.runelite.client.party.PartyMember m : members)
-		{
-			out.add(m.getAvatar() == null ? 0 : System.identityHashCode(m.getAvatar()));
-		}
-		return out;
-	}
 
 	/** T-125: a member's figures for the scope on show; null when they have none for it. */
 	private static SidePanelParty.Member member(PartyBoard.View v, boolean raidScope, String scope, long since,
@@ -1283,9 +1238,9 @@ class PvmPerformancePanel extends PluginPanel
 			return false;
 		}
 		restyles++;
+		partySection.restyle();
 		fightTab.restyle(lastFight);
 		tripTab.restyle(lastTrip);
-		partyTab.restyle();
 		historyTab.restyle();
 		revalidate();
 		repaint();
@@ -1303,7 +1258,7 @@ class PvmPerformancePanel extends PluginPanel
 		final long started = PerfProbe.start(perf);
 		if (repaintTiming != null)
 		{
-			repaintTiming.applying(snapshot.party != null ? "Party" : snapshot.trip != null ? "Trip" : "Fight");
+			repaintTiming.applying(snapshot.trip != null ? "Trip" : "Fight");
 		}
 		shown = snapshot;
 		if (snapshot.fight != null)
@@ -1314,12 +1269,18 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			lastTrip = snapshot.trip;
 		}
+		// T-176: the party first, so the Fight tab places its blocks as this snapshot has them.
+		partySection.apply(snapshot.party);
 		if (snapshot.fight != null)
 		{
 			fightTab.apply(snapshot.fight);
 		}
+		else if (snapshot.party != null)
+		{
+			// The party alone (tests): the Fight tab places its blocks again with the last fight it had.
+			fightTab.partyChanged();
+		}
 		tripTab.apply(snapshot.trip);
-		partyTab.apply(snapshot.party);
 		if (started != 0L)
 		{
 			perf.stopSwing(PerfProbe.SwingSlot.APPLY, started);
@@ -1349,7 +1310,7 @@ class PvmPerformancePanel extends PluginPanel
 	 */
 	int perfState()
 	{
-		final int tab = fightButton.isSelected() ? 0 : historyButton.isSelected() ? 1 : partyButton.isSelected() ? 3 : 2;
+		final int tab = fightButton.isSelected() ? 0 : historyButton.isSelected() ? 1 : 2;
 		return PerfProbe.panelState(active, tab, config == null || config.panelLive(),
 			config == null || config.panelCharts());
 	}
@@ -1374,10 +1335,10 @@ class PvmPerformancePanel extends PluginPanel
 		return historyTab;
 	}
 
-	/** T-125. */
-	SidePanelPartyTab partyTab()
+	/** T-176: the party's blocks on the Fight tab. */
+	SidePanelPartySection partySection()
 	{
-		return partyTab;
+		return partySection;
 	}
 
 	SidePanelTripTab tripTab()
@@ -1577,12 +1538,6 @@ class PvmPerformancePanel extends PluginPanel
 	/** The buttons' actions, passed on to the plugin. */
 	private final class Actions implements SidePanelFightTab.Actions
 	{
-		@Override
-		public void openParty()
-		{
-			tabs.select(partyButton);
-		}
-
 		@Override
 		public void calibrationReport()
 		{

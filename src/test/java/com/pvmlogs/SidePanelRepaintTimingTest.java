@@ -46,19 +46,18 @@ public class SidePanelRepaintTimingTest
 				final SidePanelPartyLagTest.Party party = new SidePanelPartyLagTest.Party();
 				party.run(130);
 				final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
-				panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), null, null));
-				panel.tabs().select(panel.tabs().getTab(3));
-				panel.apply(party.partySnapshot());
-				final SidePanelPartyTab tab = panel.partyTab();
+				panel.apply(party.snapshot());
+				// T-176: the party is on the Fight tab, which paints through its own buffer.
+				final SidePanelFightTab tab = panel.fightTab();
 				tab.setBounds(new Rectangle(0, 0, 225, 4000));
 				SidePanelPictures.layout(tab);
-				final int built = tab.rebuilds();
+				final int built = tab.builds();
 				for (int i = 0; i < 6; i++)
 				{
 					party.run(PvmPerformancePanel.UPDATE_TICKS);
 					dirty.clear();
-					panel.apply(party.partySnapshot());
-					assertEquals("no rebuild", built, tab.rebuilds());
+					panel.apply(party.snapshot());
+					assertEquals("no rebuild", built, tab.builds());
 					assertTrue("values changed", dirty.size() > 3);
 					assertTrue("the tab itself is dirty, so every child joins its pass", dirty.contains(tab));
 					// Every other dirty component is inside it: one root, one pass, one copy to the window.
