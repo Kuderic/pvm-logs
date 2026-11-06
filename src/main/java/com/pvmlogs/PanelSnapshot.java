@@ -618,6 +618,29 @@ final class PanelSnapshot
 		/** The chip's word and colour role, or null for none. */
 		final Text chip;
 		final Color chipFill;
+		/** T-173: a part of the row above it (the Wardens' phase 2): set in under it, with its tooltip. */
+		boolean part;
+		String tip;
+
+		/** T-173: shorter forms of the name and the sub-line, longest first, where the full one doesn't fit; empty for none. */
+		List<String> nameShort = Collections.emptyList();
+		List<String> subShort = Collections.emptyList();
+
+		/** T-173: as a part of the row above, with {@code tip} on hover. */
+		ListRow part(String tip)
+		{
+			this.part = true;
+			this.tip = tip;
+			return this;
+		}
+
+		/** T-173: the name's and the sub-line's shorter forms. */
+		ListRow shorter(List<String> name, List<String> sub)
+		{
+			this.nameShort = name == null ? Collections.<String>emptyList() : name;
+			this.subShort = sub == null ? Collections.<String>emptyList() : sub;
+			return this;
+		}
 
 		ListRow(Text name, Text suffix, Text value, Text sub, Text chip, Color chipFill)
 		{

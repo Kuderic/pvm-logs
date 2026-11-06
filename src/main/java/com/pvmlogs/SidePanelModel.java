@@ -102,7 +102,70 @@ final class SidePanelModel
 		int combatTicks;
 		int phases;
 		boolean scored;
+		/** T-173: the Wardens' phase, by npc id ({@link #wardensPhase}): 1 the Obelisk, 2, 3; 0 for any other target. */
+		int wardensPhase;
+		/** T-173: phase 2's parts (T-172), summed over its fights; null without a record of them (an older one too). */
+		WardensPhase2 parts;
 	}
+
+	// ---- T-173: the Wardens, by phase ----
+
+	/**
+	 * T-173: the Wardens' phase of an npc id (RuneLite's gamevals): 1 the Obelisk (11750–11752), 2 a warden's phase 2
+	 * forms (11753–11758, either warden), 3 her phase 3 forms (11759–11766); 0 for anything else. Which warden is damaged
+	 * varies by run (Eric, 2026-11-05), so the phase is never read from her name.
+	 */
+	static int wardensPhase(int npcId)
+	{
+		if (npcId >= net.runelite.api.gameval.NpcID.TOA_WARDENS_P1_OBELISK_NPC_INACTIVE
+			&& npcId <= net.runelite.api.gameval.NpcID.TOA_WARDENS_P2_OBELISK_NPC)
+		{
+			return 1;
+		}
+		if (npcId >= net.runelite.api.gameval.NpcID.TOA_WARDEN_ELIDINIS_PHASE2_MAGE
+			&& npcId <= net.runelite.api.gameval.NpcID.TOA_WARDEN_TUMEKEN_PHASE2_EXPOSED)
+		{
+			return 2;
+		}
+		if (npcId >= net.runelite.api.gameval.NpcID.TOA_WARDEN_ELIDINIS_PHASE3_INACTIVE
+			&& npcId <= net.runelite.api.gameval.NpcID.TOA_WARDEN_P3_DEATH_ELIDINIS)
+		{
+			return 3;
+		}
+		return 0;
+	}
+
+	/** T-173: a Wardens target's name by its phase: {@code Obelisk}, {@code P2 · Elidinis' Warden}; the name otherwise. */
+	static String wardensLabel(int phase, String name)
+	{
+		return phase == 1 ? "Obelisk" : phase == 2 || phase == 3 ? "P" + phase + DOT + name : name;
+	}
+
+	/**
+	 * T-173: a phase's shorter names, where hers doesn't fit beside the figures: {@code P3 · Tumeken}, then {@code P3}.
+	 * None for any other target.
+	 */
+	static List<String> wardensShort(Target t)
+	{
+		if (t.wardensPhase < 2)
+		{
+			return Collections.emptyList();
+		}
+		final String prefix = "P" + t.wardensPhase;
+		final String rest = t.name.substring(Math.min(t.name.length(), prefix.length() + DOT.length()));
+		final String first = rest.split(" ")[0].replace("'s", "").replace("'", "");
+		return first.isEmpty() ? Collections.singletonList(prefix) : Arrays.asList(prefix + DOT + first, prefix);
+	}
+
+	static final String POISE = "poise";
+	static final String CORE = "core";
+	static final String PASSED_ON = "passed on to her (×5)";
+	static final String POISE_TIP = "Her poise, not her hitpoints: your hits on her while her core is in. Its luck is"
+		+ " these hits against what was expected of them.";
+	static final String CORE_TIP = "Your hits on her core, at their own value (not the ×5 it passes on to her), against"
+		+ " what was expected of them.";
+	static final String PASSED_ON_TIP = "The core passes five times its damage on to her: her hitpoints. It's your hits"
+		+ " on the core again, so no luck, execution or total counts it.";
 
 	/** One room of the raid, for the whole raid's Rooms list. */
 	static final class Room
@@ -1010,16 +1073,30 @@ final class SidePanelModel
 				// Opened by looking at it, never fought.
 				continue;
 			}
-			final String name = f.getTargetName();
+			// T-173: the Wardens by phase, from the npc id: Obelisk, P2 · <her name>, P3 · <her name>.
+			final int phase = wardensPhase(f.getTargetId());
+			final String name = wardensLabel(phase, f.getTargetName());
 			Target t = byName.get(name);
 			if (t == null)
 			{
 				t = new Target();
 				t.name = name;
 				t.scored = true;
+				t.wardensPhase = phase;
 				byName.put(name, t);
 				ids.put(name, new LinkedHashSet<>());
 				npcs.put(name, new LinkedHashSet<>());
+			}
+			final WardensPhase2 p2 = f.getWardensP2();
+			if (p2 != null)
+			{
+				if (t.parts == null)
+				{
+					t.parts = new WardensPhase2();
+				}
+				add(t.parts.poise, p2.poise);
+				add(t.parts.core, p2.core);
+				t.parts.passedOn += p2.passedOn;
 			}
 			npcs.get(name).add(f.getTargetIndex());
 			t.damage += f.getDamageDealt();
@@ -1035,6 +1112,17 @@ final class SidePanelModel
 			t.npcs = npcs.get(t.name).size();
 		}
 		return new ArrayList<>(byName.values());
+	}
+
+	private static void add(WardensPhase2.Part into, WardensPhase2.Part p)
+	{
+		if (p != null)
+		{
+			into.damage += p.damage;
+			into.expected += p.expected;
+			into.variance += p.variance;
+			into.attacks += p.attacks;
+		}
 	}
 
 	/**
@@ -2657,9 +2745,67 @@ final class SidePanelModel
 					: LedgerRows.number(t.damage), text),
 				Text.small(String.join(DOT, sub), t.scored ? SidePanelStyle.SECONDARY : SidePanelStyle.MUTED),
 				Text.small(t.scored ? "scored" : "not scored", t.scored ? SidePanelStyle.SECONDARY : SidePanelStyle.BODY),
-				t.scored ? null : SidePanelStyle.CHIP_NEUTRAL));
+				t.scored ? null : SidePanelStyle.CHIP_NEUTRAL).shorter(wardensShort(t), null));
+			if (t.parts != null)
+			{
+				rows.addAll(wardensParts(t.parts, warning));
+			}
 		}
 		return new PanelSnapshot.ListRows(Text.small("damage/expected", SidePanelStyle.SECONDARY), rows);
+	}
+
+	/**
+	 * T-173: phase 2's three parts under its row: poise and the core, each its own A/E and luck; then what the core passed
+	 * on to her, her hitpoints only. The P2 row's own figures are poise + core (T-172), never the passed-on.
+	 */
+	static List<ListRow> wardensParts(WardensPhase2 p, boolean warning)
+	{
+		final List<ListRow> out = new ArrayList<>(3);
+		out.add(part(POISE, p.poise, "not hitpoints", POISE_TIP, warning));
+		out.add(part(CORE, p.core, "own value", CORE_TIP, warning));
+		out.add(new ListRow(Text.body(PASSED_ON, SidePanelStyle.SECONDARY), null,
+			Text.title(LedgerRows.number(p.passedOn), SidePanelStyle.SECONDARY),
+			Text.small("her hitpoints", SidePanelStyle.MUTED),
+			Text.small("not counted", SidePanelStyle.BODY), SidePanelStyle.CHIP_NEUTRAL).part(PASSED_ON_TIP)
+			.shorter(Arrays.asList("passed on (×5)", "passed on"), Collections.singletonList("")));
+		return out;
+	}
+
+	/** T-173: one of phase 2's scored parts: A/E, its luck in damage, and its band where it has a spread. */
+	private static ListRow part(String name, WardensPhase2.Part p, String what, String tip, boolean warning)
+	{
+		// Its luck first, then what it is; the attacks on hover.
+		final List<String> sub = new ArrayList<>();
+		final boolean figures = !warning && p.attacks > 0;
+		final long luck = Math.round(p.damage - p.expected);
+		if (figures)
+		{
+			sub.add("luck " + signed(luck));
+		}
+		sub.add(what);
+		final double percentile = figures ? DamageMoments.percentile(p.damage, p.expected, p.variance) : -1;
+		final Text chip;
+		final Color fill;
+		if (percentile >= 0)
+		{
+			final LedgerRows.Colour c = LedgerRows.percentileBand(percentile);
+			chip = Text.small(LedgerRows.band(percentile), c == LedgerRows.Colour.NEUTRAL ? SidePanelStyle.BODY
+				: SidePanelStyle.of(c));
+			fill = SidePanelStyle.chip(c);
+		}
+		else
+		{
+			// No spread (the core's melee is certain): its luck is the difference alone, with no band to put it in.
+			chip = figures ? Text.small("certain", SidePanelStyle.BODY) : null;
+			fill = figures ? SidePanelStyle.CHIP_NEUTRAL : null;
+		}
+		return new ListRow(Text.body(name, SidePanelStyle.VALUE), null,
+			Text.title(figures ? LedgerRows.number(p.damage) + "/" + LedgerRows.number(Math.round(p.expected))
+				: LedgerRows.number(p.damage), SidePanelStyle.VALUE),
+			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY), chip, fill).part(tip + (figures
+			? " " + LedgerRows.number(p.damage) + " against " + LedgerRows.number(Math.round(p.expected)) + " expected ("
+			+ signed(luck) + ") over " + p.attacks + (p.attacks == 1 ? " attack." : " attacks.") : ""))
+			.shorter(null, figures ? Collections.singletonList(sub.get(0)) : Collections.<String>emptyList());
 	}
 
 	private static PanelSnapshot.ListRows rooms(List<Room> rooms)
