@@ -213,6 +213,8 @@ class Fight
 	private transient FightTimeline timeline;
 	// T-153: see recordPassedOn.
 	private transient int passedOn;
+	/** T-172: the Wardens' phase 2 in its parts (poise, core, passed on); null for any other fight and older records. */
+	private WardensPhase2 wardensP2;
 
 	// The tick this target became attackable, and how long it took to be
 
@@ -430,11 +432,58 @@ class Fight
 	void recordPassedOn(int amount)
 	{
 		passedOn += Math.max(0, amount);
+		// T-172: and saved, as phase 2's third part: what the core did to her, not scored again.
+		wardensP2().passedOn += Math.max(0, amount);
 	}
 
 	int getPassedOn()
 	{
 		return passedOn;
+	}
+
+	/** T-172: the Wardens' phase 2 in its parts, or null for any other fight (and a record saved before T-172). */
+	WardensPhase2 getWardensP2()
+	{
+		return wardensP2;
+	}
+
+	private WardensPhase2 wardensP2()
+	{
+		if (wardensP2 == null)
+		{
+			wardensP2 = new WardensPhase2();
+		}
+		return wardensP2;
+	}
+
+	/**
+	 * T-172: the player's damage on one of phase 2's npcs, to its part: on the warden with her core in, the poise; on the
+	 * core, the core. Nothing for any other npc, nor for the passed-on (see {@link #recordPassedOn}).
+	 */
+	void recordWardensDamage(int npcId, int amount)
+	{
+		final WardensPhase2.Kind kind = WardensPhase2.kindOf(npcId);
+		if (kind != null && amount > 0)
+		{
+			wardensP2().part(kind).damage += amount;
+		}
+	}
+
+	/**
+	 * T-172: an attack scored against one of phase 2's npcs, to its part: its expected damage and variance, as booked into
+	 * the fight. Against the warden with her core out, the core's (the attack is on the core, scored by the core's rule).
+	 */
+	void recordWardensExpected(int npcId, double mean, double variance)
+	{
+		final WardensPhase2.Kind kind = WardensPhase2.kindOf(npcId);
+		if (kind == null || mean < 0)
+		{
+			return;
+		}
+		final WardensPhase2.Part part = wardensP2().part(kind);
+		part.expected += mean;
+		part.variance += Math.max(0, variance);
+		part.attacks++;
 	}
 
 	/** A splat of a type not known here. See unclassifiedDamage. */

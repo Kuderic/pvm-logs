@@ -373,17 +373,8 @@
             "npcIds": [11755, 11758],
             "styles": ["MELEE"],
             "guaranteedMax": true,
-            "multiply": [5, 1],
             "specials": true,
-            "source": "T-152. OSRS Wiki, read 2026-11-02, Core: 'damage dealt to the core deals five times the damage towards the Warden, so a hit of 55 would deal 275 damage', and 'Players will always deal their max hit when using melee against the Warden's core.' Eric's 11-02 core hits, type 43: 240 = 5 x 48 (the keris), 210 = 5 x 42 (the dragon dagger)."
-          },
-          {
-            "name": "the core",
-            "npcIds": [11755, 11758],
-            "styles": ["RANGED", "MAGIC"],
-            "multiply": [5, 1],
-            "specials": true,
-            "source": "T-152. OSRS Wiki, Core: five times the damage; the max hit only for melee, so a ranged or magic hit rolls as it would."
+            "source": "T-172: at the hit's own value, no x5: the attack is the player's hit on the core, whose splat is the attack's damage (T-153), and the x5 is what the core passes on to her, kept apart (WardensPhase2). Eric's duo raid of 2026-11-04: the core's splats 1148, its x5 5940; scored at x5 E was 6340 against an A of 1148, z -263. T-152. OSRS Wiki, read 2026-11-02, Core: 'damage dealt to the core deals five times the damage towards the Warden, so a hit of 55 would deal 275 damage', and 'Players will always deal their max hit when using melee against the Warden's core.' Eric's 11-02 core hits, type 43: 240 = 5 x 48 (the keris), 210 = 5 x 42 (the dragon dagger)."
           }
         ]
       }

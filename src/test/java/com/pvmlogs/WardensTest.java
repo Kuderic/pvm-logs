@@ -12,7 +12,7 @@ import org.junit.Test;
 
 /**
  * T-152: the Wardens. P2's poise (the DPS calc's facts): certain to land, m% to (m + 20)% of the max. The core (OSRS
- * Wiki, Core): five times the damage, melee always its max. P3: 'Damaged' until its first fall below 5%, then
+ * Wiki, Core): five times the damage passed on to her, melee always its max; T-172: scored at the hit's own value. P3: 'Damaged' until its first fall below 5%, then
  * 'Enraged' (OSRS Wiki, Tumeken's Warden). Eric's 11-02 solo raid at level 340.
  */
 public class WardensTest
@@ -64,32 +64,33 @@ public class WardensTest
 	}
 
 	@Test
-	public void aMeleeHitOnTheCoreIsFiveTimesItsMax()
+	public void aMeleeHitOnTheCoreIsItsMaxAtItsOwnValue()
 	{
+		// T-172: the hit on the core at its own value (the core's splat is the attack's damage, T-153); its x5 is what the
+		// core passes on to her, kept apart (WardensPhase2), not scored.
 		final List<BossRules.ModifierRule> mods = applying(NpcID.TOA_WARDEN_ELIDINIS_PHASE2_EXPOSED, "MELEE",
 			new ModifierTracker(null), 100);
 		assertEquals(1.0, ModifierTracker.accuracy(mods, 0.40), 0);
-		// The keris's 48: 240, certain, nothing to luck.
+		// The keris's 48: 48, certain, nothing to luck.
 		final DamageMoments keris = ModifierTracker.moments(mods, new int[]{48}, 1.0, Integer.MAX_VALUE);
-		assertEquals(240.0, keris.mean, 1e-9);
+		assertEquals(48.0, keris.mean, 1e-9);
 		assertEquals(0.0, keris.variance(), 1e-9);
-		// The dragon dagger's special, two hits of 48: two 240s ([33170], [33171]).
+		// The dragon dagger's special, two hits of 48: 96 (two splats of 48 on the core, 240 each passed on).
 		final List<BossRules.ModifierRule> spec = ModifierTracker.forSpecials(mods);
-		assertEquals(480.0, ModifierTracker.moments(spec, new int[]{48, 48}, 1.0, Integer.MAX_VALUE).mean, 1e-9);
-		// Its ordinary max, 42: 210 ([33166]).
-		assertEquals(210, ModifierTracker.max(mods, 42));
+		assertEquals(96.0, ModifierTracker.moments(spec, new int[]{48, 48}, 1.0, Integer.MAX_VALUE).mean, 1e-9);
+		// Its ordinary max, 42.
+		assertEquals(42, ModifierTracker.max(mods, 42));
 	}
 
 	@Test
-	public void aRangedHitOnTheCoreRollsTimesFive()
+	public void aRangedHitOnTheCoreRollsAsItWould()
 	{
+		// T-172: no rule left for a ranged or magic hit on the core: it rolls as it would, at its own value.
 		final List<BossRules.ModifierRule> mods = applying(NpcID.TOA_WARDEN_TUMEKEN_PHASE2_EXPOSED, "RANGED",
 			new ModifierTracker(null), 100);
+		assertTrue(mods.isEmpty());
 		assertEquals(0.8, ModifierTracker.accuracy(mods, 0.8), 0);
-		assertEquals(250, ModifierTracker.max(mods, 50));
-		// Each roll times five: 0.8 x 5 x 25; T-156: its 0 pushed up to 1 before the core's x5 (1 in 51 deals 5).
-		assertEquals(0.8 * 5 * (25 + 1.0 / 51), ModifierTracker.moments(mods, new int[]{50}, 0.8, Integer.MAX_VALUE).mean,
-			1e-9);
+		assertEquals(50, ModifierTracker.max(mods, 50));
 	}
 
 	@Test
