@@ -133,6 +133,13 @@ class ThrallTracker
 	private boolean varbitActive;
 	private final List<int[]> recentSpawns = new ArrayList<>(); // {index, id, tick, distance}
 	private final List<Due> due = new ArrayList<>();
+	// T-177: projectiles of ours whose window passed with no splat, kept a few ticks; and those held through a target's
+	// collapse, whose splat, a 0, comes as it turns.
+	private final List<Due> missed = new ArrayList<>();
+	private final List<Due> held = new ArrayList<>();
+	static final int MISSED_KEPT_TICKS = 4;
+	// T-177: targets in a collapse, to the tick it holds what lands on them until.
+	private final java.util.Map<Integer, Integer> collapsing = new java.util.HashMap<>();
 	private final double[] phase = new double[ATTACK_SPEED_TICKS];
 	private int lastSplatTick = Integer.MIN_VALUE;
 	private int lastObservedTick = Integer.MIN_VALUE;
@@ -490,7 +497,12 @@ class ThrallTracker
 		{
 			return 0;
 		}
-		final double thrallRate = thrallRate(e.targetIndex, e.tick);
+		double thrallRate = thrallRate(e.targetIndex, e.tick);
+		// T-177: a 0 on a target whose collapse held our projectile: that projectile's.
+		if (e.amount == 0 && heldOn(e.targetIndex, e.tick))
+		{
+			thrallRate = Math.max(thrallRate, RATE_THRALL_PROJECTILE);
+		}
 		final double playerRate = e.player.rate;
 		// A thrall rolls 0 to its max evenly. The player misses, or rolls 0 to their max evenly.
 		final double thrallLikelihood = 1.0 / (maxHit + 1);
@@ -556,6 +568,59 @@ class ThrallTracker
 		return (phase[Math.floorMod(tick, ATTACK_SPEED_TICKS)] + 0.05) / (total + 0.2);
 	}
 
+	/**
+	 * T-177: the target starts a collapse that holds what lands on it until it turns ({@code untilTick} at the latest): our
+	 * projectiles at it still due, due in the last few ticks and found no splat, or fired at it during the collapse, land
+	 * then as a 0. The P2 Warden's, before her core comes out. Returns how many are held now.
+	 */
+	int holdThroughCollapse(int targetIndex, int tick, int untilTick)
+	{
+		collapsing.put(targetIndex, untilTick);
+		int n = 0;
+		for (Due d : due)
+		{
+			if (d.fromProjectile && d.targetIndex == targetIndex)
+			{
+				held.add(new Due(targetIndex, d.attackTick, tick, untilTick));
+				n++;
+			}
+		}
+		for (Iterator<Due> it = missed.iterator(); it.hasNext(); )
+		{
+			final Due d = it.next();
+			if (d.targetIndex == targetIndex)
+			{
+				held.add(new Due(targetIndex, d.attackTick, tick, untilTick));
+				it.remove();
+				n++;
+			}
+		}
+		if (n > 0)
+		{
+			notes.add(String.format("THRALL projectile%s at npc index %d held through its collapse from tick %d to %d: a 0 on it "
+				+ "then is its splat", n == 1 ? "" : "s", targetIndex, tick, untilTick));
+		}
+		return n;
+	}
+
+	/** T-177: whether a projectile of ours held through this npc's collapse can land its 0 on it on this tick. */
+	boolean heldOn(int targetIndex, int tick)
+	{
+		return heldDue(targetIndex, tick) != null;
+	}
+
+	private Due heldDue(int targetIndex, int tick)
+	{
+		for (Due d : held)
+		{
+			if (d.targetIndex == targetIndex && tick >= d.earliest && tick <= d.latest)
+			{
+				return d;
+			}
+		}
+		return null;
+	}
+
 	/** A splat judged to be the thrall's: it spends the attack it came from and votes for its phase. */
 	void noteThrallSplat(int targetIndex, int tick)
 	{
@@ -563,6 +628,14 @@ class ThrallTracker
 		if (d != null)
 		{
 			due.remove(d);
+		}
+		else
+		{
+			final Due h = heldDue(targetIndex, tick);
+			if (h != null)
+			{
+				held.remove(h);
+			}
 		}
 		for (int i = 0; i < phase.length; i++)
 		{
@@ -619,11 +692,26 @@ class ThrallTracker
 				// A projectile of ours always brings its splat. One that found none means its splat went to the player.
 				if (d.fromProjectile)
 				{
-					notes.add(String.format("THRALL projectile seen on %d found no splat it was judged to own", d.attackTick));
+					final Integer until = collapsing.get(d.targetIndex);
+					if (until != null && tick <= until)
+					{
+						// T-177: fired into a collapse: its splat comes as the target turns.
+						held.add(new Due(d.targetIndex, d.attackTick, tick, until));
+						notes.add(String.format("THRALL projectile seen on %d found no splat yet: its target's collapse holds it "
+							+ "until tick %d", d.attackTick, until));
+					}
+					else
+					{
+						notes.add(String.format("THRALL projectile seen on %d found no splat it was judged to own", d.attackTick));
+						missed.add(d);
+					}
 				}
 				it.remove();
 			}
 		}
+		missed.removeIf(d -> tick - d.latest > MISSED_KEPT_TICKS);
+		held.removeIf(d -> tick > d.latest);
+		collapsing.values().removeIf(until -> tick > until);
 		recentSpawns.removeIf(s -> tick - s[2] > SUMMON_WINDOW_TICKS);
 		unownedProjectiles.removeIf(p -> tick - p[2] > PROJECTILE_LATE);
 	}
