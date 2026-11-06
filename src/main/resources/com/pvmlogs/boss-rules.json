@@ -324,7 +324,7 @@
     },
     {
       "name": "Ba-Ba",
-      "npcIds": [11778],
+      "npcIds": [11778, 11779, 11780],
       "defenceDrain": {
         "defenceFloor": 60,
         "source": "OSRS Wiki, read 2026-10-28: Tombs of Amascut/Strategies: Ba-Ba -20, no lower than 60 of 80. DPS calc agrees."

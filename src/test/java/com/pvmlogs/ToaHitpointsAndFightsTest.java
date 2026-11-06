@@ -275,9 +275,9 @@ public class ToaHitpointsAndFightsTest
 			assertTrue(EncounterGroup.addKeepsBossFight(id, NpcID.TOA_WARDEN_TUMEKEN_PHASE3));
 			assertTrue(EncounterGroup.addKeepsBossFight(id, NpcID.TOA_WARDEN_ELIDINIS_PHASE3));
 		}
-		// Ba-Ba's baboons are fought: their own fights, scored.
-		assertFalse(EncounterGroup.isUnscored(NpcID.TOA_BABA_BABOON));
-		assertFalse(EncounterGroup.addKeepsBossFight(NpcID.TOA_BABA_BABOON, NpcID.TOA_BABA));
+		// T-175: Ba-Ba's baboons too, killed by any landed hit; each was a fight of its own and split hers.
+		assertTrue(EncounterGroup.isUnscored(NpcID.TOA_BABA_BABOON));
+		assertTrue(EncounterGroup.addKeepsBossFight(NpcID.TOA_BABA_BABOON, NpcID.TOA_BABA));
 	}
 
 	@Test

@@ -5668,6 +5668,12 @@ public class PvmPerformancePlugin extends Plugin
 		}
 	}
 
+	/** T-175: whether an npc leaving the scene keeps its count for its return: a boss form, alive, in a raid. */
+	static boolean parksOnLeaving(boolean inRaid, boolean dead, int npcId)
+	{
+		return inRaid && !dead && EncounterGroup.isBossForm(npcId);
+	}
+
 	private void closeOnDespawn(NPC npc, boolean killedByMessage)
 	{
 		if (Thralls.isThrall(npc.getId()))
@@ -5685,7 +5691,22 @@ public class PvmPerformancePlugin extends Plugin
 		// the counts outlive the fights, and a respawn on the index would start at what the last one had left.
 		if (current == null || current.isEnded() || current.getTargetIndex() != npc.getIndex())
 		{
-			health.forget(npc.getIndex());
+			// T-175: a boss's form leaving alive in a raid (Akkha, teleporting away while his shadow is fought) comes back to
+			// the count it left with.
+			if (parksOnLeaving(raidType != null, npc.isDead(), npc.getId()))
+			{
+				final int extra = damageByIndex.getOrDefault(npc.getIndex(), 0);
+				final int counted = health.damageCounted(npc.getIndex());
+				if (health.parkGone(npc.getIndex(), client.getWorld(), raidCounter, extra))
+				{
+					debug.log("COUNT PARKED on %s (npc %d, index %d): it left the scene alive with %d counted, kept for its return",
+						Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), counted);
+				}
+			}
+			else
+			{
+				health.forget(npc.getIndex());
+			}
 			if (npc.isDead())
 			{
 				damageByIndex.remove(npc.getIndex());
