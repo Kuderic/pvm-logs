@@ -216,7 +216,46 @@ final class EncounterGroup
 	/** T-175: whether two ids are forms of one boss ({@link #isBossForm}, the same group): the same npc in another form. */
 	static boolean sameBoss(int npcId, int otherId)
 	{
-		return npcId == otherId || sameGroup(npcId, otherId) && isBossForm(npcId) && isBossForm(otherId);
+		return npcId == otherId || sameGroup(npcId, otherId) && isBossForm(npcId) && isBossForm(otherId)
+			|| sameOlmPart(npcId, otherId);
+	}
+
+	/**
+	 * T-183: Olm's head and claws. Their fights stay apart (the head in no group, the claws a SEPARATE group of their own,
+	 * labelled by {@code labelOlmPhase}), but they're one boss for counting: a turn from one to the other keeps every
+	 * part's count, and a part leaving the scene alive keeps its own for its return.
+	 */
+	static boolean isOlmPart(int npcId)
+	{
+		return olmPart(npcId) != 0;
+	}
+
+	/** T-183: whether two ids are the same part of Olm in its forms (spawning, standing, dying). */
+	static boolean sameOlmPart(int npcId, int otherId)
+	{
+		final int part = olmPart(npcId);
+		return part != 0 && part == olmPart(otherId);
+	}
+
+	// 1 the head, 2 the left claw, 3 the right claw, 0 not Olm.
+	private static int olmPart(int npcId)
+	{
+		switch (npcId)
+		{
+			case NpcID.OLM_HEAD_SPAWNING:
+			case NpcID.OLM_HEAD:
+				return 1;
+			case NpcID.OLM_HAND_LEFT_SPAWNING:
+			case NpcID.OLM_HAND_LEFT:
+			case NpcID.OLM_HAND_LEFT_DYING:
+				return 2;
+			case NpcID.OLM_HAND_RIGHT_SPAWNING:
+			case NpcID.OLM_HAND_RIGHT:
+			case NpcID.OLM_HAND_RIGHT_DYING:
+				return 3;
+			default:
+				return 0;
+		}
 	}
 
 	/**

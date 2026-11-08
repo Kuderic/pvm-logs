@@ -5957,7 +5957,7 @@ public class PvmPerformancePlugin extends Plugin
 	/** T-175: whether an npc leaving the scene keeps its count for its return: a boss form, alive, in a raid. */
 	static boolean parksOnLeaving(boolean inRaid, boolean dead, int npcId)
 	{
-		return inRaid && !dead && EncounterGroup.isBossForm(npcId);
+		return inRaid && !dead && (EncounterGroup.isBossForm(npcId) || EncounterGroup.isOlmPart(npcId));
 	}
 
 	private void closeOnDespawn(NPC npc, boolean killedByMessage)
@@ -7755,7 +7755,10 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	static boolean keepsCountsOnSwitch(Encounter room, Fight fight, int npcId, boolean monster)
 	{
-		return switchesWithinRoom(room, fight, npcId) || monster && fight.isMonsterRoom();
+		return switchesWithinRoom(room, fight, npcId) || monster && fight.isMonsterRoom()
+			// T-183: Olm's head and claws, one boss for counting: a turn from the head to a claw dropped the claw's 598 at
+			// [161973] of Eric's log of 2026-11-06 11:38, and its kill reconciled 4 against 600.
+			|| EncounterGroup.isOlmPart(fight.getTargetId()) && EncounterGroup.isOlmPart(npcId);
 	}
 
 	/**

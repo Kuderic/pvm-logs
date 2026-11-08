@@ -499,12 +499,36 @@ class TargetHealth
 		{
 			restoredByBar(index, e, npcId, hp, tick);
 		}
+		else if (!regenerates && refilledToFull(e.hudMax, e.hudHp, e.hudId, npcId, hp, base,
+			(e.damage - e.damageAtHud) - (e.healed - e.healedAtHud)))
+		{
+			final int restored = hp - e.hudHp;
+			e.healed += restored;
+			if (notes.size() < MAX_NOTES)
+			{
+				notes.add(String.format("HP RESTORED: npc index %d's bar went back to full (%d -> %d of %d) on tick %d with "
+					+ "nothing counted since and no heal splat; counted as healed", index, e.hudHp, hp, base, tick));
+			}
+		}
 		e.hudHp = hp;
 		e.hudMax = base;
 		e.hudTick = tick;
 		e.hudId = npcId;
 		e.damageAtHud = e.damage;
 		e.healedAtHud = e.healed;
+	}
+
+	/**
+	 * T-183: a bar read back at full, as the same npc on the same bar, with nothing counted since its last reading and more
+	 * than {@link #barTolerance} above it: the game gave it all back with no heal splat. Olm's head, hit for 100 while a
+	 * claw still lived ([161967] of Eric's log of 2026-11-06 11:38, 700 of 800), read 800 of 800 at [161980]: its kill
+	 * reconciled 902 against 800. Only back to full, so a bar briefly high, or one that fills as the player works it (the
+	 * P2 Warden's poise), isn't taken for a heal.
+	 */
+	static boolean refilledToFull(int lastMax, int lastHp, int lastId, int npcId, int hp, int base, int countedSince)
+	{
+		return lastMax == base && lastHp >= 0 && lastId == npcId && hp == base && countedSince == 0
+			&& hp - lastHp > barTolerance(base) && WardensPhase2.kindOf(npcId) != WardensPhase2.Kind.POISE;
 	}
 
 	/**
@@ -868,8 +892,15 @@ class TargetHealth
 	 */
 	boolean parkGone(int index, int world, int raid, int extra)
 	{
-		if (!byIndex.containsKey(index))
+		final Entry e = byIndex.get(index);
+		if (e == null)
 		{
+			return false;
+		}
+		// T-183: back for a moment with nothing counted on it (a bar read as it rose, not hit): what was parked stands.
+		if (parked.containsKey(index) && e.damage == 0 && e.healed == 0)
+		{
+			byIndex.remove(index);
 			return false;
 		}
 		park(index, world, raid, extra);
