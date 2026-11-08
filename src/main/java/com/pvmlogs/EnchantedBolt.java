@@ -9,7 +9,13 @@ enum EnchantedBolt
 	/** Armour piercing: 15% higher max and a guaranteed hit. */
 	DIAMOND(0.10),
 	/** Life leech: 20% more damage, but not against the undead. */
-	ONYX(0.11);
+	ONYX(0.11),
+	/**
+	 * T-182, Dragon's breath: on a hit, extra damage of a fifth of the visible Ranged level, rounded down; not against fiery
+	 * monsters or dragons. OSRS Wiki, Enchanted bolts, read 2026-11-08: "dealing extra damage (Visible Ranged level * 20%,
+	 * rounded down)", 6% in PvM, "negated by fiery monsters, such as dragons", and it doesn't bypass the accuracy roll.
+	 */
+	DRAGONSTONE(0.06);
 
 	private static final int RUBY_DAMAGE_CAP = 100;
 
@@ -30,8 +36,14 @@ enum EnchantedBolt
 		return Math.min(RUBY_DAMAGE_CAP, targetCurrentHp / 5);
 	}
 
+	/** T-182: Dragon's breath's extra damage for this visible (boosted) Ranged level. */
+	static int dragonstoneDamage(int visibleRangedLevel)
+	{
+		return Math.max(0, visibleRangedLevel) / 5;
+	}
+
 	/**
-	 * The bolt loaded in the ammo slot, or null. Matches on name so the plain
+	 * The bolt fired (the ammo slot's or, T-182, a Dizana's quiver's), or null. Matches on name so the plain
 	 * and dragon variants of each are both covered.
 	 */
 	static EnchantedBolt forAmmoName(String ammoName)
@@ -47,6 +59,10 @@ enum EnchantedBolt
 		if (ammoName.startsWith("Diamond"))
 		{
 			return DIAMOND;
+		}
+		if (ammoName.startsWith("Dragonstone"))
+		{
+			return DRAGONSTONE;
 		}
 		return ammoName.startsWith("Onyx") ? ONYX : null;
 	}

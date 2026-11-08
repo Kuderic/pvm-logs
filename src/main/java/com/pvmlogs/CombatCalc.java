@@ -10,6 +10,8 @@ import java.util.Set;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.IntFunction;
+import java.util.function.ToIntFunction;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -348,6 +350,10 @@ class CombatCalc
 	private int memoGearNpc = Integer.MIN_VALUE;
 	private GearBonus memoGear;
 	private Loadout memoLoadout;
+	// T-182: the item in Dizana's quiver's own ammo slot, -1 for none, QUIVER_UNREAD until first asked. Read from its varps
+	// once and then on their change (onVarpChanged), not every tick.
+	private static final int QUIVER_UNREAD = -2;
+	private int quiverAmmo = QUIVER_UNREAD;
 	// The magic formula's parts for a target, per mode, as the base max hit is: levels and prayers differ by mode.
 	private final MagicDamage[] memoMagic = new MagicDamage[MODES];
 	private final int[] memoMagicNpc = new int[MODES];
@@ -460,9 +466,52 @@ class CombatCalc
 		expireMemo();
 		if (memoLoadout == null)
 		{
-			memoLoadout = Loadout.worn(itemManager, client.getItemContainer(InventoryID.WORN));
+			memoLoadout = Loadout.worn(itemManager, client.getItemContainer(InventoryID.WORN), quiverAmmo());
 		}
 		return memoLoadout;
+	}
+
+	private int quiverAmmo()
+	{
+		if (quiverAmmo == QUIVER_UNREAD)
+		{
+			quiverAmmo = readQuiverAmmo();
+		}
+		return quiverAmmo;
+	}
+
+	/**
+	 * T-182: the item in Dizana's quiver's own ammo slot, from its two varps, as RuneLite's ammo plugin reads them: the item
+	 * (-1 for none) and how many (0 for none).
+	 */
+	private int readQuiverAmmo()
+	{
+		final int item = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO);
+		final int amount = client.getVarpValue(VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO_AMOUNT);
+		return item > 0 && amount > 0 ? item : -1;
+	}
+
+	/**
+	 * T-182: a varp changed. The quiver's ammo is read again when one of its two varps does (the amount falls with every
+	 * shot from it, so this is reached often, but it's two reads).
+	 *
+	 * @return a GEAR quiver line for the debug log when the quiver's ammo is now a different item, or null
+	 */
+	String onVarpChanged(int varpId)
+	{
+		if (varpId != VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO && varpId != VarPlayerID.DIZANAS_QUIVER_TEMP_AMMO_AMOUNT)
+		{
+			return null;
+		}
+		final int was = quiverAmmo;
+		quiverAmmo = readQuiverAmmo();
+		if (quiverAmmo == was)
+		{
+			return null;
+		}
+		memoLoadout = null;
+		memoTick = Integer.MIN_VALUE;
+		return "GEAR quiver: " + (quiverAmmo < 0 ? "empty" : itemLabel(quiverAmmo) + " #" + quiverAmmo);
 	}
 
 	/**
@@ -490,6 +539,14 @@ class CombatCalc
 			final String name = gear.name(slot);
 			b.append(slot.name().toLowerCase(Locale.ROOT)).append(' ').append(name == null ? "?" : name)
 				.append(" #").append(id);
+		}
+		final int quiver = gear.quiverAmmo();
+		if (quiver >= 0)
+		{
+			// T-182: the quiver's own ammo slot, fired when the equipment's holds nothing the weapon fires.
+			final String name = gear.quiverAmmoName();
+			b.append(b.length() > 0 ? ", " : "").append("quiver ").append(name == null ? "?" : name).append(" #")
+				.append(quiver);
 		}
 		return b.length() == 0 ? "nothing worn" : b.toString();
 	}
@@ -1272,6 +1329,10 @@ class CombatCalc
 				return (push ? DamageMoments.successful(1.15 * averageMax) : DamageMoments.uniform(1.15 * averageMax))
 					.weighted(procChance)
 					.or(ordinary.weighted(1.0 - procChance));
+			case DRAGONSTONE:
+				// T-182: an extra on a hit, so it needs the accuracy roll the ordinary attack makes.
+				return dragonstoneMoments(procChance, EnchantedBolt.dragonstoneDamage(visibleRangedLevel()),
+					shapeLandChance(ordinaryShape(), accuracy, hitsPerAttack(npcId)), ordinary);
 			default:
 				// Onyx leeches from damage actually dealt, so it needs a hit first.
 				return onyxMoments(procChance, ordinary);
@@ -1508,6 +1569,18 @@ class CombatCalc
 		return DamageMoments.fixed(rubyDamage).weighted(procChance).or(ordinary.weighted(1.0 - procChance));
 	}
 
+	/**
+	 * T-182: a dragonstone bolt: a landed hit (this chance) deals {@code extra} more with the proc's chance. With D the landed
+	 * hit's damage, the ordinary attack's moments are p·E[D] and p·E[D²], so E[X] adds p·c·e and E[X²] adds 2c·e·p·E[D] +
+	 * p·c·e². Not re-capped at the hp left: the extra is a fifth of a level, about 24 at most.
+	 */
+	static DamageMoments dragonstoneMoments(double procChance, int extra, double landChance, DamageMoments ordinary)
+	{
+		final double ce = procChance * extra;
+		return new DamageMoments(ordinary.mean + landChance * ce,
+			ordinary.second + 2 * ce * ordinary.mean + landChance * ce * extra);
+	}
+
 	/** An onyx bolt: 20% more on a proc, which needs the hit, so the whole attack is scaled with that chance. */
 	static DamageMoments onyxMoments(double procChance, DamageMoments ordinary)
 	{
@@ -1531,9 +1604,8 @@ class CombatCalc
 		{
 			return null;
 		}
-		final int ammo = equippedItemId(EquipmentInventorySlot.AMMO);
-		final EnchantedBolt bolt = ammo < 0
-			? null : EnchantedBolt.forAmmoName(itemManager.getItemComposition(ammo).getName());
+		// T-182: the bolts fired, which may be the quiver's.
+		final EnchantedBolt bolt = EnchantedBolt.forAmmoName(firedAmmoName());
 		if (bolt == EnchantedBolt.ONYX)
 		{
 			final MonsterStatsProvider.MonsterStats npc = monsters.get(npcId);
@@ -1542,7 +1614,22 @@ class CombatCalc
 				return null;
 			}
 		}
+		if (bolt == EnchantedBolt.DRAGONSTONE)
+		{
+			// The wiki's "fiery monsters, such as dragons": the DPS calc's attributes for both.
+			final MonsterStatsProvider.MonsterStats npc = monsters.get(npcId);
+			if (npc != null && (npc.hasAttribute("fiery") || npc.hasAttribute("dragon")))
+			{
+				return null;
+			}
+		}
 		return bolt;
+	}
+
+	// The Ranged level shown in the skills tab, boosts included: what Dragon's breath is a fifth of.
+	private int visibleRangedLevel()
+	{
+		return client.getBoostedSkillLevel(Skill.RANGED);
 	}
 
 	private boolean hasKandarinHardDiary()
@@ -2408,37 +2495,7 @@ class CombatCalc
 	private int computeAttackBonus(AttackType type)
 	{
 		final Loadout gear = gear();
-		final boolean skipAmmo = !ammoSlotFeedsWeapon();
-		int total = 0;
-		for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
-		{
-			if (skipAmmo && slot == EquipmentInventorySlot.AMMO)
-			{
-				continue;
-			}
-			final ItemEquipmentStats e = equipmentStats(gear.id(slot));
-			if (e != null)
-			{
-				switch (type)
-				{
-					case STAB:
-						total += e.getAstab();
-						break;
-					case SLASH:
-						total += e.getAslash();
-						break;
-					case CRUSH:
-						total += e.getAcrush();
-						break;
-					case RANGED:
-						total += e.getArange();
-						break;
-					default:
-						total += e.getAmagic();
-						break;
-				}
-			}
-		}
+		int total = wornBonus(gear, ammoSlotFeedsWeapon(), quiverFeedsWeapon(), this::equipmentStats, attackBonusOf(type));
 		if (type == AttackType.MAGIC && usingWeaponsOwnAttack())
 		{
 			// The shadow multiplies the magic accuracy of everything else worn on the same terms as the damage: its own spell
@@ -2469,25 +2526,100 @@ class CombatCalc
 	 * Dizana's max cape, worn, with arrows or bolts in the ammo slot for a weapon that fires them. OSRS Wiki, Dizana's
 	 * quiver, read 2026-11-03: "will gain an additional +1 Ranged Strength and +10 Ranged accuracy", for ammo the quiver
 	 * can store, so not darts, chinchompas or the bow of faerdhinen's; blessed, "a permanent effect". The DPS calc's facts
-	 * agree. The quiver's own ammo slot isn't read here, only the equipment's.
+	 * agree. T-182: the ammo fired, from either slot: the wiki's Sunfire applies to arrows and bolts "shot from either
+	 * ammunition slot".
 	 */
 	private boolean dizanasSunfire()
 	{
 		final Loadout gear = gear();
 		return attackStyle().getAttackType() == AttackType.RANGED && ammoSlotFeedsWeapon()
-			&& sunfire(gear.id(EquipmentInventorySlot.CAPE), gear.name(EquipmentInventorySlot.AMMO), weaponCategory());
+			&& sunfire(gear.id(EquipmentInventorySlot.CAPE), firedAmmoName(), weaponCategory());
 	}
 
 	/** T-151: {@link #dizanasSunfire} from the cape, the ammo's name and the weapon's category. */
 	static boolean sunfire(int capeId, String ammoName, WeaponCategory weapon)
 	{
-		if (!SUNFIRE_CAPES.contains(capeId) || ammoName == null)
+		return SUNFIRE_CAPES.contains(capeId) && Loadout.fires(weapon, ammoName);
+	}
+
+	/**
+	 * T-182: whether the attack going out fires the quiver's ammo: a ranged weapon that fires ammo at all, and
+	 * {@link Loadout#firesFromQuiver}.
+	 */
+	private boolean quiverFeedsWeapon()
+	{
+		return attackStyle().getAttackType() == AttackType.RANGED && ammoSlotFeedsWeapon()
+			&& gear().firesFromQuiver(weaponCategory());
+	}
+
+	/** T-182: the ammo the attack fires, the quiver's or the ammo slot's; -1 for none. */
+	int firedAmmo()
+	{
+		return quiverFeedsWeapon() ? gear().quiverAmmo() : equippedItemId(EquipmentInventorySlot.AMMO);
+	}
+
+	/** {@link #firedAmmo}'s name, or null. */
+	private String firedAmmoName()
+	{
+		return quiverFeedsWeapon() ? gear().quiverAmmoName() : gear().name(EquipmentInventorySlot.AMMO);
+	}
+
+	/**
+	 * One bonus summed over the worn gear (T-182, from the two loops that did it). The ammo slot counts only when it feeds
+	 * the weapon (ammoSlotFeedsWeapon). When the quiver's ammo is fired, its bonus is added; the ammo slot then holds
+	 * something the weapon doesn't fire, and a blessing there still counts (its stats are its own), but arrows or bolts
+	 * the weapon isn't firing don't: the ammo's strength is the shot's. That last part is a guess, labelled as one: the
+	 * wiki names no case, and the DPS calc has no second ammo slot.
+	 */
+	static int wornBonus(Loadout gear, boolean ammoSlotFeeds, boolean firesQuiver,
+		IntFunction<ItemEquipmentStats> stats, ToIntFunction<ItemEquipmentStats> bonus)
+	{
+		int total = 0;
+		for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
 		{
-			return false;
+			if (slot == EquipmentInventorySlot.AMMO
+				&& (!ammoSlotFeeds || firesQuiver && isArrowsOrBolts(gear.name(EquipmentInventorySlot.AMMO))))
+			{
+				continue;
+			}
+			final ItemEquipmentStats e = stats.apply(gear.id(slot));
+			if (e != null)
+			{
+				total += bonus.applyAsInt(e);
+			}
 		}
-		final String ammo = ammoName.toLowerCase();
-		return weapon == WeaponCategory.CROSSBOW && ammo.contains("bolt")
-			|| weapon == WeaponCategory.BOW && ammo.contains("arrow");
+		if (firesQuiver)
+		{
+			final ItemEquipmentStats e = stats.apply(gear.quiverAmmo());
+			if (e != null)
+			{
+				total += bonus.applyAsInt(e);
+			}
+		}
+		return total;
+	}
+
+	private static boolean isArrowsOrBolts(String ammoName)
+	{
+		return Loadout.fires(WeaponCategory.CROSSBOW, ammoName) || Loadout.fires(WeaponCategory.BOW, ammoName);
+	}
+
+	/** The attack bonus an item gives for this type. */
+	static ToIntFunction<ItemEquipmentStats> attackBonusOf(AttackType type)
+	{
+		switch (type)
+		{
+			case STAB:
+				return ItemEquipmentStats::getAstab;
+			case SLASH:
+				return ItemEquipmentStats::getAslash;
+			case CRUSH:
+				return ItemEquipmentStats::getAcrush;
+			case RANGED:
+				return ItemEquipmentStats::getArange;
+			default:
+				return ItemEquipmentStats::getAmagic;
+		}
 	}
 
 	// A charged quiver, a blessed (infinite) one, and the max cape, each with its trouver version (gameval names).
@@ -2941,6 +3073,8 @@ class CombatCalc
 				return Math.max(hit, EnchantedBolt.rubyDamage(targetCurrentHp(npcId)));
 			case DIAMOND:
 				return (int) (hit * 1.15);
+			case DRAGONSTONE:
+				return hit + EnchantedBolt.dragonstoneDamage(visibleRangedLevel());
 			default:
 				return (int) (hit * 1.20);
 		}
@@ -3347,7 +3481,7 @@ class CombatCalc
 	// Dragon arrows in the quiver, seeking ones included: Descent of Dragons rather than of Darkness (wiki, Dark bow).
 	private boolean firesDragonArrows()
 	{
-		final int ammo = equippedItemId(EquipmentInventorySlot.AMMO);
+		final int ammo = firedAmmo();
 		return ammo == ItemID.DRAGON_ARROW || ammo == ItemID.DRAGON_ARROW_P || ammo == ItemID.DRAGON_ARROW_P_
 			|| ammo == ItemID.DRAGON_ARROW_P__ || ammo == ItemID.SEEKING_DRAGON_ARROW;
 	}
@@ -5011,20 +5145,8 @@ class CombatCalc
 	private int computeEquipmentBonus(boolean melee)
 	{
 		final Loadout gear = gear();
-		final boolean skipAmmo = !ammoSlotFeedsWeapon();
-		int total = 0;
-		for (EquipmentInventorySlot slot : EquipmentInventorySlot.values())
-		{
-			if (skipAmmo && slot == EquipmentInventorySlot.AMMO)
-			{
-				continue;
-			}
-			final ItemEquipmentStats e = equipmentStats(gear.id(slot));
-			if (e != null)
-			{
-				total += melee ? e.getStr() : e.getRstr();
-			}
-		}
+		int total = wornBonus(gear, ammoSlotFeedsWeapon(), quiverFeedsWeapon(), this::equipmentStats,
+			melee ? ItemEquipmentStats::getStr : ItemEquipmentStats::getRstr);
 		if (!melee)
 		{
 			final ItemEquipmentStats dart = blowpipeDart();

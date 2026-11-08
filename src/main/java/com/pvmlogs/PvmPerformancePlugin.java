@@ -4423,10 +4423,11 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		else if (!combatCalc.isMeleeEquipped() && worn != null)
 		{
-			final Item ammo = worn.getItem(EquipmentInventorySlot.AMMO.getSlotIdx());
-			if (ammo != null && ammo.getId() > 0)
+			// T-182: the ammo fired, which may be in Dizana's quiver rather than the ammo slot.
+			final int ammo = combatCalc.firedAmmo();
+			if (ammo > 0)
 			{
-				c.ammoOrSpell = FightContext.addOnce(c.ammoOrSpell, combatCalc.itemLabel(ammo.getId()));
+				c.ammoOrSpell = FightContext.addOnce(c.ammoOrSpell, combatCalc.itemLabel(ammo));
 			}
 		}
 	}
@@ -6970,6 +6971,12 @@ public class PvmPerformancePlugin extends Plugin
 			drain.onVarbitChanged(event.getVarbitId(), event.getValue());
 		}
 		noteSpecialEnergy();
+		// T-182: the ammo in Dizana's quiver, read again when its varps change rather than every tick.
+		final String quiver = combatCalc.onVarpChanged(event.getVarpId());
+		if (quiver != null)
+		{
+			debug.log("%s", quiver);
+		}
 		// The slayer task's count: the game's check on the slayer table (T-090).
 		if (event.getVarpId() == VarPlayerID.SLAYER_COUNT)
 		{
