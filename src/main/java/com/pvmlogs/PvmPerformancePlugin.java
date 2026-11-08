@@ -6025,6 +6025,13 @@ public class PvmPerformancePlugin extends Plugin
 				lastBookedThrowTick = attackTick;
 				lastAttackFromProjectile = attackObservedFromProjectile;
 				combatCalc.noteAttackKind(true);
+				// T-181: a cast spends its click here too. A Crumble Undead at Vorkath's spawn was left in hand for the rest of
+				// its window, so his next bolt was read, named and scored as the spell ([37098] of Eric's log of 2026-11-06
+				// 11:38: "named by the throw's spell Crumble Undead", max 18, chances 0.11, against the bolt's 63 and 0.84).
+				if (spendsTheCast(attackObservedFromProjectile, attackObservedFromCast))
+				{
+					combatCalc.noteAttackThrown();
+				}
 				if (onAdd)
 				{
 					// At one of the boss's adds (T-084): its tick is time in the boss's fight, as a tick on cooldown; nothing
@@ -6180,7 +6187,7 @@ public class PvmPerformancePlugin extends Plugin
 				debug.log("%s", meleeLine);
 			}
 			lastAttackFromProjectile = attackObservedFromProjectile;
-			if (attackObservedFromProjectile || attackObservedFromCast)
+			if (spendsTheCast(attackObservedFromProjectile, attackObservedFromCast))
 			{
 				// Only a cast can spend a cast. A melee blow landing on the tick the spell was clicked would otherwise consume it,
 				// and the cast a tick later then read as the weapon. A cast seen from its animation spends it too (T-066): it was
@@ -6633,6 +6640,16 @@ public class PvmPerformancePlugin extends Plugin
 	 * T-170: whether a weapon held as a melee weapon ({@code heldMelee}) or not could have thrown an attack seen as a
 	 * projectile or as a melee blow: a melee weapon throws no projectile, and a bow strikes no blow. Unknown says yes.
 	 */
+	/**
+	 * Whether a booked attack spends the manual cast in hand: only a cast or a projectile can (a melee blow landing on the
+	 * tick the spell was clicked would otherwise consume it). T-181: wherever it was booked, a fight's target or one of its
+	 * adds swatted in passing.
+	 */
+	static boolean spendsTheCast(boolean fromProjectile, boolean fromCast)
+	{
+		return fromProjectile || fromCast;
+	}
+
 	static boolean couldHaveThrown(boolean fromProjectile, boolean meleeBlow, Boolean heldMelee)
 	{
 		if (heldMelee == null)
