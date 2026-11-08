@@ -20,7 +20,9 @@ final class EncounterGroup
 	private static final Map<String, Falls> FALLS = buildFalls();
 	// Groups whose adds are swatted in passing while the boss fight goes on (T-084): a hit on one, or its death, never ends
 	// the boss's fight. Not the Sire's, Kraken's or Hespori's, whose adds are the phase the boss waits through and get their
-	// own fights in the room. The Maggot King's larvae too (T-086): one shot each as it flies, between the King's attacks.
+	// own fights in the room (T-180: but any add of WEAK_ADD_HP or less, Hespori's flowers among them, is swatted in passing
+	// by the plugin's weak-add rule). The Maggot King's larvae too (T-086): one shot each as it flies, between the King's
+	// attacks.
 	private static final Set<String> ADDS_KEEP_BOSS_FIGHT = Collections.unmodifiableSet(new HashSet<>(
 		Arrays.asList("Zulrah", "Maggot King",
 			// T-153: Ba-Ba's boulders and the Wardens' phase three energy siphons, broken between her and their attacks.
@@ -215,6 +217,37 @@ final class EncounterGroup
 	static boolean sameBoss(int npcId, int otherId)
 	{
 		return npcId == otherId || sameGroup(npcId, otherId) && isBossForm(npcId) && isBossForm(otherId);
+	}
+
+	/**
+	 * T-180: the full hitpoints (the monster table's, raid-level free) at or under which a boss's add, or a monster hit
+	 * during a boss's fight, opens no fight of its own: swatted in passing. Kephri's eggs (35), agile scarabs and swarms,
+	 * Hespori's flowers (10), the spiders' spiderlings (5); not Araxxor's araxytes (58), Yama's void flares (71), Kephri's
+	 * guardian scarabs or Akkha's shadows.
+	 */
+	static final int WEAK_ADD_HP = 40;
+
+	/** T-180: whether this npc is an add its group lists: a one-boss group's npc that isn't one of the boss's forms. */
+	static boolean isBossesAdd(int npcId)
+	{
+		final Falls rule = falls(npcId);
+		return rule != null && rule.kind == FallKind.ONE_BOSS && !rule.boss.contains(npcId);
+	}
+
+	/** T-180: whether a fight on this npc is in a boss's encounter: its group is one boss with its adds. */
+	static boolean isBossEncounter(int npcId)
+	{
+		final Falls rule = falls(npcId);
+		return rule != null && rule.kind == FallKind.ONE_BOSS;
+	}
+
+	/**
+	 * T-180: the Chambers' Scavenger beasts, a resource room's monsters fought for their drops: 21 fights of one or two
+	 * hits in Eric's log of 2026-11-06 11:38, each taking over the Fight tab.
+	 */
+	static boolean isScavenger(int npcId)
+	{
+		return npcId == NpcID.RAIDS_SCAVENGER_BEAST_A || npcId == NpcID.RAIDS_SCAVENGER_BEAST_B;
 	}
 
 	/** Every group's name, for the audit test. */

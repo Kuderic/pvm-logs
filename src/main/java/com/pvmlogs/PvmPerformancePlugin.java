@@ -1111,6 +1111,21 @@ public class PvmPerformancePlugin extends Plugin
 					recordExtraTarget(npc, hitsplat.getAmount(), now);
 					return;
 				}
+				// T-180: a weak add with no boss fight open (a Scavenger beast, Kephri's egg before her): no fight.
+				if (swatOf(npc) == Swat.NO_FIGHT)
+				{
+					final List<PendingHit> flew = pendingMineHits.remove(npc.getIndex());
+					if ((flew == null || flew.isEmpty()) && combatCalc.isMeleeEquipped()
+						&& !withinTicks(client.getTickCount(), lastAddBlowTick, 1))
+					{
+						lastAddBlowTick = client.getTickCount();
+						recordAttackObserved(false, npc);
+					}
+					noteWeakAdd(npc, false);
+					debug.log("hitsplat %d on %s (npc %d, index %d): a weak add, no fight opened; not counted",
+						hitsplat.getAmount(), npc.getName(), npc.getId(), npc.getIndex());
+					return;
+				}
 				startFight(npc, now);
 			}
 			// The held fight's target hit on its own index before any spawn was seen for it (T-088): back.
@@ -2705,7 +2720,15 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				return;
 			}
-			startFight(npc, now);
+			// T-180: or no fight at all, for a weak add with no boss fight open.
+			if (swatOf(npc) != Swat.NO_FIGHT)
+			{
+				startFight(npc, now);
+			}
+			else
+			{
+				noteWeakAdd(npc, false);
+			}
 		}
 		noteBossAttacked(npc);
 		final int lands = landingTick(projectile);
@@ -4961,7 +4984,8 @@ public class PvmPerformancePlugin extends Plugin
 		final long now = System.currentTimeMillis();
 		if (current == null || current.isEnded() || current.getTargetIndex() != target.getIndex())
 		{
-			if (!isFightable(target))
+			// T-180: a cast at a weak add opens no fight; one at a weak add in a boss's fight leaves it open.
+			if (!isFightable(target) || swatOf(target) != Swat.NONE)
 			{
 				return false;
 			}
@@ -5489,6 +5513,11 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return true;
 		}
+		if (!collateral && swatOf(npc) == Swat.IN_FIGHT)
+		{
+			noteWeakAdd(npc, true);
+			return true;
+		}
 		if (collateral || !bossFightOpen() || !isFightable(npc))
 		{
 			return false;
@@ -5535,6 +5564,87 @@ public class PvmPerformancePlugin extends Plugin
 			&& targetNpc != null && targetNpc.getIndex() == current.getTargetIndex() && !targetNpc.isDead()
 			&& !MonsterRooms.isMonster(current.getTargetName(), current.getTargetId(), false,
 				monsterStats == null ? null : monsterStats.rules());
+	}
+
+	/** T-180: how a weak add is swatted in passing: not at all (a fight of its own), into the fight open, or with none. */
+	enum Swat
+	{
+		NONE, IN_FIGHT, NO_FIGHT
+	}
+
+	/**
+	 * T-180: whether a hit on this npc opens a fight of its own. While a boss's fight is open, a monster or a boss's listed
+	 * add of {@link EncounterGroup#WEAK_ADD_HP} full hitpoints or less is swatted in passing: nothing scored, its tick in the
+	 * boss's fight. With none open, a boss's listed add that weak (Kephri's eggs before her, Hespori's flowers between her
+	 * pieces), and a Scavenger beast anywhere in a raid, open no fight: their ticks go to the trip's time. Anything else,
+	 * and everything outside a boss's fight that isn't a boss's add, is as before: a goblin killed on its own is a fight
+	 * (T-157), the Tombs' Baboons room keeps its fights (no boss), and grouped parts (Olm's hands, the Guardians) are left
+	 * alone.
+	 */
+	static Swat weakAddSwat(boolean inRaid, int addId, boolean addIsMonster, int addFullHp, boolean bossFightOpen)
+	{
+		if (inRaid && EncounterGroup.isScavenger(addId))
+		{
+			return Swat.NO_FIGHT;
+		}
+		final boolean listedAdd = EncounterGroup.isBossesAdd(addId);
+		final boolean monster = EncounterGroup.of(addId) == null && addIsMonster;
+		if (!listedAdd && !monster || addFullHp <= 0 || addFullHp > EncounterGroup.WEAK_ADD_HP)
+		{
+			return Swat.NONE;
+		}
+		if (bossFightOpen)
+		{
+			return Swat.IN_FIGHT;
+		}
+		return listedAdd ? Swat.NO_FIGHT : Swat.NONE;
+	}
+
+	/** T-180: {@link #weakAddSwat} for this npc, against the fight open now. */
+	private Swat swatOf(NPC npc)
+	{
+		if (npc == null || EncounterGroup.isBossForm(npc.getId()))
+		{
+			return Swat.NONE;
+		}
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final boolean monster = MonsterRooms.isMonster(Text.removeTags(npc.getName()), npc.getId(), false, rules);
+		return weakAddSwat(raidType != null, npc.getId(), monster, fullHitpoints(npc.getId()), bossFightForAdds(npc));
+	}
+
+	/** T-180: a boss's fight open, its target not this npc: a boss's encounter (its own parts and adds), or a boss alone. */
+	private boolean bossFightForAdds(NPC npc)
+	{
+		if (current == null || current.isEnded() || current.isMonsterRoom() || away != null
+			|| current.getTargetIndex() == npc.getIndex())
+		{
+			return false;
+		}
+		final int id = current.getTargetId();
+		if (EncounterGroup.isBossEncounter(id))
+		{
+			return true;
+		}
+		return EncounterGroup.of(id) == null && !MonsterRooms.isMonster(current.getTargetName(), id, false,
+			monsterStats == null ? null : monsterStats.rules());
+	}
+
+	// T-180: the weak adds already said in the log, by index, so each is said once.
+	private final Set<Integer> weakAddsSaid = new HashSet<>();
+
+	private void noteWeakAdd(NPC npc, boolean inFight)
+	{
+		if (weakAddsSaid.add(npc.getIndex()))
+		{
+			if (weakAddsSaid.size() > 256)
+			{
+				weakAddsSaid.clear();
+			}
+			debug.log("WEAK ADD %s (npc %d, index %d, %d hp): swatted in passing, no fight of its own; %s",
+				Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), fullHitpoints(npc.getId()),
+				inFight && current != null ? current.getTargetName() + "'s fight stays open, its ticks in it"
+					: "no fight open, its ticks in the trip's time");
+		}
 	}
 
 	/** T-163: the player's own attack on the open fight's target, what a provisional add's release counts from. */
@@ -5992,8 +6102,13 @@ public class PvmPerformancePlugin extends Plugin
 			final boolean onAdd = attackObservedNpcIndex >= 0 && attackObservedNpcId >= 0 && current != null
 				&& !current.isEnded() && current.getTargetIndex() != attackObservedNpcIndex
 				&& (EncounterGroup.addKeepsBossFight(attackObservedNpcId, current.getTargetId())
-					|| unlistedAdds.isAccepted(attackObservedNpcIndex));
-			Fight attacker = onAdd ? null : attackerFor(attackObservedNpcIndex, attackTick, current, lastFinished);
+					|| unlistedAdds.isAccepted(attackObservedNpcIndex)
+					|| attackObservedNpc != null && attackObservedNpc.getIndex() == attackObservedNpcIndex
+						&& swatOf(attackObservedNpc) == Swat.IN_FIGHT);
+			// T-180: at a weak add with no fight open: its tick goes to the trip's time.
+			final boolean onWeakAdd = !onAdd && attackObservedNpc != null && attackObservedNpc.getIndex() == attackObservedNpcIndex
+				&& swatOf(attackObservedNpc) == Swat.NO_FIGHT;
+			Fight attacker = onAdd || onWeakAdd ? null : attackerFor(attackObservedNpcIndex, attackTick, current, lastFinished);
 			// A shot lands only on the npc its projectile was aimed at (T-101), unless what threw it hits several. A splat of
 			// mine on another npc in between opened a fight there - a thrall's last 0 on Araxxor, in Eric's 21:40 log - and the
 			// crossbow shot at a Mirrorback was booked to Araxxor, its 31 left unmatched. Booked on the npc it was aimed at,
@@ -6002,6 +6117,7 @@ public class PvmPerformancePlugin extends Plugin
 			{
 				final NPC aimed = attackObservedNpc;
 				final boolean reopen = aimed != null && aimed.getIndex() == attackObservedNpcIndex && !aimed.isDead()
+					&& swatOf(aimed) == Swat.NONE
 					&& isFightable(aimed);
 				debug.log("ATTACK thrown tick %d: its projectile was aimed at npc %d (index %d), not at %s: %s", attackTick,
 					attackObservedNpcId, attackObservedNpcIndex, attacker.getTargetName(), reopen ? "booked on it"
@@ -6032,7 +6148,13 @@ public class PvmPerformancePlugin extends Plugin
 				{
 					combatCalc.noteAttackThrown();
 				}
-				if (onAdd)
+				if (onWeakAdd)
+				{
+					session.recordTickSpent(false);
+					debug.log("ATTACK thrown tick %d on a weak add (npc %d), no fight open: its tick in the trip's time, nothing "
+						+ "scored", attackTick, attackObservedNpcId);
+				}
+				else if (onAdd)
 				{
 					// At one of the boss's adds (T-084): its tick is time in the boss's fight, as a tick on cooldown; nothing
 					// about it is scored.
@@ -7578,7 +7700,8 @@ public class PvmPerformancePlugin extends Plugin
 			return;
 		}
 		final NPC npc = (NPC) target;
-		if (!isFightable(npc))
+		// T-180: a weak add opens no fight by being targeted either.
+		if (!isFightable(npc) || swatOf(npc) == Swat.NO_FIGHT)
 		{
 			return;
 		}
