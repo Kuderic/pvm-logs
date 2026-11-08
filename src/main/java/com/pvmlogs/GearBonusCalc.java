@@ -776,6 +776,18 @@ class GearBonusCalc
 	 * ammo and magic dart, so anything else zeroes the damage. Only the
 	 * leaf-bladed battleaxe carries a bonus on top.
 	 */
+	// T-182: the ammo a bow or crossbow fires, its own slot's or the quiver's; the ammo slot's for anything else.
+	private static String firedAmmoName(Loadout gear)
+	{
+		final String weapon = gear.name(EquipmentInventorySlot.WEAPON);
+		final String w = weapon == null ? "" : weapon.toLowerCase();
+		if (!w.contains("bow"))
+		{
+			return gear.name(EquipmentInventorySlot.AMMO);
+		}
+		return gear.firedAmmoName(w.contains("crossbow") ? WeaponCategory.CROSSBOW : WeaponCategory.BOW);
+	}
+
 	private GearBonus leafyBonus(AttackType type, MonsterStatsProvider.MonsterStats npc, Spell spell, Loadout gear)
 	{
 		if (npc == null || !npc.hasAttribute("leafy"))
@@ -787,8 +799,9 @@ class GearBonusCalc
 			case MAGIC:
 				return spell == Spell.MAGIC_DART ? GearBonus.NONE : GearBonus.symmetric(0.0);
 			case RANGED:
-				// "Broad bolts", "Amethyst broad bolts", "Broad arrows".
-				final String ammo = gear.name(EquipmentInventorySlot.AMMO);
+				// "Broad bolts", "Amethyst broad bolts", "Broad arrows". T-182: the ammo fired, which may be a Dizana's
+				// quiver's; told crossbow from bow by the weapon's name, as this has no combat tab to read.
+				final String ammo = firedAmmoName(gear);
 				return ammo != null && ammo.toLowerCase().contains("broad")
 					? GearBonus.NONE : GearBonus.symmetric(0.0);
 			default:
