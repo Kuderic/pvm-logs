@@ -5592,7 +5592,11 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final boolean listedAdd = EncounterGroup.isBossesAdd(addId);
 		final boolean monster = EncounterGroup.of(addId) == null && addIsMonster;
-		if (!listedAdd && !monster || addFullHp <= 0 || addFullHp > EncounterGroup.WEAK_ADD_HP)
+		// T-184: a Tombs monster whose hitpoints scale with the raid is never weak, at any raid level: Kephri's guardian
+		// scarabs (a table's 40, 99 to 110 as Eric fights them) were swatted, and he wants their fights and the overlay's
+		// DPS against them to weigh his weapons. A full hp read from the table alone had them at 40.
+		if (!listedAdd && !monster || addFullHp <= 0 || addFullHp > EncounterGroup.WEAK_ADD_HP
+			|| RaidScaling.tombsScales(addId))
 		{
 			return Swat.NONE;
 		}
@@ -5612,7 +5616,22 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
 		final boolean monster = MonsterRooms.isMonster(Text.removeTags(npc.getName()), npc.getId(), false, rules);
-		return weakAddSwat(raidType != null, npc.getId(), monster, fullHitpoints(npc.getId()), bossFightForAdds(npc));
+		return weakAddSwat(raidType != null, npc.getId(), monster, fightHitpoints(npc), bossFightForAdds(npc));
+	}
+
+	/**
+	 * T-184: the full hitpoints an npc is fought at: the raid's scaling of its table figure (RAID HP's: the Chambers' party
+	 * factor, the Tombs' raid and path levels), the table's outside a raid.
+	 */
+	private int fightHitpoints(NPC npc)
+	{
+		final int table = fullHitpoints(npc.getId());
+		if (raidType == null || table <= 0)
+		{
+			return table;
+		}
+		final MonsterStatsProvider.MonsterStats stats = monsterStats == null ? null : monsterStats.get(npc.getId());
+		return RaidScaling.hitpoints(client, table, npc.getId(), stats == null ? null : stats.getVersion());
 	}
 
 	/** T-180: a boss's fight open, its target not this npc: a boss's encounter (its own parts and adds), or a boss alone. */
@@ -5644,7 +5663,7 @@ public class PvmPerformancePlugin extends Plugin
 				weakAddsSaid.clear();
 			}
 			debug.log("WEAK ADD %s (npc %d, index %d, %d hp): swatted in passing, no fight of its own; %s",
-				Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), fullHitpoints(npc.getId()),
+				Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), fightHitpoints(npc),
 				inFight && current != null ? current.getTargetName() + "'s fight stays open, its ticks in it"
 					: "no fight open, its ticks in the trip's time");
 		}
