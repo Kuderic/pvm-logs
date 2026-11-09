@@ -259,10 +259,10 @@ final class EncounterGroup
 	}
 
 	/**
-	 * T-180: the full hitpoints (the monster table's, raid-level free) at or under which a boss's add, or a monster hit
-	 * during a boss's fight, opens no fight of its own: swatted in passing. Kephri's eggs (35), agile scarabs and swarms,
-	 * Hespori's flowers (10), the spiders' spiderlings (5); not Araxxor's araxytes (58), Yama's void flares (71), Kephri's
-	 * guardian scarabs or Akkha's shadows.
+	 * T-180: the full hitpoints at or under which a boss's add, or a monster hit during a boss's fight, opens no fight of
+	 * its own: swatted in passing. Kephri's eggs (35), agile scarabs and swarms, Hespori's flowers (10), the spiders'
+	 * spiderlings (5); not Araxxor's araxytes (58), Yama's void flares (71), Kephri's guardian scarabs or Akkha's shadows.
+	 * T-184: the hitpoints it's fought at (a raid's scaling of the table's), and never a Tombs monster that scales.
 	 */
 	static final int WEAK_ADD_HP = 40;
 
