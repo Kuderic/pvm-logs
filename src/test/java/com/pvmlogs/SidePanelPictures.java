@@ -122,6 +122,11 @@ public final class SidePanelPictures
 			badgesAndMoment(out);
 			return;
 		}
+		if (args.length > 1 && "progress".equals(args[1]))
+		{
+			historyProgress(out);
+			return;
+		}
 		if (args.length > 1 && "card".equals(args[1]))
 		{
 			killCard(out);
@@ -1961,6 +1966,37 @@ public final class SidePanelPictures
 			card.step();
 		}
 		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/**
+	 * T-190: History's top as progress, from the record, with graded kill rows: the Vardorvis example (16 kills tracked)
+	 * and a farmed Araxxor (209); and the Vardorvis example with Celebrations off, as today. Normal, Smooth and Larger, 1x
+	 * and 2x.
+	 */
+	private static void historyProgress(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			final BossRecords vardorvis = SidePanelProgressExamples.vardorvis();
+			final java.util.List<Fight> araxxorHistory = SidePanelProgressExamples.araxxorHistory();
+			final BossRecords araxxor = SidePanelProgressExamples.araxxor();
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-vardorvis", scale, renderHistory(SidePanelProgressExamples.source(
+					SidePanelHistoryExamples.history(), vardorvis), t -> { }, scale));
+				write(dir, "b-araxxor-farmed", scale, renderHistory(SidePanelProgressExamples.source(araxxorHistory,
+					araxxor), t -> { }, scale));
+				write(dir, "c-celebrations-off", scale, renderHistory(source(), t -> { }, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
 	}
 
 	/** T-188: the Fight tab with Celebrations on and every section opened. */

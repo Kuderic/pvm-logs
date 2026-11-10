@@ -456,7 +456,7 @@ final class SidePanelKillCard extends JComponent
 	}
 
 	/** T-189: a badge: a gold mark and its name, on the panel's ground with a quiet edge. */
-	private void paintBadge(Graphics2D g, PanelSnapshot.Badge b, int x, int y, int w)
+	static void paintBadge(Graphics2D g, PanelSnapshot.Badge b, int x, int y, int w)
 	{
 		final int h = badgeHeight();
 		g.setColor(SidePanelStyle.PANEL);

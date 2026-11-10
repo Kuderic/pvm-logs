@@ -1490,6 +1490,20 @@ class PvmPerformancePanel extends PluginPanel
 		}
 
 		@Override
+		public boolean celebrations()
+		{
+			return PvmPerformancePanel.this.celebrations();
+		}
+
+		@Override
+		public BossRecords.View record(LedgerHistory.Like like)
+		{
+			// T-190: an immutable copy, made when History refreshes (its tab opened, a boss or version picked).
+			final BossRecords records = plugin.getRecords();
+			return records == null ? null : records.view(like);
+		}
+
+		@Override
 		public BossRules rules()
 		{
 			// T-102: the rules the history budget classes fights by, from the plugin's own MonsterStatsProvider.

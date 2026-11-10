@@ -1,5 +1,6 @@
 package com.pvmlogs;
 
+import com.pvmlogs.PanelSnapshot.Row;
 import com.pvmlogs.PanelSnapshot.Text;
 import com.pvmlogs.PanelSnapshot.Tile;
 import java.awt.Color;
@@ -8,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -804,6 +806,8 @@ final class SidePanelHistory
 		 * -1 for a boss's room, or a fight saved before T-089.
 		 */
 		final int kills;
+		/** T-190: the kill's grade from T-187's record (S to C), or null; with Celebrations on, in Execution's place. */
+		final String grade;
 
 		KillRow(Encounter room, String clock, String date, Text chip, Color chipFill, String execution, String name,
 			boolean ended)
@@ -811,9 +815,30 @@ final class SidePanelHistory
 			this(room, clock, date, chip, chipFill, execution, name, ended, -1);
 		}
 
+		/** T-190: this row with its grade, and luck as a violet roll on a neutral chip. */
+		private KillRow(KillRow r, String grade)
+		{
+			this(r.room, r.clock, r.date, r.chip == null || r.chip.text.startsWith("rolled") ? r.chip == null ? null
+				: Text.small(r.chip.text, SidePanelStyle.LUCK) : r.chip, r.chip == null ? r.chipFill
+				: r.chip.text.startsWith("rolled") ? SidePanelStyle.CHIP_NEUTRAL : r.chipFill, r.execution, r.name, r.ended,
+				r.kills, grade);
+		}
+
+		KillRow withGrade(String g)
+		{
+			return new KillRow(this, g);
+		}
+
 		KillRow(Encounter room, String clock, String date, Text chip, Color chipFill, String execution, String name,
 			boolean ended, int kills)
 		{
+			this(room, clock, date, chip, chipFill, execution, name, ended, kills, null);
+		}
+
+		KillRow(Encounter room, String clock, String date, Text chip, Color chipFill, String execution, String name,
+			boolean ended, int kills, String grade)
+		{
+			this.grade = grade;
 			this.kills = kills;
 			this.room = room;
 			this.clock = clock;
@@ -824,6 +849,154 @@ final class SidePanelHistory
 			this.name = name;
 			this.ended = ended;
 		}
+	}
+
+	// ---- T-190: History's top as progress, from T-187's record ----
+
+	/** T-190: how many kills the luck-removed trend compares: the newest half of them against the older half. */
+	static final int TREND_OF = 20;
+
+	/**
+	 * T-190 (Eric, 2026-11-09: direction A for History's top too): one version's progress, from T-187's record, so
+	 * kills history has dropped still count: the personal bests, the luck-removed time's trend, how the grades spread,
+	 * the A-or-better streak, and badges. No DPS best (T-186: it is luck).
+	 */
+	static final class Progress
+	{
+		final int kills;
+		/** Under ten kills the grade reads fixed bands; the note says so. */
+		final String note;
+		final List<Row> bests;
+		/** {@code Luck removed, last 16}, and how its newest half compares with its older half ({@code 8 s faster}). */
+		final String trendTitle;
+		final Text trend;
+		/** S, A, B, C counts. */
+		final int[] grades;
+		final String streak;
+		final List<PanelSnapshot.Badge> badges;
+
+		Progress(int kills, String note, List<Row> bests, String trendTitle, Text trend, int[] grades, String streak,
+			List<PanelSnapshot.Badge> badges)
+		{
+			this.kills = kills;
+			this.note = note;
+			this.bests = Collections.unmodifiableList(bests);
+			this.trendTitle = trendTitle;
+			this.trend = trend;
+			this.grades = grades.clone();
+			this.streak = streak;
+			this.badges = Collections.unmodifiableList(badges);
+		}
+	}
+
+	/** T-190: the progress for a record's view, or null with no kill recorded. */
+	static Progress progress(BossRecords.View v)
+	{
+		if (v == null || v.kills <= 0)
+		{
+			return null;
+		}
+		final List<Row> bests = new ArrayList<>(3);
+		if (!Double.isNaN(v.fastest.value) && v.fastest.value > 0)
+		{
+			bests.add(new Row(Text.body("fastest", SidePanelStyle.SECONDARY), Double.isNaN(v.fastest.luckPercentile)
+				? Text.NONE : Text.small(" " + SidePanelModel.rolled(v.fastest.luckPercentile), SidePanelStyle.LUCK),
+				Text.title(SidePanelModel.clockOf(v.fastest.value), SidePanelStyle.VALUE)));
+		}
+		if (!Double.isNaN(v.luckRemoved.value))
+		{
+			// The gold star: the luck-removed best is the skill's PB.
+			bests.add(new Row(Text.body("luck removed", SidePanelStyle.SECONDARY), Text.small(" " + SKILL_PB,
+				SidePanelStyle.GOLD),
+				Text.title(SidePanelStyle.roundedDuration(v.luckRemoved.value), SidePanelStyle.VALUE)));
+		}
+		if (!Double.isNaN(v.execution.value))
+		{
+			bests.add(new Row(Text.body("execution", SidePanelStyle.SECONDARY), Text.NONE,
+				Text.title(LedgerRows.partPercent(v.execution.value), SidePanelStyle.VALUE)));
+		}
+		// The trend: the newest half of the last kills against the older half, medians.
+		final double[][] t = v.luckRemovedTrend;
+		final List<Double> recent = new ArrayList<>();
+		for (int i = Math.max(0, t.length - TREND_OF); i < t.length; i++)
+		{
+			if (!Double.isNaN(t[i][1]))
+			{
+				recent.add(t[i][1]);
+			}
+		}
+		String trendTitle = null;
+		Text trend = Text.NONE;
+		if (recent.size() >= 4)
+		{
+			final int half = recent.size() / 2;
+			final double older = median(recent.subList(0, half));
+			final double newer = median(recent.subList(recent.size() - half, recent.size()));
+			trendTitle = "Luck removed, last " + recent.size();
+			final double saved = older - newer;
+			trend = Text.small(LedgerRows.fasterOrSlower(saved), LedgerRows.roundHalfAway(saved) > 0 ? SidePanelStyle.GRADE_A
+				: LedgerRows.roundHalfAway(saved) < 0 ? SidePanelStyle.COST : SidePanelStyle.SECONDARY);
+		}
+		final String note = v.kills < 10 ? "Grades by fixed bands until 10 kills (" + v.kills + " so far)" : null;
+		final String streak = v.streak + " now · best " + v.longestStreak;
+		final List<PanelSnapshot.Badge> badges = new ArrayList<>(3);
+		if (v.longestStreak >= SidePanelModel.STREAK_BADGE)
+		{
+			badges.add(new PanelSnapshot.Badge("best " + v.longestStreak + " A's in a row", "Your longest run of A or better"
+				+ " on this boss: " + v.longestStreak + " kills.", PanelSnapshot.Badge.Mark.STREAK));
+		}
+		if (v.flawlessStreak > 0)
+		{
+			badges.add(new PanelSnapshot.Badge("Flawless " + v.flawlessStreak + " in a row", "No avoidable damage on your"
+				+ " last " + v.flawlessStreak + " kills, by the boss's attack rules.", PanelSnapshot.Badge.Mark.FLAWLESS));
+		}
+		if (v.kills >= 100)
+		{
+			final int hundreds = v.kills / 100 * 100;
+			badges.add(new PanelSnapshot.Badge(LedgerRows.number(hundreds) + " kills tracked", "The kills the plugin has"
+				+ " tracked of this boss, history's dropped ones included: " + LedgerRows.number(v.kills) + ".",
+				PanelSnapshot.Badge.Mark.KILLS));
+		}
+		return new Progress(v.kills, note, bests, trendTitle, trend, v.grades, streak, badges);
+	}
+
+	/** T-190: the luck-removed best's label: the only gold. */
+	static final String SKILL_PB = "skill PB";
+
+	private static double median(List<Double> values)
+	{
+		final double[] a = values.stream().mapToDouble(Double::doubleValue).sorted().toArray();
+		return LedgerHistory.quantile(a, 0.5);
+	}
+
+	/** T-190: the boss's kills with each one's grade from its version's record, where it has one. */
+	static List<KillRow> kills(List<Fight> history, String name, long now, ZoneId zone,
+		java.util.function.Function<LedgerHistory.Like, BossRecords.View> records)
+	{
+		final List<KillRow> rows = kills(history, name, now, zone);
+		if (records == null)
+		{
+			return rows;
+		}
+		final Map<String, BossRecords.View> views = new HashMap<>();
+		final List<KillRow> out = new ArrayList<>(rows.size());
+		for (KillRow r : rows)
+		{
+			if (r.kills >= 0 || r.room.getFights().isEmpty())
+			{
+				out.add(r);
+				continue;
+			}
+			final LedgerHistory.Like like = LedgerHistory.Like.of(r.room);
+			final BossRecords.View v = views.computeIfAbsent(key(like), k -> records.apply(like));
+			BossRecords.Grade g = v == null ? null : v.gradeOf(r.room.getStartMillis());
+			if (g == null && v != null)
+			{
+				g = v.gradeOf(r.room.getFights().get(0).getStartMillis());
+			}
+			out.add(r.withGrade(g == null ? null : g.name()));
+		}
+		return out;
 	}
 
 	/** The boss's kills, newest first (spec 3.2). */

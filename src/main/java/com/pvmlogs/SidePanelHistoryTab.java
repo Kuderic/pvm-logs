@@ -113,6 +113,18 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		{
 			return SidePanelIcons.NONE;
 		}
+
+		/** T-190: Celebrations (T-188): History opens on progress, its kill rows graded. Off in tests unless set. */
+		default boolean celebrations()
+		{
+			return false;
+		}
+
+		/** T-190: one version's record (T-187), an immutable copy; null with none. */
+		default BossRecords.View record(LedgerHistory.Like like)
+		{
+			return null;
+		}
 	}
 
 	/** No saved fights: the panel before the plugin is wired, tests, renders. */
@@ -474,8 +486,13 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel box = SidePanelParts.card(6);
+		// T-190: with Celebrations on, the selected version's progress from the record, kills history dropped included.
+		final LedgerHistory.Like like = card.versions.isEmpty() ? null : card.versions.get(card.selected).like;
+		final SidePanelHistory.Progress progress = !source.celebrations() || like == null || card.runs > 0 ? null
+			: SidePanelHistory.progress(source.record(like));
 		// T-095: a kind fought in runs, "5 runs · 312 kills".
-		final String count = card.kills + (card.kills == 1 ? " kill" : " kills");
+		final String count = progress != null ? LedgerRows.number(progress.kills) + " kills tracked"
+			: card.kills + (card.kills == 1 ? " kill" : " kills");
 		final SidePanelParts.Line line = new SidePanelParts.Line(Text.title(card.name, SidePanelStyle.VALUE),
 			Text.small(card.runs > 0 ? card.runs + (card.runs == 1 ? " run · " : " runs · ") + count : count,
 				SidePanelStyle.SECONDARY));
@@ -504,9 +521,14 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			});
 			box.add(picker);
 		}
+		if (progress != null)
+		{
+			// T-190: progress in the usual's tiles' place: are you getting better?
+			box.add(SidePanelProgress.block(progress, SidePanelStyle.CONTENT_WIDTH - 2 * SidePanelStyle.CARD_PAD_H));
+		}
 		final JPanel grid = new JPanel(new GridLayout(2, 2, SidePanelStyle.TILE_GAP, SidePanelStyle.TILE_GAP));
 		grid.setOpaque(false);
-		for (PanelSnapshot.Tile t : card.tiles)
+		for (PanelSnapshot.Tile t : progress != null ? java.util.Collections.<PanelSnapshot.Tile>emptyList() : card.tiles)
 		{
 			// Tiles in a card take the panel's fill, so they read as tiles (canvas).
 			// Two to a row in the card's inside, less each tile's own 6 px a side.
@@ -515,7 +537,10 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			tile.setFill(SidePanelStyle.PANEL);
 			grid.add(tile);
 		}
-		box.add(grid);
+		if (progress == null)
+		{
+			box.add(grid);
+		}
 		if (card.spark != null)
 		{
 			box.add(new SidePanelSparkline(card.spark));
@@ -560,7 +585,10 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 
 	private void kills(List<Fight> history)
 	{
-		final List<SidePanelHistory.KillRow> rows = SidePanelHistory.kills(history, boss, source.now(), source.zone());
+		// T-190: with Celebrations on, each kill's grade from its version's record, and luck as a roll.
+		final List<SidePanelHistory.KillRow> rows = SidePanelHistory.kills(history, boss, source.now(), source.zone(),
+			source.celebrations() ? source::record : null);
+		final boolean graded = rows.stream().anyMatch(r -> r.grade != null);
 		if (rows.isEmpty())
 		{
 			return;
@@ -590,7 +618,8 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		// T-095: a kind fought in runs lists its runs: their time and kills/hr, no luck or execution.
 		final boolean runs = rows.stream().anyMatch(r -> r.kills >= 0);
 		content.add(new SidePanelSection("historyKills", runs ? "Runs" : "Kills",
-			Text.small(runs ? "time · kills/hr" : "time · luck · execution", SidePanelStyle.SECONDARY), list, folds));
+			Text.small(runs ? "time · kills/hr" : graded ? "time · luck · grade" : "time · luck · execution",
+				SidePanelStyle.SECONDARY), list, folds));
 	}
 
 	/** Opens a kill's own view (state 11). */
