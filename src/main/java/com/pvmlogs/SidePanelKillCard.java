@@ -670,7 +670,7 @@ final class SidePanelKillCard extends JComponent
 			return r.y + TILE_PAD_TOP + small() + 2;
 		}
 
-		/** Skill: the grade chip and the share of a perfect fight (live: attacking); the time lost under it, orange. */
+		/** Skill: the grade chip and the share of a perfect fight (live: the uptime, "97% uptime"); the time lost under it, orange. */
 		private void skillTile(Rectangle r)
 		{
 			final int top = tile(r, "Skill");
@@ -693,7 +693,14 @@ final class SidePanelKillCard extends JComponent
 			}
 			if (c.skill != null)
 			{
-				text(Text.title(c.skill, SidePanelStyle.VALUE), x, top + (valueLine() - title()) / 2, x0 + room - x);
+				final int vw = text(Text.title(c.skill, SidePanelStyle.VALUE), x, top + (valueLine() - title()) / 2,
+					x0 + room - x);
+				if (c.live)
+				{
+					// T-199: live it's the uptime so far, and says so: "97% uptime".
+					text(Text.small(" " + LIVE_SKILL_WORD, SidePanelStyle.SECONDARY), x + vw, top + (valueLine() - title())
+						/ 2 + title() - small(), x0 + room - x - vw);
+				}
 			}
 			final Text bottom = c.lost != null ? Text.small(c.lost, SidePanelStyle.COST)
 				: c.skill != null ? Text.small("±0 s", SidePanelStyle.MUTED) : Text.NONE;
@@ -780,6 +787,8 @@ final class SidePanelKillCard extends JComponent
 		}
 
 		static final int GRADE_PAD = 4;
+		/** T-199: the live Skill tile's word after its share. */
+		static final String LIVE_SKILL_WORD = "uptime";
 
 		/** The grade chip: edged in its colour, its letter centred on its own drawn shape; it waits for the die. */
 		static void paintGradeChip(Graphics2D g, KillCard c, int x, int y, int w, int h, boolean rolling, boolean flash)

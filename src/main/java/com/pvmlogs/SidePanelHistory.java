@@ -1034,8 +1034,8 @@ final class SidePanelHistory
 	static final String BEST_SKILL = "Best Skill";
 	/** T-199: the one term for the luck-free time (was "luck removed"), as the kill card's Luck tooltip has it. */
 	static final String WITH_AVERAGE_LUCK = "With average luck";
-	/** T-199: the usual's tile for it (was "luck removed"). */
-	static final String WITH_AVERAGE_LUCK_TILE = "with average luck";
+	/** T-199: the usual's tile for it (was "luck removed"): the short form, as the full words are cut at a half tile. */
+	static final String WITH_AVERAGE_LUCK_TILE = "with avg luck";
 	/** T-190, T-199: the gold star on the fastest with average luck: the only gold, and no words. */
 	static final String STAR = "\u2605";
 

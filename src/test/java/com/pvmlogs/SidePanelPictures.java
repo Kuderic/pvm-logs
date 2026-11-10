@@ -127,6 +127,11 @@ public final class SidePanelPictures
 			historyProgress(out);
 			return;
 		}
+		if (args.length > 1 && "skill".equals(args[1]))
+		{
+			skillAndFigures(out);
+			return;
+		}
 		if (args.length > 1 && "fixes".equals(args[1]))
 		{
 			cardFixes(out);
@@ -2001,6 +2006,54 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-199: Skill as the one word and the figures that came back, on the Araxxor KC 555 kill: after the kill (as it
+	 * opens, Damage open) and live (the luck track, DPS · exp); the Skill section opened; Where the time went folded with
+	 * its labelled line; History's Personal bests and trend, and its rows with "skill" (Celebrations off). Normal and
+	 * Larger, 1x and 2x.
+	 */
+	private static void skillAndFigures(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			final java.util.List<Fight> araxxorHistory = SidePanelProgressExamples.araxxorHistory();
+			final BossRecords araxxor = SidePanelProgressExamples.araxxor();
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-araxxor-kill", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "b-araxxor-live", scale, fightTab(SidePanelKillCardExamples.araxxorLive(), scale));
+				write(dir, "c-skill-open", scale, openedOnly(SidePanelKillCardExamples.araxxorKill(), "execution", scale));
+				write(dir, "d-vardorvis-unlucky", scale, fightTab(SidePanelKillCardExamples.vardorvisKill(), scale));
+				write(dir, "e-history-bests", scale, renderHistory(SidePanelProgressExamples.source(araxxorHistory,
+					araxxor), t -> { }, scale));
+				write(dir, "f-history-rows-celebrations-off", scale, renderHistory(source(), t -> { }, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-199: the Fight tab with Celebrations on and only the section {@code id} opened (Damage as it opens). */
+	private static BufferedImage openedOnly(SidePanelModel.Input in, String id, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.setCelebrations(true);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
+		final SidePanelSection s = sectionOf(panel.fightTab(), id);
+		if (s.isFolded())
+		{
+			s.toggle();
+		}
+		return draw(panel.tabs(), panel.fightTab(), scale);
 	}
 
 	/** T-198: the Fight tab with its Luck section folded, the mouse over its header or not. */

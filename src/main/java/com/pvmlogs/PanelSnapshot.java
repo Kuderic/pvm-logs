@@ -1683,7 +1683,7 @@ final class PanelSnapshot
 		/** S to C after the kill; null live and before the record has it. */
 		String grade;
 		Color gradeColour = SidePanelStyle.VALUE;
-		/** {@code 99%}: after the kill of a perfect fight, live the share attacking; null when unknown. */
+		/** {@code 99%}: after the kill of a perfect fight, live the uptime so far; null when unknown. */
 		String skill;
 		/** {@code −1.1 s} in orange; null when nothing was lost. */
 		String lost;
