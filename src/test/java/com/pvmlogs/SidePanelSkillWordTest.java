@@ -70,8 +70,9 @@ public class SidePanelSkillWordTest
 						{
 							continue;
 						}
-						if (s.toLowerCase(java.util.Locale.ROOT).contains("execution")
-							|| s.toLowerCase(java.util.Locale.ROOT).contains("your play"))
+						final String low = s.toLowerCase(java.util.Locale.ROOT);
+						if (low.contains("execution") || low.contains("your play") || low.contains("luck removed")
+							|| low.contains("luck-removed"))
 						{
 							found.add(name + ":" + n + " \"" + s + "\"");
 						}
@@ -303,6 +304,86 @@ public class SidePanelSkillWordTest
 		unsure.warning = "unsure";
 		final PanelSnapshot.KillCard w = SidePanelModel.fight(unsure).card;
 		assertNull(w.expDps);
+	}
+
+	@Test
+	public void personalBestsSayWhatEachNumberIs()
+	{
+		for (BossRecords.View v : new BossRecords.View[]{SidePanelProgressExamples.araxxor().view(
+			new LedgerHistory.Like("Araxxor", 1020, true)), SidePanelProgressExamples.vardorvis().view(
+			new LedgerHistory.Like("Vardorvis", 700, true))})
+		{
+			final SidePanelHistory.Progress p = SidePanelHistory.progress(v, SidePanelHistoryExamples.NOW,
+				SidePanelExamples.ZONE);
+			final List<String> labels = new ArrayList<>();
+			for (PanelSnapshot.Row r : p.bests)
+			{
+				// Every row has a hover, and none says null or has a stray break.
+				assertNotNull(r.left.text, r.tooltip);
+				clean(r.left.text, r.tooltip);
+				// Nothing between a label and its value but the gold star.
+				assertTrue(r.left.text + " |" + r.hint.text + "|", r.hint.isEmpty()
+					|| r.hint.text.equals(" " + SidePanelHistory.STAR));
+				if (r.indent)
+				{
+					// The roll's small line under the fastest kill, with no value of its own.
+					assertTrue(r.left.text, r.left.text.matches("rolled \\d+"));
+					assertTrue(r.right.isEmpty());
+					continue;
+				}
+				labels.add(r.left.text);
+			}
+			assertEquals(Arrays.asList(SidePanelHistory.FASTEST_KILL, SidePanelHistory.FASTEST_AVERAGE_LUCK,
+				SidePanelHistory.BEST_SKILL), labels);
+			assertEquals(Arrays.asList("Fastest kill", "Fastest with average luck", "Best Skill"), labels);
+			assertTrue(p.bests.get(0).tooltip, p.bests.get(0).tooltip.contains("Your fastest kill: "));
+			assertTrue(p.bests.get(0).tooltip, p.bests.get(0).tooltip.contains(" of 100: "));
+			// The trend: its own header, both medians, the change, and what they are on hover.
+			assertTrue(p.trendTitle, p.trendTitle.startsWith("With average luck, last "));
+			assertTrue(p.trendMedians.text, p.trendMedians.text.matches("\\d+:\\d\\d \u2192 \\d+:\\d\\d"));
+			assertTrue(p.trend.text, p.trend.text.matches("\\d+ s (faster|slower)|even"));
+			assertTrue(p.trendTip, p.trendTip.contains("Lower is faster"));
+			clean("trend", p.trendTip);
+		}
+		assertEquals("rolled 100 of 100: as lucky as it gets", SidePanelModel.rollWords(0.9999));
+		assertEquals("rolled 50 of 100: about average", SidePanelModel.rollWords(0.5));
+	}
+
+	@Test
+	public void theBestsFitAtLargerWithNothingCut()
+	{
+		// The labels and values whole in every text mode: the History tab's Personal bests as drawn.
+		for (boolean larger : new boolean[]{false, true})
+		{
+			SidePanelStyle.setText(larger, false);
+			try
+			{
+				final SidePanelHistory.Progress p = SidePanelHistory.progress(SidePanelProgressExamples.araxxor().view(
+					new LedgerHistory.Like("Araxxor", 1020, true)), SidePanelHistoryExamples.NOW, SidePanelExamples.ZONE);
+				final javax.swing.JPanel block = SidePanelProgress.block(p, SidePanelStyle.CONTENT_WIDTH - 12);
+				block.setSize(SidePanelStyle.CONTENT_WIDTH - 12, 1000);
+				SidePanelPictures.layout(block);
+				block.setSize(SidePanelStyle.CONTENT_WIDTH - 12, block.getPreferredSize().height);
+				SidePanelPictures.layout(block);
+				final BufferedImage img = new BufferedImage(block.getWidth(), block.getHeight(),
+					BufferedImage.TYPE_INT_RGB);
+				final Graphics2D g = img.createGraphics();
+				block.paint(g);
+				g.dispose();
+				for (Component k : components(block))
+				{
+					if (k instanceof SidePanelText && ((SidePanelText) k).lastShown() != null)
+					{
+						final String shown = ((SidePanelText) k).lastShown();
+						assertFalse((larger ? "larger: " : "normal: ") + shown, shown.contains(LedgerRows.CUT));
+					}
+				}
+			}
+			finally
+			{
+				SidePanelStyle.setText(false, false);
+			}
+		}
 	}
 
 	// ---- helpers ----

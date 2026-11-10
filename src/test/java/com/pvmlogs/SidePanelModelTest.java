@@ -268,7 +268,7 @@ public class SidePanelModelTest
 		// 136.8 s against 114: 23 s slower. Never coloured (Orchestrator, T-034): the raw clock carries luck.
 		assertEquals("23 s slower", dead.average.get(0).right.text);
 		assertEquals(SidePanelStyle.BODY, dead.average.get(0).right.colour);
-		assertEquals("luck removed 2:02", dead.average.get(1).left.text);
+		assertEquals("with average luck 2:02", dead.average.get(1).left.text);
 		// 122.5 s against 117, above the upper quartile 120: luck removed is the one that's coloured.
 		assertEquals("5 s slower than 1:57", dead.average.get(1).right.text);
 		assertEquals(SidePanelStyle.COST, dead.average.get(1).right.colour);

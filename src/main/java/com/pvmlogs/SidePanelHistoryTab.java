@@ -489,7 +489,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		// T-190: with Celebrations on, the selected version's progress from the record, kills history dropped included.
 		final LedgerHistory.Like like = card.versions.isEmpty() ? null : card.versions.get(card.selected).like;
 		final SidePanelHistory.Progress progress = !source.celebrations() || like == null || card.runs > 0 ? null
-			: SidePanelHistory.progress(source.record(like));
+			: SidePanelHistory.progress(source.record(like), source.now(), source.zone());
 		// T-095: a kind fought in runs, "5 runs · 312 kills".
 		final String count = progress != null ? LedgerRows.number(progress.kills) + " kills tracked"
 			: card.kills + (card.kills == 1 ? " kill" : " kills");
@@ -547,7 +547,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			final JPanel legend = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
 			legend.setOpaque(false);
 			legend.add(swatch(SidePanelSparkline.CLOCK, "kill time"));
-			legend.add(swatch(SidePanelHistory.LUCK_REMOVED, "luck removed"));
+			legend.add(swatch(SidePanelHistory.LUCK_REMOVED, "with average luck"));
 			box.add(legend);
 			// On its own line: a FlowLayout wraps it out of the card's height.
 			box.add(new SidePanelText(Text.small("last " + card.spark.clock.length + " like kills · up = slower",

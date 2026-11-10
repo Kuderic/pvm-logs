@@ -15,7 +15,7 @@ import javax.swing.JPanel;
 
 /**
  * T-190 (Eric, 2026-11-09: direction A for History's top): one boss version's progress on History's boss card, from
- * T-187's record ({@link SidePanelHistory.Progress}): the personal bests, the luck-removed trend, how the grades
+ * T-187's record ({@link SidePanelHistory.Progress}): the personal bests, the trend with average luck, how the grades
  * spread, the A-or-better streak and badges, in place of the usual's four tiles. Built when History refreshes (its tab
  * opened, a boss or version picked), never per tick.
  */
@@ -45,7 +45,15 @@ final class SidePanelProgress
 		}
 		if (p.trendTitle != null)
 		{
-			out.add(new SidePanelParts.Line(Text.small(p.trendTitle, SidePanelStyle.SECONDARY), p.trend));
+			// T-199: a block of its own, after a new block's gap, so it never reads as a fourth best: its small header,
+			// then the two medians and the change.
+			final JPanel trend = SidePanelParts.stack(3);
+			trend.setBorder(new javax.swing.border.EmptyBorder(4, 0, 0, 0));
+			trend.add(new SidePanelText(Text.small(p.trendTitle, SidePanelStyle.SECONDARY), false));
+			final SidePanelParts.Line line = new SidePanelParts.Line(p.trendMedians, p.trend);
+			line.setTip(p.trendTip);
+			trend.add(line);
+			out.add(trend);
 		}
 		final JPanel grades = SidePanelParts.stack(3);
 		grades.add(new SidePanelParts.Line(Text.small("Grades", SidePanelStyle.SECONDARY), Text.small(

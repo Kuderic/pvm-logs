@@ -66,7 +66,7 @@ final class SidePanelModel
 		+ " ticks (1 tick is 0.6 s); setup costs are in damage.";
 	static final String RAID_NO_AVERAGE = "no average yet: raid level isn't recorded";
 	/** T-042: the time budget bar's end when luck saved time, after its clock. */
-	static final String AT_AVERAGE_LUCK = " at average luck";
+	static final String AT_AVERAGE_LUCK = " with average luck";
 	/** T-042: luck's row's hint when luck saved time, before your clock: the stretch past it. */
 	static final String PAST = "past ";
 	/** The luck curve's marker stays inside the drawing. */
@@ -1650,6 +1650,19 @@ final class SidePanelModel
 	}
 
 	/**
+	 * T-199: a roll in words for a hover: {@code rolled 100 of 100: as lucky as it gets}, {@code rolled 81 of 100: lucky,
+	 * top 19%}, {@code rolled 50 of 100: about average}, {@code rolled 1 of 100: as unlucky as it gets}.
+	 */
+	static String rollWords(double percentile)
+	{
+		final int r = roll(percentile);
+		final String words = r >= 100 ? "as lucky as it gets" : r <= 1 ? "as unlucky as it gets"
+			: strength(r) == LuckStrength.BRIGHT ? "lucky, " + luckBand(percentile)
+			: strength(r) == LuckStrength.DIM ? "unlucky, " + luckBand(percentile) : "about average";
+		return rolledOf(percentile) + ": " + words;
+	}
+
+	/**
 	 * T-194: a roll's tooltip, saying what it's out of: {@code rolled 96 of 100 · top 4% · dealt 112% of expected · 9 s
 	 * faster}; the parts that aren't known left out.
 	 */
@@ -3178,7 +3191,7 @@ final class SidePanelModel
 				// T-198: the two times, a word each; how they compare is the bar's.
 				average.add(new Row(Text.small("usual", SidePanelStyle.BODY), Text.small(LedgerRows.duration(a.median),
 					SidePanelStyle.BODY)));
-				average.add(new Row(Text.small("avg luck", SidePanelStyle.BODY), Text.small(LedgerRows.duration(
+				average.add(new Row(Text.small("with average luck", SidePanelStyle.BODY), Text.small(LedgerRows.duration(
 					n.expectedDuration), SidePanelStyle.BODY)));
 			}
 			else
@@ -3190,7 +3203,7 @@ final class SidePanelModel
 				{
 					final LedgerHistory.Spread r = in.luckRemoved;
 					// T-118: "25 s faster" alone where "… than 1:46" would cut the clock on the left (in the tooltip whole).
-					average.add(new Row(Text.small("luck removed " + LedgerRows.duration(n.expectedDuration), SidePanelStyle.BODY),
+					average.add(new Row(Text.small("with average luck " + LedgerRows.duration(n.expectedDuration), SidePanelStyle.BODY),
 						Text.small(against(n.expectedDuration, r.median) + (LedgerRows.roundHalfAway(n.expectedDuration - r.median)
 							== 0 ? " with " : " than ") + LedgerRows.duration(r.median), SidePanelStyle.of(usual(n.expectedDuration,
 							r)))).withRightShort(against(n.expectedDuration, r.median)));
