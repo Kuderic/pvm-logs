@@ -89,7 +89,9 @@ final class SidePanelKillRow extends JPanel
 			}
 			return w;
 		}), BorderLayout.CENTER);
-		final SidePanelText exec = new SidePanelText(Text.small(row.execution, SidePanelStyle.BODY), true);
+		// T-190: a graded kill shows its grade in Execution's place, in the grade's colour.
+		final SidePanelText exec = new SidePanelText(row.grade != null ? Text.title(row.grade,
+			SidePanelModel.gradeColour(row.grade)) : Text.small(row.execution, SidePanelStyle.BODY), true);
 		right.add(new Column(exec, () -> Math.max(SidePanelStyle.columnWidth(SidePanelStyle.Type.SMALL, "100%", 30),
 			exec.getPreferredSize().width)), BorderLayout.EAST);
 		return right;
