@@ -145,10 +145,10 @@ final class SidePanelPartyMeter extends JComponent
 		if (r.others)
 		{
 			// T-167: others, others taken as members', or a member listed without figures: each says what it is.
-			return r.tip != null ? r.tip : SidePanelParty.OTHERS_NOTE;
+			return SidePanelStyle.tip(r.tip != null ? r.tip : SidePanelParty.OTHERS_NOTE);
 		}
-		return (r.you ? "You" : r.name) + ": " + r.dmg[0] + " damage, " + r.dmg[1] + " dps, " + r.dmg[2]
-			+ " of the party's. Click for their Fight panels below.";
+		return SidePanelStyle.tip((r.you ? "You" : r.name) + ": " + r.dmg[0] + " damage, " + r.dmg[1] + " dps, " + r.dmg[2]
+			+ " of the party's. Click for their Fight panels below.");
 	}
 
 	@Override

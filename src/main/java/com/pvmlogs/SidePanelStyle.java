@@ -506,27 +506,52 @@ final class SidePanelStyle
 	 */
 	static String wrapTip(String tip)
 	{
+		return tip(tip);
+	}
+
+	/**
+	 * T-201 (Eric: "The tooltip here is massive long and has a &lt;br&gt; in it with no actual working line breaks"): the
+	 * panel's one way to make a tooltip, which every {@code setToolTipText}, {@code setTip} and {@code setTooltip} in the
+	 * panel goes through. Its lines (split at {@code <br>} or a newline; an {@code <html>} around it is taken off) are
+	 * made {@link #drawable}, escaped ({@code &}, {@code <}, {@code >}), broken at spaces into lines of at most
+	 * {@link #TIP_LINE} characters, and wrapped in {@code <html>}. The width is fixed in characters: RuneLite draws a
+	 * tooltip in its look and feel's default font (the RuneScape font, {@code RuneLiteLAF}'s {@code defaultFont}), which
+	 * the panel's Larger setting doesn't change, so 56 characters is at most about 330 px in every text mode. The same tip
+	 * again gives the same text (it's idempotent), and null or blank gives null.
+	 */
+	static String tip(String tip)
+	{
 		if (tip == null)
 		{
 			return null;
 		}
-		final String body = tip.startsWith("<html>") ? tip.substring(6).replace("</html>", "") : tip;
-		final StringBuilder out = new StringBuilder("<html>");
-		final String[] paragraphs = body.split("<br>", -1);
-		for (int p = 0; p < paragraphs.length; p++)
+		String body = tip.trim();
+		if (body.startsWith("<html>"))
 		{
-			if (p > 0)
+			body = body.substring(6);
+		}
+		body = body.replace("</html>", "").replace("\n", "<br>");
+		final StringBuilder out = new StringBuilder("<html>");
+		int lines = 0;
+		for (String paragraph : body.split("<br>", -1))
+		{
+			final String text = drawable(unescape(paragraph)).trim();
+			if (text.isEmpty() || "null".equals(text))
+			{
+				continue;
+			}
+			if (lines > 0)
 			{
 				out.append("<br>");
 			}
 			int line = 0;
-			for (String word : paragraphs[p].split(" "))
+			for (String word : text.split(" "))
 			{
 				if (word.isEmpty())
 				{
 					continue;
 				}
-				final int len = word.replaceAll("<[^>]*>", "").length();
+				final int len = word.length();
 				if (line > 0 && line + 1 + len > TIP_LINE)
 				{
 					out.append("<br>");
@@ -537,10 +562,52 @@ final class SidePanelStyle
 					out.append(' ');
 					line++;
 				}
-				out.append(word);
+				out.append(escape(word));
 				line += len;
 			}
+			lines++;
 		}
-		return out.append("</html>").toString();
+		return lines == 0 ? null : out.append("</html>").toString();
+	}
+
+	private static String escape(String s)
+	{
+		return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+	}
+
+	private static String unescape(String s)
+	{
+		return s.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+	}
+
+	/**
+	 * T-201 (Eric: "an empty yellow box beside Fastest with average luck"): a text as the panel's fonts can draw it. The
+	 * RuneScape fonts have only a few characters past Latin-1; Swing draws the rest from a fallback font, or as a box
+	 * on a client with none (the Orchestrator's measure on RuneLite 1.13.6). So the minus sign and the dash become the
+	 * hyphen, an arrow becomes "to", and so on. The panel's own literals use these already; this catches any that
+	 * come from elsewhere ({@code LedgerRows}' rows). The gold star ({@code SidePanelText.STAR}) is painted, never
+	 * drawn, so it's kept for the text that paints it.
+	 */
+	static String drawable(String s)
+	{
+		if (s == null)
+		{
+			return null;
+		}
+		boolean plain = true;
+		for (int i = 0; i < s.length() && plain; i++)
+		{
+			plain = s.charAt(i) < '\u2010';
+		}
+		if (plain)
+		{
+			return s;
+		}
+		return s.replace("\u2212", "-").replace("\u2013", "-").replace("\u2010", "-").replace("\u2011", "-")
+			.replace(" \u2192 ", " to ").replace("\u2192", " to ").replace("\u2190", " from ").replace("\u2264", "<=")
+			.replace("\u2265", ">=").replace("\u2022", "\u00b7").replace("\u2191", "up ").replace("\u2193", "down ")
+			.replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", "\"").replace("\u201d", "\"")
+			.replace("\u2009", " ").replace("\u202f", " ").replace("\u2032", "'").replace("\u2713", "")
+			.replace("\u25b8", "").replace("\u25be", "");
 	}
 }

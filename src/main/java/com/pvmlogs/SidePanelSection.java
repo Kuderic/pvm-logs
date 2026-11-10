@@ -448,8 +448,8 @@ final class SidePanelSection extends JPanel
 	{
 		ownTip = tooltip;
 		final String fold = isFolded() ? OPEN_TIP : FOLD_TIP;
-		final String text = tooltip == null ? fold : tooltip.startsWith("<html>")
-			? tooltip.replace("</html>", "<br>" + fold + "</html>") : "<html>" + tooltip + "<br>" + fold + "</html>";
+		// T-201: through the panel's one tooltip helper, its own lines and then the fold's.
+		final String text = SidePanelStyle.tip(tooltip == null ? fold : tooltip + "<br>" + fold);
 		if (!text.equals(header.getToolTipText()))
 		{
 			header.setToolTipText(text);

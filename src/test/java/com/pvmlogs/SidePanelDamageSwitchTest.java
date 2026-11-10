@@ -51,11 +51,11 @@ public class SidePanelDamageSwitchTest
 		{
 			fail("a paragraph in the Damage card: " + p);
 		}
-		final String tip = only(view).getToolTipText();
+		final String tip = Tips.plain(only(view).getToolTipText());
 		assertEquals("1,504 on the boss over 2:40. Luck and skill cover the whole kill.", tip);
 		for (SidePanelText w : only(view).words())
 		{
-			assertEquals(tip, w.getToolTipText());
+			assertEquals(tip, Tips.plain(w.getToolTipText()));
 		}
 	}
 
@@ -72,7 +72,7 @@ public class SidePanelDamageSwitchTest
 		final SidePanelFightTab.TargetSwitch s = only(view);
 		assertEquals(SidePanelStyle.VALUE, s.words().get(1).colour());
 		assertEquals(SidePanelStyle.MUTED, s.words().get(0).colour());
-		assertTrue(s.getToolTipText(), s.getToolTipText().startsWith("384 on the adds over "));
+		assertTrue(Tips.plain(s.getToolTipText()), Tips.plain(s.getToolTipText()).startsWith("384 on the adds over "));
 	}
 
 	@Test
@@ -118,7 +118,7 @@ public class SidePanelDamageSwitchTest
 			lines.add(p.text());
 		}
 		assertEquals("[Nothing scored on the adds: their time counts in the kill's.]", lines.toString());
-		assertTrue(only(view).getToolTipText(), only(view).getToolTipText().startsWith("0:03 on the adds, not scored."));
+		assertTrue(Tips.plain(only(view).getToolTipText()), Tips.plain(only(view).getToolTipText()).startsWith("0:03 on the adds, not scored."));
 	}
 
 	@Test
@@ -157,7 +157,7 @@ public class SidePanelDamageSwitchTest
 		assertFalse(only(view).isVisible());
 		// T-198: the chevron says it opens, no "+".
 		assertFalse(damage.chevronOpen());
-		assertEquals(SidePanelSection.OPEN_TIP, damage.headerTip());
+		assertEquals(SidePanelSection.OPEN_TIP, Tips.plain(damage.headerTip()));
 		damage.toggle();
 		assertTrue(only(view).isVisible());
 	}

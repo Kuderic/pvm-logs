@@ -271,11 +271,11 @@ final class SidePanelParts
 		/** T-109: a tooltip on the whole line, both its texts; set again only when it changes. */
 		void setTip(String tooltip)
 		{
-			if (!java.util.Objects.equals(tooltip, getToolTipText()))
+			if (!java.util.Objects.equals(SidePanelStyle.tip(tooltip), getToolTipText()))
 			{
-				setToolTipText(tooltip);
-				left.setToolTipText(tooltip);
-				right.setToolTipText(tooltip);
+				setToolTipText(SidePanelStyle.tip(tooltip));
+				left.setToolTipText(SidePanelStyle.tip(tooltip));
+				right.setToolTipText(SidePanelStyle.tip(tooltip));
 			}
 		}
 
@@ -723,7 +723,7 @@ final class SidePanelParts
 			chip.set(row.chip, row.chipFill);
 			if (row.tip != null || getToolTipText() != null)
 			{
-				setToolTipText(row.tip);
+				setToolTipText(SidePanelStyle.tip(row.tip));
 			}
 		}
 	}
@@ -820,9 +820,9 @@ final class SidePanelParts
 			{
 				bottom.left.setGroup(s.dps != null && !s.subShort.isEmpty() ? forms : null);
 			}
-			if (!java.util.Objects.equals(s.tooltip, getToolTipText()))
+			if (!java.util.Objects.equals(SidePanelStyle.tip(s.tooltip), getToolTipText()))
 			{
-				setToolTipText(s.tooltip);
+				setToolTipText(SidePanelStyle.tip(s.tooltip));
 			}
 			if (s.shareFraction != share || !s.colour.equals(colour))
 			{

@@ -272,8 +272,8 @@ public class SidePanelPartyNotSharingTest
 
 	private static String tip(SidePanelPartyMeter m, int y)
 	{
-		return m.getToolTipText(new java.awt.event.MouseEvent(m, java.awt.event.MouseEvent.MOUSE_MOVED, 0, 0, 5, y, 0,
-			false));
+		return Tips.plain(m.getToolTipText(new java.awt.event.MouseEvent(m, java.awt.event.MouseEvent.MOUSE_MOVED, 0, 0, 5,
+			y, 0, false)));
 	}
 
 	private static List<Long> ids(List<SidePanelParty.Unshared> members)

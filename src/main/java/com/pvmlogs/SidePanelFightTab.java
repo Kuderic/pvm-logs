@@ -639,15 +639,15 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
 		b.add(text);
 		final JButton save = button("Save debug log", SidePanelStyle.VALUE);
-		save.setToolTipText("Write the last few thousand lines of what the tracker saw to a file, with the loadout and "
-			+ "settings that produced them");
+		save.setToolTipText(SidePanelStyle.tip("Write the last few thousand lines of what the tracker saw to a file, with the loadout and "
+			+ "settings that produced them"));
 		save.addActionListener(e -> actions.saveDebugLog());
 		b.add(save);
 		add(b);
 		updaters.add(t ->
 		{
 			text.set(t.banner.text, SidePanelStyle.SECONDARY);
-			b.setToolTipText(t.banner.reason);
+			b.setToolTipText(SidePanelStyle.tip(t.banner.reason));
 		});
 	}
 
@@ -707,7 +707,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		final JPanel card = SidePanelParts.card(6);
 		// T-118, T-123: the parts are in ticks, luck in seconds and the setup costs in damage: once, here, the units.
-		card.setToolTipText(SidePanelModel.TICK_NOTE);
+		card.setToolTipText(SidePanelStyle.tip(SidePanelModel.TICK_NOTE));
 		final SidePanelTimeBudgetBar bar = new SidePanelTimeBudgetBar(tab.budget);
 		card.add(bar);
 		final List<SidePanelParts.Swatch> swatches = new ArrayList<>();
@@ -797,16 +797,16 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			if ("Luck".equals(t.label.text))
 			{
 				// T-194: with the roll's words first.
-				v.setToolTipText(t.tooltip != null ? t.tooltip : SidePanelModel.TICK_NOTE);
+				v.setToolTipText(SidePanelStyle.tip(t.tooltip != null ? t.tooltip : SidePanelModel.TICK_NOTE));
 			}
 			else if (SidePanelModel.SKILL.equals(t.label.text))
 			{
-				v.setToolTipText(tab.execution.tooltip);
+				v.setToolTipText(SidePanelStyle.tip(tab.execution.tooltip));
 			}
 			else if (t.tooltip != null)
 			{
 				// T-134: the DPS tile's parts.
-				v.setToolTipText(t.tooltip);
+				v.setToolTipText(SidePanelStyle.tip(t.tooltip));
 			}
 			views.add(v);
 			grid.add(v);
@@ -820,9 +820,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				// T-126: the Execution tile's sum moves with its figures; text only, set when it changes.
 				final String tip = t.tiles.get(i).label.text.equals(SidePanelModel.SKILL) ? t.execution.tooltip
 					: t.tiles.get(i).tooltip;
-				if (tip != null && !tip.equals(views.get(i).getToolTipText()))
+				if (tip != null && !SidePanelStyle.tip(tip).equals(views.get(i).getToolTipText()))
 				{
-					views.get(i).setToolTipText(tip);
+					views.get(i).setToolTipText(SidePanelStyle.tip(tip));
 				}
 			}
 		});
@@ -851,7 +851,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final SidePanelParts.Paragraph caption = new SidePanelParts.Paragraph(tab.curve.caption, clearPass
 			? SidePanelStyle.BODY : SidePanelStyle.SECONDARY, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
 		final SidePanelLuckCurve curve = new SidePanelLuckCurve(tab.curve.z, clearPass);
-		curve.setToolTipText(tab.curve.tooltip);
+		curve.setToolTipText(SidePanelStyle.tip(tab.curve.tooltip));
 		card.add(curve);
 		final JPanel legend = new JPanel(new LegendCells());
 		legend.setOpaque(false);
@@ -865,7 +865,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			// T-188: the curve's ends in rolls, as luck is written everywhere: rolled 1 to 25, 76 to 100.
 			legend.add(new SidePanelText(Text.small(SidePanelModel.CURVE_LOW, SidePanelStyle.COST), false));
-			final SidePanelText middle = new SidePanelText(Text.small("middle half", SidePanelStyle.SECONDARY), false);
+			final SidePanelText middle = new SidePanelText(Text.small("average", SidePanelStyle.SECONDARY), false);
 			legend.add(centred(middle));
 			legend.add(new SidePanelText(Text.small(SidePanelModel.CURVE_HIGH, SidePanelStyle.BETTER), true));
 		}
@@ -888,7 +888,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		body(section, t ->
 		{
 			curve.set(t.curve.z);
-			curve.setToolTipText(t.curve.tooltip);
+			curve.setToolTipText(SidePanelStyle.tip(t.curve.tooltip));
 			caption.set(t.curve.caption, captionColour);
 			if (hits != null && t.clear != null && t.clear.luckHits.size() == tab.clear.luckHits.size())
 			{
@@ -1402,14 +1402,14 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		void set(int picked, String tooltip)
 		{
 			this.picked = picked;
-			setToolTipText(tooltip);
+			setToolTipText(SidePanelStyle.tip(tooltip));
 			for (SidePanelText w : words)
 			{
-				w.setToolTipText(tooltip);
+				w.setToolTipText(SidePanelStyle.tip(tooltip));
 			}
 			for (SidePanelText d : dots)
 			{
-				d.setToolTipText(tooltip);
+				d.setToolTipText(SidePanelStyle.tip(tooltip));
 			}
 			paintWords();
 		}
@@ -1606,12 +1606,13 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
-	/** T-142: a block's head: its name and hint, its change, and that with its arrow closed up ({@code 225→191}). */
+	/**
+	 * T-142: a block's head: its name and hint, and its change. T-201: the change reads "225 to 191" (no arrow, which the
+	 * RuneScape fonts don't have), and its short form is the two numbers alone ("225 191" would mislead), so none.
+	 */
 	private static PanelSnapshot.Row headRow(PanelSnapshot.DrainBlock b)
 	{
-		final String closed = b.change.text.replace(" \u2192 ", "\u2192");
-		return new PanelSnapshot.Row(b.name, b.hint, b.change, null, false, false, closed.equals(b.change.text) ? null :
-			java.util.Collections.singletonList(closed));
+		return new PanelSnapshot.Row(b.name, b.hint, b.change, null, false, false, null);
 	}
 
 	/** T-142: a block line's inset: under the stat, and further under a special. */
@@ -1759,17 +1760,17 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			super(new GridLayout(2, 2, SidePanelStyle.TILE_GAP, SidePanelStyle.TILE_GAP));
 			setOpaque(false);
 			export = button("Export CSV", SidePanelStyle.VALUE);
-			export.setToolTipText("Export every saved fight to a CSV file");
+			export.setToolTipText(SidePanelStyle.tip("Export every saved fight to a CSV file"));
 			export.addActionListener(e -> actions.exportAll());
 			final JButton trip = button("New trip", SidePanelStyle.VALUE);
-			trip.setToolTipText("Start the trip totals over. Saved fights are untouched");
+			trip.setToolTipText(SidePanelStyle.tip("Start the trip totals over. Saved fights are untouched"));
 			trip.addActionListener(e -> actions.newTrip());
 			final JButton log = button("Save log", SidePanelStyle.VALUE);
-			log.setToolTipText("Write the last few thousand lines of what the tracker saw to a file, with the loadout and "
-				+ "settings that produced them. Press it when a figure looks wrong");
+			log.setToolTipText(SidePanelStyle.tip("Write the last few thousand lines of what the tracker saw to a file, with the loadout and "
+				+ "settings that produced them. Press it when a figure looks wrong"));
 			log.addActionListener(e -> actions.saveDebugLog());
 			clear = button("Clear…", SidePanelStyle.DEAD);
-			clear.setToolTipText("Discard every saved fight");
+			clear.setToolTipText(SidePanelStyle.tip("Discard every saved fight"));
 			clear.addActionListener(e ->
 			{
 				if (confirm.getAsBoolean())

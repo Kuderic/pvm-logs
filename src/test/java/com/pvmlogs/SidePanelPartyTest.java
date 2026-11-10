@@ -115,10 +115,10 @@ public class SidePanelPartyTest
 	{
 		final PanelSnapshot.PartyTab after = SidePanelParty.party(SidePanelPartyExamples.toa());
 		assertTrue(after.after);
-		assertEquals(Arrays.asList("rolled 88", "8 s"), Arrays.asList(after.rows.get(0).luck));
+		assertEquals(Arrays.asList("top 12%", "8 s"), Arrays.asList(after.rows.get(0).luck));
 		// T-194: luck's violet by the roll's strength: 88 bright, 9 dim.
 		assertEquals(SidePanelStyle.LUCK_BRIGHT, after.rows.get(0).luckColour);
-		assertEquals(Arrays.asList("rolled 9", "12 s"), Arrays.asList(after.rows.get(2).luck));
+		assertEquals(Arrays.asList("bottom 9%", "12 s"), Arrays.asList(after.rows.get(2).luck));
 		assertEquals(SidePanelStyle.LUCK_DIM, after.rows.get(2).luckColour);
 		// Execution, and the uptime's idle ticks beside it (Eric's default).
 		assertEquals(Arrays.asList("84%", "-13t"), Arrays.asList(after.rows.get(2).exec));
@@ -150,7 +150,7 @@ public class SidePanelPartyTest
 		{
 			summary.add((r.indent ? "  " : "") + r.left.text + " | " + r.right.text);
 		}
-		assertEquals(Arrays.asList("luck | rolled 50 (1 s slower)", "skill | 91%", "  uptime | 97% (-6 ticks)",
+		assertEquals(Arrays.asList("luck | average (1 s slower)", "skill | 91%", "  uptime | 97% (-6 ticks)",
 			"  prayer | 100%", "  gear | 98% (-23 dmg)", "  stat boost | 97% (-35 dmg)", "damage taken | 71 (7 hits)"),
 			summary);
 		// The rows a sender summed the rest into, and a spell.

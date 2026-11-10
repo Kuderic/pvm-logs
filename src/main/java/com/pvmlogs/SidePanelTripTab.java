@@ -130,7 +130,7 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 			rows("tripDrains", "Defence drains", tab.drains, t -> t.drains);
 		}
 		final JButton newTrip = SidePanelFightTab.button("New trip", SidePanelStyle.VALUE);
-		newTrip.setToolTipText("Start the trip totals over. Saved fights are untouched");
+		newTrip.setToolTipText(SidePanelStyle.tip("Start the trip totals over. Saved fights are untouched"));
 		newTrip.addActionListener(e -> actions.newTrip());
 		add(newTrip);
 		add(new SidePanelParts.Paragraph("Starts the trip's totals over. Saved kills stay in History.",
@@ -281,9 +281,9 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 			clock.set(Text.title(r.clock, c));
 			chip.set(r.chip, r.chipFill);
 			// T-194: the roll's words on hover.
-			if (!java.util.Objects.equals(r.chipTip, chip.getToolTipText()))
+			if (!java.util.Objects.equals(SidePanelStyle.tip(r.chipTip), chip.getToolTipText()))
 			{
-				chip.setToolTipText(r.chipTip);
+				chip.setToolTipText(SidePanelStyle.tip(r.chipTip));
 			}
 			icon.set(r.icon);
 		}

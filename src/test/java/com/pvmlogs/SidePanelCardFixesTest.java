@@ -138,7 +138,7 @@ public class SidePanelCardFixesTest
 				luck.toggle();
 			}
 			assertFalse("the chevron points right while folded", luck.chevronOpen());
-			assertEquals(SidePanelSection.OPEN_TIP, luck.headerTip());
+			assertEquals(SidePanelSection.OPEN_TIP, Tips.plain(luck.headerTip()));
 			// The hand cursor over the whole header.
 			final java.awt.Component head = luck.getComponent(0);
 			assertEquals(Cursor.HAND_CURSOR, head.getCursor().getType());
@@ -153,7 +153,7 @@ public class SidePanelCardFixesTest
 			// Opened, the chevron points down and the tooltip says it folds; the fold key is kept.
 			luck.toggle();
 			assertTrue(luck.chevronOpen());
-			assertEquals(SidePanelSection.FOLD_TIP, luck.headerTip());
+			assertEquals(SidePanelSection.FOLD_TIP, Tips.plain(luck.headerTip()));
 		}
 	}
 }

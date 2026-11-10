@@ -167,7 +167,7 @@ public class SidePanelTicksTest
 		int noted = 0;
 		for (Component c : all(p.fightTab()))
 		{
-			final String tip = c instanceof JComponent ? ((JComponent) c).getToolTipText() : null;
+			final String tip = c instanceof JComponent ? Tips.plain(((JComponent) c).getToolTipText()) : null;
 			if (tip != null && tip.contains(SidePanelModel.TICK_NOTE))
 			{
 				noted++;

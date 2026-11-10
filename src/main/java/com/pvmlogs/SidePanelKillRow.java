@@ -143,13 +143,13 @@ final class SidePanelKillRow extends JPanel
 			return super.getToolTipText(e);
 		}
 		final java.awt.Point p = javax.swing.SwingUtilities.convertPoint(this, e.getPoint(), chip);
-		return chip.contains(p) ? chipTip : super.getToolTipText(e);
+		return chip.contains(p) ? SidePanelStyle.tip(chipTip) : super.getToolTipText(e);
 	}
 
 	/** T-194: the chip's words, for the tests. */
 	String chipTip()
 	{
-		return chipTip;
+		return SidePanelStyle.tip(chipTip);
 	}
 
 	private SidePanelKillRow(Runnable onClick)

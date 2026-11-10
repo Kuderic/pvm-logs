@@ -88,7 +88,7 @@ public class SidePanelModelTest
 			+ luckTile.sub.text + ")");
 		if (!Double.isNaN(percentile))
 		{
-			assertEquals(SidePanelModel.rolled(percentile), luckTile.value.text);
+			assertEquals(SidePanelModel.luckText(percentile), luckTile.value.text);
 		}
 		// T-194: the panel paints luck in luck's violet by the roll's strength; the overlay keeps its band colours.
 		assertEquals(SidePanelModel.luckInk(percentile), luckTile.value.colour);
@@ -157,7 +157,7 @@ public class SidePanelModelTest
 		assertEquals(SidePanelStyle.DEAD, t.header.suffix.colour);
 		assertEquals("700 HP · solo · 3:31 pm", t.header.sub.text);
 		assertEquals("2:16", t.header.clock.text);
-		assertEquals("rolled 20", tile(t, "Luck").value.text);
+		assertEquals("bottom 20%", tile(t, "Luck").value.text);
 		assertEquals("14 s slower", tile(t, "Luck").sub.text);
 		assertEquals("+80 thrall", tile(t, "Damage/expected").sub.text);
 		// T-134: the tile counts the thrall; its sub-line keeps the weapon's alone.
@@ -172,7 +172,7 @@ public class SidePanelModelTest
 		assertEquals(SidePanelStyle.LUCK_DIM, tile(t, "Luck").edge);
 		assertEquals(SidePanelStyle.LUCK_DIM, tile(t, "Luck").value.colour);
 		assertNotNull(t.curve);
-		assertEquals("rolled 20", t.curve.headerValue.text);
+		assertEquals("bottom 20%", t.curve.headerValue.text);
 		assertEquals("80% of fights with these attacks dealt more", t.curve.caption);
 		assertNotNull(t.details);
 		assertNull(t.loadout);
@@ -380,7 +380,7 @@ public class SidePanelModelTest
 		// T-030's two rows, as the loadout overlay has them.
 		assertEquals("48 max · 71%", t.loadout.specRows.get(0).right.text);
 		assertEquals("26.0 (8.2 burn)", t.loadout.specRows.get(1).right.text);
-		assertEquals("rolled 20", t.lastFight.chip.text);
+		assertEquals("bottom 20%", t.lastFight.chip.text);
 	}
 
 	@Test

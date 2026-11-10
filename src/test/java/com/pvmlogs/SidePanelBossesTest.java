@@ -229,7 +229,7 @@ public class SidePanelBossesTest
 			assertTrue(all(section(tab, "historyTools"), javax.swing.JCheckBox.class).contains(tab.exportChoice()));
 			assertEquals(1, all(tab, javax.swing.JCheckBox.class).size());
 			assertEquals(SidePanelHistoryTab.EXPORT_BOSSES_ONLY, tab.exportChoice().getText());
-			assertEquals(SidePanelHistoryTab.EXPORT_BOSSES_ONLY_TIP, tab.exportChoice().getToolTipText());
+			assertEquals(SidePanelHistoryTab.EXPORT_BOSSES_ONLY_TIP, Tips.plain(tab.exportChoice().getToolTipText()));
 			final javax.swing.JButton export = all(tab, javax.swing.JButton.class).stream().filter(b ->
 				"Export CSV".equals(b.getText())).findFirst().get();
 			export.doClick();

@@ -38,7 +38,7 @@ public class SidePanelDefenceDrainTest
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.twoHammersOneLanded());
 		final PanelSnapshot.Defence d = tab.defence;
 		assertNotNull(d);
-		assertEquals("250 → 175", d.hint.text);
+		assertEquals("250 to 175", d.hint.text);
 		// T-076: no row repeats the header's drop, and no floor where the boss has none.
 		// T-119: what the hammers did (no timeline here, so no chance), the worth's time and the specials' luck on hover.
 		assertEquals(Arrays.asList("Dragon warhammer | landed 1 of 2"), rows(d));
@@ -122,7 +122,7 @@ public class SidePanelDefenceDrainTest
 		d.specs.put("EYE_OF_AYAK", new int[]{1, 1});
 		d.magicStart = 150;
 		d.magicEnd = 120;
-		assertEquals(Arrays.asList("Magic | 150 → 120", "Eye of ayak | landed 1 of 1"), rows(SidePanelModel.defence(d)));
+		assertEquals(Arrays.asList("Magic | 150 to 120", "Eye of ayak | landed 1 of 1"), rows(SidePanelModel.defence(d)));
 	}
 
 	@Test

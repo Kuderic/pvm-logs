@@ -35,7 +35,7 @@ public class SidePanelDefenceCardTest
 	public void theSireKillsCardInLabelledRows()
 	{
 		final PanelSnapshot.Defence d = SidePanelModel.fight(SidePanelExamples.sireEmberlight()).defence;
-		assertEquals("250 → 174", d.hint.text);
+		assertEquals("250 to 174", d.hint.text);
 		// No row repeats the drop, no floor where the boss has none, no sentences.
 		// T-119: Emberlight drains on landing: what landed against its chance (the kill's timeline has it); the worth's
 		// time and the specials' luck on hover.

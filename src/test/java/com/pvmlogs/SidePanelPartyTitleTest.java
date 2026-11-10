@@ -71,7 +71,7 @@ public class SidePanelPartyTitleTest
 		// Her name and nothing else: no " · Fight panels", no place, no hint.
 		assertEquals(Arrays.asList("Brindle", ""), texts);
 		// The hint is the meter's tooltip.
-		assertEquals(SidePanelPartySection.SWITCH_HINT, tab.meter().getToolTipText());
+		assertEquals(SidePanelPartySection.SWITCH_HINT, Tips.plain(tab.meter().getToolTipText()));
 	}
 
 	// ---- 2. The tint ----
