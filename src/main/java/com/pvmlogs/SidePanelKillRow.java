@@ -46,7 +46,7 @@ final class SidePanelKillRow extends JPanel
 				: java.util.Arrays.asList(kills + " · " + shortDate, kills));
 		}
 		r.add(date, BorderLayout.CENTER);
-		r.add(chipAndExecution(row), BorderLayout.EAST);
+		r.add(chipAndExecution(row, r), BorderLayout.EAST);
 		return r;
 	}
 
@@ -73,12 +73,20 @@ final class SidePanelKillRow extends JPanel
 	private static final String[] CHIP_SAMPLES = {"bottom 25%", "14 s slower"};
 
 	/** The chip and the execution, each right-aligned in a fixed column so the rows line up. */
-	private static JPanel chipAndExecution(SidePanelHistory.KillRow row)
+	private static JPanel chipAndExecution(SidePanelHistory.KillRow row, SidePanelKillRow r)
 	{
 		final JPanel right = new JPanel(new BorderLayout(6, 0));
 		right.setOpaque(false);
 		final SidePanelParts.Chip chip = new SidePanelParts.Chip();
 		chip.set(row.chip, row.chipFill);
+		// T-194: the roll's words on hover over the chip. The row asks, not the chip: a chip with its own tooltip would
+		// take the row's clicks and hover.
+		r.chip = chip;
+		r.chipTip = row.chipTip;
+		if (row.chipTip != null)
+		{
+			javax.swing.ToolTipManager.sharedInstance().registerComponent(r);
+		}
 		right.add(new Column(chip, () ->
 		{
 			int w = chip.getPreferredSize().width;
@@ -121,6 +129,27 @@ final class SidePanelKillRow extends JPanel
 		{
 			return new Dimension(width.getAsInt(), c.getPreferredSize().height);
 		}
+	}
+
+	/** T-194: the luck chip and its words, shown on hover over it; null for none. */
+	private SidePanelParts.Chip chip;
+	private String chipTip;
+
+	@Override
+	public String getToolTipText(MouseEvent e)
+	{
+		if (chip == null || chipTip == null)
+		{
+			return super.getToolTipText(e);
+		}
+		final java.awt.Point p = javax.swing.SwingUtilities.convertPoint(this, e.getPoint(), chip);
+		return chip.contains(p) ? chipTip : super.getToolTipText(e);
+	}
+
+	/** T-194: the chip's words, for the tests. */
+	String chipTip()
+	{
+		return chipTip;
 	}
 
 	private SidePanelKillRow(Runnable onClick)

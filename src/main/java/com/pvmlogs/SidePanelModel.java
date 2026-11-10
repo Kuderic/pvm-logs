@@ -1272,7 +1272,7 @@ final class SidePanelModel
 			else if (!Double.isNaN(n.luck))
 			{
 				b.noCurve = NO_CURVE_TEXT;
-				b.noCurveHint = Text.title(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.of(luckColour));
+				b.noCurveHint = Text.title(LedgerRows.fasterOrSlower(n.luck), luckInk(n));
 			}
 		}
 		b.execution = run ? null : execution(n, avoidable);
@@ -1339,6 +1339,136 @@ final class SidePanelModel
 	static String rolled(double percentile)
 	{
 		return "rolled " + roll(percentile);
+	}
+
+	/** T-194: a roll's strength: unlucky (1 to 25), normal (26 to 75) or lucky (76 to 100). */
+	enum LuckStrength
+	{
+		DIM, NORMAL, BRIGHT
+	}
+
+	static LuckStrength strength(int roll)
+	{
+		return roll <= 25 ? LuckStrength.DIM : roll >= 76 ? LuckStrength.BRIGHT : LuckStrength.NORMAL;
+	}
+
+	static LuckStrength strength(double percentile)
+	{
+		return strength(roll(percentile));
+	}
+
+	/** T-194: a roll's colour as text alone (a tile, a header, the card's number). */
+	static Color luckInk(double percentile)
+	{
+		return ink(strength(percentile));
+	}
+
+	static Color ink(LuckStrength strength)
+	{
+		switch (strength)
+		{
+			case DIM:
+				return SidePanelStyle.LUCK_DIM;
+			case BRIGHT:
+				return SidePanelStyle.LUCK_BRIGHT;
+			default:
+				return SidePanelStyle.LUCK;
+		}
+	}
+
+	/** T-194: a scope's luck as text: its roll's strength, or luck's own violet in seconds alone. */
+	static Color luckInk(LedgerRows.Numbers n)
+	{
+		return Double.isNaN(n.percentile) ? SidePanelStyle.LUCK : luckInk(n.percentile);
+	}
+
+	/** T-194: the card's word for a roll's strength: {@code unlucky}, {@code average}, {@code lucky}. */
+	static String strengthWord(LuckStrength s)
+	{
+		switch (s)
+		{
+			case DIM:
+				return "unlucky";
+			case BRIGHT:
+				return "lucky";
+			default:
+				return "average";
+		}
+	}
+
+	/** T-194: a roll's chip: its text and fill. */
+	static Color luckChipInk(double percentile)
+	{
+		switch (strength(percentile))
+		{
+			case DIM:
+				return SidePanelStyle.LUCK_CHIP_DIM_INK;
+			case BRIGHT:
+				return SidePanelStyle.LUCK_CHIP_BRIGHT_INK;
+			default:
+				return SidePanelStyle.LUCK;
+		}
+	}
+
+	static Color luckChipFill(double percentile)
+	{
+		switch (strength(percentile))
+		{
+			case DIM:
+				return SidePanelStyle.LUCK_CHIP_DIM_FILL;
+			case BRIGHT:
+				return SidePanelStyle.LUCK_CHIP_BRIGHT_FILL;
+			default:
+				return SidePanelStyle.LUCK_CHIP_FILL;
+		}
+	}
+
+	/** T-194: a roll's band in words, by its strength: {@code bottom 9%}, {@code middle half}, {@code top 4%}. */
+	static String luckBand(double percentile)
+	{
+		final int r = roll(percentile);
+		switch (strength(r))
+		{
+			case DIM:
+				return "bottom " + r + "%";
+			case BRIGHT:
+				return "top " + Math.max(1, 100 - r) + "%";
+			default:
+				return "middle half";
+		}
+	}
+
+	/**
+	 * T-194: a roll's tooltip, saying what it's out of: {@code rolled 96 of 100 · top 4% · dealt 112% of expected · 9 s
+	 * faster}; the parts that aren't known left out.
+	 */
+	static String luckWords(double percentile, double damage, double expected, double luckSeconds)
+	{
+		final List<String> parts = new ArrayList<>(4);
+		parts.add(rolledOf(percentile));
+		parts.add(luckBand(percentile));
+		if (expected > 0)
+		{
+			parts.add("dealt " + Math.round(100 * damage / expected) + "% of expected");
+		}
+		if (!Double.isNaN(luckSeconds))
+		{
+			parts.add(LedgerRows.fasterOrSlower(luckSeconds));
+		}
+		return String.join(DOT, parts);
+	}
+
+	/** T-194: {@link #luckWords} for a scope's numbers; null without a percentile. */
+	static String luckWords(LedgerRows.Numbers n)
+	{
+		return Double.isNaN(n.percentile) ? null : luckWords(n.percentile, n.damage, n.expected, n.luck);
+	}
+
+	/** T-194: the Luck tile's tooltip: the roll's words, then what a tick is (T-118). */
+	static String luckTileTip(LedgerRows.Numbers n)
+	{
+		final String words = luckWords(n);
+		return words == null ? TICK_NOTE : "<html>" + words + "<br>" + TICK_NOTE + "</html>";
 	}
 
 	/** {@code rolled 20 of 100}. */
@@ -1528,8 +1658,11 @@ final class SidePanelModel
 		else
 		{
 			rolled = Double.isNaN(n.percentile) ? -1 : roll(n.percentile);
+			// T-194: the roll's effect in words, in its strength: "unlucky · 9 s slower", "lucky · 10 s faster".
 			luckLine = Double.isNaN(n.luck) ? Text.small(n.expected <= 0 ? "no monster data yet" : "",
-				SidePanelStyle.MUTED) : Text.small(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.LUCK);
+				SidePanelStyle.MUTED) : rolled > 0 ? Text.small(strengthWord(strength(rolled)) + DOT
+				+ LedgerRows.fasterOrSlower(n.luck), luckInk(n.percentile))
+				: Text.small(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.LUCK);
 		}
 
 		// After the kill: the luck-removed clock and its PB, and one tip.
@@ -1584,6 +1717,8 @@ final class SidePanelModel
 			h.subShort, corner, h.clock.text, side1, side2, side3, newPb, grade, gradeColour, gradeTip, big, caption, skill1,
 			skill2, rolled, luckLine, luckRemoved, luckRemovedPb, newLuckRemovedPb, tip, weapon, weaponItem, weaponSprite,
 			weaponDps);
+		// T-194: the roll's words on its tile.
+		card.luckWords = rolled > 0 ? luckWords(n) : null;
 		return live || warning ? card : card.withBadges(badges(in, n, avoidable));
 	}
 
@@ -2116,11 +2251,16 @@ final class SidePanelModel
 		if (r.kills >= 0 && r.room != null)
 		{
 			// A run: its kills after the name, kept when the name is cut short.
-			return new PanelSnapshot.TripRow(r.room.getName(), r.ended, r.clock, r.chip, r.chipFill, icon, r.kills,
-				r.kills > 0 ? " ×" + r.kills : "");
+			final PanelSnapshot.TripRow t = new PanelSnapshot.TripRow(r.room.getName(), r.ended, r.clock, r.chip,
+				r.chipFill, icon, r.kills, r.kills > 0 ? " ×" + r.kills : "");
+			t.chipTip = r.chipTip;
+			return t;
 		}
-		return new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill, icon, r.ended ? 0 : 1, "",
-			r.ended && SidePanelHistory.died(r.room));
+		final PanelSnapshot.TripRow t = new PanelSnapshot.TripRow(r.name, r.ended, r.clock, r.chip, r.chipFill, icon,
+			r.ended ? 0 : 1, "", r.ended && SidePanelHistory.died(r.room));
+		// T-194: the roll's words on its chip.
+		t.chipTip = r.chipTip;
+		return t;
 	}
 
 	// ---- tiles ----
@@ -2129,8 +2269,9 @@ final class SidePanelModel
 		boolean warning)
 	{
 		final List<Tile> tiles = new ArrayList<>(4);
-		final Color luck = SidePanelStyle.of(luckColour);
-		final Color edge = warning || luckColour == LedgerRows.Colour.NEUTRAL ? SidePanelStyle.TRACK : luck;
+		// T-194: luck's figures in luck's violet, by the roll's strength, never skill's colours (gold, green, orange).
+		final Color luck = luckInk(n);
+		final Color edge = warning || Double.isNaN(n.luck) ? SidePanelStyle.TRACK : luck;
 
 		// Luck.
 		if (warning)
@@ -2146,13 +2287,16 @@ final class SidePanelModel
 		else if (Double.isNaN(n.percentile))
 		{
 			// Luck stays in seconds (T-118, Eric 10:04): how the kill's time came out against average.
-			tiles.add(tile("Luck", Text.title(LedgerRows.fasterOrSlower(n.luck), luck),
-				Text.small("no percentile", SidePanelStyle.MUTED), edge));
+			// T-194: luck's violet, never skill's colours.
+			tiles.add(tile("Luck", Text.title(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.LUCK),
+				Text.small("no percentile", SidePanelStyle.MUTED), SidePanelStyle.LUCK));
 		}
 		else
 		{
-			tiles.add(tile("Luck", Text.title(rolled(n.percentile), luck),
-				Text.small(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.hint(luckColour)), edge));
+			// T-194: the roll in its strength of luck's violet, never skill's colours; its words on hover.
+			final Color ink = luckInk(n.percentile);
+			tiles.add(new Tile(Text.small("Luck", SidePanelStyle.SECONDARY), Text.title(rolled(n.percentile), ink),
+				Text.small(LedgerRows.fasterOrSlower(n.luck), ink), null, ink, luckTileTip(n)));
 		}
 
 		// Damage/expected, as the overlay's row: the weapon's damage against what it was expected to deal.
@@ -2649,7 +2793,7 @@ final class SidePanelModel
 		rows.add(new BudgetRow(luckSwatch, Text.small(middleHalf ? "luck average" : "luck", SidePanelStyle.BODY),
 			endLabel == null ? null : Text.small(PAST + clockLabel, SidePanelStyle.MUTED),
 			Text.small(luckKnown ? LedgerRows.fasterOrSlower(l) : LedgerRows.UNKNOWN,
-				luckKnown ? SidePanelStyle.of(luckColour) : SidePanelStyle.VALUE)));
+				luckKnown ? luckInk(n) : SidePanelStyle.VALUE)));
 		if (u > 0)
 		{
 			rows.add(new BudgetRow(Fill.UNSCORED, Text.small("adds, not scored", SidePanelStyle.BODY), null,
@@ -3184,7 +3328,7 @@ final class SidePanelModel
 		{
 			caption = curveShare(p) + "% of fights with these attacks dealt less";
 		}
-		return new PanelSnapshot.Curve(z, Text.title(rolled(p), SidePanelStyle.LUCK), caption,
+		return new PanelSnapshot.Curve(z, Text.title(rolled(p), luckInk(p)), caption,
 			curveTip(z, p));
 	}
 
@@ -3276,10 +3420,9 @@ final class SidePanelModel
 		final Color fill;
 		if (percentile >= 0)
 		{
-			final LedgerRows.Colour c = LedgerRows.percentileBand(percentile);
-			chip = Text.small(rolled(percentile), c == LedgerRows.Colour.NEUTRAL ? SidePanelStyle.BODY
-				: SidePanelStyle.of(c));
-			fill = SidePanelStyle.chip(c);
+			// T-194: the roll's chip in its strength.
+			chip = Text.small(rolled(percentile), luckChipInk(percentile));
+			fill = luckChipFill(percentile);
 		}
 		else
 		{
@@ -3290,7 +3433,8 @@ final class SidePanelModel
 		return new ListRow(Text.body(name, SidePanelStyle.VALUE), null,
 			Text.title(figures ? LedgerRows.number(p.damage) + "/" + LedgerRows.number(Math.round(p.expected))
 				: LedgerRows.number(p.damage), SidePanelStyle.VALUE),
-			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY), chip, fill).part(tip + (figures
+			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY), chip, fill).part((percentile >= 0
+			? luckWords(percentile, p.damage, p.expected, Double.NaN) + ". " : "") + tip + (figures
 			? " " + LedgerRows.number(p.damage) + " against " + LedgerRows.number(Math.round(p.expected)) + " expected ("
 			+ signed(luck) + ") over " + p.attacks + (p.attacks == 1 ? " attack." : " attacks.") : ""))
 			.shorter(null, figures ? Collections.singletonList(sub.get(0)) : Collections.<String>emptyList());
@@ -3305,7 +3449,7 @@ final class SidePanelModel
 				Text.title(LedgerRows.clock(r.combatTicks), SidePanelStyle.VALUE),
 				Text.small("execution " + (Double.isNaN(roomExecution(r)) ? LedgerRows.UNKNOWN
 					: LedgerRows.partPercent(roomExecution(r))), SidePanelStyle.SECONDARY),
-				chip(r.numbers, r.warning), chipFill(r.numbers, r.warning)));
+				chip(r.numbers, r.warning), chipFill(r.numbers, r.warning)).tip(r.warning ? null : luckWords(r.numbers)));
 		}
 		return new PanelSnapshot.ListRows(Text.small("time · luck · execution", SidePanelStyle.SECONDARY), rows);
 	}
@@ -3342,7 +3486,7 @@ final class SidePanelModel
 			l.killed ? Text.title(" (dead)", SidePanelStyle.DEAD) : notAKill(l.died),
 			Text.title(LedgerRows.duration(l.numbers.clock), SidePanelStyle.VALUE),
 			Text.small(String.join(DOT, sub), SidePanelStyle.SECONDARY), chip(l.numbers, l.warning),
-			chipFill(l.numbers, l.warning));
+			chipFill(l.numbers, l.warning)).tip(l.warning ? null : luckWords(l.numbers));
 	}
 
 	/** A list's luck chip: T-029's words, or the seconds for fights saved before T-028; null when unknown. */
@@ -3352,14 +3496,22 @@ final class SidePanelModel
 		{
 			return null;
 		}
-		final String word = Double.isNaN(n.percentile) ? LedgerRows.fasterOrSlower(n.luck) : rolled(n.percentile);
-		final LedgerRows.Colour c = luckColour(n);
-		return Text.small(word, c == LedgerRows.Colour.NEUTRAL ? SidePanelStyle.BODY : SidePanelStyle.of(c));
+		// T-194: a roll in its strength of luck's violet; seconds alone (a kill saved before T-028) in its normal one.
+		if (Double.isNaN(n.percentile))
+		{
+			return Text.small(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.LUCK);
+		}
+		return Text.small(rolled(n.percentile), luckChipInk(n.percentile));
 	}
 
-	private static Color chipFill(LedgerRows.Numbers n, boolean warning)
+	/** T-194: the chip's fill, in the roll's strength. */
+	static Color chipFill(LedgerRows.Numbers n, boolean warning)
 	{
-		return warning || Double.isNaN(n.luck) ? null : SidePanelStyle.chip(luckColour(n));
+		if (warning || Double.isNaN(n.luck))
+		{
+			return null;
+		}
+		return Double.isNaN(n.percentile) ? SidePanelStyle.LUCK_CHIP_FILL : luckChipFill(n.percentile);
 	}
 
 	// ---- damage, details, damage taken ----

@@ -192,7 +192,9 @@ public class SidePanelTimeBudgetTest
 		assertEquals("luck", luck.label.text);
 		assertEquals("past 1:16", luck.hint.text);
 		assertEquals("15 s faster", luck.value.text);
-		assertEquals(SidePanelStyle.BETTER, luck.value.colour);
+		// T-194: the words in luck's violet, by the roll's strength; the stripes keep the bar's colours.
+		assertEquals(SidePanelModel.luckInk(new LedgerRows.Numbers(SidePanelExamples.luckSaved(15).scope)),
+			luck.value.colour);
 		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, luck.swatch);
 		assertEquals(SidePanelStyle.BETTER, b.luckSavedColour);
 

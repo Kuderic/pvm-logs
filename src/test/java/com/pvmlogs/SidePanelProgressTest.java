@@ -82,10 +82,11 @@ public class SidePanelProgressTest
 			{
 				graded++;
 				assertTrue(r.grade, grades.contains(r.grade));
-				// Luck as a violet roll; the 26 Oct kill, from before T-028, keeps its seconds.
+				// Luck as a violet roll, in its strength (T-194); the 26 Oct kill, from before T-028, keeps its seconds.
 				if (r.chip.text.startsWith("rolled"))
 				{
-					assertEquals(SidePanelStyle.LUCK, r.chip.colour);
+					assertEquals(SidePanelModel.luckChipInk(Integer.parseInt(r.chip.text.substring(7)) / 100.0),
+						r.chip.colour);
 					assertTrue(r.chip.text, r.chip.text.matches("rolled \\d+"));
 				}
 				else

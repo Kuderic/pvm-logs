@@ -68,6 +68,11 @@ public class SidePanelModelTest
 		throw new AssertionError("no part " + label);
 	}
 
+	private static LedgerRows.Numbers n0(SidePanelModel.Input in)
+	{
+		return new LedgerRows.Numbers(in.scope);
+	}
+
 	/** The tiles and parts say what the overlay says, in the same colours. */
 	private static void sameAsOverlay(SidePanelModel.Input in, LedgerRows.State state)
 	{
@@ -85,12 +90,14 @@ public class SidePanelModelTest
 		{
 			assertEquals(SidePanelModel.rolled(percentile), luckTile.value.text);
 		}
-		assertEquals(SidePanelStyle.of(luck.rightColour), luckTile.value.colour);
+		// T-194: the panel paints luck in luck's violet by the roll's strength; the overlay keeps its band colours.
+		assertEquals(SidePanelModel.luckInk(percentile), luckTile.value.colour);
 
 		final LedgerRows.Row damage = row(rows, "Damage/expected");
 		final PanelSnapshot.Tile damageTile = tile(t, "Damage/expected");
 		assertEquals(damage.right, damageTile.value.text);
-		assertEquals(SidePanelStyle.of(damage.rightColour), damageTile.value.colour);
+		assertEquals(Double.isNaN(n0(in).luck) ? SidePanelStyle.VALUE : SidePanelModel.luckInk(n0(in)),
+			damageTile.value.colour);
 
 		// T-073: the overlay has no DPS row any more; the tile reads the same Numbers the overlay's rows do.
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
@@ -161,8 +168,9 @@ public class SidePanelModelTest
 		assertEquals("29 ticks lost", tile(t, "Execution").sub.text);
 		assertEquals("29t lost", tile(t, "Execution").subShort);
 		assertEquals(SidePanelStyle.COST, tile(t, "Execution").sub.colour);
-		// Luck's tile edge takes its colour.
-		assertEquals(SidePanelStyle.COST, tile(t, "Luck").edge);
+		// Luck's tile edge takes its colour: rolled 20, luck's dim violet (T-194).
+		assertEquals(SidePanelStyle.LUCK_DIM, tile(t, "Luck").edge);
+		assertEquals(SidePanelStyle.LUCK_DIM, tile(t, "Luck").value.colour);
 		assertNotNull(t.curve);
 		assertEquals("rolled 20", t.curve.headerValue.text);
 		assertEquals("80% of fights with these attacks dealt more", t.curve.caption);
@@ -280,7 +288,8 @@ public class SidePanelModelTest
 		final PanelSnapshot.BudgetRow slower = luckRow(dead);
 		assertEquals("luck", slower.label.text);
 		assertEquals("14 s slower", slower.value.text);
-		assertEquals(SidePanelStyle.COST, slower.value.colour);
+		// T-194: in the Luck tile's colour, the roll's strength (rolled 20, dim).
+		assertEquals(SidePanelStyle.LUCK_DIM, slower.value.colour);
 
 		// The raid's luck saved 13 s, in the top 15%.
 		final PanelSnapshot.BudgetRow faster = luckRow(tab(SidePanelExamples.raid()).budget);

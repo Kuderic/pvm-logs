@@ -109,11 +109,13 @@ class PvmPerformancePanel extends PluginPanel
 	static final String OPENED = ".opened";
 	/**
 	 * T-188: with Celebrations on, the Fight tab's sections fold below the kill card until opened, each kept open under
-	 * its own {@link #OPENED} key; the keys they had stay as they were, for Celebrations off and the other tabs.
+	 * its own {@link #OPENED} key; the keys they had stay as they were, for Celebrations off and the other tabs. T-194
+	 * (Eric, 21:32: "I like having them open, at least for damage"): Damage isn't one, so it opens by default and keeps
+	 * its own key, folded or open as you leave it.
 	 */
 	static final java.util.Set<String> FOLDED_UNDER_CARD = java.util.Collections.unmodifiableSet(
-		new java.util.HashSet<>(java.util.Arrays.asList("damage", "curve", "budget", "execution", "targets", "defence",
-			"later", "chart", "ticks", "details", "taken", SidePanelPartySection.PARTY)));
+		new java.util.HashSet<>(java.util.Arrays.asList("curve", "budget", "execution", "targets", "defence", "later",
+			"chart", "ticks", "details", "taken", SidePanelPartySection.PARTY)));
 	/** T-188: Celebrations for tests and renders, which have no config; null reads the setting. */
 	private Boolean celebrations;
 

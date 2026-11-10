@@ -127,6 +127,11 @@ public final class SidePanelPictures
 			historyProgress(out);
 			return;
 		}
+		if (args.length > 1 && "luck".equals(args[1]))
+		{
+			luckStrengths(out);
+			return;
+		}
 		if (args.length > 1 && "card".equals(args[1]))
 		{
 			killCard(out);
@@ -1920,6 +1925,71 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-194: History's Kills list from Eric's screenshot (rolled 35, 28, 92, 27, 9, 96, 92, 94, 59, 70, 99, 26, 27, 74),
+	 * with Celebrations on and off, and the after-kill card with a lucky roll (Araxxor's 81) and an unlucky one
+	 * (Vardorvis's 20), Damage open as it opens by default. Normal, Smooth and Larger, 1x and 2x.
+	 */
+	private static void luckStrengths(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			final java.util.List<Fight> kills = SidePanelLuckExamples.history();
+			final BossRecords records = SidePanelLuckExamples.records(kills);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-kills-list", scale, renderHistory(SidePanelProgressExamples.source(kills, records),
+					SidePanelPictures::showAll, scale));
+				write(dir, "b-kills-list-celebrations-off", scale, renderHistory(source(kills),
+					SidePanelPictures::showAll, scale));
+				write(dir, "c-card-lucky-81", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "d-card-unlucky-20", scale, fightTab(SidePanelKillCardExamples.vardorvisKill(), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-194: History with every kill shown: its Show more pressed until it's gone. */
+	private static void showAll(SidePanelHistoryTab t)
+	{
+		for (int i = 0; i < 10; i++)
+		{
+			final javax.swing.JButton more = button(t, "Show ");
+			if (more == null)
+			{
+				return;
+			}
+			more.doClick();
+		}
+	}
+
+	private static javax.swing.JButton button(Container c, String prefix)
+	{
+		for (Component k : c.getComponents())
+		{
+			if (k instanceof javax.swing.JButton && ((javax.swing.JButton) k).getText().startsWith(prefix))
+			{
+				return (javax.swing.JButton) k;
+			}
+			if (k instanceof Container)
+			{
+				final javax.swing.JButton b = button((Container) k, prefix);
+				if (b != null)
+				{
+					return b;
+				}
+			}
+		}
+		return null;
 	}
 
 	/**

@@ -106,10 +106,10 @@ public class SidePanelKillCardTest
 		assertEquals("99%", c.bigCaption.get(0).text);
 		assertEquals("2 ticks lost", c.skill1.text);
 		assertEquals("top 10% of last 50", c.skill2.text);
-		// Luck rolled 81 of 100, 10 s faster, violet.
+		// Luck rolled 81 of 100, lucky, 10 s faster, in luck's bright violet (T-194).
 		assertEquals(81, c.rolled);
-		assertEquals("10 s faster", c.luckLine.text);
-		assertEquals(SidePanelStyle.LUCK, c.luckLine.colour);
+		assertEquals("lucky · 10 s faster", c.luckLine.text);
+		assertEquals(SidePanelStyle.LUCK_BRIGHT, c.luckLine.colour);
 		// Luck removed and its own PB; the tip from the biggest loss.
 		assertEquals("1:36", c.luckRemoved);
 		assertEquals("PB 1:12", c.luckRemovedPb);
@@ -129,7 +129,7 @@ public class SidePanelKillCardTest
 		assertEquals("2 s faster", c.side2.text);
 		assertEquals("fastest of 17", c.side3.text);
 		// The luck that helped, beside it.
-		assertEquals("10 s faster", c.luckLine.text);
+		assertEquals("lucky · 10 s faster", c.luckLine.text);
 		assertTrue(c.newLuckRemovedPb);
 		assertEquals("was 1:37", c.luckRemovedPb);
 	}
@@ -216,6 +216,12 @@ public class SidePanelKillCardTest
 		final List<String> lines = new ArrayList<>();
 		for (SidePanelSection s : all(p.fightTab(), SidePanelSection.class))
 		{
+			// T-194: Damage opens by default; the rest fold with a line each.
+			if (s.id().equals("damage"))
+			{
+				assertFalse(s.isFolded());
+				s.toggle();
+			}
 			assertTrue(s.id(), s.isFolded());
 			lines.add(s.id() + ": " + s.summary());
 		}
@@ -226,13 +232,14 @@ public class SidePanelKillCardTest
 		assertTrue(lines.toString(), lines.contains("taken: largest hit 3"));
 		assertTrue(lines.toString(), lines.contains("details: hits 30/29.6"));
 		// Opened, a section is today's card and its line goes; the fold is kept under its own key.
-		final SidePanelSection damage = SidePanelPictures.sectionOf(p.fightTab(), "damage");
-		damage.toggle();
-		assertFalse(damage.isFolded());
-		assertEquals("", damage.summary());
+		final SidePanelSection curve = SidePanelPictures.sectionOf(p.fightTab(), "curve");
+		curve.toggle();
+		assertFalse(curve.isFolded());
+		assertEquals("", curve.summary());
 		final PvmPerformancePanel again = panel(SidePanelKillCardExamples.araxxorKill());
-		assertTrue("each panel its own folds in tests", SidePanelPictures.sectionOf(again.fightTab(), "damage")
+		assertTrue("each panel its own folds in tests", SidePanelPictures.sectionOf(again.fightTab(), "curve")
 			.isFolded());
+		assertFalse(SidePanelPictures.sectionOf(again.fightTab(), "damage").isFolded());
 	}
 
 	@Test

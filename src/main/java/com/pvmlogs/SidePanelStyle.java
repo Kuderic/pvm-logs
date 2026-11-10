@@ -86,6 +86,20 @@ final class SidePanelStyle
 	static final Color REFLECT = new Color(0x9AA5B1);
 	/** T-188: luck's own colour on the kill card and in its words, always: the thrall's violet, apart from skill's. */
 	static final Color LUCK = THRALL;
+	/**
+	 * T-194 (Eric, 2026-11-09: "ok lets do your idea"): luck's violet in three strengths by roll, so a lucky or unlucky
+	 * roll shows at a glance in a column, never in skill's colours (gold and green are S and A, orange is ticks lost).
+	 * They differ in lightness, not only hue. Text alone, on the card's #1E1E1E and the tiles' #282828: dim 5.6 and 5.0,
+	 * {@link #LUCK} 6.5 and 5.7, bright 10.9 and 9.7.
+	 */
+	static final Color LUCK_DIM = new Color(0x9A92AE);
+	static final Color LUCK_BRIGHT = new Color(0xDCC8FF);
+	/** T-194: the roll's chip in each strength, text on fill: dim 4.73, normal 4.68 (a step darker than #3A3A3A's 4.41), bright 4.69. */
+	static final Color LUCK_CHIP_DIM_FILL = new Color(0x2C2836);
+	static final Color LUCK_CHIP_DIM_INK = new Color(0x9890AC);
+	static final Color LUCK_CHIP_FILL = new Color(0x363636);
+	static final Color LUCK_CHIP_BRIGHT_FILL = new Color(0x8456E8);
+	static final Color LUCK_CHIP_BRIGHT_INK = Color.WHITE;
 	/** T-188: an S grade, and the luck-removed PB's star: the only gold. */
 	static final Color GOLD = new Color(0xFFD75E);
 	/** T-188: an A grade. */

@@ -275,6 +275,8 @@ final class SidePanelKillCard extends JComponent
 		if (luckTile.contains(e.getPoint()))
 		{
 			return card.live ? "Luck rolls with every hit; its number comes when the fight ends."
+				: card.luckWords != null ? "<html>" + card.luckWords + "<br>How your damage rolls went against the odds, 1 to"
+				+ " 100: luck, not skill. " + SidePanelModel.TICK_NOTE + "</html>"
 				: "How your damage rolls went against the odds, 1 to 100: luck, not skill. " + SidePanelModel.TICK_NOTE;
 		}
 		return null;
@@ -652,13 +654,18 @@ final class SidePanelKillCard extends JComponent
 		else if (c.rolled > 0)
 		{
 			// T-189: at the kill the die rolls before it settles on its number.
-			final String roll = String.valueOf(rolling() ? ROLLS[frame % ROLLS.length] : c.rolled);
-			final int bw = draw(g, new Text(roll, rolling() ? SidePanelStyle.alpha(SidePanelStyle.LUCK, 0.6)
-				: SidePanelStyle.LUCK, SidePanelStyle.Type.CLOCK), x, y - 2, room);
-			final List<Text> cap = new ArrayList<>(2);
-			cap.add(Text.small("rolled", SidePanelStyle.SECONDARY));
-			cap.add(Text.small("of 100", SidePanelStyle.SECONDARY));
-			paintCaption(g, cap, x + bw + 4, y, right - x - bw - 4);
+			final int roll = rolling() ? ROLLS[frame % ROLLS.length] : c.rolled;
+			// T-194 (Eric, 21:32: "what is this out of?"): one phrase, "rolled 81 of 100", the number in its strength of
+			// luck's violet; under it a 1 to 100 track with a marker at the roll; then its effect in words. The tile's
+			// edge stays violet.
+			final Color ink = SidePanelModel.ink(SidePanelModel.strength(c.rolled));
+			final Color shown = rolling() ? SidePanelStyle.alpha(ink, 0.6) : ink;
+			// The phrase and the track share the big figure's line; the words take the two lines under it.
+			paintRolled(g, roll, shown, x, y, room);
+			paintTrack(g, roll, shown, x, y + big() - 5, room);
+			y += big() + 4;
+			paintWords(g, c.luckLine, x, y, room);
+			return;
 		}
 		else
 		{
@@ -666,6 +673,81 @@ final class SidePanelKillCard extends JComponent
 		}
 		y += big() + 4;
 		draw(g, fit(g, c.luckLine, room), x, y, room);
+	}
+
+	/**
+	 * T-194: {@code rolled 81 of 100} on one line, the number at the title's size in its strength, the words around it at
+	 * the title's size where they fit, else small, else (Larger's narrow tile) {@code 81 of 100}, still out of 100.
+	 */
+	private static void paintRolled(Graphics2D g, int roll, Color ink, int x, int y, int room)
+	{
+		final String n = String.valueOf(roll);
+		final SidePanelStyle.Type title = SidePanelStyle.Type.TITLE;
+		SidePanelStyle.Type words = title;
+		boolean says = true;
+		if (phrase(g, title, n) > room)
+		{
+			words = SidePanelStyle.Type.SMALL;
+			if (phrase(g, words, n) > room)
+			{
+				words = title;
+				says = false;
+			}
+		}
+		final FontMetrics fm = g.getFontMetrics(title.font());
+		final int baseline = y + lineHeight(title) - fm.getDescent();
+		final int gap = PHRASE_GAP;
+		int at = x;
+		if (says)
+		{
+			at += drawAt(g, new Text("rolled", SidePanelStyle.SECONDARY, words), at, baseline) + gap;
+		}
+		at += drawAt(g, new Text(n, ink, title), at, baseline) + gap;
+		drawAt(g, new Text("of 100", SidePanelStyle.SECONDARY, words), at, baseline);
+	}
+
+	/** {@code rolled N of 100}'s width, its words at {@code words}' size and the number at the title's. */
+	private static int phrase(Graphics2D g, SidePanelStyle.Type words, String n)
+	{
+		return width(g, words, "rolled") + width(g, SidePanelStyle.Type.TITLE, n) + width(g, words, "of 100")
+			+ 2 * PHRASE_GAP;
+	}
+
+	/** T-194: the phrase's word gap. */
+	private static final int PHRASE_GAP = 3;
+
+	/** T-194: the roll's effect, {@code lucky · 10 s faster}, on one line, or its two parts on two. */
+	private static void paintWords(Graphics2D g, Text t, int x, int y, int room)
+	{
+		final int dot = t.text.indexOf(" · ");
+		if (dot < 0 || width(g, t.type, t.text) <= room)
+		{
+			draw(g, t, x, y, room);
+			return;
+		}
+		draw(g, new Text(t.text.substring(0, dot), t.colour, t.type), x, y, room);
+		draw(g, new Text(t.text.substring(dot + 3), t.colour, t.type), x, y + small() + 3, room);
+	}
+
+	/** T-194: a thin 1 to 100 track centred on {@code mid}, with a marker at the roll in its strength. */
+	static void paintTrack(Graphics2D g, int roll, Color ink, int x, int mid, int room)
+	{
+		final int h = 3;
+		g.setColor(SidePanelStyle.TRACK);
+		g.fillRect(x, mid - h / 2, room, h);
+		final int w = 3;
+		final int at = x + (int) Math.round((Math.max(1, Math.min(100, roll)) - 1) / 99.0 * (room - w));
+		g.setColor(ink);
+		g.fillRect(at, mid - 3, w, 7);
+	}
+
+	/** Draws a text on {@code baseline}; returns its width. */
+	private static int drawAt(Graphics2D g, Text t, int x, int baseline)
+	{
+		g.setFont(t.type.font());
+		g.setColor(t.colour);
+		g.drawString(t.text, x, baseline);
+		return g.getFontMetrics(t.type.font()).stringWidth(t.text);
 	}
 
 	/** One or two short lines beside a big figure, its baseline at the figure's foot. */

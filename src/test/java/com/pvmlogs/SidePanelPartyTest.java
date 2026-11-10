@@ -116,9 +116,10 @@ public class SidePanelPartyTest
 		final PanelSnapshot.PartyTab after = SidePanelParty.party(SidePanelPartyExamples.toa());
 		assertTrue(after.after);
 		assertEquals(Arrays.asList("rolled 88", "8 s"), Arrays.asList(after.rows.get(0).luck));
-		assertEquals(SidePanelStyle.BETTER, after.rows.get(0).luckColour);
+		// T-194: luck's violet by the roll's strength: 88 bright, 9 dim.
+		assertEquals(SidePanelStyle.LUCK_BRIGHT, after.rows.get(0).luckColour);
 		assertEquals(Arrays.asList("rolled 9", "12 s"), Arrays.asList(after.rows.get(2).luck));
-		assertEquals(SidePanelStyle.COST, after.rows.get(2).luckColour);
+		assertEquals(SidePanelStyle.LUCK_DIM, after.rows.get(2).luckColour);
 		// Execution, and the uptime's idle ticks beside it (Eric's default).
 		assertEquals(Arrays.asList("84%", "-13t"), Arrays.asList(after.rows.get(2).exec));
 		final PanelSnapshot.PartyTab live = SidePanelParty.party(SidePanelPartyExamples.tobLive());
