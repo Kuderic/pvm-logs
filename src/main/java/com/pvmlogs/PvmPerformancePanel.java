@@ -553,6 +553,29 @@ class PvmPerformancePanel extends PluginPanel
 		return key;
 	}
 
+	/** T-188: T-187's standing as the card reads it ({@code claude/specs/t187-t188-record-api.md}); null for none. */
+	static SidePanelModel.Standing standing(BossRecords.Standing r)
+	{
+		if (r == null)
+		{
+			return null;
+		}
+		final SidePanelModel.Standing s = new SidePanelModel.Standing();
+		s.previousBestClock = r.previousBestClock;
+		s.newPb = r.newPb;
+		s.previousBestLuckRemoved = r.previousBestLuckRemoved;
+		s.newBestLuckRemoved = r.newBestLuckRemoved;
+		s.rank = r.rank;
+		s.ranked = r.ranked;
+		s.grade = r.grade == null ? null : r.grade.name();
+		s.basis = r.basis;
+		s.ticksToNext = r.ticksToNext;
+		s.next = r.next == null ? null : r.next.name();
+		s.streak = r.streak;
+		s.flawlessStreak = r.flawlessStreak;
+		return s;
+	}
+
 	/** T-188: whether Celebrations is on: the setting, else what a test set. */
 	boolean celebrations()
 	{
@@ -668,6 +691,9 @@ class PvmPerformancePanel extends PluginPanel
 			{
 				in.kc = Math.max(in.kc, f.getContext() == null ? 0 : f.getContext().kc);
 			}
+			// T-188: the kill's place in its boss's record (T-187): a lookup, null until the kill's history save has run.
+			final BossRecords records = plugin == null || !in.celebrations ? null : plugin.getRecords();
+			in.standing = standing(records == null ? null : records.standing(room));
 		}
 		// T-095: a run has no "your average": comparing runs' clocks says nothing.
 		if (in.killed && room.getRaid() == null && in.warning == null && !in.run)
