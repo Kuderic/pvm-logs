@@ -117,6 +117,11 @@ public final class SidePanelPictures
 			fightTabInAParty(out);
 			return;
 		}
+		if (args.length > 1 && "badges".equals(args[1]))
+		{
+			badgesAndMoment(out);
+			return;
+		}
 		if (args.length > 1 && "card".equals(args[1]))
 		{
 			killCard(out);
@@ -1910,6 +1915,52 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-189: the after-kill card with badges (one earned, and all four), and the kill-end moment's frames: the die
+	 * rolling (frame 3) and the chips flashing (frame 9). Normal, Smooth and Larger, 1x and 2x.
+	 */
+	private static void badgesAndMoment(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			final SidePanelModel.Input streak = SidePanelKillCardExamples.araxxorKill();
+			streak.standing.streak = 3;
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-one-badge-a-streak", scale, fightTab(streak, scale));
+				write(dir, "b-all-four-badges", scale, fightTab(SidePanelKillCardExamples.allBadges(), scale));
+				write(dir, "c-moment-die-rolling", scale, moment(SidePanelKillCardExamples.allBadges(), 3, scale));
+				write(dir, "d-moment-chips-flash", scale, moment(SidePanelKillCardExamples.allBadges(), 9, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-189: the kill card {@code frames} into its kill-end moment, after the same fight live. */
+	private static BufferedImage moment(SidePanelModel.Input kill, int frames, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.setCelebrations(true);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()), null,
+			SidePanelParty.party(new SidePanelParty.Input())));
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(kill), null, SidePanelParty.party(new SidePanelParty.Input())));
+		final SidePanelKillCard card = (SidePanelKillCard) panel.fightTab().getComponent(0);
+		card.showing = () -> true;
+		for (int i = 0; i < frames; i++)
+		{
+			card.step();
+		}
+		return draw(panel.tabs(), panel.fightTab(), scale);
 	}
 
 	/** T-188: the Fight tab with Celebrations on and every section opened. */

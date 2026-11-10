@@ -1533,6 +1533,8 @@ final class PanelSnapshot
 		final int weaponItem;
 		final int weaponSprite;
 		final String weaponDps;
+		/** T-189: the badges earned, only after a kill and only when earned; empty for none. */
+		final List<Badge> badges;
 
 		KillCard(boolean live, String boss, Color tint, int icon, String sub, List<String> subShort, String corner,
 			String clock, Text side1, Text side2, Text side3, boolean newPb, String grade, Color gradeColour,
@@ -1569,12 +1571,80 @@ final class PanelSnapshot
 			this.weaponItem = weaponItem;
 			this.weaponSprite = weaponSprite;
 			this.weaponDps = weaponDps;
+			this.badges = Collections.emptyList();
 		}
 
-		/** Live or after, and the rows that take room: the luck-removed row and the tip. */
+		/** T-189: this card with its badges. */
+		private KillCard(KillCard c, List<Badge> badges)
+		{
+			live = c.live;
+			boss = c.boss;
+			tint = c.tint;
+			icon = c.icon;
+			sub = c.sub;
+			subShort = c.subShort;
+			corner = c.corner;
+			clock = c.clock;
+			side1 = c.side1;
+			side2 = c.side2;
+			side3 = c.side3;
+			newPb = c.newPb;
+			grade = c.grade;
+			gradeColour = c.gradeColour;
+			gradeTip = c.gradeTip;
+			big = c.big;
+			bigCaption = c.bigCaption;
+			skill1 = c.skill1;
+			skill2 = c.skill2;
+			rolled = c.rolled;
+			luckLine = c.luckLine;
+			luckRemoved = c.luckRemoved;
+			luckRemovedPb = c.luckRemovedPb;
+			newLuckRemovedPb = c.newLuckRemovedPb;
+			tip = c.tip;
+			weapon = c.weapon;
+			weaponItem = c.weaponItem;
+			weaponSprite = c.weaponSprite;
+			weaponDps = c.weaponDps;
+			this.badges = list(badges);
+		}
+
+		KillCard withBadges(List<Badge> b)
+		{
+			return new KillCard(this, b);
+		}
+
+		/** Live or after, and the rows that take room: the luck-removed row, the tip, the badges. */
 		String structure()
 		{
-			return (live ? "l" : "k") + (luckRemoved == null ? "" : "r") + (tip == null ? "" : "t");
+			return (live ? "l" : "k") + (luckRemoved == null ? "" : "r") + (tip == null ? "" : "t")
+				+ (badges.isEmpty() ? "" : "b" + badges.size());
+		}
+	}
+
+	/** T-189: a badge on the kill card: its name, what it reads (its tooltip), and its mark. */
+	static final class Badge
+	{
+		enum Mark
+		{
+			KILLS, FLAWLESS, CLEAN, STREAK
+		}
+
+		final String name;
+		final String tip;
+		final Mark mark;
+
+		Badge(String name, String tip, Mark mark)
+		{
+			this.name = name;
+			this.tip = tip;
+			this.mark = mark;
+		}
+
+		@Override
+		public String toString()
+		{
+			return name;
 		}
 	}
 

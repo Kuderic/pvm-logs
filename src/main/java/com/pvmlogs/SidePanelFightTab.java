@@ -132,6 +132,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private FightTab last;
 	private final SidePanelSection.Folds folds;
 	private final List<Consumer<FightTab>> updaters = new ArrayList<>();
+	/** T-189: the last card on show was a live one: its kill, next, earns the kill-end moment. */
+	private boolean cardLive;
 	private String structure;
 	private int builds;
 	/** Whether this build's values have reserved their widest digits (T-046). */
@@ -313,6 +315,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private void rebuild(FightTab tab)
 	{
 		builds++;
+		if (tab.card == null)
+		{
+			// T-189: no card on show, so no live one for a kill to follow.
+			cardLive = false;
+		}
 		removeAll();
 		chartView = null;
 		stripView = null;
@@ -413,11 +420,19 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	{
 		final SidePanelKillCard view = new SidePanelKillCard(tab.card, icons);
 		add(view);
+		// T-189: the kill-end moment plays once, when this tab saw the fight live and now shows it killed: never for a
+		// kill already over when the panel opened, nor for one opened again.
+		if (cardLive && !tab.card.live)
+		{
+			view.celebrate();
+		}
+		cardLive = tab.card.live;
 		updaters.add(t ->
 		{
 			if (t.card != null)
 			{
 				view.set(t.card);
+				cardLive = t.card.live;
 			}
 		});
 	}
