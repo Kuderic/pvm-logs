@@ -81,11 +81,27 @@ public final class ReadmePictures
 		png(out, "overlay-ruled-kill", overlays(ruledKill()));
 		png(out, "overlay-loadout", overlays(LedgerRows.loadout(g.versus(hammer()), false)));
 
-		png(out, "panel-fight", SidePanelPictures.render(g.panel, 1));
-		png(out, "panel-history", SidePanelPictures.renderHistory(false, 1));
+		png(out, "panel-fight", fightTab(g.panel));
+		png(out, "panel-fight-live", g.live);
+		// T-197: History's top as progress (T-190), from a record (T-187), as a new install with Celebrations on shows it.
+		png(out, "panel-history", SidePanelPictures.renderHistory(SidePanelProgressExamples.source(
+			SidePanelHistoryExamples.history(), SidePanelProgressExamples.vardorvis()), t -> { }, 1));
 		png(out, "panel-trip", SidePanelPictures.renderTrip(SidePanelExamples.trip(), 1));
 
 		gif(out.resolve("panel-fight-live.gif"), killFrames());
+	}
+
+	/**
+	 * T-197: the Fight tab as a new install shows it: the panel's folds follow Celebrations, as the setting drives both in
+	 * game (the same steps as SidePanelPictures' own Celebrations renders).
+	 */
+	static BufferedImage fightTab(SidePanelModel.Input in)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.setCelebrations(in.celebrations);
+		panel.setText(false, false);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
+		return SidePanelPictures.draw(panel.tabs(), panel.fightTab(), 1);
 	}
 
 	// ---- Overlays ----
@@ -105,6 +121,11 @@ public final class ReadmePictures
 		final List<LedgerRows.Row> mid;
 		final List<LedgerRows.Row> dead;
 		final SidePanelModel.Input panel;
+		/**
+		 * T-197: the Fight tab's live kill card, about half way through the same kill, drawn then: the input reads the kill
+		 * as it goes on.
+		 */
+		final BufferedImage live;
 		private final Fight fight;
 
 		Graardor()
@@ -120,6 +141,7 @@ public final class ReadmePictures
 			final int drained = kill.defenceNow();
 			mid = LedgerRows.build(LedgerRows.of(kill.room), LedgerRows.State.fight(kill.boss, false, false, false)
 				.withDrain(new LedgerRows.LiveDrain(drained, DEFENCE, 0, MAGIC, MAGIC, 0)), all);
+			live = fightTab(SidePanelKillCardExamples.on(kill.input(new SidePanelWeaponRows())));
 			while (!kill.over())
 			{
 				kill.run(1);
@@ -136,6 +158,23 @@ public final class ReadmePictures
 			panel.killed = true;
 			panel.endMillis = kill.now();
 			panel.average = usual;
+			// T-197: the kill card (T-188) as a new install shows it, Celebrations on, with an illustrative record: KC 412,
+			// your PB 0:31, the 4th fastest of 23 kills tracked, an A (top 15% of your last 23), 3 ticks from an S, and
+			// the badges this kill earns by the record's rules (T-192).
+			SidePanelKillCardExamples.on(panel);
+			panel.kc = 412;
+			final SidePanelModel.Standing st = new SidePanelModel.Standing();
+			st.previousBestClock = 31.2;
+			st.rank = 4;
+			st.ranked = 23;
+			st.grade = "A";
+			st.basis = "top 15% of last 23";
+			st.ticksToNext = 3;
+			st.next = "S";
+			st.previousBestLuckRemoved = 33.0;
+			st.streak = 2;
+			panel.standing = st;
+			SidePanelKillCardExamples.recorded(panel);
 		}
 
 		/** The DPS overlay's `vs` line (T-073), named and coloured as the plugin does it for this fight. */
@@ -301,18 +340,20 @@ public final class ReadmePictures
 	 */
 	static List<Frame> killFrames()
 	{
-		final Kill kill = new Kill();
+		// T-197: the same Graardor kill as the other pictures, with the kill card (Celebrations on, a new install's default).
+		final Kill kill = Kill.graardor();
 		final SidePanelWeaponRows rows = new SidePanelWeaponRows();
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.setCelebrations(true);
 		final List<BufferedImage> images = new ArrayList<>();
 		while (!kill.over())
 		{
 			kill.run(PvmPerformancePanel.UPDATE_TICKS);
-			panel.apply(new PanelSnapshot(SidePanelModel.fight(kill.input(rows)), null));
+			panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelKillCardExamples.on(kill.input(rows))), null));
 			images.add(SidePanelPictures.draw(panel.tabs(), panel.fightTab(), 1));
 		}
 		kill.end();
-		final SidePanelModel.Input dead = kill.input(rows);
+		final SidePanelModel.Input dead = SidePanelKillCardExamples.on(kill.input(rows));
 		dead.ended = true;
 		dead.killed = true;
 		dead.endMillis = kill.now();
