@@ -9030,6 +9030,10 @@ public class PvmPerformancePlugin extends Plugin
 
 	// T-178: history.json, saved whole and never saved over when it didn't load. Made by loadHistory, on the executor.
 	private volatile HistoryStore historyStore;
+	// T-187: the per-boss record (records.json), loaded or seeded once history is, updated as history is saved.
+	private volatile BossRecords bossRecords;
+	// T-187: the fights whose bosses a save looks at for a new counted kill: a room's worth, and then some.
+	static final int RECORDS_RECENT_FIGHTS = 50;
 	// T-178: the last save queued, which shutDown lets finish.
 	private volatile java.util.concurrent.Future<?> lastHistorySave;
 	// T-178: said in chat once, on the next tick: the history didn't read and a copy was loaded.
@@ -9063,6 +9067,19 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("HISTORY couldn't be loaded: %s", e);
 			log.warn("PvM Logs: could not load history", e);
 		}
+		// T-187: the per-boss record, from records.json or seeded from this history and its backups.
+		try
+		{
+			final BossRecords records = new BossRecords(dir, gson);
+			debug.log("%s", records.load(new ArrayList<>(history), System.currentTimeMillis()));
+			records.save();
+			bossRecords = records;
+		}
+		catch (IOException | RuntimeException e)
+		{
+			debug.log("RECORDS couldn't be loaded or saved: %s", e);
+			log.warn("PvM Logs: could not load the boss records", e);
+		}
 		if (panel != null)
 		{
 			panel.refresh();
@@ -9089,7 +9106,49 @@ public class PvmPerformancePlugin extends Plugin
 				debug.log("HISTORY couldn't be saved: %s", e.getMessage());
 				log.warn("PvM Logs: could not save history", e);
 			}
+			noteRecords(snapshot);
 		});
+	}
+
+	/** T-187: a counted kill in the history just saved goes into its boss's record, once, and the record is saved. */
+	private void noteRecords(List<Fight> snapshot)
+	{
+		final BossRecords records = bossRecords;
+		if (records == null)
+		{
+			return;
+		}
+		try
+		{
+			if (records.noteHistory(snapshot, RECORDS_RECENT_FIGHTS))
+			{
+				records.save();
+				for (String line : records.recordedLines())
+				{
+					debug.log("%s", line);
+				}
+				// The kill card gains its PB, rank and grade on the next snapshot.
+				if (panel != null)
+				{
+					panel.refresh();
+				}
+			}
+		}
+		catch (IOException | RuntimeException e)
+		{
+			debug.log("RECORDS couldn't be updated: %s", e.getMessage());
+			log.warn("PvM Logs: could not update the boss records", e);
+		}
+	}
+
+	/**
+	 * T-187: the per-boss record (records.json) for the side panel (T-188 to T-190; claude/specs/t187-t188-record-api.md):
+	 * {@code standing(room)} for a recorded kill, {@code view(like)} for one key. Both immutable. Null until history has
+	 * loaded.
+	 */
+	BossRecords getRecords()
+	{
+		return bossRecords;
 	}
 
 	/** T-178: the last save queued gets to finish before the plugin goes (a crash mid-save still leaves a whole file). */
