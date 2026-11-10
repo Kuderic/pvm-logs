@@ -103,13 +103,13 @@ public class SidePanelFightOrderTest
 	public void theCurveExplainsItsTail()
 	{
 		final String top = SidePanelModel.curveTip(2.33, 0.99);
-		assertTrue(top, top.startsWith("Top 1%: 1% of fights with these attacks would have dealt more, the shaded right"));
+		assertTrue(top, top.startsWith("Rolled 99 of 100: 1% of fights with these attacks would have dealt more, the shaded right"));
 		assertTrue(top, top.contains("thin sliver"));
 		final String bottom = SidePanelModel.curveTip(-1.28, 0.10);
-		assertTrue(bottom, bottom.startsWith("Bottom 10%: 10% of fights with these attacks would have dealt less, the"
+		assertTrue(bottom, bottom.startsWith("Rolled 10 of 100: 10% of fights with these attacks would have dealt less, the"
 			+ " shaded left"));
 		final String middle = SidePanelModel.curveTip(0.2, 0.58);
-		assertTrue(middle, middle.startsWith("Average: 42% of fights with these attacks would have dealt more"));
+		assertTrue(middle, middle.startsWith("Rolled 58 of 100: 42% of fights with these attacks would have dealt more"));
 		// On the tab: the curve carries it.
 		final SidePanelFightTab view = view(SidePanelExamples.dead());
 		final SidePanelLuckCurve curve = all(view, SidePanelLuckCurve.class).get(0);

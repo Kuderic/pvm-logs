@@ -84,6 +84,12 @@ final class SidePanelStyle
 	static final Color THRALL = new Color(0xB48CFF);
 	static final Color DOT = new Color(0xE6A0D4);
 	static final Color REFLECT = new Color(0x9AA5B1);
+	/** T-188: luck's own colour on the kill card and in its words, always: the thrall's violet, apart from skill's. */
+	static final Color LUCK = THRALL;
+	/** T-188: an S grade, and the luck-removed PB's star: the only gold. */
+	static final Color GOLD = new Color(0xFFD75E);
+	/** T-188: an A grade. */
+	static final Color GRADE_A = new Color(0x8FE08A);
 
 	// ---- sizes (spec section 2, "Layout") ----
 	/** The sidebar's 242 px less a 6 px border each side and the 17 px scrollbar. */

@@ -117,6 +117,11 @@ public final class SidePanelPictures
 			fightTabInAParty(out);
 			return;
 		}
+		if (args.length > 1 && "card".equals(args[1]))
+		{
+			killCard(out);
+			return;
+		}
 		if (args.length > 1 && "wardens".equals(args[1]))
 		{
 			wardensTargets(out);
@@ -1877,10 +1882,68 @@ public final class SidePanelPictures
 		return draw(panel.tabs(), panel.fightTab(), scale);
 	}
 
+	/**
+	 * T-188: the kill card, live and after a kill, on the Vardorvis example and Eric's Araxxor kill; a PB kill; a kill
+	 * before the record has it; Celebrations off. Normal, Smooth and Larger, 1x and 2x.
+	 */
+	private static void killCard(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-vardorvis-live", scale, fightTab(SidePanelKillCardExamples.vardorvisLive(), scale));
+				write(dir, "b-vardorvis-kill", scale, fightTab(SidePanelKillCardExamples.vardorvisKill(), scale));
+				write(dir, "c-araxxor-live", scale, fightTab(SidePanelKillCardExamples.araxxorLive(), scale));
+				write(dir, "d-araxxor-kill", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "e-pb-kill", scale, fightTab(SidePanelKillCardExamples.pbKill(), scale));
+				write(dir, "f-before-the-record", scale, fightTab(SidePanelKillCardExamples.unrecorded(), scale));
+				write(dir, "g-celebrations-off", scale, fightTab(SidePanelKillCardExamples.off(), scale));
+				write(dir, "h-araxxor-kill-sections-open", scale, opened(SidePanelKillCardExamples.araxxorKill(), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-188: the Fight tab with Celebrations on and every section opened. */
+	private static BufferedImage opened(SidePanelModel.Input in, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.setCelebrations(true);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
+		openAll(panel.fightTab());
+		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	static void openAll(Container c)
+	{
+		for (Component k : c.getComponents())
+		{
+			if (k instanceof SidePanelSection && ((SidePanelSection) k).isFolded())
+			{
+				((SidePanelSection) k).toggle();
+			}
+			else if (k instanceof Container)
+			{
+				openAll((Container) k);
+			}
+		}
+	}
+
 	/** T-176: the Fight tab alone, solo. */
 	private static BufferedImage fightTab(SidePanelModel.Input in, double scale)
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		// T-188: the panel's folds follow the input's Celebrations, as the setting drives both in game.
+		panel.setCelebrations(in.celebrations);
 		styled(panel);
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
 		return draw(panel.tabs(), panel.fightTab(), scale);

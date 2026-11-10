@@ -313,7 +313,7 @@ final class SidePanelParty
 		final int all = f.all();
 		final String[] dmg = {compact(all), dps(all, seconds), share(all, total)};
 		final boolean luckKnown = f.p >= 0;
-		final String[] luck = {luckKnown ? LedgerRows.band(f.p) : "", luckKnown ? seconds(f.ls) : ""};
+		final String[] luck = {luckKnown ? SidePanelModel.rolled(f.p) : "", luckKnown ? seconds(f.ls) : ""};
 		final String[] exec = {f.x >= 0 ? LedgerRows.partPercent(f.x) : "", f.il > 0 ? "-" + f.il + LedgerRows.TICKS_SHORT
 			: ""};
 		final Color luckColour = luckKnown ? SidePanelStyle.of(LedgerRows.percentileBand(f.p)) : SidePanelStyle.MUTED;
@@ -411,7 +411,7 @@ final class SidePanelParty
 		final List<PanelSnapshot.Row> rows = new ArrayList<>();
 		if (after && f.p >= 0)
 		{
-			rows.add(row("luck", LedgerRows.band(f.p) + " (" + LedgerRows.fasterOrSlower(f.ls) + ")",
+			rows.add(row("luck", SidePanelModel.rolled(f.p) + " (" + LedgerRows.fasterOrSlower(f.ls) + ")",
 				SidePanelStyle.of(LedgerRows.percentileBand(f.p)), false));
 		}
 		if (f.x >= 0)
