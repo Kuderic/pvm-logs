@@ -71,6 +71,11 @@ public class SidePanelWeaponDpsTest
 		final byte[] states = {a, c, a, c, l, l, a, c, c, c, c};
 		final List<FightTimeline.Attack> attacks = Arrays.asList(new FightTimeline.Attack(100),
 			new FightTimeline.Attack(102), new FightTimeline.Attack(106));
+		// T-200: all landed (an expectation booked); one thrown and not landed yet counts no ticks.
+		for (FightTimeline.Attack k : attacks)
+		{
+			k.mean = 10;
+		}
 		final FightTimeline.View view = new FightTimeline.View(100, states, new float[states.length],
 			new float[states.length], new float[states.length], attacks);
 		assertEquals(2, SidePanelWeaponRows.ticks(view, 0));

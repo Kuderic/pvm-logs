@@ -127,6 +127,11 @@ public final class SidePanelPictures
 			historyProgress(out);
 			return;
 		}
+		if (args.length > 1 && "rate".equals(args[1]))
+		{
+			rates(out);
+			return;
+		}
 		if (args.length > 1 && "skill".equals(args[1]))
 		{
 			skillAndFigures(out);
@@ -2039,6 +2044,31 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-200: the live card about 3 s, 6 s and 30 s into an Araxxor kill (a 4-tick tentacle, each attack expected to deal
+	 * 30, the damage rolled from a fixed seed), Normal at 2x. Run on master and on the fix for the before and after.
+	 */
+	private static void rates(Path out) throws IOException
+	{
+		smooth = false;
+		larger = false;
+		Files.createDirectories(out);
+		final SidePanelRateTest.Sim s = new SidePanelRateTest.Sim();
+		final java.util.Random roll = new java.util.Random(555);
+		final int[] at = {5, 10, 50};
+		int shot = 0;
+		for (int t = 0; t <= 50; t++)
+		{
+			if (shot < at.length && t == at[shot])
+			{
+				write(out, "live-" + Math.round(t * LedgerRows.SECONDS_PER_TICK) + "s", 2, fightTab(s.input(false), 2));
+				shot++;
+			}
+			final boolean lands = roll.nextDouble() < 0.75;
+			s.tick(t % 4 == 0, "Abyssal tentacle", 4, lands ? 1 + roll.nextInt(55) : 0);
+		}
 	}
 
 	/** T-199: the Fight tab with Celebrations on and only the section {@code id} opened (Damage as it opens). */

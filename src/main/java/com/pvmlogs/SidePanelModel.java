@@ -1792,10 +1792,12 @@ final class SidePanelModel
 	 */
 	static void rates(PanelSnapshot.KillCard c, Input in, LedgerRows.Numbers n, boolean warning)
 	{
-		c.dps = Double.isNaN(n.dps) ? null : LedgerRows.oneDecimal(n.dps);
-		c.expDps = warning || Double.isNaN(n.expectedDps) ? null : LedgerRows.oneDecimal(n.expectedDps);
+		// T-200: over the time every landed attack's whole cooldown takes, so the first hits read the gear's rate.
+		final Rate r = rate(n, in);
+		c.dps = Double.isNaN(r.dps) ? null : LedgerRows.oneDecimal(r.dps);
+		c.expDps = warning || Double.isNaN(r.expectedDps) ? null : LedgerRows.oneDecimal(r.expectedDps);
 		final String parts = dpsTooltip(n, in);
-		c.dpsTip = tipLines(c.dps == null ? "No DPS yet: it starts with your first attack." : null,
+		c.dpsTip = tipLines(c.dps == null ? "No DPS yet: it starts when your first attack lands." : null,
 			parts == null ? null : parts.replace("<html>", "").replace("</html>", ""),
 			c.expDps == null ? null : "Exp " + c.expDps + ": the DPS of average rolls with the same attacks (luck taken"
 				+ " out).", warning ? "Boss data unsure: expected is hidden." : null);
@@ -2348,10 +2350,11 @@ final class SidePanelModel
 			Text.small(rate == null ? "after a minute" : "over " + LedgerRows.duration(clock), rate == null
 				? SidePanelStyle.MUTED : SidePanelStyle.SECONDARY), SidePanelStyle.TRACK));
 		// T-134: all your damage against the expected and the same other damage, both over the scored clock.
-		final double expectedDps = n.expectedDps;
-		tiles.add(new Tile(Text.small("DPS", SidePanelStyle.SECONDARY), Text.title(Double.isNaN(n.dps)
-			? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps), SidePanelStyle.VALUE), Text.small(warning
-			? "expected hidden" : Double.isNaN(expectedDps) ? dpsSub(n) : "expected " + LedgerRows.oneDecimal(expectedDps),
+		final Rate rates = rate(n, in);
+		final double expectedDps = rates.expectedDps;
+		tiles.add(new Tile(Text.small("DPS", SidePanelStyle.SECONDARY), Text.title(Double.isNaN(rates.dps)
+			? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(rates.dps), SidePanelStyle.VALUE), Text.small(warning
+			? "expected hidden" : Double.isNaN(expectedDps) ? dpsSub(n, rates) : "expected " + LedgerRows.oneDecimal(expectedDps),
 			warning ? SidePanelStyle.MUTED : SidePanelStyle.SECONDARY), null, SidePanelStyle.TRACK, dpsTooltip(n, in)));
 		final String other = otherDamage(in);
 		tiles.add(tile("Damage", Text.title(LedgerRows.number(n.damage), SidePanelStyle.VALUE),
@@ -2683,9 +2686,10 @@ final class SidePanelModel
 		}
 
 		// T-134: all your damage over the scored clock; the sub-line says what's in it, the tooltip each part.
-		tiles.add(new Tile(Text.small("DPS", SidePanelStyle.SECONDARY), Text.title(Double.isNaN(n.dps)
-			? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps), SidePanelStyle.VALUE), Text.small(in.unscored
-			&& in.kind == Kind.ROOM ? "on the " + in.scoredName : dpsSub(n), SidePanelStyle.SECONDARY), null,
+		final Rate rate = rate(n, in);
+		tiles.add(new Tile(Text.small("DPS", SidePanelStyle.SECONDARY), Text.title(Double.isNaN(rate.dps)
+			? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(rate.dps), SidePanelStyle.VALUE), Text.small(in.unscored
+			&& in.kind == Kind.ROOM ? "on the " + in.scoredName : dpsSub(n, rate), SidePanelStyle.SECONDARY), null,
 			SidePanelStyle.TRACK, dpsTooltip(n, in)));
 
 		final boolean avoidable = avoidableShown(n, in);
@@ -2704,9 +2708,42 @@ final class SidePanelModel
 	}
 
 	/** T-134: the DPS tile's sub-line: {@code weapon 21.1} beside your other damage, {@code weapon only} without. */
-	static String dpsSub(LedgerRows.Numbers n)
+	static String dpsSub(LedgerRows.Numbers n, Rate r)
 	{
-		return n.other > 0 && !Double.isNaN(n.weaponDps) ? "weapon " + LedgerRows.oneDecimal(n.weaponDps) : "weapon only";
+		return n.other > 0 && !Double.isNaN(r.weaponDps) ? "weapon " + LedgerRows.oneDecimal(r.weaponDps) : "weapon only";
+	}
+
+	/**
+	 * T-200 (Eric: "Exp dps in the side bar is too high on the first few hits of the fight"): the panel's DPS, weapon
+	 * DPS and expected DPS over the time every landed attack's whole cooldown takes: the scored clock, plus what's left
+	 * of the latest landed attack's cooldown, less the ticks of an attack thrown and not landed yet
+	 * ({@link SidePanelWeaponRows#rateTicks}, as the weapon rows read it). Over the scored clock alone the newest hit's
+	 * damage sat over only the part of its cooldown that had passed: 2.5 times the gear's rate at a 5-tick weapon's first
+	 * hit, falling back over each cooldown. Idle, eating and mechanic ticks count as on the clock. With no timeline it's
+	 * the scored clock. {@link LedgerRows.Numbers}, luck, the CSV, history and the overlay keep the scored clock.
+	 */
+	static final class Rate
+	{
+		final double seconds;
+		final double dps;
+		final double weaponDps;
+		final double expectedDps;
+
+		Rate(double seconds, LedgerRows.Numbers n)
+		{
+			this.seconds = seconds;
+			final boolean none = n.scoredClock <= 0 || seconds <= 0;
+			dps = none ? Double.NaN : (n.damage + n.other) / seconds;
+			weaponDps = none ? Double.NaN : n.damage / seconds;
+			expectedDps = none || n.expected <= 0 ? Double.NaN : (n.expected + n.other) / seconds;
+		}
+	}
+
+	/** T-200: the panel's rates for {@code n}, from the input's timeline when it has one. */
+	static Rate rate(LedgerRows.Numbers n, Input in)
+	{
+		final int extra = in == null || n.scoredClock <= 0 ? 0 : SidePanelWeaponRows.rateTicks(in.view, in.ended);
+		return new Rate(n.scoredClock + extra * LedgerRows.SECONDS_PER_TICK, n);
 	}
 
 	/**
@@ -2716,33 +2753,35 @@ final class SidePanelModel
 	 */
 	static String dpsTooltip(LedgerRows.Numbers n, Input in)
 	{
-		if (n.other <= 0 || Double.isNaN(n.dps) || n.scoredClock <= 0)
+		final Rate r = rate(n, in);
+		if (n.other <= 0 || Double.isNaN(r.dps))
 		{
 			return null;
 		}
+		final double over = r.seconds;
 		final List<String> parts = new ArrayList<>();
-		parts.add("weapon " + LedgerRows.oneDecimal(n.weaponDps));
+		parts.add("weapon " + LedgerRows.oneDecimal(r.weaponDps));
 		if (in.scoredThrall > 0)
 		{
-			parts.add("thrall " + LedgerRows.oneDecimal(in.scoredThrall / n.scoredClock));
+			parts.add("thrall " + LedgerRows.oneDecimal(in.scoredThrall / over));
 		}
 		if (in.scoredReflect > 0)
 		{
-			parts.add("recoil/veng " + LedgerRows.oneDecimal(in.scoredReflect / n.scoredClock));
+			parts.add("recoil/veng " + LedgerRows.oneDecimal(in.scoredReflect / over));
 		}
 		for (Map.Entry<String, Integer> e : DotKinds.split(in.scoredDotByKind, in.scoredDot, DotKinds.REMAINDER)
 			.entrySet())
 		{
-			parts.add(e.getKey() + " " + LedgerRows.oneDecimal(e.getValue() / n.scoredClock));
+			parts.add(e.getKey() + " " + LedgerRows.oneDecimal(e.getValue() / over));
 		}
 		// A party member's live panels know the sum alone (their update's o), not its kinds.
 		final int named = Math.max(0, in.scoredThrall) + Math.max(0, in.scoredReflect) + Math.max(0, in.scoredDot);
 		if (n.other > named)
 		{
 			parts.add((named == 0 ? "thrall, recoil and DoT " : "other ") + LedgerRows.oneDecimal((n.other - named)
-				/ n.scoredClock));
+				/ over));
 		}
-		return "<html>" + LedgerRows.oneDecimal(n.dps) + " DPS over " + LedgerRows.duration(n.scoredClock)
+		return "<html>" + LedgerRows.oneDecimal(r.dps) + " DPS over " + LedgerRows.duration(over)
 			+ " of scored fighting:<br>" + String.join(", ", parts) + ".</html>";
 	}
 
@@ -4179,9 +4218,10 @@ final class SidePanelModel
 			return rows;
 		}
 		final Map<String, WeaponRow> byKey = new LinkedHashMap<>();
+		final int landed = SidePanelWeaponRows.lastLanded(view);
 		for (int i = 0; i < view.attacks.size(); i++)
 		{
-			SidePanelWeaponRows.add(byKey, view.attacks.get(i), SidePanelWeaponRows.ticks(view, i));
+			SidePanelWeaponRows.add(byKey, view.attacks.get(i), SidePanelWeaponRows.ticks(view, i, landed));
 		}
 		rows.addAll(byKey.values());
 		return rows;
