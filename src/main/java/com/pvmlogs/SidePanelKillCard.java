@@ -40,13 +40,32 @@ final class SidePanelKillCard extends JComponent
 	/** Measures a tip's width before the card has a graphics of its own: the RuneScape fonts' metrics are fixed. */
 	private static final Graphics2D MEASURE = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics();
 
+	/**
+	 * T-189: the kill-end moment, once: {@link #SETTLE} frames of the die rolling to its number, then the grade and PB
+	 * chips flash; {@link #FRAMES} frames of {@link #FRAME_MS} ms (0.6 s), one {@link Timer}, nothing per tick.
+	 */
+	static final int FRAMES = 12;
+	static final int SETTLE = 8;
+	static final int FRAME_MS = 50;
+	/** The numbers the die shows as it rolls, before it settles. */
+	private static final int[] ROLLS = {7, 63, 31, 95, 12, 70, 44, 23};
+	static final int BADGE_H = 15;
+
 	private KillCard card;
 	private final SidePanelIcons icons;
+	private javax.swing.Timer timer;
+	/** The moment's frame, 0 to {@link #FRAMES} - 1; -1 at rest. */
+	private int frame = -1;
+	/** Frames stepped, for tests. */
+	private int stepped;
+	/** Whether the card is on screen; a test can stand in for Swing's {@code isShowing}. */
+	java.util.function.BooleanSupplier showing = this::isShowing;
 	private BufferedImage weaponImage;
 	private int weaponAsked = Integer.MIN_VALUE;
 	/** Where the skill and luck tiles were drawn, for their tooltips. */
 	private final Rectangle skillTile = new Rectangle();
 	private final Rectangle luckTile = new Rectangle();
+	private final List<Rectangle> badgeBoxes = new ArrayList<>(4);
 	private int paints;
 
 	SidePanelKillCard(KillCard card, SidePanelIcons icons)
@@ -169,8 +188,42 @@ final class SidePanelKillCard extends JComponent
 				final int lines = tipLines(c.tip, SidePanelStyle.CONTENT_WIDTH - 2 * PAD_X - TIP_ICON - 6);
 				h += 7 + 1 + 6 + Math.max(TIP_ICON, lines * small() + (lines - 1) * 2);
 			}
+			if (!c.badges.isEmpty())
+			{
+				final int rows = badgeRows(c.badges, SidePanelStyle.CONTENT_WIDTH - 2 * PAD_X);
+				h += 7 + rows * badgeHeight() + (rows - 1) * 4;
+			}
 		}
 		return h + PAD_BOTTOM;
+	}
+
+	static int badgeHeight()
+	{
+		return Math.max(BADGE_H, small() + 4);
+	}
+
+	/** A badge's width: its mark, its name, the padding. */
+	static int badgeWidth(PanelSnapshot.Badge b)
+	{
+		return 5 + 7 + 4 + SidePanelStyle.metrics(MEASURE, SidePanelStyle.Type.SMALL.font()).stringWidth(b.name) + 6;
+	}
+
+	/** The rows the badges take, flowed left to right in this width. */
+	static int badgeRows(List<PanelSnapshot.Badge> badges, int room)
+	{
+		int rows = 1;
+		int x = 0;
+		for (PanelSnapshot.Badge b : badges)
+		{
+			final int w = badgeWidth(b);
+			if (x > 0 && x + w > room)
+			{
+				rows++;
+				x = 0;
+			}
+			x += w + 4;
+		}
+		return rows;
 	}
 
 	/** The tip's lines at this width, one or two, as {@link #wrap} breaks it. */
@@ -211,6 +264,13 @@ final class SidePanelKillCard extends JComponent
 			}
 			return card.gradeTip != null ? "<html>Your grade, from Execution only, against your own kills of this boss: "
 				+ card.gradeTip + ".</html>" : "Your grade, from Execution only, against your own kills of this boss.";
+		}
+		for (int i = 0; i < badgeBoxes.size(); i++)
+		{
+			if (badgeBoxes.get(i).contains(e.getPoint()) && i < card.badges.size())
+			{
+				return card.badges.get(i).tip;
+			}
 		}
 		if (luckTile.contains(e.getPoint()))
 		{
@@ -296,11 +356,11 @@ final class SidePanelKillCard extends JComponent
 			{
 				// NEW PB: in the boss's colour, in a box edged with it.
 				final int tw = width(g, t.type, t.text);
-				g.setColor(SidePanelStyle.PANEL);
+				g.setColor(flashing() ? c.tint : SidePanelStyle.PANEL);
 				g.fillRect(right - tw - 10, sy - 2, tw + 10, lh + 3);
 				g.setColor(c.tint);
 				g.drawRect(right - tw - 10, sy - 2, tw + 9, lh + 2);
-				drawRight(g, t, right - 5, sy, w);
+				drawRight(g, flashing() ? new Text(t.text, SidePanelStyle.CARD, t.type) : t, right - 5, sy, w);
 			}
 			else
 			{
@@ -340,12 +400,13 @@ final class SidePanelKillCard extends JComponent
 						y + (body() - small()), w);
 					final int chipW = 7 + 3 + width(g, SidePanelStyle.Type.SMALL, "PB") + 8;
 					final int cx = right - ww - 4 - chipW;
-					g.setColor(SidePanelStyle.PANEL);
+					g.setColor(flashing() ? SidePanelStyle.GOLD : SidePanelStyle.PANEL);
 					g.fillRect(cx, y + 1, chipW, body() - 1);
 					g.setColor(SidePanelStyle.GOLD);
 					g.drawRect(cx, y + 1, chipW - 1, body() - 2);
-					star(g, cx + 4, y + (body() - 7) / 2 + 1);
-					draw(g, Text.small("PB", SidePanelStyle.GOLD), cx + 4 + 7 + 3, y + (body() - small()), chipW);
+					star(g, cx + 4, y + (body() - 7) / 2 + 1, flashing() ? SidePanelStyle.CARD : SidePanelStyle.GOLD);
+					draw(g, Text.small("PB", flashing() ? SidePanelStyle.CARD : SidePanelStyle.GOLD), cx + 4 + 7 + 3,
+						y + (body() - small()), chipW);
 				}
 				else
 				{
@@ -372,7 +433,158 @@ final class SidePanelKillCard extends JComponent
 			{
 				draw(g, Text.small(lines.get(i), SidePanelStyle.BODY), tx, y + i * (small() + 2), right - tx);
 			}
+			y += Math.max(TIP_ICON, lines.size() * small() + (lines.size() - 1) * 2);
 		}
+		badgeBoxes.clear();
+		if (!c.badges.isEmpty())
+		{
+			y += 7;
+			int x = left;
+			for (PanelSnapshot.Badge b : c.badges)
+			{
+				final int bw = badgeWidth(b);
+				if (x > left && x + bw > right)
+				{
+					x = left;
+					y += badgeHeight() + 4;
+				}
+				paintBadge(g, b, x, y, bw);
+				badgeBoxes.add(new Rectangle(x, y, bw, badgeHeight()));
+				x += bw + 4;
+			}
+		}
+	}
+
+	/** T-189: a badge: a gold mark and its name, on the panel's ground with a quiet edge. */
+	private void paintBadge(Graphics2D g, PanelSnapshot.Badge b, int x, int y, int w)
+	{
+		final int h = badgeHeight();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(x, y, w, h);
+		g.setColor(SidePanelStyle.TRACK);
+		g.drawRect(x, y, w - 1, h - 1);
+		mark(g, b.mark, x + 5, y + (h - 8) / 2);
+		draw(g, Text.small(b.name, SidePanelStyle.BODY), x + 5 + 7 + 4, y + (h - small()) / 2, w - 16);
+	}
+
+	/** T-189: each badge's mark, 7 px wide, in gold. */
+	static void mark(Graphics2D g, PanelSnapshot.Badge.Mark m, int x, int y)
+	{
+		g.setColor(SidePanelStyle.GOLD);
+		switch (m)
+		{
+			case FLAWLESS:
+				// A shield.
+				g.drawRect(x, y, 6, 3);
+				g.drawLine(x, y + 4, x + 3, y + 7);
+				g.drawLine(x + 6, y + 4, x + 3, y + 7);
+				break;
+			case CLEAN:
+				// A tick.
+				g.drawLine(x, y + 4, x + 2, y + 6);
+				g.drawLine(x + 2, y + 6, x + 6, y + 1);
+				g.drawLine(x, y + 5, x + 2, y + 7);
+				g.drawLine(x + 2, y + 7, x + 6, y + 2);
+				break;
+			case STREAK:
+				// A flame.
+				g.fillRect(x + 3, y, 1, 2);
+				g.fillRect(x + 2, y + 2, 3, 2);
+				g.fillRect(x + 1, y + 4, 5, 3);
+				g.fillRect(x + 2, y + 7, 3, 1);
+				break;
+			default:
+				// A medal.
+				g.fillRect(x + 1, y, 2, 3);
+				g.fillRect(x + 4, y, 2, 3);
+				g.fillOval(x, y + 2, 7, 6);
+				break;
+		}
+	}
+
+	// ---- T-189: the kill-end moment ----
+
+	/** The kill has just happened on this card: roll the die to its number, then flash the chips. Once. */
+	void celebrate()
+	{
+		if (card.live)
+		{
+			return;
+		}
+		stop();
+		frame = 0;
+		timer = new javax.swing.Timer(FRAME_MS, e -> step());
+		timer.start();
+		repaint();
+	}
+
+	/** One frame; hidden (another tab, the panel closed), the moment ends at once on the settled card. */
+	void step()
+	{
+		if (frame < 0)
+		{
+			return;
+		}
+		if (!showing.getAsBoolean())
+		{
+			stop();
+			frame = -1;
+			repaint();
+			return;
+		}
+		stepped++;
+		frame++;
+		if (frame >= FRAMES)
+		{
+			stop();
+			frame = -1;
+		}
+		repaint();
+	}
+
+	private void stop()
+	{
+		if (timer != null)
+		{
+			timer.stop();
+			timer = null;
+		}
+	}
+
+	/** Whether the moment is playing, for tests. */
+	boolean celebrating()
+	{
+		return frame >= 0;
+	}
+
+	boolean timerRunning()
+	{
+		return timer != null;
+	}
+
+	int stepped()
+	{
+		return stepped;
+	}
+
+	@Override
+	public void removeNotify()
+	{
+		stop();
+		frame = -1;
+		super.removeNotify();
+	}
+
+	/** Rolling: the die's number not yet settled. */
+	private boolean rolling()
+	{
+		return frame >= 0 && frame < SETTLE;
+	}
+
+	/** The chips flash once the die has settled. */
+	private boolean flashing()
+	{
+		return frame >= SETTLE;
 	}
 
 	private void paintSkill(Graphics2D g, KillCard c, Rectangle r)
@@ -390,7 +602,24 @@ final class SidePanelKillCard extends JComponent
 				y + (body() - small()) / 2, room);
 		}
 		y += body() + 4;
-		final int bigW = draw(g, c.big, x, y - 2, room);
+		Text bigText;
+		if (c.grade != null && rolling())
+		{
+			// T-189: the grade waits for the die.
+			bigText = new Text("\u00b7", SidePanelStyle.MUTED, SidePanelStyle.Type.CLOCK);
+		}
+		else
+		{
+			bigText = c.big;
+		}
+		if (c.grade != null && flashing())
+		{
+			final int gw = width(g, SidePanelStyle.Type.CLOCK, c.big.text) + 4;
+			g.setColor(c.gradeColour);
+			g.fillRect(x - 2, y - 1, gw, big() + 2);
+			bigText = new Text(c.big.text, SidePanelStyle.CARD, SidePanelStyle.Type.CLOCK);
+		}
+		final int bigW = draw(g, bigText, x, y - 2, room);
 		paintCaption(g, c.bigCaption, x + bigW + 6, y, right - x - bigW - 6);
 		y += big() + 4;
 		draw(g, fit(g, c.skill1, room), x, y, room);
@@ -422,8 +651,10 @@ final class SidePanelKillCard extends JComponent
 		}
 		else if (c.rolled > 0)
 		{
-			final int bw = draw(g, new Text(String.valueOf(c.rolled), SidePanelStyle.LUCK, SidePanelStyle.Type.CLOCK), x,
-				y - 2, room);
+			// T-189: at the kill the die rolls before it settles on its number.
+			final String roll = String.valueOf(rolling() ? ROLLS[frame % ROLLS.length] : c.rolled);
+			final int bw = draw(g, new Text(roll, rolling() ? SidePanelStyle.alpha(SidePanelStyle.LUCK, 0.6)
+				: SidePanelStyle.LUCK, SidePanelStyle.Type.CLOCK), x, y - 2, room);
 			final List<Text> cap = new ArrayList<>(2);
 			cap.add(Text.small("rolled", SidePanelStyle.SECONDARY));
 			cap.add(Text.small("of 100", SidePanelStyle.SECONDARY));
@@ -501,10 +732,10 @@ final class SidePanelKillCard extends JComponent
 		g.drawLine(mx, cy, mx, y + h - 1);
 	}
 
-	/** The gold star, 7 px. */
-	static void star(Graphics2D g, int x, int y)
+	/** The star, 7 px: gold, or the card's dark while it flashes. */
+	static void star(Graphics2D g, int x, int y, Color colour)
 	{
-		g.setColor(SidePanelStyle.GOLD);
+		g.setColor(colour);
 		g.fillRect(x + 3, y, 1, 2);
 		g.fillRect(x, y + 2, 7, 1);
 		g.fillRect(x + 1, y + 3, 5, 1);

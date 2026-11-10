@@ -98,6 +98,27 @@ final class SidePanelKillCardExamples
 		return in;
 	}
 
+	/**
+	 * T-189 (illustrative): the PB kill with every badge: the 600th kill, Flawless (as if Araxxor had attack rules and
+	 * nothing avoidable was taken), a Clean run (two ticks of eating, no idle tick, the setup at 99.96%), and a third A
+	 * in a row.
+	 */
+	static SidePanelModel.Input allBadges()
+	{
+		final SidePanelModel.Input in = pbKill();
+		in.kc = 600;
+		final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) in.scope;
+		s.avoidableEatingTicks = 0;
+		s.damageTakenAvoidable = 0;
+		s.ticksLost = 2;
+		s.ticksLostEating = 2;
+		s.efficiency = 0.9996;
+		s.boostCostShare = 0.0003;
+		s.switchCostShare = 0;
+		in.standing.streak = 3;
+		return in;
+	}
+
 	/** The Araxxor kill before the record has it: your usual beside the clock, no grade or rank yet. */
 	static SidePanelModel.Input unrecorded()
 	{
