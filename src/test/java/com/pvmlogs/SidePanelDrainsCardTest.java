@@ -41,7 +41,7 @@ public class SidePanelDrainsCardTest
 		assertEquals(2, d.blocks.size());
 		final PanelSnapshot.DrainBlock def = d.blocks.get(0);
 		assertEquals("Defence", def.name.text);
-		assertEquals("225 → 191", def.change.text);
+		assertEquals("225 to 191", def.change.text);
 		assertNotNull(def.bar);
 		assertEquals(145, def.bar.floor);
 		// The Emberlight, the drains he had when the second fight began, his regen, and the sum for your melee and ranged.
@@ -52,7 +52,7 @@ public class SidePanelDrainsCardTest
 		// The reduction, and the bonus his casts met; no bar, no regen.
 		assertEquals("-60", md.change.text);
 		assertNull(md.bar);
-		assertEquals(java.util.Arrays.asList("bonus met +81 → +21 |", "Eye of ayak | +27 dmg", "landed 3 of 3 · -60 |",
+		assertEquals(java.util.Arrays.asList("bonus met +81 to +21 |", "Eye of ayak | +27 dmg", "landed 3 of 3 · -60 |",
 			"for your magic |"), texts(md));
 		// The total: the sum of the stats' values, T-050's drain value.
 		assertEquals("+65 dmg", d.worth.damage);
@@ -131,7 +131,7 @@ public class SidePanelDrainsCardTest
 		final PanelSnapshot.Defence d = card(SidePanelDrainsExamples.old(), false);
 		assertNull(d.blocks);
 		assertNotNull(d.drop);
-		assertEquals("250 → 175", d.hint.text);
+		assertEquals("250 to 175", d.hint.text);
 		// Through the history's JSON, a record without the per-stat fields reads them null.
 		final com.google.gson.Gson gson = new com.google.gson.Gson();
 		final DrainRecord loaded = gson.fromJson("{\"version\":1,\"defenceStart\":250,\"defenceEnd\":175,"

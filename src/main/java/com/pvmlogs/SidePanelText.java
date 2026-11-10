@@ -158,7 +158,45 @@ final class SidePanelText extends JComponent
 	private int natural()
 	{
 		return SidePanelStyle.metrics(this, getFont()).stringWidth(text)
-			+ SidePanelStyle.metrics(this, suffixFont()).stringWidth(suffix);
+			+ runWidth(SidePanelStyle.metrics(this, suffixFont()), suffix);
+	}
+
+	/**
+	 * T-201 (Eric: "an empty yellow box beside Fastest with average luck"): the gold star is painted, a small shape as
+	 * the die and the badge marks are, never drawn as text: the RuneScape fonts have no star, so it came out a box. A
+	 * second run of just this (or a space and this) is the star.
+	 */
+	static final String STAR = "\u2605";
+
+	private static boolean starred(String s)
+	{
+		return s.equals(STAR) || s.equals(" " + STAR);
+	}
+
+	/** A second run's width: the star's square (its font's ascent) after its space, else the text's. */
+	private static int runWidth(FontMetrics fm, String s)
+	{
+		return starred(s) ? (s.startsWith(" ") ? fm.charWidth(' ') : 0) + fm.getAscent() : fm.stringWidth(s);
+	}
+
+	/** T-201: a five-point star in the box {@code size} square at {@code x}, {@code y} (its top). */
+	static void paintStar(java.awt.Graphics2D g, int x, int y, int size)
+	{
+		final int[] xs = new int[10];
+		final int[] ys = new int[10];
+		final double cx = x + size / 2.0;
+		final double cy = y + size / 2.0 + size * 0.05;
+		for (int i = 0; i < 10; i++)
+		{
+			final double r = (i % 2 == 0 ? 0.5 : 0.21) * size;
+			final double a = -Math.PI / 2 + i * Math.PI / 5;
+			xs[i] = (int) Math.round(cx + r * Math.cos(a));
+			ys[i] = (int) Math.round(cy + r * Math.sin(a));
+		}
+		final Object aa = g.getRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING);
+		g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+		g.fillPolygon(xs, ys, 10);
+		g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, aa);
 	}
 
 	/**
@@ -171,7 +209,8 @@ final class SidePanelText extends JComponent
 	private int moving()
 	{
 		return reservedWidth(SidePanelStyle.metrics(this, getFont()), text)
-			+ reservedWidth(SidePanelStyle.metrics(this, suffixFont()), suffix);
+			+ (starred(suffix) ? runWidth(SidePanelStyle.metrics(this, suffixFont()), suffix)
+			: reservedWidth(SidePanelStyle.metrics(this, suffixFont()), suffix));
 	}
 
 	/** {@code s}'s width with each digit counted at the font's widest digit. */
@@ -345,7 +384,7 @@ final class SidePanelText extends JComponent
 	/** The width the first run has: all of it less the second run's. */
 	private int room(FontMetrics suffixMetrics)
 	{
-		return Math.max(0, getWidth() - suffixMetrics.stringWidth(suffix));
+		return Math.max(0, getWidth() - runWidth(suffixMetrics, suffix));
 	}
 
 	/** The second run is cut before the first: for hints, which matter less than what they follow. */
@@ -388,7 +427,7 @@ final class SidePanelText extends JComponent
 		final FontMetrics fm = SidePanelStyle.metrics(g, font);
 		final FontMetrics sm = SidePanelStyle.metrics(g, suffixFont());
 		String after = suffix;
-		if (cutSuffixFirst && !after.isEmpty() && fm.stringWidth(text) + sm.stringWidth(after) > getWidth())
+		if (cutSuffixFirst && !after.isEmpty() && !starred(after) && fm.stringWidth(text) + sm.stringWidth(after) > getWidth())
 		{
 			// The gap before a hint stays a gap: cut what follows it.
 			final String lead = after.startsWith(" ") ? " " : "";
@@ -397,7 +436,7 @@ final class SidePanelText extends JComponent
 			// A hint cut to its dots says nothing: drop it.
 			after = cut.isEmpty() || cut.equals(LedgerRows.CUT) ? "" : lead + cut;
 		}
-		final int suffixWidth = sm.stringWidth(after);
+		final int suffixWidth = runWidth(sm, after);
 		final int room = Math.max(0, getWidth() - suffixWidth);
 		// The short form where the text would be cut (T-063), cut itself only if even it doesn't fit.
 		String full = text;
@@ -429,13 +468,20 @@ final class SidePanelText extends JComponent
 		final int baseline = getHeight() - fm.getDescent();
 		g.setColor(lifted(colour));
 		g.drawString(shown, x, baseline);
-		if (!after.isEmpty())
+		if (starred(after))
+		{
+			g.setColor(lifted(suffixColour));
+			final int size = sm.getAscent();
+			SidePanelText.paintStar((java.awt.Graphics2D) g, x + fm.stringWidth(shown) + (after.startsWith(" ")
+				? sm.charWidth(' ') : 0), baseline - size, size);
+		}
+		else if (!after.isEmpty())
 		{
 			g.setColor(lifted(suffixColour));
 			g.setFont(suffixFont());
 			g.drawString(after, x + fm.stringWidth(shown), baseline);
 		}
-		setToolTipText(shown.equals(text) && after.equals(suffix) ? null : text + suffix);
+		setToolTipText(SidePanelStyle.tip(shown.equals(text) && after.equals(suffix) ? null : text + (starred(suffix) ? "" : suffix)));
 		lastShown = shown;
 	}
 

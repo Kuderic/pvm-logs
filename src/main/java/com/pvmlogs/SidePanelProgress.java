@@ -85,7 +85,7 @@ final class SidePanelProgress
 			{
 				tip.append(i == 0 ? " " : ", ").append(names[i]).append(' ').append(counts[i]);
 			}
-			setToolTipText(tip.append(".</html>").toString());
+			setToolTipText(SidePanelStyle.tip(tip.append(".</html>").toString()));
 		}
 
 		@Override
@@ -183,7 +183,7 @@ final class SidePanelProgress
 			{
 				if (boxes.get(i).contains(e.getPoint()))
 				{
-					return badges.get(i).tip;
+					return SidePanelStyle.tip(badges.get(i).tip);
 				}
 			}
 			return null;

@@ -68,21 +68,29 @@ public class SidePanelLuckStrengthTest
 	@Test
 	public void theBandsEdges()
 	{
-		assertEquals(SidePanelModel.LuckStrength.DIM, SidePanelModel.strength(1));
-		assertEquals(SidePanelModel.LuckStrength.DIM, SidePanelModel.strength(25));
-		assertEquals(SidePanelModel.LuckStrength.NORMAL, SidePanelModel.strength(26));
-		assertEquals(SidePanelModel.LuckStrength.NORMAL, SidePanelModel.strength(75));
-		assertEquals(SidePanelModel.LuckStrength.BRIGHT, SidePanelModel.strength(76));
-		assertEquals(SidePanelModel.LuckStrength.BRIGHT, SidePanelModel.strength(100));
-		// By the roll shown, so the chip's number and its strength never disagree: 25.4 shows "rolled 25", dim.
-		assertEquals("rolled 25", SidePanelModel.rolled(0.254));
-		assertEquals(SidePanelModel.LuckStrength.DIM, SidePanelModel.strength(0.254));
-		assertEquals("rolled 76", SidePanelModel.rolled(0.755));
-		assertEquals(SidePanelModel.LuckStrength.BRIGHT, SidePanelModel.strength(0.755));
-		assertEquals(SidePanelStyle.LUCK_CHIP_DIM_FILL, SidePanelModel.luckChipFill(p(25)));
-		assertEquals(SidePanelStyle.LUCK_CHIP_FILL, SidePanelModel.luckChipFill(p(26)));
-		assertEquals(SidePanelStyle.LUCK_CHIP_FILL, SidePanelModel.luckChipFill(p(75)));
-		assertEquals(SidePanelStyle.LUCK_CHIP_BRIGHT_FILL, SidePanelModel.luckChipFill(p(76)));
+		// T-201: one cut-off rule, the band's: the strength and the words never disagree at an edge.
+		final double[][] edges = {{0.001, 0}, {0.249, 0}, {0.2499, 0}, {0.25, 1}, {0.254, 1}, {0.5, 1}, {0.75, 1},
+			{0.7501, 2}, {0.755, 2}, {0.999, 2}};
+		for (double[] e : edges)
+		{
+			final SidePanelModel.LuckStrength want = SidePanelModel.LuckStrength.values()[(int) e[1]];
+			final String band = SidePanelModel.luckText(e[0]);
+			assertEquals(e[0] + " " + band, want, SidePanelModel.strength(e[0]));
+			assertEquals(e[0] + " " + band, want == SidePanelModel.LuckStrength.DIM, band.startsWith("bottom "));
+			assertEquals(e[0] + " " + band, want == SidePanelModel.LuckStrength.BRIGHT, band.startsWith("top "));
+			assertEquals(e[0] + " " + band, want == SidePanelModel.LuckStrength.NORMAL, band.equals("average"));
+		}
+		// N is never 0, and the edges read as the band says.
+		assertEquals("bottom 1%", SidePanelModel.luckText(0.001));
+		assertEquals("bottom 25%", SidePanelModel.luckText(0.249));
+		assertEquals("average", SidePanelModel.luckText(0.25));
+		assertEquals("average", SidePanelModel.luckText(0.75));
+		assertEquals("top 25%", SidePanelModel.luckText(0.7501));
+		assertEquals("top 1%", SidePanelModel.luckText(0.9999));
+		assertEquals(SidePanelStyle.LUCK_CHIP_DIM_FILL, SidePanelModel.luckChipFill(0.249));
+		assertEquals(SidePanelStyle.LUCK_CHIP_FILL, SidePanelModel.luckChipFill(0.25));
+		assertEquals(SidePanelStyle.LUCK_CHIP_FILL, SidePanelModel.luckChipFill(0.75));
+		assertEquals(SidePanelStyle.LUCK_CHIP_BRIGHT_FILL, SidePanelModel.luckChipFill(0.751));
 	}
 
 	@Test
@@ -129,17 +137,16 @@ public class SidePanelLuckStrengthTest
 	@Test
 	public void theTooltipsWords()
 	{
-		assertEquals("rolled 96 of 100 · top 4% · dealt 112% of expected · 9 s faster",
-			SidePanelModel.luckWords(0.96, 1120, 1000, 9));
-		assertEquals("rolled 9 of 100 · bottom 9% · dealt 88% of expected · 14 s slower",
-			SidePanelModel.luckWords(0.09, 880, 1000, -14));
-		assertEquals("rolled 50 of 100 · middle half · dealt 101% of expected · 1 s faster",
-			SidePanelModel.luckWords(0.5, 1010, 1000, 1));
-		// Rolled 100 is the top 1%, not 0%; the parts not known are left out.
-		assertEquals("rolled 100 of 100 · top 1%", SidePanelModel.luckWords(1.0, 0, 0, Double.NaN));
-		assertEquals("bottom 25%", SidePanelModel.luckBand(0.25));
-		assertEquals("middle half", SidePanelModel.luckBand(0.26));
-		assertEquals("top 24%", SidePanelModel.luckBand(0.76));
+		// T-201: the band explained once, then the damage against average and the seconds.
+		assertEquals("Top 4%: of 100 fights with these attacks, 96 dealt less damage.<br>Dealt 112% of expected, 9 s"
+			+ " faster.", SidePanelModel.luckWords(0.96, 1120, 1000, 9));
+		assertEquals("Bottom 9%: of 100 fights with these attacks, 9 dealt less damage.<br>Dealt 88% of expected, 14 s"
+			+ " slower.", SidePanelModel.luckWords(0.09, 880, 1000, -14));
+		assertEquals("Average: of 100 fights with these attacks, 50 dealt less damage.<br>Dealt 101% of expected, 1 s"
+			+ " faster.", SidePanelModel.luckWords(0.5, 1010, 1000, 1));
+		// The top is 1%, not 0%; the parts not known are left out.
+		assertEquals("Top 1%: of 100 fights with these attacks, 99 dealt less damage.",
+			SidePanelModel.luckWords(1.0, 0, 0, Double.NaN));
 	}
 
 	// ---- on the tabs ----
@@ -159,11 +166,12 @@ public class SidePanelLuckStrengthTest
 			}
 		}
 		assertNotNull(luck);
-		assertEquals("rolled 20", luck.value.text);
+		assertEquals("bottom 20%", luck.value.text);
 		assertEquals(SidePanelStyle.LUCK_DIM, luck.value.colour);
 		assertEquals(SidePanelStyle.LUCK_DIM, luck.edge);
-		assertTrue(luck.tooltip, luck.tooltip.startsWith("<html>rolled 20 of 100 · bottom 20% · dealt "));
-		assertTrue(luck.tooltip, luck.tooltip.contains("14 s slower<br>" + SidePanelModel.TICK_NOTE));
+		assertTrue(luck.tooltip, luck.tooltip.startsWith("Bottom 20%: of 100 fights with these attacks, 20 dealt less"
+			+ " damage.<br>Dealt 88% of expected, 14 s slower."));
+		assertTrue(luck.tooltip, luck.tooltip.contains("14 s slower.<br>" + SidePanelModel.TICK_NOTE));
 		assertEquals(SidePanelStyle.LUCK_DIM, t.curve.headerValue.colour);
 	}
 
@@ -173,14 +181,15 @@ public class SidePanelLuckStrengthTest
 		// Eric's Araxxor kill rolled 81: bright, the words on its tile; live, the die rolls with no words.
 		final PanelSnapshot.KillCard card = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card;
 		assertEquals(81, card.rolled);
-		assertEquals(SidePanelModel.LuckStrength.BRIGHT, SidePanelModel.strength(card.rolled));
-		assertTrue(card.luckWords, card.luckWords.startsWith("rolled 81 of 100 · top 19% · dealt 112% of expected · "));
+		assertEquals(SidePanelModel.LuckStrength.BRIGHT, SidePanelModel.strength(card.luckP));
+		assertTrue(card.luckWords, card.luckWords.startsWith("Top 19%: of 100 fights with these attacks, 81 dealt less"
+			+ " damage.<br>Dealt 112% of expected, "));
 		assertNull(SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card.luckWords);
 		// Its badges keep them. T-196: the strength's word is the chip beside the roll; the effect is a sentence.
 		assertEquals(card.luckWords, card.withBadges(new ArrayList<>()).luckWords);
-		assertEquals("lucky", SidePanelModel.strengthWord(SidePanelModel.strength(card.rolled)));
+		assertEquals("lucky", SidePanelModel.strengthWord(SidePanelModel.strength(card.luckP)));
 		assertEquals("unlucky", SidePanelModel.strengthWord(SidePanelModel.strength(
-			SidePanelModel.fight(SidePanelKillCardExamples.vardorvisKill()).card.rolled)));
+			SidePanelModel.fight(SidePanelKillCardExamples.vardorvisKill()).card.luckP)));
 	}
 
 	@Test
@@ -192,7 +201,7 @@ public class SidePanelLuckStrengthTest
 		{
 			if (tile.label.text.equals("Luck"))
 			{
-				assertEquals("rolled 81", tile.value.text);
+				assertEquals("top 19%", tile.value.text);
 				assertEquals(SidePanelStyle.LUCK_BRIGHT, tile.value.colour);
 				return;
 			}
@@ -209,21 +218,22 @@ public class SidePanelLuckStrengthTest
 		int rolls = 0;
 		for (SidePanelHistory.KillRow r : rows)
 		{
-			if (r.chip == null || !r.chip.text.startsWith("rolled"))
+			if (r.chip == null || !r.chip.text.matches("top \\d+%|bottom \\d+%|average"))
 			{
 				continue;
 			}
 			rolls++;
-			final int roll = Integer.parseInt(r.chip.text.substring("rolled ".length()));
-			assertEquals(r.chip.text, SidePanelModel.luckChipInk(p(roll)), r.chip.colour);
-			assertEquals(r.chip.text, SidePanelModel.luckChipFill(p(roll)), r.chipFill);
+			// T-201: the band's words and its strength's colours agree.
+			final double at = r.chip.text.startsWith("top ") ? 0.9 : r.chip.text.startsWith("bottom ") ? 0.1 : 0.5;
+			assertEquals(r.chip.text, SidePanelModel.luckChipInk(at), r.chip.colour);
+			assertEquals(r.chip.text, SidePanelModel.luckChipFill(at), r.chipFill);
 			assertFalse(r.chip.text, skill.contains(r.chip.colour) || skill.contains(r.chipFill));
 			assertNotNull(r.chip.text, r.chipTip);
-			assertTrue(r.chipTip, r.chipTip.startsWith(SidePanelModel.rolledOf(p(roll)) + " · "
-				+ SidePanelModel.luckBand(p(roll)) + " · dealt "));
+			assertTrue(r.chipTip, r.chipTip.startsWith(Character.toUpperCase(r.chip.text.charAt(0))
+				+ r.chip.text.substring(1) + ": of 100 fights with these attacks, "));
 			// The row, not the chip, answers the hover: the chip leaves the row its clicks.
 			final SidePanelKillRow view = SidePanelKillRow.history(r, () -> { });
-			assertEquals(r.chipTip, view.chipTip());
+			assertEquals(SidePanelStyle.tip(r.chipTip), view.chipTip());
 		}
 		assertTrue(rolls >= 10);
 	}
@@ -283,13 +293,17 @@ public class SidePanelLuckStrengthTest
 		for (SidePanelHistory.KillRow r : rows)
 		{
 			chips.add(r.chip.text);
-			strengths.add(SidePanelModel.strength(Integer.parseInt(r.chip.text.substring("rolled ".length()))));
-			assertEquals(SidePanelModel.luckChipFill(Integer.parseInt(r.chip.text.substring(7)) / 100.0), r.chipFill);
+			final SidePanelModel.LuckStrength s = r.chip.text.startsWith("top ") ? SidePanelModel.LuckStrength.BRIGHT
+				: r.chip.text.startsWith("bottom ") ? SidePanelModel.LuckStrength.DIM : SidePanelModel.LuckStrength.NORMAL;
+			strengths.add(s);
+			assertEquals(SidePanelModel.luckChipFill(s == SidePanelModel.LuckStrength.BRIGHT ? 0.9
+				: s == SidePanelModel.LuckStrength.DIM ? 0.1 : 0.5), r.chipFill);
 		}
+		// T-201: each roll as its band; 26 to 28 are the middle half's edge.
 		final List<String> want = new ArrayList<>();
 		for (int roll : SidePanelLuckExamples.ROLLS)
 		{
-			want.add("rolled " + roll);
+			want.add(LedgerRows.band(roll / 100.0));
 		}
 		assertEquals(want, chips);
 		final SidePanelModel.LuckStrength d = SidePanelModel.LuckStrength.DIM;

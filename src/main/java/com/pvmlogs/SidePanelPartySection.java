@@ -400,7 +400,7 @@ final class SidePanelPartySection
 		header.setTip(t.where + " · " + headerRight(t));
 		card.add(header);
 		meter = new SidePanelPartyMeter(this::select);
-		meter.setToolTipText(SWITCH_HINT);
+		meter.setToolTipText(SidePanelStyle.tip(SWITCH_HINT));
 		meter.setMetric(metric);
 		meter.set(t.rows);
 		meter.setSelected(selected);

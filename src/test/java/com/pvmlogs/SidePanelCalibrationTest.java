@@ -134,7 +134,7 @@ public class SidePanelCalibrationTest
 			tab.setDebug(true);
 			final javax.swing.JButton b = tab.calibrationButton();
 			assertEquals(SidePanelHistoryTab.CALIBRATION, b.getText());
-			assertEquals(SidePanelHistoryTab.CALIBRATION_TIP, b.getToolTipText());
+			assertEquals(SidePanelHistoryTab.CALIBRATION_TIP, Tips.plain(b.getToolTipText()));
 			assertTrue(b.isEnabled());
 			assertTrue(inTools(tab, b));
 			final int builds = tab.builds();
@@ -197,7 +197,7 @@ public class SidePanelCalibrationTest
 			for (java.awt.Component c : all(tab))
 			{
 				if (c instanceof SidePanelHistoryTab.Close && "Close the calibration findings".equals(
-					((SidePanelHistoryTab.Close) c).getToolTipText()))
+					Tips.plain(((SidePanelHistoryTab.Close) c).getToolTipText())))
 				{
 					for (java.awt.event.MouseListener l : c.getMouseListeners())
 					{

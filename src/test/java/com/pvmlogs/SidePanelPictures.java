@@ -127,6 +127,11 @@ public final class SidePanelPictures
 			historyProgress(out);
 			return;
 		}
+		if (args.length > 1 && "band".equals(args[1]))
+		{
+			luckBands(out);
+			return;
+		}
 		if (args.length > 1 && "rate".equals(args[1]))
 		{
 			rates(out);
@@ -2044,6 +2049,67 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-201: luck as "top 19%" everywhere, Luck then Skill on the card, live Skill as the Skill score, the tooltips
+	 * wrapped, the star painted: a lucky (Araxxor KC 555), an average and an unlucky kill; Araxxor live; the opened Luck
+	 * section with its tooltip as RuneLite draws it (its look and feel's default font, the RuneScape font); History's
+	 * kill rows, and its Personal bests with the trend. Normal and Larger (the RuneScape fonts), 2x.
+	 */
+	private static void luckBands(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			final double scale = 2;
+			final SidePanelModel.Input average = SidePanelKillCardExamples.araxxorKill();
+			final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) average.scope;
+			s.damage = (int) Math.round(s.expectedDamage) + 4;
+			write(dir, "a-lucky-araxxor-kill", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+			write(dir, "b-araxxor-live", scale, fightTab(SidePanelKillCardExamples.araxxorLive(), scale));
+			write(dir, "c-average-kill", scale, fightTab(average, scale));
+			write(dir, "d-unlucky-vardorvis", scale, fightTab(SidePanelKillCardExamples.vardorvisKill(), scale));
+			final SidePanelModel.Input lucky = SidePanelKillCardExamples.araxxorKill();
+			write(dir, "e-luck-open-with-tooltip", scale, withTooltip(openedOnly(lucky, "curve", scale),
+				SidePanelStyle.tip(SidePanelModel.fight(lucky).curve.tooltip), scale));
+			write(dir, "f-history-bests", scale, renderHistory(SidePanelProgressExamples.source(
+				SidePanelProgressExamples.araxxorHistory(), SidePanelProgressExamples.araxxor()), t -> { }, scale));
+			final java.util.List<Fight> kills = SidePanelLuckExamples.history();
+			write(dir, "g-history-rows", scale, renderHistory(SidePanelProgressExamples.source(kills,
+				SidePanelLuckExamples.records(kills)), SidePanelPictures::showAll, scale));
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-201: a picture with a tooltip drawn under it, as Swing draws one in RuneLite's default font. */
+	private static BufferedImage withTooltip(BufferedImage above, String tip, double scale)
+	{
+		final javax.swing.JToolTip t = new javax.swing.JToolTip();
+		t.setFont(net.runelite.client.ui.FontManager.getRunescapeFont());
+		t.setBackground(new java.awt.Color(0x1E1E1E));
+		t.setForeground(java.awt.Color.WHITE);
+		t.setTipText(tip);
+		final java.awt.Dimension d = t.getPreferredSize();
+		t.setSize(d);
+		layout(t);
+		final int tw = (int) Math.round(d.width * scale);
+		final int th = (int) Math.round(d.height * scale);
+		final BufferedImage img = new BufferedImage(Math.max(above.getWidth(), tw + 8), above.getHeight() + th + 8,
+			BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.drawImage(above, 0, 0, null);
+		g.translate(4, above.getHeight() + 4);
+		g.scale(scale, scale);
+		t.paint(g);
+		g.dispose();
+		return img;
 	}
 
 	/**

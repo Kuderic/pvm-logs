@@ -130,7 +130,7 @@ public class SidePanelSkillWordTest
 		assertTrue(SidePanelModel.PERFECT, SidePanelModel.PERFECT.contains("full uptime"));
 		assertFalse(SidePanelModel.PERFECT, SidePanelModel.PERFECT.contains("attacking"));
 		final PanelSnapshot.KillCard live = SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card;
-		assertTrue(live.skillTip, live.skillTip.startsWith("Uptime "));
+		assertTrue(live.skillTip, live.skillTip.contains("Uptime "));
 		assertFalse(live.skillTip, live.skillTip.contains("attacking"));
 	}
 
@@ -146,7 +146,7 @@ public class SidePanelSkillWordTest
 				{
 					if (signed.matcher(part).find())
 					{
-						assertTrue(e.getKey() + ": " + part, part.matches("[a-z]+ [+−±].*"));
+						assertTrue(e.getKey() + ": " + part, part.matches("[a-z]+ [-+±].*"));
 					}
 				}
 			}
@@ -157,9 +157,9 @@ public class SidePanelSkillWordTest
 		// The budget's runs: skill's loss orange, luck violet; and the sign rule said on the hover.
 		final PanelSnapshot.Mark bar = SidePanelModel.fight(SidePanelKillCardExamples.vardorvisKill()).clear.marks
 			.get("budget");
-		assertEquals("skill −17 s", bar.runs[0].text);
+		assertEquals("skill -17 s", bar.runs[0].text);
 		assertEquals(SidePanelStyle.COST, bar.runs[0].colour);
-		assertEquals("luck −14 s", bar.runs[2].text);
+		assertEquals("luck -14 s", bar.runs[2].text);
 		assertEquals(SidePanelStyle.LUCK, bar.runs[2].colour);
 		assertTrue(SidePanelFightTab.BUDGET_TIP, SidePanelFightTab.BUDGET_TIP.contains("+ is time gained"));
 		final PvmPerformancePanel p = SidePanelKillCardTest.panel(SidePanelKillCardExamples.araxxorKill());
@@ -212,7 +212,7 @@ public class SidePanelSkillWordTest
 		g.dispose();
 		assertTrue("marker painted", view.markerX >= 0);
 		// The marker in its strength's ink, somewhere down its column.
-		final Color ink = SidePanelModel.ink(SidePanelModel.strength(c.luckAt));
+		final Color ink = SidePanelModel.luckInk(c.luckP);
 		boolean inked = false;
 		for (int y = 0; y < h; y++)
 		{
@@ -222,6 +222,7 @@ public class SidePanelSkillWordTest
 		// No luck yet: no marker.
 		final PanelSnapshot.KillCard none = SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card;
 		none.luckAt = 0;
+		none.luckP = Double.NaN;
 		final SidePanelKillCard empty = new SidePanelKillCard(none, null);
 		empty.setSize(SidePanelStyle.CONTENT_WIDTH, h);
 		final Graphics2D g2 = img.createGraphics();
@@ -327,7 +328,7 @@ public class SidePanelSkillWordTest
 				if (r.indent)
 				{
 					// The roll's small line under the fastest kill, with no value of its own.
-					assertTrue(r.left.text, r.left.text.matches("rolled \\d+"));
+					assertTrue(r.left.text, r.left.text.matches("(top|bottom) \\d+%|average"));
 					assertTrue(r.right.isEmpty());
 					continue;
 				}
@@ -337,16 +338,17 @@ public class SidePanelSkillWordTest
 				SidePanelHistory.BEST_SKILL), labels);
 			assertEquals(Arrays.asList("Fastest kill", "Fastest with average luck", "Best Skill"), labels);
 			assertTrue(p.bests.get(0).tooltip, p.bests.get(0).tooltip.contains("Your fastest kill: "));
-			assertTrue(p.bests.get(0).tooltip, p.bests.get(0).tooltip.contains(" of 100: "));
+			assertTrue(p.bests.get(0).tooltip, p.bests.get(0).tooltip.contains(": of 100 fights with these attacks"));
 			// The trend: its own header, both medians, the change, and what they are on hover.
 			assertTrue(p.trendTitle, p.trendTitle.startsWith("With average luck, last "));
-			assertTrue(p.trendMedians.text, p.trendMedians.text.matches("\\d+:\\d\\d \u2192 \\d+:\\d\\d"));
+			assertTrue(p.trendMedians.text, p.trendMedians.text.matches("\\d+:\\d\\d to \\d+:\\d\\d"));
 			assertTrue(p.trend.text, p.trend.text.matches("\\d+ s (faster|slower)|even"));
 			assertTrue(p.trendTip, p.trendTip.contains("Lower is faster"));
 			clean("trend", p.trendTip);
 		}
-		assertEquals("rolled 100 of 100: as lucky as it gets", SidePanelModel.rollWords(0.9999));
-		assertEquals("rolled 50 of 100: about average", SidePanelModel.rollWords(0.5));
+		assertEquals("Top 1%: of 100 fights with these attacks, 99 dealt less damage.",
+			SidePanelModel.luckSentence(0.9999));
+		assertEquals("Average: of 100 fights with these attacks, 50 dealt less damage.", SidePanelModel.luckSentence(0.5));
 	}
 
 	@Test

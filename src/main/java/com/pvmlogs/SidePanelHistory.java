@@ -961,13 +961,13 @@ final class SidePanelHistory
 		{
 			final boolean rolled = !Double.isNaN(v.fastest.luckPercentile);
 			final String tip = SidePanelModel.tipLines("Your fastest kill: " + SidePanelModel.clockOf(v.fastest.value)
-				+ when(v.fastest, now, zone) + ".", rolled ? "Its luck: " + SidePanelModel.rollWords(v.fastest.luckPercentile)
-				+ "." : null);
+				+ when(v.fastest, now, zone) + ".", rolled ? "Its luck: " + SidePanelModel.luckSentence(
+				v.fastest.luckPercentile) : null);
 			bests.add(new Row(Text.body(FASTEST_KILL, SidePanelStyle.SECONDARY), Text.NONE,
 				Text.title(SidePanelModel.clockOf(v.fastest.value), SidePanelStyle.VALUE), tip));
 			if (rolled)
 			{
-				bests.add(new Row(Text.small(SidePanelModel.rolled(v.fastest.luckPercentile),
+				bests.add(new Row(Text.small(SidePanelModel.luckText(v.fastest.luckPercentile),
 					SidePanelModel.luckInk(v.fastest.luckPercentile)), Text.NONE, Text.NONE, tip, false, true));
 			}
 		}
@@ -1010,7 +1010,8 @@ final class SidePanelHistory
 			final double saved = older - newer;
 			trend = Text.small(LedgerRows.fasterOrSlower(saved), LedgerRows.roundHalfAway(saved) > 0 ? SidePanelStyle.GRADE_A
 				: LedgerRows.roundHalfAway(saved) < 0 ? SidePanelStyle.COST : SidePanelStyle.SECONDARY);
-			medians = Text.body(SidePanelStyle.roundedDuration(older) + " \u2192 " + SidePanelStyle.roundedDuration(newer),
+			// T-201: "to", not an arrow, which the RuneScape fonts don't have.
+			medians = Text.body(SidePanelStyle.roundedDuration(older) + " to " + SidePanelStyle.roundedDuration(newer),
 				SidePanelStyle.VALUE);
 			trendTip = "Your kill times with average rolls, medians: the newest " + half + " kills "
 				+ SidePanelStyle.roundedDuration(newer) + " against the " + half + " before "
@@ -1037,7 +1038,7 @@ final class SidePanelHistory
 	/** T-199: the usual's tile for it (was "luck removed"): the short form, as the full words are cut at a half tile. */
 	static final String WITH_AVERAGE_LUCK_TILE = "with avg luck";
 	/** T-190, T-199: the gold star on the fastest with average luck: the only gold, and no words. */
-	static final String STAR = "\u2605";
+	static final String STAR = SidePanelText.STAR;
 
 	private static double median(List<Double> values)
 	{

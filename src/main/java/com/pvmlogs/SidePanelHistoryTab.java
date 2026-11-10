@@ -229,7 +229,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		search.setPreferredSize(new Dimension(SidePanelStyle.CONTENT_WIDTH, 30));
 		search.setBackground(SidePanelStyle.CARD);
 		search.setHoverBackgroundColor(SidePanelStyle.SELECTED);
-		search.setToolTipText("Search bosses and monsters by name. Escape clears it");
+		search.setToolTipText(SidePanelStyle.tip("Search bosses and monsters by name. Escape clears it"));
 		// T-082: Escape clears the search, and so brings back what it hid.
 		search.addKeyListener(new java.awt.event.KeyAdapter()
 		{
@@ -265,9 +265,9 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		bossesOnly.setOpaque(false);
 		bossesOnly.setForeground(SidePanelStyle.SECONDARY);
 		bossesOnly.setFont(SidePanelStyle.Type.SMALL.font());
-		bossesOnly.setToolTipText(EXPORT_BOSSES_ONLY_TIP);
+		bossesOnly.setToolTipText(SidePanelStyle.tip(EXPORT_BOSSES_ONLY_TIP));
 		calibration = SidePanelFightTab.button(CALIBRATION, SidePanelStyle.VALUE);
-		calibration.setToolTipText(CALIBRATION_TIP);
+		calibration.setToolTipText(SidePanelStyle.tip(CALIBRATION_TIP));
 		calibration.addActionListener(e -> this.actions.calibrationReport());
 
 		add(searchBox);
@@ -508,7 +508,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 				card.versions.toArray(new SidePanelHistory.Version[0]));
 			picker.setSelectedIndex(card.selected);
 			picker.setFont(SidePanelStyle.Type.SMALL.font());
-			picker.setToolTipText("Which version of the boss, solo or in a group: your usual is taken over kills like it");
+			picker.setToolTipText(SidePanelStyle.tip("Which version of the boss, solo or in a group: your usual is taken over kills like it"));
 			picker.setPreferredSize(new Dimension(SidePanelStyle.CONTENT_WIDTH, 24));
 			picker.addActionListener(e ->
 			{
@@ -601,7 +601,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			final Fight key = row.room.getFights().get(0);
 			final SidePanelKillRow view = SidePanelKillRow.history(row, () -> open(key));
 			view.setSelected(key == selectedKill);
-			view.setToolTipText(row.kills >= 0 ? "Open this run" : "Open this kill");
+			view.setToolTipText(SidePanelStyle.tip(row.kills >= 0 ? "Open this run" : "Open this kill"));
 			list.add(view);
 		}
 		final String more = SidePanelHistory.showMore(rows.size(), shown);
@@ -663,7 +663,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		back.setBorder(new EmptyBorder(2, 0, 2, 0));
 		back.add(backLink, BorderLayout.CENTER);
 		back.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		back.setToolTipText("Back to " + room.getName() + "'s kills");
+		back.setToolTipText(SidePanelStyle.tip("Back to " + room.getName() + "'s kills"));
 		back.addMouseListener(new MouseAdapter()
 		{
 			@Override
@@ -823,8 +823,8 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		}
 		row.add(text, BorderLayout.CENTER);
 		row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		row.setToolTipText((picked && !searching() ? "Put " + b.name + " away" : "Show " + b.name)
-			+ ". Right-click to export its fights to CSV");
+		row.setToolTipText(SidePanelStyle.tip((picked && !searching() ? "Put " + b.name + " away" : "Show " + b.name)
+			+ ". Right-click to export its fights to CSV"));
 		final JPopupMenu menu = new JPopupMenu();
 		final JMenuItem export = new JMenuItem("Export " + b.name + " to CSV");
 		export.addActionListener(e -> source.exportNpc(b.name));
@@ -939,7 +939,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		Close(String tooltip, Runnable onClick)
 		{
 			setOpaque(false);
-			setToolTipText(tooltip);
+			setToolTipText(SidePanelStyle.tip(tooltip));
 			setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			addMouseListener(new MouseAdapter()
 			{

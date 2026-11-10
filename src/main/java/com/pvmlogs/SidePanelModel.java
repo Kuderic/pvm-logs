@@ -1349,33 +1349,34 @@ final class SidePanelModel
 			}
 			b.byTarget = views;
 		}
+		final LedgerRows.Scope s = in.scope;
 		if (b.curve != null && !Double.isNaN(n.percentile))
 		{
 			final double p = n.percentile;
 			final String specs = specsShareOfLuck(in.drain);
-			// T-198: no sentence on the panel; the curve's words are its tooltip.
+			// T-198: no sentence on the panel; the curve's words are its tooltip. T-201 (Eric: "massive long and has a
+			// <br> in it"): the band explained once, the hits against average (Damage has the rest), what the curve's
+			// width is; wrapped by the panel's one tooltip helper.
+			final String hitLine = warning || s.expectedHits() <= 0 ? null : "Hits " + s.hits() + DOT + "average "
+				+ LedgerRows.oneDecimal(s.expectedHits()) + (s.hits() > 0 && n.expected > 0 ? "; per hit "
+				+ LedgerRows.number(Math.round(n.damage / s.hits())) + DOT + "average "
+				+ LedgerRows.number(Math.round(n.expected / s.expectedHits())) : "") + ".";
 			b.curve = new PanelSnapshot.Curve(b.curve.z, Text.title(strengthWord(strength(p)), luckInk(p)), "",
-				tipLines(rolledOf(p) + ": of 100 fights with these attacks, " + curveShare(p) + " dealt less damage."
-				+ (specs == null ? "" : " " + specs + "."), b.curve.tooltip));
+				tipLines(luckSentence(p) + (specs == null ? "" : " " + specs + "."), hitLine, CURVE_SPREAD));
 		}
 		if (b.execution != null)
 		{
 			b.execution = plainParts(b.execution, n, avoidable);
 		}
-		final LedgerRows.Scope s = in.scope;
 		final PanelSnapshot.Row healed = in.ended && s.healed() > 0 ? new PanelSnapshot.Row(Text.small("Boss healed",
 			SidePanelStyle.BODY), Text.small(LedgerRows.number(s.healed()), SidePanelStyle.BODY)) : null;
-		final List<PanelSnapshot.Row> hits = new ArrayList<>(2);
-		if (in.ended && !warning && s.expectedHits() > 0)
+		// T-201 (Eric: "hits and per hit here is pointless since it's shown above in damage, should we bring back the 'top
+		// x% luck' line instead?"): one row after the kill, the band in its strength and luck's seconds in violet.
+		final List<PanelSnapshot.Row> hits = new ArrayList<>(1);
+		if (in.ended && !warning && !Double.isNaN(n.percentile))
 		{
-			hits.add(new PanelSnapshot.Row(Text.small("hits", SidePanelStyle.SECONDARY), Text.small(s.hits()
-				+ DOT + "avg " + LedgerRows.oneDecimal(s.expectedHits()), SidePanelStyle.LUCK)));
-			if (s.hits() > 0 && n.expected > 0)
-			{
-				hits.add(new PanelSnapshot.Row(Text.small("per hit", SidePanelStyle.SECONDARY), Text.small(
-					LedgerRows.number(Math.round(n.damage / s.hits())) + DOT + "avg "
-					+ LedgerRows.number(Math.round(n.expected / s.expectedHits())), SidePanelStyle.LUCK)));
-			}
+			hits.add(new PanelSnapshot.Row(Text.small(luckText(n.percentile), luckInk(n.percentile)), Double.isNaN(n.luck)
+				? Text.NONE : Text.small(luckTime(n.luck), SidePanelStyle.LUCK)));
 		}
 		final Map<String, PanelSnapshot.Mark> marks = new LinkedHashMap<>();
 		if (b.damage != null)
@@ -1472,11 +1473,11 @@ final class SidePanelModel
 			{
 				case "uptime":
 					name = "Uptime";
-					note = n.uptimeCost >= 0.05 ? "\u2212" + secs(n.uptimeCost) + " idle" : "";
+					note = n.uptimeCost >= 0.05 ? "-" + secs(n.uptimeCost) + " idle" : "";
 					break;
 				case "avoidable eating":
 					name = "Avoidable eating";
-					note = avoidableEating(n) >= 0.05 ? "\u2212" + secs(avoidableEating(n)) + " eating" : "";
+					note = avoidableEating(n) >= 0.05 ? "-" + secs(avoidableEating(n)) + " eating" : "";
 					break;
 				case PRAYER:
 					name = "Offensive prayers";
@@ -1506,7 +1507,7 @@ final class SidePanelModel
 	/** T-198: a setup part's cost under its bar, {@code −5 dmg}; empty for none. */
 	private static String costNote(double damage)
 	{
-		return Double.isNaN(damage) || damage < 0.5 ? "" : "\u2212" + LedgerRows.number(Math.round(damage)) + " dmg";
+		return Double.isNaN(damage) || damage < 0.5 ? "" : "-" + LedgerRows.number(Math.round(damage)) + " dmg";
 	}
 
 	/**
@@ -1542,14 +1543,18 @@ final class SidePanelModel
 		return (int) Math.max(1, Math.min(100, Math.round(percentile * 100)));
 	}
 
-	/** T-188: the Luck curve's legend, its ends in rolls. */
-	static final String CURVE_LOW = "1 to 25";
-	static final String CURVE_HIGH = "76 to 100";
+	/** T-188: the Luck curve's legend, its ends; T-201: in the bands. */
+	static final String CURVE_LOW = "bottom 25%";
+	static final String CURVE_HIGH = "top 25%";
 
-	/** {@code rolled 20}: the short form, in section hints, list chips and kill rows. */
-	static String rolled(double percentile)
+	/**
+	 * T-201 (Eric's pick, 2026-11-10: "Top x% everywhere"): luck's one scale on the panel, the card, the Luck section,
+	 * History and the party: {@link LedgerRows#band}, {@code top 19%} over the middle half, {@code average} in it,
+	 * {@code bottom 20%} under it; N is never 0. "rolled N of 100" is gone.
+	 */
+	static String luckText(double percentile)
 	{
-		return "rolled " + roll(percentile);
+		return LedgerRows.band(percentile);
 	}
 
 	/** T-194: a roll's strength: unlucky (1 to 25), normal (26 to 75) or lucky (76 to 100). */
@@ -1558,14 +1563,14 @@ final class SidePanelModel
 		DIM, NORMAL, BRIGHT
 	}
 
-	static LuckStrength strength(int roll)
-	{
-		return roll <= 25 ? LuckStrength.DIM : roll >= 76 ? LuckStrength.BRIGHT : LuckStrength.NORMAL;
-	}
-
+	/**
+	 * T-201: one cut-off rule with the band's ({@link LedgerRows#band}): dim under the bottom quarter, bright over the top
+	 * quarter, so "bottom 25%" is never drawn in the middle's violet. NaN reads as the middle.
+	 */
 	static LuckStrength strength(double percentile)
 	{
-		return strength(roll(percentile));
+		return percentile < LedgerRows.LOW_QUARTILE ? LuckStrength.DIM : percentile > LedgerRows.HIGH_QUARTILE
+			? LuckStrength.BRIGHT : LuckStrength.NORMAL;
 	}
 
 	/** T-194: a roll's colour as text alone (a tile, a header, the card's number). */
@@ -1634,43 +1639,24 @@ final class SidePanelModel
 		}
 	}
 
-	/** T-194: a roll's band in words, by its strength: {@code bottom 9%}, {@code middle half}, {@code top 4%}. */
-	static String luckBand(double percentile)
-	{
-		final int r = roll(percentile);
-		switch (strength(r))
-		{
-			case DIM:
-				return "bottom " + r + "%";
-			case BRIGHT:
-				return "top " + Math.max(1, 100 - r) + "%";
-			default:
-				return "middle half";
-		}
-	}
-
 	/**
-	 * T-199: a roll in words for a hover: {@code rolled 100 of 100: as lucky as it gets}, {@code rolled 81 of 100: lucky,
-	 * top 19%}, {@code rolled 50 of 100: about average}, {@code rolled 1 of 100: as unlucky as it gets}.
+	 * T-201: the band explained once, for a hover: {@code Top 19%: of 100 fights with these attacks, 81 dealt less
+	 * damage.}, {@code Average: ... 52 ...}, {@code Bottom 20%: ... 20 ...}.
 	 */
-	static String rollWords(double percentile)
+	static String luckSentence(double percentile)
 	{
-		final int r = roll(percentile);
-		final String words = r >= 100 ? "as lucky as it gets" : r <= 1 ? "as unlucky as it gets"
-			: strength(r) == LuckStrength.BRIGHT ? "lucky, " + luckBand(percentile)
-			: strength(r) == LuckStrength.DIM ? "unlucky, " + luckBand(percentile) : "about average";
-		return rolledOf(percentile) + ": " + words;
+		final String band = luckText(percentile);
+		return Character.toUpperCase(band.charAt(0)) + band.substring(1) + ": of 100 fights with these attacks, "
+			+ curveShare(percentile) + " dealt less damage.";
 	}
 
 	/**
-	 * T-194: a roll's tooltip, saying what it's out of: {@code rolled 96 of 100 · top 4% · dealt 112% of expected · 9 s
-	 * faster}; the parts that aren't known left out.
+	 * T-194, T-201: luck's tooltip lines: the band explained ({@link #luckSentence}), then {@code Dealt 112% of expected,
+	 * 9 s faster.}, the parts that aren't known left out.
 	 */
 	static String luckWords(double percentile, double damage, double expected, double luckSeconds)
 	{
-		final List<String> parts = new ArrayList<>(4);
-		parts.add(rolledOf(percentile));
-		parts.add(luckBand(percentile));
+		final List<String> parts = new ArrayList<>(2);
 		if (expected > 0)
 		{
 			parts.add("dealt " + Math.round(100 * damage / expected) + "% of expected");
@@ -1679,7 +1665,9 @@ final class SidePanelModel
 		{
 			parts.add(LedgerRows.fasterOrSlower(luckSeconds));
 		}
-		return String.join(DOT, parts);
+		final String rest = String.join(", ", parts);
+		return tipLines(luckSentence(percentile), rest.isEmpty() ? null : Character.toUpperCase(rest.charAt(0))
+			+ rest.substring(1) + ".");
 	}
 
 	/** T-194: {@link #luckWords} for a scope's numbers; null without a percentile. */
@@ -1688,17 +1676,10 @@ final class SidePanelModel
 		return Double.isNaN(n.percentile) ? null : luckWords(n.percentile, n.damage, n.expected, n.luck);
 	}
 
-	/** T-194: the Luck tile's tooltip: the roll's words, then what a tick is (T-118). */
+	/** T-194: the Luck tile's tooltip: luck's words, then what a tick is (T-118). */
 	static String luckTileTip(LedgerRows.Numbers n)
 	{
-		final String words = luckWords(n);
-		return words == null ? TICK_NOTE : "<html>" + words + "<br>" + TICK_NOTE + "</html>";
-	}
-
-	/** {@code rolled 20 of 100}. */
-	static String rolledOf(double percentile)
-	{
-		return rolled(percentile) + " of 100";
+		return tipLines(luckWords(n), TICK_NOTE);
 	}
 
 	/**
@@ -1880,7 +1861,7 @@ final class SidePanelModel
 			final double lost = lostSeconds(n, avoidable);
 			if (lost >= 0.05)
 			{
-				c.lost = "−" + secs(lost);
+				c.lost = "-" + secs(lost);
 				final List<String> why = lossCauses(n, avoidable);
 				tip.add("Lost " + secs(lost) + (why.isEmpty() ? "." : ": " + String.join(", ", why) + "."));
 				final String biggest = biggestLoss(n, avoidable);
@@ -2065,7 +2046,7 @@ final class SidePanelModel
 	static String luckTime(double luckSeconds)
 	{
 		final long r = LedgerRows.roundHalfAway(luckSeconds);
-		return r == 0 ? "±0 s" : (r > 0 ? "+" : "−") + Math.abs(r) + " s";
+		return r == 0 ? "±0 s" : (r > 0 ? "+" : "-") + Math.abs(r) + " s";
 	}
 
 	/**
@@ -2088,8 +2069,9 @@ final class SidePanelModel
 		else
 		{
 			c.rolled = roll(n.percentile);
+			c.luckP = n.percentile;
 			c.luckWords = luckWords(n);
-			tip.add(c.luckWords + ".");
+			tip.add(c.luckWords);
 		}
 		if (n.expected > 0 && !Double.isNaN(n.luck))
 		{
@@ -2113,16 +2095,24 @@ final class SidePanelModel
 		c.luckTip = String.join("<br>", tip);
 	}
 
-	/** T-198: Skill so far: the share attacking and the idle time, with the fight's idle strip; the rest on hover. */
+	/**
+	 * T-198: Skill so far, with the fight's idle strip; the rest on hover. T-201 (Eric: "why does it say uptime during
+	 * the fight"): the Skill score so far ({@link #shownExecution}: {@code Numbers.executionLive} while the fight runs,
+	 * Skill without avoidable eating, which is judged at the kill), the same kind of number as after the kill, and the
+	 * time lost so far worked out the same way. Uptime and idle time on hover. Still no grade live.
+	 */
 	private static void livePlay(PanelSnapshot.KillCard c, Input in, LedgerRows.Numbers n)
 	{
-		c.skill = Double.isNaN(n.uptime) ? null : LedgerRows.partPercent(n.uptime);
-		final double idle = Double.isNaN(n.uptimeCost) ? 0 : n.uptimeCost;
-		c.lost = idle >= 0.05 ? "−" + secs(idle) : null;
+		final double score = shownExecution(n, in);
+		c.skill = Double.isNaN(score) ? null : LedgerRows.partPercent(score);
+		final double lost = Math.max(0, lostSeconds(n, false));
+		c.lost = lost >= 0.05 ? "-" + secs(lost) : null;
 		c.strip = in.view == null ? null : strip(in.view.states, STRIP_BUCKETS);
-		c.skillTip = (c.skill == null ? "" : "Uptime " + c.skill + ".<br>") + "Idle " + secs(idle) + " of "
-			+ secs(n.clock) + ": off cooldown with no attack. The strip is the fight so far, idle moments in orange."
-			+ " Avoidable eating counts once the fight ends." + (c.lost == null ? "" : "<br>" + SIGN_RULE);
+		final double idle = Double.isNaN(n.uptimeCost) ? 0 : n.uptimeCost;
+		c.skillTip = tipLines(c.skill == null ? null : "Skill so far " + c.skill + " of a perfect fight.",
+			Double.isNaN(n.uptime) ? null : "Uptime " + LedgerRows.partPercent(n.uptime) + ", idle " + secs(idle) + " of "
+				+ secs(n.clock) + " (off cooldown with no attack). The strip is the fight so far, idle moments in orange.",
+			"Avoidable damage is counted at the kill.", c.lost == null ? null : SIGN_RULE);
 	}
 
 	/** T-196: the live strip's buckets at most: about one per pixel of the card. */
@@ -2162,6 +2152,7 @@ final class SidePanelModel
 			SidePanelStyle.MUTED) : Text.title(strengthWord(strength(n.percentile)), luckInk(n.percentile));
 		// T-199: the track live, marked where luck so far sits; no number on it.
 		c.luckAt = Double.isNaN(n.percentile) ? 0 : roll(n.percentile);
+		c.luckP = n.percentile;
 		c.luckTip = (n.expected > 0 ? "You've dealt " + LedgerRows.number(n.damage) + ". Average rolls: "
 			+ LedgerRows.number(Math.round(n.expected)) + ".<br>" : "") + "Luck rolls with every hit; its number comes when"
 			+ " the fight ends.";
@@ -2226,7 +2217,8 @@ final class SidePanelModel
 		}
 		if (b.curve != null && !Double.isNaN(n.percentile))
 		{
-			out.put("curve", Text.small(String.valueOf(roll(n.percentile)), luckInk(n.percentile)));
+			// T-201: the mini track and the band.
+			out.put("curve", Text.small(luckText(n.percentile), luckInk(n.percentile)));
 		}
 		if (b.budget != null && !b.budget.rows.isEmpty())
 		{
@@ -2247,7 +2239,7 @@ final class SidePanelModel
 				final double idle = Double.isNaN(n.uptimeCost) ? 0 : n.uptimeCost;
 				// T-199: live it's uptime, labelled, and the idle time with its label: "uptime 97% · idle −1.2 s".
 				out.put("execution", Text.small(in.ended ? LedgerRows.partPercent(shown) : "uptime "
-					+ LedgerRows.partPercent(shown) + (idle < 0.05 ? "" : DOT + "idle \u2212" + secs(idle)),
+					+ LedgerRows.partPercent(shown) + (idle < 0.05 ? "" : DOT + "idle -" + secs(idle)),
 					SidePanelStyle.BODY));
 			}
 		}
@@ -2268,7 +2260,7 @@ final class SidePanelModel
 	static Text[] budgetRuns(LedgerRows.Numbers n, boolean avoidable, boolean warning)
 	{
 		final double lost = Math.max(0, lostSeconds(n, avoidable));
-		final Text skill = lost >= 0.05 ? Text.small("skill \u2212" + secs(lost), SidePanelStyle.COST)
+		final Text skill = lost >= 0.05 ? Text.small("skill -" + secs(lost), SidePanelStyle.COST)
 			: Text.small("skill \u00b10 s", SidePanelStyle.MUTED);
 		if (warning || Double.isNaN(n.luck))
 		{
@@ -2279,7 +2271,7 @@ final class SidePanelModel
 	}
 
 	/** T-199: the sign rule, said on the hovers of every signed time. */
-	static final String SIGN_RULE = "+ is time gained, \u2212 time lost.";
+	static final String SIGN_RULE = "+ is time gained, - time lost.";
 
 	/** T-188: a source's short name in a summary: {@code tentacle} for "Abyssal tentacle (or)", {@code thrall}. */
 	static String shortName(String name)
@@ -2665,7 +2657,7 @@ final class SidePanelModel
 		{
 			// T-194: the roll in its strength of luck's violet, never skill's colours; its words on hover.
 			final Color ink = luckInk(n.percentile);
-			tiles.add(new Tile(Text.small("Luck", SidePanelStyle.SECONDARY), Text.title(rolled(n.percentile), ink),
+			tiles.add(new Tile(Text.small("Luck", SidePanelStyle.SECONDARY), Text.title(luckText(n.percentile), ink),
 				Text.small(LedgerRows.fasterOrSlower(n.luck), ink), null, ink, luckTileTip(n)));
 		}
 
@@ -3160,7 +3152,7 @@ final class SidePanelModel
 			if (damage >= 1)
 			{
 				rows.add(new BudgetRow(fill, Text.small(labels[i], SidePanelStyle.BODY), null,
-					Text.small(plain ? "\u2212" + LedgerRows.number(damage) + " dmg" : damageLost(damage), colour),
+					Text.small(plain ? "-" + LedgerRows.number(damage) + " dmg" : damageLost(damage), colour),
 					setupTip(labels[i], LedgerRows.ticks(costs[i]), damage)).withValueShort("-" + LedgerRows.number(damage)));
 			}
 			// T-118 (Eric, 2026-10-30): the time parts in ticks once it rounds to a tick; T-199: "-25 ticks" (the hyphen,
@@ -3169,29 +3161,29 @@ final class SidePanelModel
 			else if (LedgerRows.ticks(costs[i]) >= 1)
 			{
 				rows.add(new BudgetRow(fill, Text.small(plain && i == 0 ? "idle" : labels[i], SidePanelStyle.BODY), null,
-					Text.small((plain ? "\u2212" + secs(costs[i]) : "-" + SidePanelStyle.ticks(costs[i])), colour)));
+					Text.small("-" + (plain ? secs(costs[i]) : SidePanelStyle.ticks(costs[i])), colour)));
 			}
 			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
 			if (i == 0 && LedgerRows.ticks(ca) >= 1)
 			{
 				rows.add(new BudgetRow(caCosting ? Fill.COST : Fill.MINOR_COST, Text.small("avoidable eating",
-					SidePanelStyle.BODY), null, Text.small((plain ? "\u2212" + secs(ca) : "-" + SidePanelStyle.ticks(ca)), caCosting
+					SidePanelStyle.BODY), null, Text.small("-" + (plain ? secs(ca) : SidePanelStyle.ticks(ca)), caCosting
 					? SidePanelStyle.COST : SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(e - ca) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
-					Text.small((plain ? "\u2212" + secs(e - ca) : "-" + SidePanelStyle.ticks(e - ca)), SidePanelStyle.BODY)));
+					Text.small("-" + (plain ? secs(e - ca) : SidePanelStyle.ticks(e - ca)), SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(m - stall) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(MECHANICS, SidePanelStyle.BODY), null,
-					Text.small((plain ? "\u2212" + secs(m - stall) : "-" + SidePanelStyle.ticks(m - stall)), SidePanelStyle.BODY)));
+					Text.small("-" + (plain ? secs(m - stall) : SidePanelStyle.ticks(m - stall)), SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(stall) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(plain ? "stall" : STALL, SidePanelStyle.BODY), null,
-					Text.small((plain ? "\u2212" + secs(stall) : "-" + SidePanelStyle.ticks(stall)), SidePanelStyle.BODY)));
+					Text.small("-" + (plain ? secs(stall) : SidePanelStyle.ticks(stall)), SidePanelStyle.BODY)));
 			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
@@ -3207,7 +3199,7 @@ final class SidePanelModel
 		if (u > 0)
 		{
 			rows.add(new BudgetRow(Fill.UNSCORED, Text.small(plain ? "adds" : "adds, not scored", SidePanelStyle.BODY),
-				null, Text.small((plain ? "\u2212" + secs(u) : "-" + SidePanelStyle.ticks(u)), SidePanelStyle.BODY)));
+				null, Text.small("-" + (plain ? secs(u) : SidePanelStyle.ticks(u)), SidePanelStyle.BODY)));
 		}
 
 		// Against your average: after a kill only, outside a raid, never under the warning (spec 3.1).
@@ -3356,7 +3348,7 @@ final class SidePanelModel
 		// Magic defence: the bonus the attacks met, the boss's modifiers in (Yama's moves with his target and phase).
 		if (bonus && changed && p.bonusAtStart != null && p.bonusAtEnd != null)
 		{
-			final String met = signedPlain(p.bonusAtStart) + " → " + signedPlain(p.bonusAtEnd);
+			final String met = signedPlain(p.bonusAtStart) + " to " + signedPlain(p.bonusAtEnd);
 			lines.add(new PanelSnapshot.BlockLine(new Row(Text.small("bonus met " + met, SidePanelStyle.SECONDARY),
 				Text.NONE, Text.NONE, null), 1, java.util.Arrays.asList("bonus " + met, met)));
 		}
@@ -3508,7 +3500,7 @@ final class SidePanelModel
 
 	private static String path(int start, int end)
 	{
-		return start < 0 || end < 0 ? "unknown" : start == end ? String.valueOf(end) : start + " → " + end;
+		return start < 0 || end < 0 ? "unknown" : start == end ? String.valueOf(end) : start + " to " + end;
 	}
 
 	/** A special's name as the game's items are written: {@code Dragon warhammer}, {@code Dinh's bulwark}. */
@@ -3750,7 +3742,7 @@ final class SidePanelModel
 		{
 			caption = curveShare(p) + "% of fights with these attacks dealt less";
 		}
-		return new PanelSnapshot.Curve(z, Text.title(rolled(p), luckInk(p)), caption,
+		return new PanelSnapshot.Curve(z, Text.title(luckText(p), luckInk(p)), caption,
 			curveTip(z, p));
 	}
 
@@ -3771,12 +3763,16 @@ final class SidePanelModel
 	{
 		final boolean right = z >= 0;
 		final long share = curveShare(right ? 1 - p : p);
-		final String head = "Rolled " + roll(p) + " of 100: " + share
+		final String band = luckText(p);
+		final String head = Character.toUpperCase(band.charAt(0)) + band.substring(1) + ": " + share
 			+ "% of fights with these attacks would have dealt " + (right ? "more" : "less") + ", the shaded "
 			+ (right ? "right" : "left") + " side.";
-		return head + " The curve is spread by damage, not by share of fights, so a small share is a thin sliver at its"
-			+ " edge.";
+		return tipLines(head, CURVE_SPREAD);
 	}
+
+	/** T-201: what the curve's width is, on its hover. */
+	static final String CURVE_SPREAD = "The curve is spread by damage, not by share of fights, so a small share is a thin"
+		+ " sliver at its edge.";
 
 	// ---- lists ----
 
@@ -3843,7 +3839,7 @@ final class SidePanelModel
 		if (percentile >= 0)
 		{
 			// T-194: the roll's chip in its strength.
-			chip = Text.small(rolled(percentile), luckChipInk(percentile));
+			chip = Text.small(luckText(percentile), luckChipInk(percentile));
 			fill = luckChipFill(percentile);
 		}
 		else
@@ -3923,7 +3919,7 @@ final class SidePanelModel
 		{
 			return Text.small(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.LUCK);
 		}
-		return Text.small(rolled(n.percentile), luckChipInk(n.percentile));
+		return Text.small(luckText(n.percentile), luckChipInk(n.percentile));
 	}
 
 	/** T-194: the chip's fill, in the roll's strength. */

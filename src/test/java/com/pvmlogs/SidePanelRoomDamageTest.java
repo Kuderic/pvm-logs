@@ -167,9 +167,9 @@ public class SidePanelRoomDamageTest
 		final PanelSnapshot.Row row = row(SidePanelModel.fight(input(araxxor(160, SidePanelExamples.at(15, 0)), true))
 			.details, SidePanelModel.ROOM_DMG);
 		final SidePanelParts.Line line = new SidePanelParts.Line(row);
-		assertEquals(row.tooltip, line.getToolTipText());
-		assertEquals(row.tooltip, line.left.getToolTipText());
-		assertEquals(row.tooltip, line.right.getToolTipText());
+		assertEquals(row.tooltip, Tips.plain(line.getToolTipText()));
+		assertEquals(row.tooltip, Tips.plain(line.left.getToolTipText()));
+		assertEquals(row.tooltip, Tips.plain(line.right.getToolTipText()));
 	}
 
 	private static PanelSnapshot.Row row(PanelSnapshot.Rows rows, String label)

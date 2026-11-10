@@ -104,7 +104,7 @@ public class SidePanelKillCardTest
 		assertEquals("A", c.grade);
 		assertEquals(SidePanelStyle.GRADE_A, c.gradeColour);
 		assertEquals("99%", c.skill);
-		assertEquals("\u22121.1 s", c.lost);
+		assertEquals("-1.1 s", c.lost);
 		for (String part : new String[]{"99% of a perfect fight (" + SidePanelModel.PERFECT + ").",
 			"Lost 1.1 s: 0.6 s idle, a boost wore off.", "Biggest loss: 0.6 s idle.",
 			"Grade A from skill only (never luck): better than 90% of your last 50 kills.",
@@ -120,12 +120,14 @@ public class SidePanelKillCardTest
 		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card;
 		assertEquals(81, c.rolled);
 		assertEquals("+10 s", c.luckTime);
-		assertTrue(c.luckTip, c.luckTip.startsWith("rolled 81 of 100 · top 19%"));
+		// T-201: the band, explained once.
+		assertEquals(0.81, c.luckP, 0.005);
+		assertTrue(c.luckTip, c.luckTip.startsWith("Top 19%: of 100 fights with these attacks, 81 dealt less damage."));
 		assertTrue(c.luckTip, c.luckTip.contains("Your hits did 12% more damage than average rolls: 10 s faster."));
 		assertTrue(c.luckTip, c.luckTip.contains("With average luck: 1:36."));
 		final PanelSnapshot.KillCard v = SidePanelModel.fight(SidePanelKillCardExamples.vardorvisKill()).card;
 		assertEquals(20, v.rolled);
-		assertEquals("\u221214 s", v.luckTime);
+		assertEquals("-14 s", v.luckTime);
 		assertTrue(v.luckTip, v.luckTip.contains("12% less damage than average rolls: 14 s slower."));
 	}
 
@@ -164,9 +166,10 @@ public class SidePanelKillCardTest
 		final PanelSnapshot.KillCard kill = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card;
 		assertFalse(kill.structure(), kill.structure().contains("f"));
 		// T-199: and the DPS line under them, live and after.
-		assertEquals(Arrays.asList("Skill", "Luck", "DPS"), SidePanelKillCard.blocks(kill));
+		// T-201: Luck, then Skill.
+		assertEquals(Arrays.asList("Luck", "Skill", "DPS"), SidePanelKillCard.blocks(kill));
 		final PanelSnapshot.KillCard live = SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card;
-		assertEquals(Arrays.asList("Skill", "Luck", "DPS"), SidePanelKillCard.blocks(live));
+		assertEquals(Arrays.asList("Luck", "Skill", "DPS"), SidePanelKillCard.blocks(live));
 	}
 
 	@Test
@@ -260,9 +263,11 @@ public class SidePanelKillCardTest
 		assertTrue(c.live);
 		assertEquals("live", c.corner);
 		assertEquals("0:42", c.clock);
-		// Skill so far: the share attacking and the idle time, with the fight's strip.
-		assertEquals("97%", c.skill);
-		assertEquals("\u22121.2 s", c.lost);
+		// Skill so far: T-201, the Skill score (not uptime) and the time lost so far, with the fight's strip.
+		final LedgerRows.Numbers n = new LedgerRows.Numbers(SidePanelKillCardExamples.araxxorLive().scope);
+		assertEquals(LedgerRows.partPercent(n.executionLive), c.skill);
+		assertEquals("96%", c.skill);
+		assertEquals("-" + SidePanelModel.secs(SidePanelModel.lostSeconds(n, false)), c.lost);
 		assertNotNull(c.strip);
 		assertEquals(70, c.strip.length);
 		int idle = 0;
@@ -271,7 +276,7 @@ public class SidePanelKillCardTest
 			idle += b == PanelSnapshot.KillCard.STRIP_IDLE ? 1 : 0;
 		}
 		assertEquals("the timeline's two lost ticks", 2, idle);
-		assertTrue(c.skillTip, c.skillTip.contains("Idle 1.2 s of 42 s"));
+		assertTrue(c.skillTip, c.skillTip.contains("Uptime 97%, idle 1.2 s of 42 s"));
 		// Luck so far: one word, its strength; the damage against average rolls on hover.
 		assertEquals("average", c.luckWord.text);
 		assertEquals(SidePanelStyle.LUCK, c.luckWord.colour);
@@ -301,37 +306,32 @@ public class SidePanelKillCardTest
 	@Test
 	public void luckIsWrittenOneWay()
 	{
-		assertEquals("rolled 20", SidePanelModel.rolled(0.20));
-		assertEquals("rolled 20 of 100", SidePanelModel.rolledOf(0.20));
-		// Never 0; 100 at the very top.
+		// T-201 (Eric's pick, "Top x% everywhere"): the band, as the old sidebar wrote it; no roll.
+		assertEquals("bottom 20%", SidePanelModel.luckText(0.20));
+		assertEquals("top 19%", SidePanelModel.luckText(0.81));
+		assertEquals("average", SidePanelModel.luckText(0.5));
+		// The roll stays only as the marker's place on the track: never 0, 100 at the very top.
 		assertEquals(1, SidePanelModel.roll(0.001));
 		assertEquals(100, SidePanelModel.roll(0.999));
-		// Celebrations off: the Luck section's header is the roll. On: its strength in words; the roll is its line.
-		assertEquals("rolled 81", SidePanelModel.fight(SidePanelKillCardExamples.off()).curve.headerValue.text);
+		// Celebrations off: the Luck section's header is the band. On: its strength in words, the band its line.
+		assertEquals("top 19%", SidePanelModel.fight(SidePanelKillCardExamples.off()).curve.headerValue.text);
 		final PanelSnapshot.FightTab on = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill());
 		assertEquals("lucky", on.curve.headerValue.text);
-		assertEquals("81", on.summaries.get("curve").text);
-		// T-198: the curve's words are its tooltip, not a caption on the panel.
+		assertEquals("top 19%", on.summaries.get("curve").text);
+		// T-198: the curve's words are its tooltip, not a caption on the panel; T-201: the band explained once.
 		assertEquals("", on.curve.caption);
-		assertTrue(on.curve.tooltip, on.curve.tooltip.startsWith("rolled 81 of 100: of 100 fights with these attacks, 81"
+		assertTrue(on.curve.tooltip, on.curve.tooltip.startsWith("Top 19%: of 100 fights with these attacks, 81"
 			+ " dealt less damage."));
-		// No band words anywhere on the tab, Celebrations on or off.
+		assertFalse(on.curve.tooltip, on.curve.tooltip.contains("would have dealt"));
+		// No roll anywhere on the tab, Celebrations on or off.
 		for (SidePanelModel.Input in : new SidePanelModel.Input[]{SidePanelKillCardExamples.araxxorKill(),
 			SidePanelKillCardExamples.off(), SidePanelKillCardExamples.vardorvisKill()})
 		{
-			final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
-			if (t.tiles != null)
-			{
-				for (PanelSnapshot.Tile tile : t.tiles)
-				{
-					assertFalse(tile.value.text, tile.value.text.matches("(bottom|top) \\d+%|average"));
-				}
-			}
 			final PvmPerformancePanel p = panel(in);
 			SidePanelPictures.openAll(p.fightTab());
 			for (SidePanelText text : all(p.fightTab(), SidePanelText.class))
 			{
-				assertFalse(text.getText(), text.getText().matches(".*\\b(bottom|top) \\d+%.*"));
+				assertFalse(text.getText(), text.getText().matches(".*\\b(rolled|\\d+ of 100)\\b.*"));
 			}
 		}
 	}
@@ -401,16 +401,19 @@ public class SidePanelKillCardTest
 		assertEquals(1, all(play, SidePanelTickStrip.class).size());
 		final List<String> playTexts = texts(play);
 		assertTrue(playTexts.toString(), playTexts.containsAll(Arrays.asList("Uptime", "Offensive prayers", "Gear",
-			"Boosts", SidePanelFightTab.ATTACK_RHYTHM, "\u22120.6 s idle", "\u22125 dmg")));
+			"Boosts", SidePanelFightTab.ATTACK_RHYTHM, "-0.6 s idle", "-5 dmg")));
 		for (String old : new String[]{"Attacking", "Right prayers", "Best gear worn", "Stats boosted", "uptime"})
 		{
 			assertFalse(playTexts.toString(), playTexts.contains(old));
 		}
-		// Luck: its hits, from Details.
+		// Luck: T-201 (Eric: "hits and per hit here is pointless"), its band and seconds, no hit rows; the hits on the
+		// curve's hover.
 		final SidePanelSection luck = SidePanelPictures.sectionOf(p.fightTab(), "curve");
 		luck.toggle();
-		assertTrue(texts(luck).toString(), texts(luck).containsAll(Arrays.asList("hits", "30 · avg 29.6", "per hit",
-			"30 · avg 27")));
+		assertTrue(texts(luck).toString(), texts(luck).containsAll(Arrays.asList("top 19%", "+10 s")));
+		assertFalse(texts(luck).toString(), texts(luck).contains("hits") || texts(luck).contains("per hit"));
+		final PanelSnapshot.FightTab tabK = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill());
+		assertTrue(tabK.curve.tooltip, tabK.curve.tooltip.contains("Hits 30 · average 29.6; per hit 30 · average 27."));
 		// Your line in the chart is white: luck only ever in its violet.
 		assertEquals(SidePanelStyle.VALUE, SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).chart.actual);
 		// No "expected" on any row: a special's damage reads against average rolls (Vardorvis's claws).
@@ -450,16 +453,16 @@ public class SidePanelKillCardTest
 		final PvmPerformancePanel p = panel(SidePanelKillCardExamples.araxxorKill());
 		final SidePanelSection luck = SidePanelPictures.sectionOf(p.fightTab(), "curve");
 		// T-198: one number beside its picture.
-		assertEquals("81", luck.summary());
+		assertEquals("top 19%", luck.summary());
 		assertEquals(PanelSnapshot.Mark.Kind.LUCK, luck.summaryMark().kind);
 		assertEquals(81, luck.summaryMark().roll);
 		final SidePanelSection time = SidePanelPictures.sectionOf(p.fightTab(), "budget");
-		assertEquals("skill \u22121.1 s · luck +10 s", time.summary());
+		assertEquals("skill -1.1 s · luck +10 s", time.summary());
 		final PanelSnapshot.Mark bar = time.summaryMark();
 		assertEquals(PanelSnapshot.Mark.Kind.TIME, bar.kind);
 		// T-199: each label with its number in its colour: skill's loss orange, luck violet.
 		assertEquals(3, bar.runs.length);
-		assertEquals("skill \u22121.1 s", bar.runs[0].text);
+		assertEquals("skill -1.1 s", bar.runs[0].text);
 		assertEquals(SidePanelStyle.COST, bar.runs[0].colour);
 		assertEquals("luck +10 s", bar.runs[2].text);
 		assertEquals(SidePanelStyle.LUCK, bar.runs[2].colour);
@@ -477,7 +480,7 @@ public class SidePanelKillCardTest
 		// Unlucky: luck's cost comes after the loss.
 		final SidePanelSection unlucky = SidePanelPictures.sectionOf(panel(SidePanelKillCardExamples.vardorvisKill())
 			.fightTab(), "budget");
-		assertEquals("skill \u221217 s · luck \u221214 s", unlucky.summary());
+		assertEquals("skill -17 s · luck -14 s", unlucky.summary());
 		assertFalse(unlucky.summaryMark().luckSaved);
 	}
 

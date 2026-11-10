@@ -89,7 +89,7 @@ public class SidePanelHistorySearchTest
 	{
 		for (JComponent k : all(c, JComponent.class))
 		{
-			final String tip = k.getToolTipText();
+			final String tip = Tips.plain(k.getToolTipText());
 			if (tip != null && (tip.startsWith("Show " + name + ".") || tip.startsWith("Put " + name + " away.")))
 			{
 				return k;
@@ -189,7 +189,7 @@ public class SidePanelHistorySearchTest
 		{
 			final SidePanelHistoryTab tab = tab();
 			final SidePanelHistoryTab.Close close = all(tab, SidePanelHistoryTab.Close.class).get(0);
-			assertEquals("Put Vardorvis away and show all bosses", close.getToolTipText());
+			assertEquals("Put Vardorvis away and show all bosses", Tips.plain(close.getToolTipText()));
 			close.dispatchEvent(new MouseEvent(close, MouseEvent.MOUSE_ENTERED, 0L, 0, 2, 2, 0, false));
 			assertTrue(close.hovered());
 			click(close);

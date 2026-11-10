@@ -30,8 +30,9 @@ public class SidePanelProgressTest
 		assertEquals(SidePanelHistory.FASTEST_KILL, p.bests.get(0).left.text);
 		assertEquals("1:43", p.bests.get(0).right.text);
 		assertTrue(p.bests.get(0).hint.isEmpty());
-		assertTrue(p.bests.get(1).left.text, p.bests.get(1).left.text.matches("rolled \\d+"));
-		assertEquals(SidePanelStyle.LUCK, p.bests.get(1).left.colour);
+		assertTrue(p.bests.get(1).left.text, p.bests.get(1).left.text.matches("(top|bottom) \\d+%|average"));
+		assertTrue(java.util.Arrays.asList(SidePanelStyle.LUCK_DIM, SidePanelStyle.LUCK, SidePanelStyle.LUCK_BRIGHT)
+			.contains(p.bests.get(1).left.colour));
 		assertTrue(p.bests.get(1).indent);
 		// The fastest with average luck carries the only gold, a star with no words; no DPS best.
 		assertEquals(SidePanelHistory.FASTEST_AVERAGE_LUCK, p.bests.get(2).left.text);
@@ -131,11 +132,11 @@ public class SidePanelProgressTest
 				graded++;
 				assertTrue(r.grade, grades.contains(r.grade));
 				// Luck as a violet roll, in its strength (T-194); the 26 Oct kill, from before T-028, keeps its seconds.
-				if (r.chip.text.startsWith("rolled"))
+				if (!r.chip.text.matches("\\d+ s (faster|slower)"))
 				{
-					assertEquals(SidePanelModel.luckChipInk(Integer.parseInt(r.chip.text.substring(7)) / 100.0),
-						r.chip.colour);
-					assertTrue(r.chip.text, r.chip.text.matches("rolled \\d+"));
+					assertEquals(SidePanelModel.luckChipInk(r.chip.text.startsWith("top ") ? 0.9 : r.chip.text
+						.startsWith("bottom ") ? 0.1 : 0.5), r.chip.colour);
+					assertTrue(r.chip.text, r.chip.text.matches("(top|bottom) \\d+%|average"));
 				}
 				else
 				{

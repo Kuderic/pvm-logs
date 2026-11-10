@@ -485,7 +485,8 @@ final class PanelSnapshot
 
 		Text(String text, Color colour, SidePanelStyle.Type type)
 		{
-			this.text = text == null ? "" : text;
+			// T-201: only what the panel's fonts can draw (a minus sign as a hyphen, an arrow as "to").
+			this.text = text == null ? "" : SidePanelStyle.drawable(text);
 			this.colour = colour;
 			this.type = type;
 		}
@@ -1713,6 +1714,11 @@ final class PanelSnapshot
 		 * 100 track, marked with no number (the roll is the kill's); 0 for none.
 		 */
 		int luckAt;
+		/**
+		 * T-201: luck's percentile, 0 to 1: after the kill the kill's, live luck so far; NaN when unknown. The card writes
+		 * it as its band ({@code top 19%}) and marks it on the track.
+		 */
+		double luckP = Double.NaN;
 		String luckTip;
 		/** T-194: the roll's words; null for none. */
 		String luckWords;
