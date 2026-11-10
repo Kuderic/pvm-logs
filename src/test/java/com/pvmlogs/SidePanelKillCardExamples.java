@@ -143,7 +143,7 @@ final class SidePanelKillCardExamples
 		return in;
 	}
 
-	/** The same kill with Celebrations off: today's title and tiles. */
+	/** The same kill with Celebrations off: the same tab, without the kill-end moment (T-202). */
 	static SidePanelModel.Input off()
 	{
 		final SidePanelModel.Input in = araxxorKill();

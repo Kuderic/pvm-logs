@@ -397,7 +397,9 @@ public class SidePanelLuckBandTest
 		final SidePanelModel.Input[] inputs = {SidePanelKillCardExamples.araxxorKill(),
 			SidePanelKillCardExamples.araxxorLive(), SidePanelKillCardExamples.vardorvisKill(),
 			SidePanelKillCardExamples.vardorvisLive(), SidePanelKillCardExamples.unrecorded(),
-			SidePanelKillCardExamples.pbKill(), SidePanelKillCardExamples.allBadges(), SidePanelKillCardExamples.off()};
+			SidePanelKillCardExamples.pbKill(), SidePanelKillCardExamples.allBadges(), SidePanelKillCardExamples.off(),
+			// T-202: a whole raid and a run of monsters, the same sections under their titles.
+			SidePanelOneTabTest.toaRaid(true), SidePanelOneTabTest.toaRaid(false), SidePanelRunExamples.saved()};
 		for (SidePanelModel.Input in : inputs)
 		{
 			final PvmPerformancePanel p = SidePanelKillCardTest.panel(in);

@@ -46,7 +46,6 @@ public class SidePanelRoomOverTest
 		assertEquals(PanelSnapshot.State.LIVE, tab.state);
 		assertTrue(tab.header.suffix.isEmpty());
 		assertNull("no after-fight budget", tab.budget);
-		assertNull("no details", tab.details);
 		assertEquals(java.util.Collections.singletonList(SidePanelModel.AFTER_THE_FIGHT),
 			java.util.Arrays.asList(tab.taken.rows.get(0).left.text));
 	}

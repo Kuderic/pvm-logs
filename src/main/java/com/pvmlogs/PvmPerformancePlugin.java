@@ -9574,7 +9574,7 @@ public class PvmPerformancePlugin extends Plugin
 					writeRows(writer, fights);
 				}
 				final String path = out.toString();
-				setStatus("Exported " + fights.size() + " fights → " + path);
+				setStatus("Exported " + fights.size() + " fights to " + path);
 				clientThread.invoke(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "",
 					PvmPerformanceConfig.DISPLAY_NAME + ": exported " + fights.size() + " fights to " + path, null));
 			}

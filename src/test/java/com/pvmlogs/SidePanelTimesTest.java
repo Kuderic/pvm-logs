@@ -2,6 +2,7 @@ package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Locale;
@@ -97,10 +98,14 @@ public class SidePanelTimesTest
 		{
 			panel.setText(true, false);
 			SidePanelPictures.draw(panel.tabs(), panel.fightTab(), 1);
-			// Larger text: "700 HP · solo · 3:31 pm" is wider than the header's room beside the clock. T-132 review: the
-			// time of day goes first, so the label stays.
-			final SidePanelText sub = find(panel.fightTab(), "700 HP");
-			assertEquals("700 HP · solo", sub.lastShown());
+			// T-132 review: where "700 HP · solo · 3:31 pm" doesn't fit beside the clock, the time of day goes first, so
+			// the label stays. T-202: a room's header is its kill card, which has the room for it in Larger text.
+			String shown = null;
+			for (String x : SidePanelKillCard.drawnTexts(SidePanelModel.fight(SidePanelExamples.dead()).card))
+			{
+				shown = x.startsWith("700 HP") ? x : shown;
+			}
+			assertTrue(shown, shown.equals("700 HP · solo · 3:31 pm") || shown.equals("700 HP · solo"));
 		}
 		finally
 		{

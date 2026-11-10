@@ -146,7 +146,8 @@ public class SidePanelCardFixesTest
 			final int before = SidePanelParts.relayouts;
 			head.dispatchEvent(new MouseEvent(head, MouseEvent.MOUSE_ENTERED, 0, 0, 5, 5, 0, false));
 			assertTrue(luck.hovered());
-			assertEquals(celebrations ? SidePanelStyle.CARD_HOVER : SidePanelStyle.HEADER_HOVER, head.getBackground());
+			// T-202: the same folded card with Celebrations off.
+			assertEquals(SidePanelStyle.CARD_HOVER, head.getBackground());
 			head.dispatchEvent(new MouseEvent(head, MouseEvent.MOUSE_EXITED, 0, 0, -5, -5, 0, false));
 			assertFalse(luck.hovered());
 			assertEquals(before, SidePanelParts.relayouts);

@@ -123,9 +123,9 @@ public class SidePanelWeaponDpsTest
 		// 620 over 120 ticks (72 s): 8.6; expected 546 over the same: 7.6.
 		assertEquals("8.6", ember.dps);
 		assertEquals("7.6", ember.expectedDps);
-		// Eric's forms, longest first: "expected" spelt out wherever it fits, as the spec row's "expected 44" is.
-		assertEquals("30 attacks · 8.6 DPS (expected 7.6)", ember.sub);
-		assertEquals(Arrays.asList("8.6 DPS (expected 7.6)", "8.6 DPS (exp 7.6)", "8.6 DPS"), ember.subShort);
+		// T-196/T-199's words: its damage a second against expected, then the rate alone where that doesn't fit.
+		assertEquals("8.6 dps · exp 7.6", ember.sub);
+		assertEquals(Arrays.asList("8.6 dps"), ember.subShort);
 		assertEquals("75%", ember.share);
 		final PanelSnapshot.Source bow = row(tab, "Scorching bow", false);
 		assertEquals("5.4", bow.dps);
@@ -142,7 +142,7 @@ public class SidePanelWeaponDpsTest
 		final PanelSnapshot.Source spec = row(tab, "Emberlight", true);
 		assertNull(spec.dps);
 		// T-112 item 6: Emberlight drains on landing, so it reads its landing.
-		assertEquals("2 specs (100% landed, expected 80%)", spec.sub);
+		assertEquals("2 specs (100% landed, chance 80%)", spec.sub);
 		assertTrue(spec.tooltip, spec.tooltip.contains("no DPS: a special is spent by energy, not time"));
 		// The 2:17 kill has a thrall row.
 		final PanelSnapshot.Source thrall = row(SidePanelModel.fight(SidePanelExamples.dead()), "Thrall", false);
@@ -159,8 +159,8 @@ public class SidePanelWeaponDpsTest
 		final PanelSnapshot.Source ember = row(SidePanelModel.fight(in), "Emberlight", false);
 		assertEquals("8.6", ember.dps);
 		assertNull(ember.expectedDps);
-		assertEquals("30 attacks · 8.6 DPS", ember.sub);
-		assertEquals(Arrays.asList("8.6 DPS", "8.6 DPS", "8.6 DPS"), ember.subShort);
+		assertEquals("8.6 dps", ember.sub);
+		assertTrue(ember.subShort.isEmpty());
 		assertFalse(ember.tooltip, ember.tooltip.contains("expected"));
 	}
 
@@ -302,13 +302,13 @@ public class SidePanelWeaponDpsTest
 		final SidePanelModel.Input in = withSpecial(SidePanelExamples.sireWeapons(), "Bandos godsword",
 			net.runelite.api.gameval.ItemID.BGS, 2, 2);
 		final PanelSnapshot.Source spec = row(SidePanelModel.fight(in), "Bandos godsword", true);
-		assertEquals("2 specs (expected 44 dmg)", spec.sub);
-		assertEquals(Arrays.asList("2 specs (exp 44)", "2 specs"), spec.subShort);
+		assertEquals("2 specs (average 44)", spec.sub);
+		assertEquals(Arrays.asList("2 specs (average 44)", "2 specs"), spec.subShort);
 		// One spec: the same row, its damage and expected as they were (so no unmatched row), as one special.
 		final SidePanelModel.Input one = withSpecial(SidePanelExamples.sireWeapons(), "Voidwaker", -1, 1, 1);
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(one);
 		final PanelSnapshot.Source v = row(tab, "Voidwaker", true);
-		assertEquals("1 spec (expected 44 dmg)", v.sub);
+		assertEquals("1 spec (average 44)", v.sub);
 		fitsInEverySetting(one, tab, v);
 	}
 
@@ -321,25 +321,25 @@ public class SidePanelWeaponDpsTest
 	{
 		// The fixture's Emberlight specials: both landed, at 80% each (T-151: a successful 0 is pushed to 1).
 		final PanelSnapshot.Source ember = row(SidePanelModel.fight(SidePanelExamples.sireWeapons()), "Emberlight", true);
-		assertEquals("2 specs (100% landed, expected 80%)", ember.sub);
-		assertEquals(Arrays.asList("2 specs (100% landed, exp 80%)", "100% landed (exp 80%)", "2 specs (100% landed)",
+		assertEquals("2 specs (100% landed, chance 80%)", ember.sub);
+		assertEquals(Arrays.asList("2 specs (100% landed, chance 80%)", "100% landed (chance 80%)", "2 specs (100% landed)",
 			"2 specs"), ember.subShort);
 		// A warhammer: two specs, one landed.
 		final SidePanelModel.Input dwh = withSpecial(SidePanelExamples.sireWeapons(), "Dragon warhammer",
 			net.runelite.api.gameval.ItemID.DRAGON_WARHAMMER, 2, 1);
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(dwh);
 		final PanelSnapshot.Source two = row(tab, "Dragon warhammer", true);
-		assertEquals("2 specs (50% landed, expected 80%)", two.sub);
+		assertEquals("2 specs (50% landed, chance 80%)", two.sub);
 		assertEquals("47", two.damage);
 		fitsInEverySetting(dwh, tab, two);
 		// One spec, landed and missed.
-		assertEquals("1 spec (landed, expected 80%)", row(SidePanelModel.fight(withSpecial(SidePanelExamples
+		assertEquals("1 spec (landed, chance 80%)", row(SidePanelModel.fight(withSpecial(SidePanelExamples
 			.sireWeapons(), "Elder maul", net.runelite.api.gameval.ItemID.ELDER_MAUL, 1, 1)), "Elder maul", true).sub);
 		final SidePanelModel.Input missed = withSpecial(SidePanelExamples.sireWeapons(), "Elder maul",
 			net.runelite.api.gameval.ItemID.ELDER_MAUL, 1, 0);
 		final PanelSnapshot.FightTab missedTab = SidePanelModel.fight(missed);
 		final PanelSnapshot.Source m = row(missedTab, "Elder maul", true);
-		assertEquals("1 spec (missed, expected 80%)", m.sub);
+		assertEquals("1 spec (missed, chance 80%)", m.sub);
 		fitsInEverySetting(missed, missedTab, m);
 		// Under the stats warning, no chance: only what landed.
 		dwh.warning = "two versions share this HP";
@@ -415,15 +415,15 @@ public class SidePanelWeaponDpsTest
 			.filter(r -> r.name.equals("Not matched to an attack")).findFirst().orElse(null);
 		if (unmatched != null)
 		{
-			assertTrue(unmatched.sub, unmatched.sub.matches("weapon damage \\(expected -?[0-9,]+\\)"));
+			assertTrue(unmatched.sub, unmatched.sub.matches("weapon damage \\(average -?[0-9,]+\\)"));
 		}
 	}
 
 	@Test
 	public void theCardsWeaponRowsShareOneForm()
 	{
-		// Each card's weapon rows are drawn in one form, the longest that fits them all: "30 attacks · 8.6 DPS
-		// (expected 7.6)" fits the Emberlight row but not the Scorching bow's, so neither has the attacks.
+		// Each card's weapon rows are drawn in one form, the longest that fits them all ("8.6 dps · exp 7.6", else
+		// "8.6 dps").
 		for (boolean smooth : new boolean[]{false, true})
 		{
 			for (double scale : new double[]{1, 2})

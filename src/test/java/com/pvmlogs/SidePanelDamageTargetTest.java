@@ -50,13 +50,13 @@ public class SidePanelDamageTargetTest
 		final PanelSnapshot.Source halberd = row(t.byTarget.get(BOSS), "Noxious halberd");
 		final PanelSnapshot.Source bossBow = row(t.byTarget.get(BOSS), "Zaryte crossbow");
 		// The crossbow's four bolts at Araxxor himself, none of the eight at the araxytes.
-		assertTrue(bossBow.sub, bossBow.sub.startsWith("4 attacks"));
-		assertTrue(halberd.sub, halberd.sub.startsWith("48 attacks"));
+		assertTrue(bossBow.tooltip, bossBow.tooltip.contains("<br>4 attacks"));
+		assertTrue(halberd.tooltip, halberd.tooltip.contains("<br>48 attacks"));
 		final PanelSnapshot.Source addsBow = row(t.byTarget.get(ADDS), "Zaryte crossbow");
-		assertTrue(addsBow.sub, addsBow.sub.startsWith("8 attacks"));
+		assertTrue(addsBow.tooltip, addsBow.tooltip.contains("<br>8 attacks"));
 		assertNull(find(t.byTarget.get(ADDS), "Noxious halberd"));
 		final PanelSnapshot.Source allBow = row(t.byTarget.get(ALL), "Zaryte crossbow");
-		assertTrue(allBow.sub, allBow.sub.startsWith("12 attacks"));
+		assertTrue(allBow.tooltip, allBow.tooltip.contains("<br>12 attacks"));
 	}
 
 	@Test
@@ -105,7 +105,10 @@ public class SidePanelDamageTargetTest
 		for (int i = 0; i < 3; i++)
 		{
 			final PanelSnapshot.FightTab shown = t.showing(i);
-			assertEquals(texts(t.tiles), texts(shown.tiles));
+			assertEquals(t.card.dps, shown.card.dps);
+			assertEquals(t.card.skill, shown.card.skill);
+			assertEquals(t.card.luckTime, shown.card.luckTime);
+			assertEquals(t.summaries.get("curve"), shown.summaries.get("curve"));
 			assertEquals(t.execution, shown.execution);
 			assertEquals(t.budget, shown.budget);
 			assertTrue(shown.byTarget.get(i).note, shown.byTarget.get(i).note.endsWith(SidePanelModel.WHOLE_KILL));
@@ -140,7 +143,7 @@ public class SidePanelDamageTargetTest
 		assertNull(t.byTarget.get(ADDS).damage);
 		assertTrue(t.byTarget.get(ADDS).note, t.byTarget.get(ADDS).note.startsWith("0:03 on the adds, not scored."));
 		final PanelSnapshot.Source bow = row(t.byTarget.get(BOSS), "Twisted bow");
-		assertTrue(bow.sub, bow.sub.startsWith("24 attacks"));
+		assertTrue(bow.tooltip, bow.tooltip.contains("<br>24 attacks"));
 	}
 
 	@Test
@@ -211,7 +214,7 @@ public class SidePanelDamageTargetTest
 				FightTimeline.room(parts[0], r.store), FightTimeline.room(parts[1], r.store)});
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
 		assertNotNull(t.byTarget);
-		assertTrue(row(t.byTarget.get(ADDS), "Zaryte crossbow").sub.startsWith("8 attacks"));
+		assertTrue(row(t.byTarget.get(ADDS), "Zaryte crossbow").tooltip.contains("<br>8 attacks"));
 		// Before its sides' views have come: the rows hold no attacks yet, as a kill's before its own view comes.
 		final SidePanelModel.Input waiting = SidePanelHistory.savedKill(history, r.room, -1, SidePanelHistoryExamples.NOW,
 			SidePanelExamples.ZONE, null, FightTimeline.room(r.room, r.store));
@@ -252,16 +255,6 @@ public class SidePanelDamageTargetTest
 	private static String hintText(PanelSnapshot.TargetView v)
 	{
 		return v.damage.hint.text;
-	}
-
-	private static String texts(List<PanelSnapshot.Tile> tiles)
-	{
-		final StringBuilder s = new StringBuilder();
-		for (PanelSnapshot.Tile t : tiles)
-		{
-			s.append(t.label.text).append('=').append(t.value.text).append(';');
-		}
-		return s.toString();
 	}
 
 	@Test

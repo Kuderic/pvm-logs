@@ -1799,7 +1799,7 @@ public class LedgerRowsTest
 	{
 		final List<Row> rows = build(drained(), State.fight("Vardorvis", true, true, false));
 		// T-075: in words, as Luck is, the worth on a row of its own under the path.
-		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145"), d(" drains", "14 s faster")), afterDamage(rows, 2));
+		assertEquals(Arrays.asList(d(" defence", "215 to 145"), d(" drains", "14 s faster")), afterDamage(rows, 2));
 		// Under Luck: 5 s is over a second and 2% of the 136.8 s clock, so Better.
 		final int luck = rows.indexOf(rows.stream().filter(r -> r.left.equals("Luck")).findFirst().get());
 		assertEquals(d(" specs", "5 s faster", BETTER), rows.get(luck + 1));
@@ -1833,11 +1833,11 @@ public class LedgerRowsTest
 	{
 		final FakeScope s = drained();
 		s.magicEnd = 120;
-		assertEquals(Arrays.asList(d(" defence", "215 \u2192 145"), d(" magic", "150 \u2192 120"),
+		assertEquals(Arrays.asList(d(" defence", "215 to 145"), d(" magic", "150 to 120"),
 			d(" drains", "14 s faster")), afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 3));
 		// Magic alone drained: its path, then the worth.
 		s.defenceEnd = 215;
-		assertEquals(Arrays.asList(d(" magic", "150 \u2192 120"), d(" drains", "14 s faster")),
+		assertEquals(Arrays.asList(d(" magic", "150 to 120"), d(" drains", "14 s faster")),
 			afterDamage(build(s, State.fight("Vardorvis", true, true, false)), 2));
 	}
 
@@ -1893,7 +1893,7 @@ public class LedgerRowsTest
 		final List<Row> rows = LedgerRows.build(drained(), State.fight("Vardorvis", true, true, false), noLuck);
 		assertFalse(rows.stream().anyMatch(r -> r.left.equals(LedgerRows.SPECS)));
 		// The Defence rows aren't luck: they stay.
-		assertTrue(rows.contains(d(" defence", "215 \u2192 145")));
+		assertTrue(rows.contains(d(" defence", "215 to 145")));
 		assertTrue(rows.contains(d(" drains", "14 s faster")));
 	}
 
@@ -1923,7 +1923,7 @@ public class LedgerRowsTest
 			final List<Row> narrow = PvmPerformanceOverlay.lines(g, build(drained(), State.fight("Vardorvis", true, true,
 				false)), new java.awt.Dimension(140, 0)).rows;
 			assertTrue(narrow.contains(d(" drains", "14 s faster")));
-			assertTrue(narrow.contains(d(" defence", "215 \u2192 145")));
+			assertTrue(narrow.contains(d(" defence", "215 to 145")));
 		}
 	}
 

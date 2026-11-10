@@ -82,7 +82,8 @@ public class SidePanelFightTabPartyTest
 			SidePanelPartySection.PARTY_CHART);
 		assertNotNull(chart);
 		assertTrue("folded by default", chart.isFolded());
-		assertFalse("the meter open", SidePanelPictures.sectionOf(p.partySection().top(), SidePanelPartySection.PARTY)
+		// T-188: the meter folds under the card until opened; T-202: whatever Celebrations is.
+		assertTrue("the meter folded", SidePanelPictures.sectionOf(p.partySection().top(), SidePanelPartySection.PARTY)
 			.isFolded());
 		// Opened, it stays open through a rebuild in new text settings (kept as partyChart.opened).
 		chart.toggle();

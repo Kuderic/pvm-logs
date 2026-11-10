@@ -104,7 +104,8 @@ public class SidePanelDamageSwitchTest
 		view.apply(SidePanelModel.fight(SidePanelTargetExamples.ungrouped()));
 		assertTrue(all(view, SidePanelFightTab.TargetSwitch.class).isEmpty());
 		final List<String> header = texts(all(section(view, "damage").getComponent(0), SidePanelText.class));
-		assertEquals("[Damage, 2,145 yours]", header.toString());
+		// T-199: against expected, as every view's Damage has it.
+		assertEquals("[Damage, 2,145 · exp 2,152]", header.toString());
 	}
 
 	@Test

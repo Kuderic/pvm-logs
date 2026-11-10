@@ -44,18 +44,6 @@ public class SidePanelModelTest
 		throw new AssertionError("no overlay row " + left + " in " + rows);
 	}
 
-	private static PanelSnapshot.Tile tile(PanelSnapshot.FightTab t, String label)
-	{
-		for (PanelSnapshot.Tile tile : t.tiles)
-		{
-			if (tile.label.text.equals(label))
-			{
-				return tile;
-			}
-		}
-		throw new AssertionError("no tile " + label);
-	}
-
 	private static PanelSnapshot.Part part(PanelSnapshot.FightTab t, String label)
 	{
 		for (PanelSnapshot.Part p : t.execution.parts)
@@ -73,54 +61,53 @@ public class SidePanelModelTest
 		return new LedgerRows.Numbers(in.scope);
 	}
 
-	/** The tiles and parts say what the overlay says, in the same colours. */
+	/** T-199's words for the overlay's parts, on Skill's bars. */
+	private static final String[][] PART_WORDS = {{"uptime", "Uptime"}, {"prayer", "Offensive prayers"},
+		{"gear", "Gear"}, {"stat boost", "Boosts"}};
+
+	/**
+	 * The figures say what the overlay says. T-202: no tiles in any view; a room's are on its card, and every view's
+	 * sections carry theirs in their headers' lines.
+	 */
 	private static void sameAsOverlay(SidePanelModel.Input in, LedgerRows.State state)
 	{
 		final PanelSnapshot.FightTab t = tab(in);
+		assertNull(t.tiles);
 		final List<LedgerRows.Row> rows = overlay(in.scope, state);
+		final LedgerRows.Numbers n = n0(in);
 
+		// The overlay's "bottom 20% (14 s slower)": the band is Luck's line (after the fight) and the card's word.
 		final LedgerRows.Row luck = row(rows, "Luck");
-		final PanelSnapshot.Tile luckTile = tile(t, "Luck");
-		// The overlay's "bottom 20% (14 s slower)" is the tile's value over its sub-line; T-188: the panel writes the
-		// percentile as a roll, "rolled 20", the overlay as its band.
-		final double percentile = new LedgerRows.Numbers(in.scope).percentile;
-		assertEquals(luck.right, (Double.isNaN(percentile) ? luckTile.value.text : LedgerRows.band(percentile)) + " ("
-			+ luckTile.sub.text + ")");
-		if (!Double.isNaN(percentile))
+		if (!Double.isNaN(n.percentile))
 		{
-			assertEquals(SidePanelModel.luckText(percentile), luckTile.value.text);
+			assertTrue(luck.right, luck.right.startsWith(LedgerRows.band(n.percentile) + " ("));
+			if (t.curve != null)
+			{
+				assertEquals(SidePanelModel.luckText(n.percentile), t.summaries.get("curve").text);
+				// T-194: in luck's violet by the roll's strength; the overlay keeps its band colours.
+				assertEquals(SidePanelModel.luckInk(n.percentile), t.summaries.get("curve").colour);
+			}
 		}
-		// T-194: the panel paints luck in luck's violet by the roll's strength; the overlay keeps its band colours.
-		assertEquals(SidePanelModel.luckInk(percentile), luckTile.value.colour);
 
-		final LedgerRows.Row damage = row(rows, "Damage/expected");
-		final PanelSnapshot.Tile damageTile = tile(t, "Damage/expected");
-		assertEquals(damage.right, damageTile.value.text);
-		assertEquals(Double.isNaN(n0(in).luck) ? SidePanelStyle.VALUE : SidePanelModel.luckInk(n0(in)),
-			damageTile.value.colour);
+		// Damage's line holds the overlay's total.
+		final String damage = row(rows, "Damage/expected").right.split(" ")[0];
+		assertTrue(t.summaries.get("damage").text, t.summaries.get("damage").text.replace(",", "")
+			.contains(damage.replace(",", "").split("/")[0]));
 
-		// T-073: the overlay has no DPS row any more; the tile reads the same Numbers the overlay's rows do.
-		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
-		assertEquals(Double.isNaN(n.dps) ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps), tile(t, "DPS").value.text);
-		assertEquals(row(rows, "Skill").right, tile(t, "Skill").value.text);
+		// The card's DPS reads the same Numbers the overlay's rows do (T-200's rate).
+		if (t.card != null)
+		{
+			final SidePanelModel.Rate r = SidePanelModel.rate(n, in);
+			assertEquals(Double.isNaN(r.dps) ? null : LedgerRows.oneDecimal(r.dps), t.card.dps);
+		}
 		assertEquals(row(rows, "Skill").right, t.execution.hint.text);
 
-		for (String part : Arrays.asList("uptime", "prayer", "gear", "stat boost"))
+		for (String[] words : PART_WORDS)
 		{
-			final LedgerRows.Row r = row(rows, " " + part);
-			final PanelSnapshot.Part p = part(t, part);
-			if (part.equals("uptime"))
-			{
-				assertEquals(part, r.right, p.value.text);
-			}
-			else
-			{
-				// T-117: the overlay prices the setup parts in damage (`97% (-45 dmg)`); the panel still prices them in ticks
-				// until T-118 reads Numbers' damage. The share before the bracket is the same.
-				assertEquals(part, r.right.split(" \\(")[0], p.value.text.split(" \\(")[0]);
-			}
-			// Costing parts are orange on both.
-			assertEquals(part, r.rightColour == LedgerRows.Colour.COST, p.value.colour.equals(SidePanelStyle.COST));
+			final LedgerRows.Row r = row(rows, " " + words[0]);
+			final PanelSnapshot.Part p = part(t, words[1]);
+			// T-117: the overlay prices the setup parts in damage (`97% (-45 dmg)`); the share before it is the same.
+			assertEquals(words[0], r.right.split(" \\(")[0], p.value.text);
 		}
 	}
 
@@ -157,24 +144,22 @@ public class SidePanelModelTest
 		assertEquals(SidePanelStyle.DEAD, t.header.suffix.colour);
 		assertEquals("700 HP · solo · 3:31 pm", t.header.sub.text);
 		assertEquals("2:16", t.header.clock.text);
-		assertEquals("bottom 20%", tile(t, "Luck").value.text);
-		assertEquals("14 s slower", tile(t, "Luck").sub.text);
-		assertEquals("+80 thrall", tile(t, "Damage/expected").sub.text);
-		// T-134: the tile counts the thrall; its sub-line keeps the weapon's alone.
-		assertEquals("weapon 5.0", tile(t, "DPS").sub.text);
-		// Uptime's 15 idle seconds and stat boost 2.4 s: 17.4 s, rounded, and costing because uptime is. Eating's 4.2 s
-		// isn't one of Execution's parts (T-038).
-		// T-118: in ticks, 17.4 s / 0.6.
-		assertEquals("29 ticks lost", tile(t, "Skill").sub.text);
-		assertEquals("29t lost", tile(t, "Skill").subShort);
-		assertEquals(SidePanelStyle.COST, tile(t, "Skill").sub.colour);
-		// Luck's tile edge takes its colour: rolled 20, luck's dim violet (T-194).
-		assertEquals(SidePanelStyle.LUCK_DIM, tile(t, "Luck").edge);
-		assertEquals(SidePanelStyle.LUCK_DIM, tile(t, "Luck").value.colour);
+		// T-202: no tiles; their figures are the card's and the sections' lines.
+		assertNull(t.tiles);
+		assertEquals("bottom 20%", t.summaries.get("curve").text);
+		assertEquals("-14 s", t.card.luckTime);
+		assertEquals("Thrall", t.damage.rows.get(2).name);
+		assertEquals("80", t.damage.rows.get(2).damage);
+		// T-134: the DPS counts the thrall; its hover keeps the weapon's alone.
+		assertTrue(t.card.dpsTip, t.card.dpsTip.contains("weapon 5.0, thrall 0.6"));
+		// Uptime's 15 idle seconds and stat boost 2.4 s: 17.4 s, rounded. Eating's 4.2 s isn't one of Execution's parts
+		// (T-038).
+		assertEquals("87%", t.card.skill);
+		assertEquals("-17 s", t.card.lost);
+		// Luck's line takes its colour: bottom 20%, luck's dim violet (T-194).
+		assertEquals(SidePanelStyle.LUCK_DIM, t.summaries.get("curve").colour);
 		assertNotNull(t.curve);
-		assertEquals("bottom 20%", t.curve.headerValue.text);
-		assertEquals("80% of fights with these attacks dealt more", t.curve.caption);
-		assertNotNull(t.details);
+		assertEquals("unlucky", t.curve.headerValue.text);
 		assertNull(t.loadout);
 	}
 
@@ -187,7 +172,8 @@ public class SidePanelModelTest
 		{
 			labels.add(p.label.text);
 		}
-		assertEquals(Arrays.asList("uptime", "prayer", "gear", "stat boost"), labels);
+		// T-199's words.
+		assertEquals(Arrays.asList("Uptime", "Offensive prayers", "Gear", "Boosts"), labels);
 	}
 
 	// ---- the time budget (spec section 4) ----
@@ -198,7 +184,7 @@ public class SidePanelModelTest
 		// B = 136.8 - 14.35 - 19.2 - 2.35 = 100.9 s: 1:41 (spec section 4's check).
 		final PanelSnapshot.TimeBudget b = tab(SidePanelExamples.dead()).budget;
 		assertNotNull(b);
-		assertEquals("best play", b.rows.get(0).label.text);
+		assertEquals("perfect", b.rows.get(0).label.text);
 		assertEquals("1:41", b.rows.get(0).value.text);
 	}
 
@@ -254,9 +240,9 @@ public class SidePanelModelTest
 		assertEquals(PanelSnapshot.Fill.UNSCORED, adds.fill);
 		assertEquals(n.clock - n.scoredClock, adds.seconds, 1e-9);
 		final PanelSnapshot.BudgetRow last = b.rows.get(b.rows.size() - 1);
-		assertEquals("adds, not scored", last.label.text);
-		assertEquals("-52 ticks", last.value.text);
-		assertEquals("best play on the Abyssal Sire", b.rows.get(0).label.text);
+		assertEquals("adds", last.label.text);
+		assertEquals("-31 s", last.value.text);
+		assertEquals("perfect", b.rows.get(0).label.text);
 	}
 
 	@Test
@@ -264,14 +250,11 @@ public class SidePanelModelTest
 	{
 		final PanelSnapshot.TimeBudget dead = tab(SidePanelExamples.dead()).budget;
 		assertEquals(2, dead.average.size());
-		assertEquals("your average 1:54", dead.average.get(0).left.text);
-		// 136.8 s against 114: 23 s slower. Never coloured (Orchestrator, T-034): the raw clock carries luck.
-		assertEquals("23 s slower", dead.average.get(0).right.text);
-		assertEquals(SidePanelStyle.BODY, dead.average.get(0).right.colour);
-		assertEquals("avg luck 2:02", dead.average.get(1).left.text);
-		// 122.5 s against 117, above the upper quartile 120: luck removed is the one that's coloured.
-		assertEquals("5 s slower than 1:57", dead.average.get(1).right.text);
-		assertEquals(SidePanelStyle.COST, dead.average.get(1).right.colour);
+		// T-196's plain rows: your usual, and this kill's clock with average luck.
+		assertEquals("usual", dead.average.get(0).left.text);
+		assertEquals("1:54", dead.average.get(0).right.text);
+		assertEquals("with average luck", dead.average.get(1).left.text);
+		assertEquals("2:02", dead.average.get(1).right.text);
 		assertEquals(114, dead.marker, 0);
 
 		final PanelSnapshot.TimeBudget ended = tab(SidePanelExamples.ended()).budget;
@@ -283,25 +266,25 @@ public class SidePanelModelTest
 	@Test
 	public void luckInTheBudgetUsesTheTilesWords()
 	{
-		// Orchestrator, T-034: "luck (14 s slower)", "luck average (2 s faster)", so a saving doesn't read like a cost.
+		// T-199's sign rule: + is time gained, - time lost.
 		final PanelSnapshot.TimeBudget dead = tab(SidePanelExamples.dead()).budget;
 		final PanelSnapshot.BudgetRow slower = luckRow(dead);
 		assertEquals("luck", slower.label.text);
-		assertEquals("14 s slower", slower.value.text);
+		assertEquals("-14 s", slower.value.text);
 		// T-194: in the Luck tile's colour, the roll's strength (rolled 20, dim).
 		assertEquals(SidePanelStyle.LUCK_DIM, slower.value.colour);
 
 		// The raid's luck saved 13 s, in the top 15%.
 		final PanelSnapshot.BudgetRow faster = luckRow(tab(SidePanelExamples.raid()).budget);
 		assertEquals("luck", faster.label.text);
-		assertEquals("13 s faster", faster.value.text);
+		assertEquals("+13 s", faster.value.text);
 		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, faster.swatch);
 
-		// In the middle half: "luck average".
+		// In the middle half: still "luck", its swatch the average one.
 		final SidePanelModel.Input mid = SidePanelExamples.dead();
 		((LedgerExamples.FakeScope) mid.scope).damage = 770;
 		final PanelSnapshot.BudgetRow average = luckRow(tab(mid).budget);
-		assertEquals("luck average", average.label.text);
+		assertEquals("luck", average.label.text);
 		assertEquals(PanelSnapshot.Fill.LUCK_AVERAGE, average.swatch);
 	}
 
@@ -326,7 +309,6 @@ public class SidePanelModelTest
 		assertEquals(PanelSnapshot.State.LIVE, live.state);
 		assertNull(live.budget);
 		assertNull(live.curve);
-		assertNull(live.details);
 	}
 
 	@Test
@@ -334,14 +316,11 @@ public class SidePanelModelTest
 	{
 		final SidePanelModel.Input in = SidePanelExamples.live();
 		((LedgerExamples.FakeScope) in.scope).healed = 40;
-		assertNull(tab(in).details);
-		final SidePanelModel.Input dead = SidePanelExamples.dead();
-		boolean healed = false;
-		for (PanelSnapshot.Row r : tab(dead).details.rows)
-		{
-			healed |= r.left.text.equals("boss healed") && r.right.text.equals("68");
-		}
-		assertTrue(healed);
+		assertNull(tab(in).clear.healed);
+		// T-202: in Damage, under its share bar (Details is gone).
+		final PanelSnapshot.Row healed = tab(SidePanelExamples.dead()).clear.healed;
+		assertEquals("Boss healed", healed.left.text);
+		assertEquals("68", healed.right.text);
 	}
 
 	@Test
@@ -349,8 +328,10 @@ public class SidePanelModelTest
 	{
 		final PanelSnapshot.FightTab t = tab(SidePanelExamples.unsure());
 		assertNotNull(t.banner);
-		assertEquals("hidden", tile(t, "Luck").value.text);
-		assertEquals("370", tile(t, "Damage").value.text);
+		assertNull(t.tiles);
+		assertEquals("unsure", t.card.luckWord.text);
+		assertNull(t.card.expDps);
+		assertEquals("418", t.summaries.get("damage").text);
 		assertNull(t.curve);
 		assertNull(t.noCurve);
 	}
@@ -361,10 +342,9 @@ public class SidePanelModelTest
 		final PanelSnapshot.FightTab t = tab(SidePanelExamples.unscoredAdds());
 		assertNotNull(t.unscoredNote);
 		assertTrue(t.unscoredNote, t.unscoredNote.contains("(1:21)"));
-		assertEquals("on the Abyssal Sire", tile(t, "DPS").sub.text);
 		assertEquals(2, t.targets.rows.size());
 		assertEquals("not scored", t.targets.rows.get(1).chip.text);
-		assertEquals("+8 burn", tile(t, "Damage/expected").sub.text);
+		assertTrue(t.card.dpsTip, t.card.dpsTip.contains("burn 0.1"));
 	}
 
 	@Test
@@ -389,8 +369,8 @@ public class SidePanelModelTest
 		final SidePanelModel.Input in = SidePanelExamples.dead();
 		((LedgerExamples.FakeScope) in.scope).damageVariance = -1;
 		final PanelSnapshot.FightTab t = tab(in);
-		assertEquals("14 s slower", tile(t, "Luck").value.text);
-		assertEquals("no percentile", tile(t, "Luck").sub.text);
+		assertEquals("no spread", t.card.luckWord.text);
+		assertEquals("-14 s", t.card.luckTime);
 		assertNull(t.curve);
 		assertEquals(SidePanelModel.NO_CURVE_TEXT, t.noCurve);
 	}
@@ -490,16 +470,14 @@ public class SidePanelModelTest
 		final PanelSnapshot.TimeBudget b = tab(SidePanelExamples.dead()).budget;
 		// Best play stays 1:41: 136.8 - 14.3 - (15.0 + 4.2 + 2.4) = 100.9 s.
 		assertEquals("1:41", b.rows.get(0).value.text);
-		assertEquals("uptime", b.rows.get(1).label.text);
-		assertEquals("-25 ticks", b.rows.get(1).value.text);
+		assertEquals("idle", b.rows.get(1).label.text);
+		assertEquals("-15 s", b.rows.get(1).value.text);
 		final PanelSnapshot.BudgetRow eating = b.rows.get(2);
 		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
 		assertEquals("eating", eating.label.text);
-		assertEquals("-7 ticks", eating.value.text);
+		assertEquals("-4.2 s", eating.value.text);
 		assertEquals(SidePanelStyle.BODY, eating.value.colour);
 		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
-		// T-112 (Eric's pick): the details no longer repeat it.
-		assertFalse(tab(SidePanelExamples.dead()).details.rows.stream().anyMatch(r -> r.left.text.equals("eating")));
 	}
 
 	@Test
@@ -534,11 +512,11 @@ public class SidePanelModelTest
 		s.ticksLost = 7;
 		s.ticksLostEating = 7;
 		final PanelSnapshot.TimeBudget b = tab(in).budget;
-		assertFalse(b.rows.stream().anyMatch(r -> r.label.text.equals("uptime")));
+		assertFalse(b.rows.stream().anyMatch(r -> r.label.text.equals("idle")));
 		final PanelSnapshot.BudgetRow eating = b.rows.get(1);
 		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
 		assertEquals("eating", eating.label.text);
-		assertEquals("-7 ticks", eating.value.text);
+		assertEquals("-4.2 s", eating.value.text);
 		assertEquals(0, b.segments.get(1).seconds, 0);
 		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
 		assertEquals(new LedgerRows.Numbers(s).clock, b.sum(), 1e-9);

@@ -308,8 +308,8 @@ public class SidePanelChartsTest
 		assertFalse(t.chart.expectedShown);
 		assertFalse(t.chart.rangeShown);
 		assertEquals(SidePanelStyle.VALUE, t.chart.actual);
-		// T-085: the DPS, but no expected beside it.
-		assertEquals("27 attacks · 5.1 DPS", t.damage.rows.get(0).sub);
+		// T-085: the DPS, but no expected beside it (T-196's words).
+		assertEquals("5.1 dps", t.damage.rows.get(0).sub);
 	}
 
 	@Test

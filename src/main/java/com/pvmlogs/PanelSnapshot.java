@@ -899,20 +899,13 @@ final class PanelSnapshot
 		/** (A - E) / √V, clamped to ±2.9 for the marker. */
 		final double z;
 		final Text headerValue;
-		final String caption;
-		/** T-112: what the shaded tail means, on hover; null for none. */
+		/** T-201: the band explained, the hits against average and what the width is, on hover; null for none. */
 		final String tooltip;
 
-		Curve(double z, Text headerValue, String caption)
-		{
-			this(z, headerValue, caption, null);
-		}
-
-		Curve(double z, Text headerValue, String caption, String tooltip)
+		Curve(double z, Text headerValue, String tooltip)
 		{
 			this.z = z;
 			this.headerValue = headerValue;
-			this.caption = caption;
 			this.tooltip = tooltip;
 		}
 	}
@@ -1160,7 +1153,6 @@ final class PanelSnapshot
 		final Chart chart;
 		/** The "later" card in the damage rows' place, for a saved kill from before this session (T-034); null for none. */
 		final String later;
-		final Rows details;
 		final Rows taken;
 		/** T-052: the Defence card after a fight with tracked drains; null for none. */
 		final Defence defence;
@@ -1175,16 +1167,16 @@ final class PanelSnapshot
 		/** T-099: which of {@link #byTarget} {@link #damage} and {@link #chart} are; -1 before one is picked. */
 		final int target;
 		/**
-		 * T-188: the kill card in place of the title and the four tiles, live and after the kill; null with Celebrations
-		 * off, and wherever the tab has no fight on show.
+		 * T-188: the kill card in place of the title, live and after the kill: a room's (T-202, whatever Celebrations
+		 * is); null for a whole raid, a run of monsters and wherever the tab has no fight on show.
 		 */
 		final KillCard card;
 		/**
 		 * T-188: each section's one line while folded, by its id ({@code damage}, {@code curve}, {@code budget},
-		 * {@code execution}, {@code details}, {@code taken}); empty with Celebrations off, as the tab was.
+		 * {@code execution}, {@code taken}); T-202: in every view but the empty and pre-attack ones.
 		 */
 		final java.util.Map<String, Text> summaries;
-		/** T-196: the clarity pass's sections under the card; null with Celebrations off, as the tab was. */
+		/** T-196: the clarity pass's sections (T-202: every fighting view's, whatever Celebrations is). */
 		final Clear clear;
 
 		FightTab(Builder b)
@@ -1205,7 +1197,6 @@ final class PanelSnapshot
 			damage = b.damage;
 			chart = b.chart;
 			later = b.later;
-			details = b.details;
 			taken = b.taken;
 			defence = b.defence;
 			loadout = b.loadout;
@@ -1238,7 +1229,6 @@ final class PanelSnapshot
 			damage = t.byTarget.get(i).damage;
 			chart = t.byTarget.get(i).chart;
 			later = t.later;
-			details = t.details;
 			taken = t.taken;
 			defence = t.defence;
 			loadout = t.loadout;
@@ -1294,7 +1284,6 @@ final class PanelSnapshot
 			s.append(later == null ? "" : "|lt");
 			s.append(chart == null ? "" : chart.expectedShown ? "|ch" : "|chx");
 			s.append(chart != null && chart.rangeShown ? "r" : "");
-			s.append(details == null ? "" : "|D" + details.rows.size());
 			s.append(taken == null ? "" : "|k" + taken.rows.size());
 			s.append(defence == null ? "" : "|df" + defence.structure());
 			if (loadout != null)
@@ -1655,6 +1644,11 @@ final class PanelSnapshot
 	static final class KillCard
 	{
 		final boolean live;
+		/**
+		 * T-202: whether the kill-end moment plays (Celebrations): the die rolling to its number and the chips flashing,
+		 * once, at the kill. Off, the card shows settled; nothing else changes.
+		 */
+		boolean moment = true;
 		final String boss;
 		/** The boss's colour ({@link BossColours}): the top edge, the name and a NEW PB. */
 		final Color tint;
@@ -1800,7 +1794,6 @@ final class PanelSnapshot
 		Sources damage;
 		Chart chart;
 		String later;
-		Rows details;
 		Rows taken;
 		Defence defence;
 		Loadout loadout;

@@ -58,10 +58,6 @@ public class SidePanelMonsterRunTest
 		{
 			assertFalse(tile.label.text, tile.label.text.contains("Luck") || tile.label.text.contains("Skill"));
 		}
-		for (PanelSnapshot.Row r : t.details == null ? new ArrayList<PanelSnapshot.Row>() : t.details.rows)
-		{
-			assertFalse(r.left.text, r.left.text.contains("eating") || r.left.text.contains("hits/expected"));
-		}
 	}
 
 	@Test
@@ -321,7 +317,9 @@ public class SidePanelMonsterRunTest
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
 		assertEquals("Vardorvis", t.header.name.text);
 		assertEquals(" (dead)", t.header.suffix.text);
-		assertEquals("Luck", t.tiles.get(0).label.text);
+		// T-202: its kill card, no tiles (only a run has those).
+		assertNull(t.tiles);
+		assertNotNull(t.card);
 		assertNotNull(t.budget);
 		assertNotNull(t.execution);
 	}

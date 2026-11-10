@@ -107,9 +107,14 @@ public class SidePanelPartyMemberViewTest
 		assertEquals("Brindle", tab.heading().left.getText());
 		final SidePanelFightTab fight = tab.memberFight();
 		assertNotNull(fight);
-		for (String id : new String[]{"damage", "curve", "budget", "execution", "chart", "ticks"})
+		// T-202: the same sections as yours, the Timeline inside Damage.
+		for (String id : new String[]{"damage", "curve", "budget", "execution"})
 		{
 			assertNotNull(id, SidePanelPictures.sectionOf(fight, id));
+		}
+		for (String id : new String[]{"chart", "ticks", "details"})
+		{
+			assertNull(id, SidePanelPictures.sectionOf(fight, id));
 		}
 		// Again: back to you: your own panels, no heading.
 		tab.select(22);
@@ -187,17 +192,19 @@ public class SidePanelPartyMemberViewTest
 	@Test
 	public void aMembersPanelsNameThem()
 	{
+		// T-199: Damage's header is the damage against expected ("1,990 · exp 2,310"), whoever's it is; the heading
+		// above their panels names them, and their chart line does.
 		final PanelSnapshot.FightTab hers = SidePanelPartyExamples.toaYouAndBrindle().members.get(2).fight;
-		assertTrue(hers.damage.hint.text, hers.damage.hint.text.endsWith(" Brindle's"));
+		assertTrue(hers.damage.hint.text, hers.damage.hint.text.matches("[\\d,]+ · exp [\\d,]+"));
 		assertTrue(hers.chart.youLegend, hers.chart.youLegend.startsWith("Brindle "));
 		final PanelSnapshot.FightTab mine = SidePanelPartyExamples.toaYouAndBrindle().members.get(0).fight;
-		assertTrue(mine.damage.hint.text, mine.damage.hint.text.endsWith(" yours"));
+		assertTrue(mine.damage.hint.text, mine.damage.hint.text.matches("[\\d,]+ · exp [\\d,]+"));
 		assertTrue(mine.chart.youLegend, mine.chart.youLegend.startsWith("you "));
 		assertEquals("Jess'", SidePanelModel.possessive("Jess"));
 		assertEquals("Brindle's", SidePanelModel.possessive("Brindle"));
 		// Mid-fight too: the Damage card of Quillon's live panels.
 		final PanelSnapshot.FightTab his = SidePanelPartyExamples.tobQuillonLive().members.get(1).fight;
-		assertTrue(his.damage.hint.text, his.damage.hint.text.endsWith(" Quillon's"));
+		assertFalse(his.damage.hint.text, his.damage.hint.text.toLowerCase().matches(".*\\byours?\\b.*"));
 		// Nothing on show in their panels says "you" or "yours" (the units note's tooltip speaks to the reader).
 		for (Object[] c : new Object[][]{{SidePanelPartyExamples.toaYouAndBrindle(), 22L},
 			{SidePanelPartyExamples.tobQuillonLive(), 31L}})
@@ -314,6 +321,8 @@ public class SidePanelPartyMemberViewTest
 	public void picturesBesideTheNamesAndTheColourWithoutOne()
 	{
 		final PvmPerformancePanel with = panel(SidePanelPartyExamples.toaWithPictures());
+		// T-188/T-202: the meter folds under the card until opened.
+		SidePanelPictures.openAll(with.fightTab());
 		SidePanelPictures.draw(with.tabs(), with.fightTab(), 1);
 		// Two pictures, each scaled once; Brindle's colour stands in for hers.
 		assertEquals(2, with.partySection().meter().scaledPictures());
@@ -321,6 +330,7 @@ public class SidePanelPartyMemberViewTest
 		assertEquals(2, with.partySection().meter().scaledPictures());
 		assertTrue(SidePanelParty.party(SidePanelPartyExamples.toaWithPictures()).avatars());
 		final PvmPerformancePanel without = panel(SidePanelPartyExamples.toa());
+		SidePanelPictures.openAll(without.fightTab());
 		SidePanelPictures.draw(without.tabs(), without.fightTab(), 1);
 		assertEquals(0, without.partySection().meter().scaledPictures());
 		assertFalse(SidePanelParty.party(SidePanelPartyExamples.toa()).avatars());

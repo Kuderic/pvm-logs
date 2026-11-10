@@ -378,14 +378,32 @@ public class SidePanelBossIconsTest
 		g.dispose();
 	}
 
+	/**
+	 * T-202: a room's header is its kill card, which draws the icon itself; the title header (with its icon View) is a
+	 * whole raid's, a run's and the pre-attack view's. A raid still running.
+	 */
+	private static SidePanelModel.Input titled()
+	{
+		final SidePanelModel.Input in = SidePanelExamples.raid();
+		in.ended = false;
+		return in;
+	}
+
+	private static int raidSprite()
+	{
+		final SidePanelModel.Input in = titled();
+		return SidePanelBossIcons.sprite(in.name, in.raidType);
+	}
+
 	@Test
 	public void theFightHeaderShowsTheBossesIconBeforeItsName()
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
-		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.live())));
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(titled())));
 		final List<SidePanelBossIcons.View> icons = views(panel.fightTab());
 		assertEquals(1, icons.size());
-		assertEquals(HiscoreSkill.VARDORVIS.getSpriteId(), icons.get(0).sprite());
+		assertTrue(raidSprite() != SidePanelBossIcons.NONE);
+		assertEquals(raidSprite(), icons.get(0).sprite());
 		assertEquals(new Dimension(SidePanelBossIcons.HEADER_BOX, SidePanelBossIcons.HEADER_BOX),
 			icons.get(0).getPreferredSize());
 	}
@@ -396,7 +414,7 @@ public class SidePanelBossIconsTest
 		SwingUtilities.invokeAndWait(() ->
 		{
 			final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
-			panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.live())));
+			panel.apply(new PanelSnapshot(SidePanelModel.fight(titled())));
 			final SidePanelFightTab tab = panel.fightTab();
 			paint(tab, 1);
 			final SidePanelBossIcons.View icon = views(tab).get(0);
@@ -423,7 +441,7 @@ public class SidePanelBossIconsTest
 			});
 			try
 			{
-				sprites.deliver(HiscoreSkill.VARDORVIS.getSpriteId(), sprite(21, 25));
+				sprites.deliver(raidSprite(), sprite(21, 25));
 			}
 			finally
 			{
@@ -525,21 +543,35 @@ public class SidePanelBossIconsTest
 	public void nothingIsAskedOrBuiltPerTick()
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
-		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.live())));
-		sprites.deliver(HiscoreSkill.VARDORVIS.getSpriteId(), sprite(21, 25));
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(titled())));
+		sprites.deliver(raidSprite(), sprite(21, 25));
 		final SidePanelFightTab tab = panel.fightTab();
 		final SidePanelBossIcons.View icon = views(tab).get(0);
 		final int builds = tab.builds();
 		final int requests = SidePanelBossIcons.requests();
 		for (int i = 0; i < 20; i++)
 		{
-			final SidePanelModel.Input later = SidePanelExamples.live();
+			final SidePanelModel.Input later = titled();
 			((LedgerExamples.FakeScope) later.scope).combatTicks += 5 * i;
 			panel.apply(new PanelSnapshot(SidePanelModel.fight(later)));
 		}
 		assertEquals(builds, tab.builds());
 		assertEquals(requests, SidePanelBossIcons.requests());
 		assertSame(icon, views(tab).get(0));
-		assertNotNull(SidePanelBossIcons.image(HiscoreSkill.VARDORVIS.getSpriteId()));
+		assertNotNull(SidePanelBossIcons.image(raidSprite()));
+		// A room's kill card, live, the same: its icon asked for once, nothing built per tick.
+		final PvmPerformancePanel room = new PvmPerformancePanel(null, null, null, null);
+		room.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.live())));
+		sprites.deliver(HiscoreSkill.VARDORVIS.getSpriteId(), sprite(21, 25));
+		final int roomBuilds = room.fightTab().builds();
+		final int roomRequests = SidePanelBossIcons.requests();
+		for (int i = 0; i < 20; i++)
+		{
+			final SidePanelModel.Input later = SidePanelExamples.live();
+			((LedgerExamples.FakeScope) later.scope).combatTicks += 5 * i;
+			room.apply(new PanelSnapshot(SidePanelModel.fight(later)));
+		}
+		assertEquals(roomBuilds, room.fightTab().builds());
+		assertEquals(roomRequests, SidePanelBossIcons.requests());
 	}
 }

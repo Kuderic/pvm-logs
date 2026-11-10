@@ -132,81 +132,9 @@ public class RoomDamageBySourceTest
 
 	// ---- Details ----
 
-	@Test
-	public void detailsShowsASourceARowLargestFirst()
-	{
-		// The 10:35 log's kill 6: explosion 80, and his cleave's 104 (the 6 at the end, capped).
-		final Encounter room = kill(true, new int[] {80, 900}, new int[] {9, 500}, new int[] {9, 400}, new int[] {10, 390},
-			new int[] {11, 380}, new int[] {11, 370}, new int[] {9, 300}, new int[] {8, 200}, new int[] {12, 100},
-			new int[] {11, 80}, new int[] {8, 50}, new int[] {6, 6});
-		final PanelSnapshot.FightTab t = SidePanelModel.fight(input(room));
-		final List<String> labels = labels(t.details);
-		assertNull(row(t.details, SidePanelModel.ROOM_DMG));
-		assertTrue(labels.toString(), labels.indexOf(HIMSELF) >= 0 && labels.indexOf(HIMSELF) < labels.indexOf(EXPLOSIONS));
-		assertEquals("104", row(t.details, HIMSELF).right.text);
-		assertEquals("80", row(t.details, EXPLOSIONS).right.text);
-		assertEquals("Araxxor's enraged cleave hitting himself (when you stand under him, Eric's read): damage Araxxor "
-			+ "took from the room. Not yours, and not part of your luck.", row(t.details, HIMSELF).tooltip);
-		assertEquals("Ruptura araxytes exploding next to Araxxor: damage Araxxor took from the room. Not yours, and not "
-			+ "part of your luck.", row(t.details, EXPLOSIONS).tooltip);
-	}
 
-	@Test
-	public void oneSourceIsOneRowUnderItsLabel()
-	{
-		final PanelSnapshot.FightTab t = SidePanelModel.fight(input(kill(false, new int[] {80, 900}, new int[] {64, 800})));
-		assertEquals("144", row(t.details, EXPLOSIONS).right.text);
-		assertNull(row(t.details, HIMSELF));
-		assertNull(row(t.details, SidePanelModel.ROOM_DMG));
-	}
 
-	@Test
-	public void anOldKillKeepsItsTotal()
-	{
-		// Saved by a build with T-106 and before T-131: roomDamage, no split.
-		final Fight old = new Gson().fromJson("{\"targetName\":\"Araxxor\",\"targetId\":13668,\"targetIndex\":1,"
-			+ "\"maxHp\":1020,\"attempts\":10,\"ended\":true,\"targetDied\":true,\"closedRoom\":true,\"roomDamage\":184}",
-			Fight.class);
-		assertNull(old.getRoomDamageBySource());
-		final Encounter room = new Encounter("Araxxor", null, 0L);
-		room.add(old);
-		final PanelSnapshot.FightTab t = SidePanelModel.fight(input(room));
-		assertEquals("184", row(t.details, SidePanelModel.ROOM_DMG).right.text);
-		assertNull(row(t.details, HIMSELF));
-		// Room damage no rule names, alone (a boss without rules): the total as before too.
-		final PanelSnapshot.FightTab other = SidePanelModel.fight(input(kill(false, new int[] {10, 500})));
-		assertEquals("10", row(other.details, SidePanelModel.ROOM_DMG).right.text);
-		assertNull(row(other.details, RoomDamage.OTHER_LABEL));
-		// Beside named sources it has its own row.
-		final PanelSnapshot.FightTab mixed = SidePanelModel.fight(input(kill(false, new int[] {80, 900},
-			new int[] {10, 500})));
-		assertEquals("10", row(mixed.details, RoomDamage.OTHER_LABEL).right.text);
-		assertEquals("80", row(mixed.details, EXPLOSIONS).right.text);
-	}
 
-	@Test
-	public void historyKeepsTheSplitAndReadsOldFilesWithout()
-	{
-		final Gson gson = new Gson();
-		final Fight f = kill(true, new int[] {80, 900}, new int[] {10, 500}).getFights().get(0);
-		final Fight back = gson.fromJson(gson.toJson(new Fight[] {f}), Fight[].class)[0];
-		assertEquals(f.getRoomDamageBySource(), back.getRoomDamageBySource());
-		assertEquals(90, back.getRoomDamage());
-		final JsonObject without = gson.toJsonTree(f).getAsJsonObject();
-		without.remove("roomDamageBySource");
-		final Fight old = gson.fromJson("[" + without + "]", Fight[].class)[0];
-		assertNull(old.getRoomDamageBySource());
-		assertEquals(90, old.getRoomDamage());
-		// History's picked kill shows the saved split.
-		final List<Fight> history = new ArrayList<>(Collections.singletonList(back));
-		final Encounter rebuilt = SidePanelHistory.allRooms(history).get(0);
-		final SidePanelModel.Input in = SidePanelHistory.savedKill(history, rebuilt, -1, SidePanelHistoryExamples.NOW,
-			SidePanelExamples.ZONE, null, null);
-		SidePanelModel.fillRoomDamageSources(in, Collections.singletonList(rebuilt), rules);
-		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
-		assertEquals("80", row(t.details, EXPLOSIONS).right.text);
-		assertEquals("10", row(t.details, HIMSELF).right.text);
-	}
 
 	// ---- the Trip tab ----
 
@@ -233,46 +161,13 @@ public class RoomDamageBySourceTest
 
 	// ---- a member's panels on the Party tab ----
 
-	@Test
-	public void theRoomMessageCarriesTheSplit()
-	{
-		final Gson gson = new Gson();
-		final SidePanelModel.Input in = input(kill(true, new int[] {80, 900}, new int[] {10, 500}));
-		final LuckVsSkillRoom m = new LuckVsSkillRoom();
-		m.r = "Araxxor";
-		m.f = SidePanelMemberFight.encode(in);
-		final LuckVsSkillRoom sent = gson.fromJson(gson.toJson(m), LuckVsSkillRoom.class);
-		final PanelSnapshot.FightTab theirs = SidePanelModel.fight(SidePanelMemberFight.decode(sent.f));
-		assertEquals("80", row(theirs.details, EXPLOSIONS).right.text);
-		assertEquals("10", row(theirs.details, HIMSELF).right.text);
-		assertEquals(row(SidePanelModel.fight(in).details, HIMSELF).tooltip, row(theirs.details, HIMSELF).tooltip);
-		// An older sender: rd and rds only. Its total shows as one row, as before.
-		final JsonObject older = gson.toJsonTree(m).getAsJsonObject();
-		older.getAsJsonObject("f").remove("rdx");
-		final LuckVsSkillRoom old = gson.fromJson(older, LuckVsSkillRoom.class);
-		final PanelSnapshot.FightTab oldView = SidePanelModel.fight(SidePanelMemberFight.decode(old.f));
-		assertEquals("90", row(oldView.details, SidePanelModel.ROOM_DMG).right.text);
-		assertNull(row(oldView.details, EXPLOSIONS));
-		// What the plugin sends at the room's end (SidePanelMemberFight.message, from the room and the rules).
-		final LuckVsSkillRoom fromPlugin = gson.fromJson(gson.toJson(SidePanelMemberFight.message(
-			kill(true, new int[] {80, 900}, new int[] {10, 500}), (FightTimeline.View) null, 0, rules)), LuckVsSkillRoom.class);
-		assertEquals(2, fromPlugin.f.rdx.size());
-		assertEquals(Arrays.asList(EXPLOSION, CLEAVE), fromPlugin.f.rds);
-		final PanelSnapshot.FightTab member = SidePanelModel.fight(SidePanelMemberFight.decode(fromPlugin.f));
-		assertEquals("80", row(member.details, EXPLOSIONS).right.text);
-		assertEquals("10", row(member.details, HIMSELF).right.text);
-		// Rows with nothing in them are dropped; none left is the total.
-		final LuckVsSkillRoom.RoomSource empty = new LuckVsSkillRoom.RoomSource();
-		assertNull(SidePanelMemberFight.roomSourcesFromWire(Collections.singletonList(empty)));
-	}
 
 	// ---- fit ----
 
 	@Test
 	public void nothingIsCutAtAnyTextSize()
 	{
-		final SidePanelModel.Input kill = input(kill(true, new int[] {80, 900}, new int[] {64, 800}, new int[] {10, 500},
-			new int[] {12, 400}, new int[] {10, 500}));
+		// T-202: the Fight tab has no Details; the room's split is the Trip tab's.
 		final SidePanelModel.Input trip = SidePanelExamples.trip();
 		SidePanelModel.fillTripRoomDamage(trip, Arrays.asList(kill(true, new int[] {80, 900}, new int[] {10, 500}),
 			kill(false, new int[] {10, 500}, new int[] {80, 900})), rules);
@@ -282,9 +177,6 @@ public class RoomDamageBySourceTest
 			{
 				for (double scale : new double[] {1, 2})
 				{
-					final PvmPerformancePanel fight = new PvmPerformancePanel(null, null, null, null);
-					fight.apply(new PanelSnapshot(SidePanelModel.fight(kill)));
-					fits(fight, fight.fightTab(), "details", larger, smooth, scale);
 					final PvmPerformancePanel t = new PvmPerformancePanel(null, null, null, null);
 					t.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.empty()), SidePanelModel.trip(trip)));
 					t.tabs().select(t.tabs().getTab(2));
@@ -405,4 +297,68 @@ public class RoomDamageBySourceTest
 		}
 		return out;
 	}
+	/** The split's labels and damage, as "label damage". */
+	private static List<String> split(SidePanelModel.Input in)
+	{
+		final List<String> out = new ArrayList<>();
+		if (in.roomDamageSplit != null)
+		{
+			for (RoomDamage.Source src : in.roomDamageSplit)
+			{
+				out.add(src.label + " " + src.damage);
+			}
+		}
+		return out;
+	}
+
+	@Test
+	public void historyKeepsTheSplitAndReadsOldFilesWithout()
+	{
+		final Gson gson = new Gson();
+		final Fight f = kill(true, new int[] {80, 900}, new int[] {10, 500}).getFights().get(0);
+		final Fight back = gson.fromJson(gson.toJson(new Fight[] {f}), Fight[].class)[0];
+		assertEquals(f.getRoomDamageBySource(), back.getRoomDamageBySource());
+		assertEquals(90, back.getRoomDamage());
+		final JsonObject without = gson.toJsonTree(f).getAsJsonObject();
+		without.remove("roomDamageBySource");
+		final Fight old = gson.fromJson("[" + without + "]", Fight[].class)[0];
+		assertNull(old.getRoomDamageBySource());
+		assertEquals(90, old.getRoomDamage());
+		// History's picked kill reads the saved split (T-202: the Trip tab shows it; the Fight tab has no Details).
+		final List<Fight> history = new ArrayList<>(Collections.singletonList(back));
+		final Encounter rebuilt = SidePanelHistory.allRooms(history).get(0);
+		final SidePanelModel.Input in = SidePanelHistory.savedKill(history, rebuilt, -1, SidePanelHistoryExamples.NOW,
+			SidePanelExamples.ZONE, null, null);
+		SidePanelModel.fillRoomDamageSources(in, Collections.singletonList(rebuilt), rules);
+		assertEquals(Arrays.asList(EXPLOSIONS + " 80", HIMSELF + " 10"), split(in));
+	}
+
+	@Test
+	public void theRoomMessageCarriesTheSplit()
+	{
+		final Gson gson = new Gson();
+		final SidePanelModel.Input in = input(kill(true, new int[] {80, 900}, new int[] {10, 500}));
+		final LuckVsSkillRoom m = new LuckVsSkillRoom();
+		m.r = "Araxxor";
+		m.f = SidePanelMemberFight.encode(in);
+		final LuckVsSkillRoom sent = gson.fromJson(gson.toJson(m), LuckVsSkillRoom.class);
+		assertEquals(split(in), split(SidePanelMemberFight.decode(sent.f)));
+		// An older sender: rd and rds only, no split.
+		final JsonObject older = gson.toJsonTree(m).getAsJsonObject();
+		older.getAsJsonObject("f").remove("rdx");
+		final LuckVsSkillRoom old = gson.fromJson(older, LuckVsSkillRoom.class);
+		final SidePanelModel.Input oldIn = SidePanelMemberFight.decode(old.f);
+		assertEquals(90, oldIn.roomDamage);
+		assertTrue(split(oldIn).isEmpty());
+		// What the plugin sends at the room's end (SidePanelMemberFight.message, from the room and the rules).
+		final LuckVsSkillRoom fromPlugin = gson.fromJson(gson.toJson(SidePanelMemberFight.message(
+			kill(true, new int[] {80, 900}, new int[] {10, 500}), (FightTimeline.View) null, 0, rules)), LuckVsSkillRoom.class);
+		assertEquals(2, fromPlugin.f.rdx.size());
+		assertEquals(Arrays.asList(EXPLOSION, CLEAVE), fromPlugin.f.rds);
+		assertEquals(Arrays.asList(EXPLOSIONS + " 80", HIMSELF + " 10"), split(SidePanelMemberFight.decode(fromPlugin.f)));
+		// Rows with nothing in them are dropped; none left is the total.
+		final LuckVsSkillRoom.RoomSource empty = new LuckVsSkillRoom.RoomSource();
+		assertNull(SidePanelMemberFight.roomSourcesFromWire(Collections.singletonList(empty)));
+	}
+
 }

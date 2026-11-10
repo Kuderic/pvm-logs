@@ -1,6 +1,7 @@
 package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -99,11 +100,13 @@ public class SidePanelSmokeTest
 	{
 		final PvmPerformancePanel panel = panel();
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.live())));
+		// T-202: Skill folds under the card by default; opened, it stays open through the rebuild at the kill.
 		final SidePanelSection execution = section(panel.fightTab(), "execution");
-		execution.toggle();
 		assertTrue(execution.isFolded());
+		execution.toggle();
+		assertFalse(execution.isFolded());
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.dead())));
-		assertTrue(section(panel.fightTab(), "execution").isFolded());
+		assertFalse(section(panel.fightTab(), "execution").isFolded());
 	}
 
 	private static SidePanelSection section(Container c, String id)
@@ -123,6 +126,11 @@ public class SidePanelSmokeTest
 	{
 		for (Component k : all(panel.fightTab()))
 		{
+			// T-202: a room's clock is its kill card's.
+			if (k instanceof SidePanelKillCard)
+			{
+				return ((SidePanelKillCard) k).card().clock;
+			}
 			if (k instanceof SidePanelText && ((SidePanelText) k).getFont().getSize() == 32)
 			{
 				return ((SidePanelText) k).getText();

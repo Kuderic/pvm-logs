@@ -140,21 +140,16 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private boolean reserved;
 
 	/**
-	 * T-132: which of the tab's parts this one shows: all of it; the room's title block alone ({@link #TITLE}); or from
-	 * the four tiles on ({@link #BODY}), as a party member's panels are (T-176).
+	 * T-132: what of the tab this one shows: all of it, or {@link #BODY}, a party member's panels under their heading
+	 * (T-176): no title or card of their own. T-202: both show the same sections; TITLE (the title block alone) had no
+	 * user and went.
 	 */
 	enum Parts
 	{
-		ALL, TITLE, BODY
+		ALL, BODY
 	}
 
 	private Parts parts = Parts.ALL;
-	/**
-	 * T-196: the clarity pass's sections under the card (Celebrations on, the tab's own panels): Damage holds its
-	 * Timeline chart and the boss's healing, Luck its hits, Your play (was Execution) its attack rhythm; Damage
-	 * over time, Ticks and Details aren't sections of their own.
-	 */
-	private boolean clearPass;
 	/**
 	 * T-176: the party, on the live Fight tab only: its block after the title, and a selected member's panels in place of
 	 * yours. Null on every other Fight tab (History's saved kill, a member's panels).
@@ -327,7 +322,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			cardLive = false;
 		}
 		removeAll();
-		clearPass = tab.clear != null && parts == Parts.ALL;
 		chartView = null;
 		stripView = null;
 		updaters.clear();
@@ -360,20 +354,14 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				}
 				break;
 			default:
-				// T-132: the room's title block alone.
-				if (parts == Parts.TITLE)
-				{
-					header(tab);
-					break;
-				}
 				// One order for both: the live order, with the after-fight sections slotted in (spec 3.1).
 				// T-112 (Eric, 2026-10-30): the tiles, then Damage and Luck, then where the time went and Execution, then
 				// the rest. One order live and after: a section that only exists after the fight just isn't there live.
-				// T-132: a member's panels start at the tiles: the title is the tab's, above.
+				// T-132: a member's panels start at their sections: the title is the tab's, above.
 				if (parts == Parts.ALL)
 				{
 					raidSwitch(tab);
-					// T-188: the kill card in the title's place, and the tiles', with Celebrations on.
+					// T-188: a room's kill card in the title's place (T-202: whatever Celebrations is).
 					if (tab.card != null)
 					{
 						killCard(tab);
@@ -396,11 +384,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				}
 				banner(tab);
 				unscored(tab);
-				// The tiles under the header, the at-a-glance summary (Eric's pick, 07:45). T-188: the card holds them.
-				if (tab.card == null || parts != Parts.ALL)
-				{
-					tiles(tab);
-				}
+				// T-202: a run of monsters keeps its four tiles (kills, kills an hour, DPS, damage); every other view has
+				// the card or its title, and the sections under it.
+				tiles(tab);
 				damage(tab);
 				curve(tab);
 				budget(tab);
@@ -409,12 +395,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				listSection(tab, "rooms", "Rooms", tab.rooms, t -> t.rooms, true);
 				defence(tab);
 				later(tab);
-				if (!clearPass)
-				{
-					chart(tab);
-					strip(tab);
-					rowsSection(tab, "details", "Details", tab.details, t -> t.details);
-				}
+				// T-202 (Eric: "Why does the celebrations setting move damage over time out from damage?"): one set of
+				// sections in every view; Damage over time, Ticks and Details are in Damage, Skill and Luck (T-196).
 				rowsSection(tab, "taken", "Damage taken", tab.taken, t -> t.taken);
 				summaries(tab);
 				break;
@@ -432,7 +414,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		add(view);
 		// T-189: the kill-end moment plays once, when this tab saw the fight live and now shows it killed: never for a
 		// kill already over when the panel opened, nor for one opened again.
-		if (cardLive && !tab.card.live)
+		if (cardLive && !tab.card.live && tab.card.moment)
 		{
 			view.celebrate();
 		}
@@ -469,7 +451,15 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
-	/** T-188: each section's one line while folded (Celebrations on); none with it off, as the tab was. */
+	/** T-196: Where the time went's header value: the kill card's clock (a member's too), else the title's. */
+	private Text budgetClock(FightTab t)
+	{
+		final String clock = t.card != null ? t.card.clock : parts == Parts.ALL && t.header != null ? t.header.clock.text
+			: null;
+		return clock == null || clock.isEmpty() ? Text.NONE : Text.title(clock, SidePanelStyle.VALUE);
+	}
+
+	/** T-188: each section's one line while folded (T-202: in every view, whatever Celebrations is). */
 	private void summaries(FightTab tab)
 	{
 		if (tab.summaries.isEmpty())
@@ -748,16 +738,13 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			card.add(note);
 		}
-		// T-196: under the card, the clock beside its name, the length the bar adds up to.
-		final SidePanelSection section = new SidePanelSection("budget", "Where the time went", clearPass && tab.card != null
-			? Text.title(tab.card.clock, SidePanelStyle.VALUE) : Text.NONE, card, folds);
+		// T-196: the clock beside its name, the length the bar adds up to (T-202: a raid's from its title).
+		final SidePanelSection section = new SidePanelSection("budget", "Where the time went", budgetClock(tab), card,
+			folds);
 		add(section);
-		if (clearPass)
-		{
-			// T-199: what the folded line's two numbers are, and the one sign rule.
-			section.setTooltip(BUDGET_TIP);
-			updaters.add(t -> section.setHint(t.card == null ? Text.NONE : Text.title(t.card.clock, SidePanelStyle.VALUE)));
-		}
+		// T-199: what the folded line's two numbers are, and the one sign rule.
+		section.setTooltip(BUDGET_TIP);
+		updaters.add(t -> section.setHint(budgetClock(t)));
 		body(section, t ->
 		{
 			bar.set(t.budget);
@@ -846,36 +833,18 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel card = SidePanelParts.card(5);
-		// T-196: under the card, the caption first, in plain words ("of 100 fights with these attacks, 80 dealt less
-		// damage"), then the curve in luck's three strengths, then the hits against average.
-		final SidePanelParts.Paragraph caption = new SidePanelParts.Paragraph(tab.curve.caption, clearPass
-			? SidePanelStyle.BODY : SidePanelStyle.SECONDARY, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
-		final SidePanelLuckCurve curve = new SidePanelLuckCurve(tab.curve.z, clearPass);
+		// T-196: the curve in luck's three strengths, its words on hover (T-198: no sentence on the panel), then
+		// T-201's line, the band and luck's seconds.
+		final SidePanelLuckCurve curve = new SidePanelLuckCurve(tab.curve.z, true);
 		curve.setToolTipText(SidePanelStyle.tip(tab.curve.tooltip));
 		card.add(curve);
 		final JPanel legend = new JPanel(new LegendCells());
 		legend.setOpaque(false);
-		if (clearPass)
-		{
-			legend.add(new SidePanelText(Text.small("unlucky", SidePanelStyle.LUCK_DIM), false));
-			legend.add(centred(new SidePanelText(Text.small("average", SidePanelStyle.LUCK), false)));
-			legend.add(new SidePanelText(Text.small("lucky", SidePanelStyle.LUCK_BRIGHT), true));
-		}
-		else
-		{
-			// T-188: the curve's ends in rolls, as luck is written everywhere: rolled 1 to 25, 76 to 100.
-			legend.add(new SidePanelText(Text.small(SidePanelModel.CURVE_LOW, SidePanelStyle.COST), false));
-			final SidePanelText middle = new SidePanelText(Text.small("average", SidePanelStyle.SECONDARY), false);
-			legend.add(centred(middle));
-			legend.add(new SidePanelText(Text.small(SidePanelModel.CURVE_HIGH, SidePanelStyle.BETTER), true));
-		}
+		legend.add(new SidePanelText(Text.small("unlucky", SidePanelStyle.LUCK_DIM), false));
+		legend.add(centred(new SidePanelText(Text.small("average", SidePanelStyle.LUCK), false)));
+		legend.add(new SidePanelText(Text.small("lucky", SidePanelStyle.LUCK_BRIGHT), true));
 		card.add(legend);
-		if (!clearPass)
-		{
-			// T-198: under the card the caption's words are the curve's tooltip: no sentence on the panel.
-			card.add(caption);
-		}
-		final SidePanelParts.RowsCard hits = clearPass && !tab.clear.luckHits.isEmpty()
+		final SidePanelParts.RowsCard hits = tab.clear != null && !tab.clear.luckHits.isEmpty()
 			? flat(tab.clear.luckHits) : null;
 		if (hits != null)
 		{
@@ -884,12 +853,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final SidePanelSection section = new SidePanelSection("curve", "Luck", tab.curve.headerValue, card, folds);
 		add(section);
 		updaters.add(t -> section.setHint(t.curve.headerValue));
-		final Color captionColour = clearPass ? SidePanelStyle.BODY : SidePanelStyle.SECONDARY;
 		body(section, t ->
 		{
 			curve.set(t.curve.z);
 			curve.setToolTipText(SidePanelStyle.tip(t.curve.tooltip));
-			caption.set(t.curve.caption, captionColour);
 			if (hits != null && t.clear != null && t.clear.luckHits.size() == tab.clear.luckHits.size())
 			{
 				hits.set(t.clear.luckHits);
@@ -994,7 +961,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		// T-196: under the card it's Your play, the card's block's name, with the attack rhythm (was Ticks) in it.
 		final Piece rhythm;
-		if (clearPass && tab.chart != null)
+		if (tab.chart != null)
 		{
 			final JPanel box = SidePanelParts.stack(5);
 			box.setBorder(javax.swing.BorderFactory.createCompoundBorder(javax.swing.BorderFactory.createMatteBorder(1, 0, 0,
@@ -1036,23 +1003,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	static final String BUDGET_TIP = SidePanelStyle.wrapTip("Skill: the time lost against a perfect fight (idle, gear, prayers, boosts). Luck:"
 		+ " the time your rolls gained or lost against average rolls. " + SidePanelModel.SIGN_RULE);
 
-	/** Damage over time (T-036): the chart in a card, its two ends' times under it, and a legend. */
-	private void chart(FightTab tab)
-	{
-		if (tab.chart == null)
-		{
-			return;
-		}
-		final Piece piece = chartPiece(tab, SidePanelParts.card(5));
-		// T-099: the switch's view, when it isn't All.
-		final String on = tab.byTarget == null || SidePanelModel.ALL.equals(tab.byTarget.get(tab.target).label) ? ""
-			: " · " + tab.byTarget.get(tab.target).label.toLowerCase(java.util.Locale.ENGLISH);
-		final SidePanelSection section = new SidePanelSection("chart", "Damage over time", Text.small("weapon" + on,
-			SidePanelStyle.SECONDARY), piece.view, folds);
-		add(section);
-		body(section, piece.update);
-	}
-
 	/**
 	 * The chart, its ends and its legend in {@code card}. T-196: under the card, the expected line is "average rolls"
 	 * (your hits against average rolls is luck's gap) and the range is left unnamed.
@@ -1085,7 +1035,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		card.add(ends);
 		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(legend);
-		final boolean plain = clearPass;
 		return new Piece(card, t ->
 		{
 			ends.set(new PanelSnapshot.Row(Text.small("0:00", SidePanelStyle.MUTED), Text.small(t.chart.end,
@@ -1094,37 +1043,16 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			items.add(new SidePanelParts.Legend.Item(t.chart.actual, false, t.chart.youLegend, SidePanelStyle.SECONDARY));
 			if (t.chart.expectedShown)
 			{
-				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.SECONDARY, false, plain
-					? t.chart.expectedLegend.replaceFirst("^expected", "average rolls") : t.chart.expectedLegend,
-					SidePanelStyle.SECONDARY));
-				if (t.chart.rangeShown && !plain)
-				{
-					items.add(new SidePanelParts.Legend.Item(new Color(0x4A4A4A), false, "typical range",
-						SidePanelStyle.SECONDARY));
-				}
+				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.SECONDARY, false,
+					t.chart.expectedLegend.replaceFirst("^expected", "average rolls"), SidePanelStyle.SECONDARY));
 			}
 			else
 			{
-				items.add(new SidePanelParts.Legend.Item(null, false, plain ? "average rolls hidden" : "expected hidden",
-					SidePanelStyle.MUTED));
+				items.add(new SidePanelParts.Legend.Item(null, false, "average rolls hidden", SidePanelStyle.MUTED));
 			}
 			legend.set(items);
 			chart.update();
 		});
-	}
-
-	/** Ticks (T-036): the tick strip in a card and its legend with counts. */
-	private void strip(FightTab tab)
-	{
-		if (tab.chart == null)
-		{
-			return;
-		}
-		final Piece piece = stripPiece(tab, SidePanelParts.card(5));
-		final SidePanelSection section = new SidePanelSection("ticks", "Ticks", Text.small("60 ticks a row",
-			SidePanelStyle.SECONDARY), piece.view, folds);
-		add(section);
-		body(section, piece.update);
 	}
 
 	/**
@@ -1156,13 +1084,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		card.add(strip);
 		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(legend);
-		final boolean plain = clearPass;
-		if (plain)
-		{
-			// T-198: the unit's words on hover, not on the panel.
-			strip.setToolTipText(SidePanelStyle.wrapTip("One mark per game tick (0.6 s), 60 to a row (36 s): attack,"
-				+ " spec, idle (off cooldown with no attack) and eating."));
-		}
+		// T-198: the unit's words on hover, not on the panel.
+		strip.setToolTipText(SidePanelStyle.wrapTip("One mark per game tick (0.6 s), 60 to a row (36 s): attack,"
+			+ " spec, idle (off cooldown with no attack) and eating."));
 		final int[] rows = {SidePanelTickStrip.rows(chartData.length())};
 		return new Piece(card, t ->
 		{
@@ -1173,19 +1097,17 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				"spec", SidePanelStyle.SECONDARY));
 			if (t.chart.lost >= 0)
 			{
-				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, false, plain ? "idle" : "lost " + t.chart.lost,
-					SidePanelStyle.SECONDARY));
+				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, false, "idle", SidePanelStyle.SECONDARY));
 			}
 			if (t.chart.eating >= 0)
 			{
-				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.EATING, false, plain ? "eating"
-					: "eating " + t.chart.eating, SidePanelStyle.SECONDARY));
+				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.EATING, false, "eating", SidePanelStyle.SECONDARY));
 			}
 			// T-081: only where a boss's mechanic forced some, so nothing changes for the rest.
 			if (t.chart.mechanics > 0)
 			{
-				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.MECHANICS, false, plain ? SidePanelModel.MECHANICS
-					: SidePanelModel.MECHANICS + " " + t.chart.mechanics, SidePanelStyle.SECONDARY));
+				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.MECHANICS, false, SidePanelModel.MECHANICS,
+					SidePanelStyle.SECONDARY));
 			}
 			legend.set(items);
 			// A new row of ticks every 36 s: the card grows.
@@ -1228,7 +1150,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
 		// T-196: under the card, the share bar first: each source's share of your damage as a picture.
-		final SidePanelShareBar shares = clearPass && tab.damage != null ? new SidePanelShareBar(tab.damage.rows) : null;
+		final SidePanelShareBar shares = tab.damage != null ? new SidePanelShareBar(tab.damage.rows) : null;
 		if (shares != null)
 		{
 			final JPanel box = SidePanelParts.card(0);
@@ -1255,8 +1177,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			list.add(card);
 		}
 		// T-196: the boss's healing, only when it isn't 0 (was in Details); then its Timeline (was Damage over time).
-		final SidePanelParts.Line healed = clearPass && tab.clear.healed != null ? new SidePanelParts.Line(tab.clear.healed)
-			: null;
+		final SidePanelParts.Line healed = tab.clear != null && tab.clear.healed != null
+			? new SidePanelParts.Line(tab.clear.healed) : null;
 		if (healed != null)
 		{
 			final JPanel box = SidePanelParts.card(0);
@@ -1264,7 +1186,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			list.add(box);
 		}
 		final Piece seconds;
-		if (clearPass && tab.chart != null)
+		if (tab.chart != null)
 		{
 			final JPanel box = SidePanelParts.card(5);
 			box.add(subhead(TIMELINE, null));

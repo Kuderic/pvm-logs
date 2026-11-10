@@ -19,19 +19,15 @@ import org.junit.Test;
  */
 public class SidePanelDpsTest
 {
-	private static PanelSnapshot.Tile tile(PanelSnapshot.FightTab t, String label)
+	/** T-202: the DPS line is the card's (no tiles); its hover names the parts. */
+	private static PanelSnapshot.KillCard card(PanelSnapshot.FightTab t)
 	{
-		for (PanelSnapshot.Tile tile : t.tiles)
-		{
-			if (tile.label.text.equals(label))
-			{
-				return tile;
-			}
-		}
-		throw new AssertionError(label);
+		assertNull(t.tiles);
+		assertNotNull(t.card);
+		return t.card;
 	}
 
-	// ---- The tile ----
+	// ---- The card's DPS line ----
 
 	@Test
 	public void withAThrallTheTileCountsItAndSaysTheWeaponsAlone()
@@ -40,12 +36,12 @@ public class SidePanelDpsTest
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
 		// 688 weapon and 80 thrall over 2:16.8.
-		assertEquals("5.6", tile(t, "DPS").value.text);
-		assertEquals("weapon 5.0", tile(t, "DPS").sub.text);
-		assertEquals("<html>5.6 DPS over 2:16 of scored fighting:<br>weapon 5.0, thrall 0.6.</html>", tile(t, "DPS").tooltip);
-		// Luck and Damage/expected stay the weapon's against expected, the thrall beside them.
-		assertEquals("688/778", tile(t, "Damage/expected").value.text);
-		assertEquals("+80 thrall", tile(t, "Damage/expected").sub.text);
+		assertEquals("5.6", card(t).dps);
+		assertTrue(card(t).dpsTip, card(t).dpsTip.contains("5.6 DPS over 2:16 of scored fighting:<br>weapon 5.0, thrall"
+			+ " 0.6."));
+		// Luck and damage against expected stay the weapon's, the thrall a row of its own.
+		assertEquals("688 · exp 778", t.summaries.get("damage").text);
+		assertEquals("80", t.damage.rows.get(2).damage);
 		assertEquals(-14.35, n.luck, 0.01);
 	}
 
@@ -61,10 +57,9 @@ public class SidePanelDpsTest
 		in.scoredDotByKind = Collections.singletonMap("venom", 30);
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
 		// (688 + 80 + 41 + 30) / 136.8.
-		assertEquals("6.1", tile(t, "DPS").value.text);
-		assertEquals("weapon 5.0", tile(t, "DPS").sub.text);
-		assertEquals("<html>6.1 DPS over 2:16 of scored fighting:<br>weapon 5.0, thrall 0.6, recoil/veng 0.3, venom 0.2.</html>",
-			tile(t, "DPS").tooltip);
+		assertEquals("6.1", card(t).dps);
+		assertTrue(card(t).dpsTip, card(t).dpsTip.contains("6.1 DPS over 2:16 of scored fighting:<br>weapon 5.0, thrall"
+			+ " 0.6, recoil/veng 0.3, venom 0.2."));
 	}
 
 	@Test
@@ -74,9 +69,8 @@ public class SidePanelDpsTest
 		((LedgerExamples.FakeScope) in.scope).thrallDamage = 0;
 		in.scoredThrall = 0;
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
-		assertEquals("5.0", tile(t, "DPS").value.text);
-		assertEquals("weapon only", tile(t, "DPS").sub.text);
-		assertNull(tile(t, "DPS").tooltip);
+		assertEquals("5.0", card(t).dps);
+		assertFalse(card(t).dpsTip, card(t).dpsTip.contains("weapon "));
 	}
 
 	/** A party member's live panels: their update's o, its kinds unknown. */
@@ -86,10 +80,11 @@ public class SidePanelDpsTest
 		final SidePanelTimelineExamples.Built b = SidePanelPartyExamples.longRoom();
 		final LuckVsSkillUpdate u = PartyShare.build(LuckVsSkillUpdate.LIVE, b.room, b.view().attacks, 0);
 		assertEquals(80, u.o);
-		final PanelSnapshot.FightTab t = SidePanelModel.fight(SidePanelMemberFight.live(u, SidePanelPartyExamples::itemName));
-		final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(b.room));
-		assertEquals(LedgerRows.oneDecimal(n.dps), tile(t, "DPS").value.text);
-		assertTrue(tile(t, "DPS").tooltip, tile(t, "DPS").tooltip.contains("thrall, recoil and DoT"));
+		final SidePanelModel.Input in = SidePanelMemberFight.live(u, SidePanelPartyExamples::itemName);
+		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
+		final SidePanelModel.Rate r = SidePanelModel.rate(new LedgerRows.Numbers(in.scope), in);
+		assertEquals(LedgerRows.oneDecimal(r.dps), card(t).dps);
+		assertTrue(card(t).dpsTip, card(t).dpsTip.contains("thrall, recoil and DoT"));
 	}
 
 	// ---- Compared with expected: the same other damage on both sides ----
@@ -105,8 +100,13 @@ public class SidePanelDpsTest
 		assertEquals((n.damage + 120) / n.scoredClock, n.dps, 1e-9);
 		assertEquals((n.expected + 120) / n.scoredClock, n.expectedDps, 1e-9);
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
-		assertEquals(LedgerRows.oneDecimal(n.dps), tile(t, "DPS").value.text);
-		assertEquals("expected " + LedgerRows.oneDecimal(n.expectedDps), tile(t, "DPS").sub.text);
+		PanelSnapshot.Tile dps = null;
+		for (PanelSnapshot.Tile tile : t.tiles)
+		{
+			dps = tile.label.text.equals("DPS") ? tile : dps;
+		}
+		assertEquals(LedgerRows.oneDecimal(n.dps), dps.value.text);
+		assertEquals("expected " + LedgerRows.oneDecimal(n.expectedDps), dps.sub.text);
 		// The overlay's run row.
 		final List<LedgerRows.Row> rows = LedgerRows.build(in.scope, LedgerRows.State.run(SidePanelRunExamples.DEMON, 12,
 			190, false, false), new LedgerRows.Settings());

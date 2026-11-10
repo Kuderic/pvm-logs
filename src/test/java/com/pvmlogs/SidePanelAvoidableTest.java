@@ -54,9 +54,10 @@ public class SidePanelAvoidableTest
 		assertEquals(PanelSnapshot.Fill.EATING, s.get(3).fill);
 		assertEquals(16.2 - 10.8, s.get(3).seconds, 1e-9);
 		final List<String> rows = rowLabels(b);
-		assertTrue(rows.toString(), rows.contains("avoidable eating -18 ticks"));
-		assertTrue(rows.toString(), rows.contains("eating -9 ticks"));
-		assertTrue(rows.indexOf("avoidable eating -18 ticks") < rows.indexOf("eating -9 ticks"));
+		// T-196's plain rows, in seconds.
+		assertTrue(rows.toString(), rows.contains("avoidable eating -11 s"));
+		assertTrue(rows.toString(), rows.contains("eating -5.4 s"));
+		assertTrue(rows.indexOf("avoidable eating -11 s") < rows.indexOf("eating -5.4 s"));
 		// The row is in Cost when it's costing, as the other parts are.
 		for (PanelSnapshot.BudgetRow r : b.rows)
 		{
@@ -98,23 +99,26 @@ public class SidePanelAvoidableTest
 		final LedgerRows.Numbers n = numbers(in);
 		final PanelSnapshot.Parts parts = tab(in).execution;
 		assertEquals(5, parts.parts.size());
-		assertEquals("uptime", parts.parts.get(0).label.text);
-		assertEquals("avoidable eating", parts.parts.get(1).label.text);
-		assertEquals(LedgerRows.withSeconds(LedgerRows.partPercent(1 - 18.0 / 216), 10.8), parts.parts.get(1).value.text);
+		// T-199's words; what it cost under its bar.
+		assertEquals("Uptime", parts.parts.get(0).label.text);
+		assertEquals("Avoidable eating", parts.parts.get(1).label.text);
+		assertEquals(LedgerRows.partPercent(1 - 18.0 / 216), parts.parts.get(1).value.text);
+		assertEquals("-11 s eating", parts.parts.get(1).note.text);
 		// The card's % is n.execution, which has it.
 		assertEquals(LedgerRows.partPercent(n.execution), parts.hint.text);
 		assertTrue(n.execution < n.executionLive);
 	}
 
 	@Test
-	public void theTilesSecondsLostIncludeAvoidableEating()
+	public void theCardsSecondsLostIncludeAvoidableEating()
 	{
 		final SidePanelModel.Input in = SidePanelExamples.ruledKill(true);
 		final LedgerRows.Numbers n = numbers(in);
-		final PanelSnapshot.Tile execution = tab(in).tiles.get(3);
-		assertEquals(LedgerRows.partPercent(n.execution), execution.value.text);
+		// T-202: the card's Skill (no tiles).
+		final PanelSnapshot.KillCard card = tab(in).card;
+		assertEquals(LedgerRows.partPercent(n.execution), card.skill);
 		final double lost = SidePanelModel.lostSeconds(n, false) + 10.8;
-		assertEquals(SidePanelStyle.ticks(lost) + " lost", execution.sub.text);
+		assertEquals("-" + SidePanelModel.secs(lost), card.lost);
 		assertEquals(lost, SidePanelModel.lostSeconds(n, true), 1e-9);
 	}
 
@@ -182,8 +186,8 @@ public class SidePanelAvoidableTest
 		assertNull(t.budget);
 		assertEquals(4, t.execution.parts.size());
 		assertEquals(LedgerRows.partPercent(n.executionLive), t.execution.hint.text);
-		assertEquals(LedgerRows.partPercent(n.executionLive), t.tiles.get(3).value.text);
-		assertEquals(SidePanelStyle.ticks(SidePanelModel.lostSeconds(n, false)) + " lost", t.tiles.get(3).sub.text);
+		assertEquals(LedgerRows.partPercent(n.executionLive), t.card.skill);
+		assertEquals("-" + SidePanelModel.secs(SidePanelModel.lostSeconds(n, false)), t.card.lost);
 		for (PanelSnapshot.Row r : t.taken.rows)
 		{
 			assertTrue(r.toString(), r.hint.isEmpty());
@@ -197,7 +201,7 @@ public class SidePanelAvoidableTest
 		final PanelSnapshot.FightTab t = tab(SidePanelExamples.unruledKill());
 		assertEquals(4, t.execution.parts.size());
 		final List<String> rows = rowLabels(t.budget);
-		assertTrue(rows.toString(), rows.contains("eating -27 ticks"));
+		assertTrue(rows.toString(), rows.contains("eating -16 s"));
 		for (String r : rows)
 		{
 			assertFalse(r, r.startsWith("avoidable"));
