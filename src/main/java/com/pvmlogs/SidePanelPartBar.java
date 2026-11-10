@@ -15,6 +15,8 @@ final class SidePanelPartBar extends JPanel
 {
 	private final SidePanelParts.Line line;
 	private final Bar bar = new Bar();
+	/** T-196: what the part cost, under the bar, in plain words; null for a part built without one. */
+	private final SidePanelText note;
 
 	SidePanelPartBar(PanelSnapshot.Part p)
 	{
@@ -23,6 +25,11 @@ final class SidePanelPartBar extends JPanel
 		line = new SidePanelParts.Line(p.label, p.value);
 		add(line);
 		add(bar);
+		note = p.note == null ? null : new SidePanelText(p.note, false);
+		if (note != null)
+		{
+			add(note);
+		}
 		set(p);
 	}
 
@@ -30,6 +37,21 @@ final class SidePanelPartBar extends JPanel
 	{
 		line.set(new PanelSnapshot.Row(p.label, p.value));
 		bar.set(p.kept, p.lost);
+		if (note != null && p.note != null)
+		{
+			note.set(p.note);
+			// No cost, no line: it takes no room.
+			if (note.isVisible() == p.note.text.isEmpty())
+			{
+				note.setVisible(!p.note.text.isEmpty());
+			}
+		}
+	}
+
+	/** T-196: the note under the bar, for tests; null without one. */
+	String noteText()
+	{
+		return note == null ? null : note.getText();
 	}
 
 	String valueText()

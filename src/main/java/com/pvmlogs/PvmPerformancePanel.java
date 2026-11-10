@@ -69,6 +69,16 @@ class PvmPerformancePanel extends PluginPanel
 	private Fight averageHistoryHead;
 	private LedgerHistory.Average average;
 	private LedgerHistory.Spread luckRemoved;
+	/** T-196: the Fight tab's folds, for tests of the merged sections' keys. */
+	private SidePanelSection.Folds fightFolds;
+
+	SidePanelSection.Folds fightFolds()
+	{
+		return fightFolds;
+	}
+
+	/** T-196: the Speed track's slow end, cached with the average. */
+	private double slowEnd = Double.NaN;
 	/** T-130 review: where the Fight tab's copy of the chart was last sent to. */
 	private final ChartBook chartBook = new ChartBook();
 	/** The Damage rows' sums, kept between snapshots so a long fight's build costs what a short one's does (T-046). */
@@ -116,6 +126,23 @@ class PvmPerformancePanel extends PluginPanel
 	static final java.util.Set<String> FOLDED_UNDER_CARD = java.util.Collections.unmodifiableSet(
 		new java.util.HashSet<>(java.util.Arrays.asList("curve", "budget", "execution", "targets", "defence", "later",
 			"chart", "ticks", "details", "taken", SidePanelPartySection.PARTY)));
+	/**
+	 * T-196: the sections merged under the card, by the section that holds them now: Damage over time ({@code chart}) in
+	 * Damage, Ticks in Your play ({@code execution}), Details' hits in Luck ({@code curve}). Each kept its fold key
+	 * ({@code <id>.opened}, T-188): one left open opens the section it's in, and folding or opening that section writes
+	 * the old key too, so the old one never overrules it again. Celebrations off reads nothing of this.
+	 */
+	static final java.util.Map<String, java.util.List<String>> MERGED;
+
+	static
+	{
+		final java.util.Map<String, java.util.List<String>> m = new java.util.HashMap<>();
+		m.put("damage", java.util.Collections.singletonList("chart"));
+		m.put("execution", java.util.Collections.singletonList("ticks"));
+		m.put("curve", java.util.Collections.singletonList("details"));
+		MERGED = java.util.Collections.unmodifiableMap(m);
+	}
+
 	/** T-188: Celebrations for tests and renders, which have no config; null reads the setting. */
 	private Boolean celebrations;
 
@@ -206,12 +233,26 @@ class PvmPerformancePanel extends PluginPanel
 			@Override
 			public boolean isFolded(String id)
 			{
+				// T-196: a section merged into this one, left open before, opens it (an opened Damage over time opens
+				// Damage with its chart).
+				if (mergedOpened(id))
+				{
+					return false;
+				}
 				return underCard(id) ? !stored.isFolded(id + OPENED) : folds.isFolded(id);
 			}
 
 			@Override
 			public void setFolded(String id, boolean folded)
 			{
+				// T-196: folding or opening it settles the merged sections' keys too, so the old ones never overrule it.
+				if (celebrations())
+				{
+					for (String old : MERGED.getOrDefault(id, java.util.Collections.emptyList()))
+					{
+						stored.setFolded(old + OPENED, !folded);
+					}
+				}
 				if (underCard(id))
 				{
 					stored.setFolded(id + OPENED, !folded);
@@ -222,7 +263,24 @@ class PvmPerformancePanel extends PluginPanel
 					folds.setFolded(id, folded);
 				}
 			}
+
+			private boolean mergedOpened(String id)
+			{
+				if (!celebrations())
+				{
+					return false;
+				}
+				for (String old : MERGED.getOrDefault(id, java.util.Collections.emptyList()))
+				{
+					if (stored.isFolded(old + OPENED))
+					{
+						return true;
+					}
+				}
+				return false;
+			}
 		};
+		this.fightFolds = fightFolds;
 		final SidePanelFightTab.Actions actions = new Actions();
 		fightTab = new SidePanelFightTab(actions, fightFolds, false, icons);
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
@@ -706,6 +764,7 @@ class PvmPerformancePanel extends PluginPanel
 			averages(history, room);
 			in.average = average;
 			in.luckRemoved = luckRemoved;
+			in.slowEnd = slowEnd;
 		}
 		return in;
 	}
@@ -1288,6 +1347,7 @@ class PvmPerformancePanel extends PluginPanel
 			final List<Fight> copy = new ArrayList<>(history);
 			average = LedgerHistory.of(copy, room);
 			luckRemoved = average == null ? null : SidePanelModel.luckRemoved(copy, room);
+			slowEnd = average == null ? Double.NaN : SidePanelModel.slowEnd(copy, room);
 		}
 	}
 

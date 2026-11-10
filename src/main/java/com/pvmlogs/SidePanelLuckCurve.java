@@ -25,11 +25,22 @@ final class SidePanelLuckCurve extends JComponent
 	private static final int PEAK = 4;
 
 	private double z;
+	/**
+	 * T-196: the clarity pass's curve: its three stretches in luck's three strengths (never skill's colours), and the
+	 * tail it counts always left of the marker, the fights that dealt less.
+	 */
+	private final boolean strengths;
 
 	SidePanelLuckCurve(double z)
 	{
+		this(z, false);
+	}
+
+	SidePanelLuckCurve(double z, boolean strengths)
+	{
 		setOpaque(false);
 		this.z = z;
+		this.strengths = strengths;
 	}
 
 	void set(double newZ)
@@ -65,6 +76,23 @@ final class SidePanelLuckCurve extends JComponent
 		final Graphics2D g2 = (Graphics2D) g.create();
 		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		final int w = getWidth();
+		if (strengths)
+		{
+			band(g2, -Z_RANGE, -QUARTILE_Z, w, SidePanelStyle.LUCK_CHIP_DIM_FILL);
+			band(g2, -QUARTILE_Z, QUARTILE_Z, w, SidePanelStyle.alpha(SidePanelStyle.LUCK_TRACK_NORMAL, 0.45));
+			band(g2, QUARTILE_Z, Z_RANGE, w, SidePanelStyle.alpha(SidePanelStyle.LUCK_TRACK_BRIGHT, 0.35));
+			final double m = Math.max(-SidePanelModel.CURVE_Z_LIMIT, Math.min(SidePanelModel.CURVE_Z_LIMIT, z));
+			final double[] less = {-Z_RANGE, m};
+			tailBand(g2, less, -Z_RANGE, -QUARTILE_Z, w, SidePanelStyle.LUCK_TRACK_DIM);
+			tailBand(g2, less, -QUARTILE_Z, QUARTILE_Z, w, SidePanelStyle.LUCK_TRACK_NORMAL);
+			tailBand(g2, less, QUARTILE_Z, Z_RANGE, w, SidePanelStyle.LUCK_TRACK_BRIGHT);
+			g2.setColor(SidePanelStyle.VALUE);
+			g2.setStroke(new BasicStroke(2f));
+			final double mx = x(m, w);
+			g2.draw(new Line2D.Double(mx, 2, mx, BASE));
+			g2.dispose();
+			return;
+		}
 		band(g2, -Z_RANGE, -QUARTILE_Z, w, SidePanelStyle.alpha(SidePanelStyle.COST, 0.35));
 		band(g2, -QUARTILE_Z, QUARTILE_Z, w, SidePanelStyle.alpha(SidePanelStyle.MUTED, 0.45));
 		band(g2, QUARTILE_Z, Z_RANGE, w, SidePanelStyle.alpha(SidePanelStyle.BETTER, 0.30));
