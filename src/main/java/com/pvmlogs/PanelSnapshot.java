@@ -1154,6 +1154,16 @@ final class PanelSnapshot
 		final List<TargetView> byTarget;
 		/** T-099: which of {@link #byTarget} {@link #damage} and {@link #chart} are; -1 before one is picked. */
 		final int target;
+		/**
+		 * T-188: the kill card in place of the title and the four tiles, live and after the kill; null with Celebrations
+		 * off, and wherever the tab has no fight on show.
+		 */
+		final KillCard card;
+		/**
+		 * T-188: each section's one line while folded, by its id ({@code damage}, {@code curve}, {@code budget},
+		 * {@code execution}, {@code details}, {@code taken}); empty with Celebrations off, as the tab was.
+		 */
+		final java.util.Map<String, Text> summaries;
 
 		FightTab(Builder b)
 		{
@@ -1181,6 +1191,9 @@ final class PanelSnapshot
 			empty = b.empty;
 			byTarget = b.byTarget == null ? null : list(b.byTarget);
 			target = -1;
+			card = b.card;
+			summaries = b.summaries == null ? Collections.<String, Text>emptyMap()
+				: Collections.unmodifiableMap(new java.util.LinkedHashMap<>(b.summaries));
 		}
 
 		/** T-099: this tab with the Damage card and chart of {@code byTarget}'s view {@code i}. */
@@ -1210,6 +1223,8 @@ final class PanelSnapshot
 			empty = t.empty;
 			byTarget = t.byTarget;
 			target = i;
+			card = t.card;
+			summaries = t.summaries;
 		}
 
 		/** T-099: the tab as it shows with view {@code i} of the switch picked; itself without a switch. */
@@ -1229,6 +1244,8 @@ final class PanelSnapshot
 			final StringBuilder s = new StringBuilder(state.name());
 			s.append(wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room");
 			s.append(header == null ? "" : "|h");
+			// T-188: the card, and the rows that change its height.
+			s.append(card == null ? "" : "|K" + card.structure());
 			// Whether the header has an icon's box (T-054); which icon is a value, set in place.
 			s.append(header == null || header.icon == SidePanelBossIcons.NONE ? "" : "i");
 			// T-052: the live defence line, from the first drain that lands.
@@ -1463,6 +1480,104 @@ final class PanelSnapshot
 		}
 	}
 
+	/**
+	 * T-188 (Eric, 2026-11-09: "let's choose A for all of them"): the kill card, in place of the Fight tab's title and
+	 * four tiles. Live: the boss, the clock with damage against expected, ticks lost and execution so far, luck rolling
+	 * with its band so far, the weapon in hand. After the kill: the clock against your PB with its rank, the grade from
+	 * execution, luck rolled N of 100, the luck-removed time and its PB, and one tip. Painted at a fixed height
+	 * ({@code SidePanelKillCard}); the rows that change its height are in {@link #structure()}.
+	 */
+	static final class KillCard
+	{
+		final boolean live;
+		final String boss;
+		/** The boss's colour ({@link BossColours}): the top edge, the name and a NEW PB. */
+		final Color tint;
+		/** The boss's hiscores sprite, or {@link SidePanelBossIcons#NONE}. */
+		final int icon;
+		/** {@code 700 HP · solo · 4:03 pm}, and its shorter forms. */
+		final String sub;
+		final List<String> subShort;
+		/** Top right: {@code KC 271} after a kill, {@code live} while it runs. */
+		final String corner;
+		final String clock;
+		/** Beside the clock: live, {@code 402 dmg} and {@code expected 431}; after, your PB, the time against it, the rank. */
+		final Text side1;
+		final Text side2;
+		final Text side3;
+		/** A new fastest kill: {@link #side1} is the NEW PB chip, in the boss's colour. */
+		final boolean newPb;
+		/** Skill: the grade (S to C), or null live and before the record has the kill. */
+		final String grade;
+		final Color gradeColour;
+		/** {@code 2 ticks from an S}, the grade's tooltip; null with none. */
+		final String gradeTip;
+		/** The big figure: live the ticks lost so far, after the grade; {@link #bigCaption} beside it, one or two lines. */
+		final Text big;
+		final List<Text> bigCaption;
+		/** The skill tile's two lines under it: live {@code execution 95%}; after the ticks lost and the grade's basis. */
+		final Text skill1;
+		final Text skill2;
+		/** Luck: rolled 1 to 100, or -1 live and when unknown. */
+		final int rolled;
+		/** Live {@code middle half so far}; after {@code 14 s slower}. Always violet. */
+		final Text luckLine;
+		/** After the kill: the luck-removed clock, its PB (or null), and whether this kill beat it. */
+		final String luckRemoved;
+		final String luckRemovedPb;
+		final boolean newLuckRemovedPb;
+		/** The one tip from the biggest loss, or null. */
+		final String tip;
+		/** Live: the weapon in hand, its icon and its DPS line ({@code 5.4 dps · expected 5.9}); null with none. */
+		final String weapon;
+		final int weaponItem;
+		final int weaponSprite;
+		final String weaponDps;
+
+		KillCard(boolean live, String boss, Color tint, int icon, String sub, List<String> subShort, String corner,
+			String clock, Text side1, Text side2, Text side3, boolean newPb, String grade, Color gradeColour,
+			String gradeTip, Text big, List<Text> bigCaption, Text skill1, Text skill2, int rolled, Text luckLine,
+			String luckRemoved, String luckRemovedPb, boolean newLuckRemovedPb, String tip, String weapon, int weaponItem,
+			int weaponSprite, String weaponDps)
+		{
+			this.live = live;
+			this.boss = boss;
+			this.tint = tint;
+			this.icon = icon;
+			this.sub = sub;
+			this.subShort = list(subShort);
+			this.corner = corner;
+			this.clock = clock;
+			this.side1 = side1 == null ? Text.NONE : side1;
+			this.side2 = side2 == null ? Text.NONE : side2;
+			this.side3 = side3 == null ? Text.NONE : side3;
+			this.newPb = newPb;
+			this.grade = grade;
+			this.gradeColour = gradeColour;
+			this.gradeTip = gradeTip;
+			this.big = big == null ? Text.NONE : big;
+			this.bigCaption = list(bigCaption);
+			this.skill1 = skill1 == null ? Text.NONE : skill1;
+			this.skill2 = skill2 == null ? Text.NONE : skill2;
+			this.rolled = rolled;
+			this.luckLine = luckLine == null ? Text.NONE : luckLine;
+			this.luckRemoved = luckRemoved;
+			this.luckRemovedPb = luckRemovedPb;
+			this.newLuckRemovedPb = newLuckRemovedPb;
+			this.tip = tip;
+			this.weapon = weapon;
+			this.weaponItem = weaponItem;
+			this.weaponSprite = weaponSprite;
+			this.weaponDps = weaponDps;
+		}
+
+		/** Live or after, and the rows that take room: the luck-removed row and the tip. */
+		String structure()
+		{
+			return (live ? "l" : "k") + (luckRemoved == null ? "" : "r") + (tip == null ? "" : "t");
+		}
+	}
+
 	static final class Builder
 	{
 		State state = State.EMPTY;
@@ -1488,6 +1603,9 @@ final class PanelSnapshot
 		ListRow lastFight;
 		Empty empty;
 		List<TargetView> byTarget;
+		KillCard card;
+		java.util.Map<String, Text> summaries;
+
 		FightTab build()
 		{
 			return new FightTab(this);

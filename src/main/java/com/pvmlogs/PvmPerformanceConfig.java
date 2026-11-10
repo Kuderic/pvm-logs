@@ -238,12 +238,26 @@ public interface PvmPerformanceConfig extends Config
 		return true;
 	}
 
+	// T-188 (side panel chat): a new key; no existing one changes.
+	@ConfigItem(
+		keyName = "panelCelebrations",
+		name = "Celebrations",
+		description = "The Fight tab opens on a kill card: your time against your PB, a grade from your execution, luck "
+			+ "rolled out of 100, with the details folded below. Off: the title and four tiles, as before",
+		position = 3,
+		section = SIDE_PANEL_SECTION
+	)
+	default boolean panelCelebrations()
+	{
+		return true;
+	}
+
 	// T-053 (side panel chat): the side panel's text. Read when the panel opens.
 	@ConfigItem(
 		keyName = "panelLargerText",
 		name = "Larger text",
 		description = "Bigger text in the side panel. Sharp at 100% and 200% scaling.",
-		position = 3,
+		position = 4,
 		section = SIDE_PANEL_SECTION
 	)
 	default boolean panelLargerText()
@@ -255,7 +269,7 @@ public interface PvmPerformanceConfig extends Config
 		keyName = "panelSmoothFont",
 		name = "Smooth font",
 		description = "Draws the side panel in your system's font, so it stays sharp at 125% or 150% scaling.",
-		position = 4,
+		position = 5,
 		section = SIDE_PANEL_SECTION
 	)
 	default boolean panelSmoothFont()
@@ -277,7 +291,7 @@ public interface PvmPerformanceConfig extends Config
 		description = "While you're in a RuneLite party, send your own damage, expected damage, Luck, Execution and attacks "
 			+ "to the party, so members with this plugin can compare. Only through RuneLite's party, never anywhere else, "
 			+ "and never your name, gear, location or history. Off: nothing is sent; others' numbers are still shown",
-		position = 5,
+		position = 6,
 		section = SIDE_PANEL_SECTION
 	)
 	default boolean shareWithParty()

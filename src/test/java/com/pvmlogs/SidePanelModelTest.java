@@ -76,8 +76,15 @@ public class SidePanelModelTest
 
 		final LedgerRows.Row luck = row(rows, "Luck");
 		final PanelSnapshot.Tile luckTile = tile(t, "Luck");
-		// The overlay's "bottom 20% (14 s slower)" is the tile's value over its sub-line.
-		assertEquals(luck.right, luckTile.value.text + " (" + luckTile.sub.text + ")");
+		// The overlay's "bottom 20% (14 s slower)" is the tile's value over its sub-line; T-188: the panel writes the
+		// percentile as a roll, "rolled 20", the overlay as its band.
+		final double percentile = new LedgerRows.Numbers(in.scope).percentile;
+		assertEquals(luck.right, (Double.isNaN(percentile) ? luckTile.value.text : LedgerRows.band(percentile)) + " ("
+			+ luckTile.sub.text + ")");
+		if (!Double.isNaN(percentile))
+		{
+			assertEquals(SidePanelModel.rolled(percentile), luckTile.value.text);
+		}
 		assertEquals(SidePanelStyle.of(luck.rightColour), luckTile.value.colour);
 
 		final LedgerRows.Row damage = row(rows, "Damage/expected");
@@ -143,7 +150,7 @@ public class SidePanelModelTest
 		assertEquals(SidePanelStyle.DEAD, t.header.suffix.colour);
 		assertEquals("700 HP · solo · 3:31 pm", t.header.sub.text);
 		assertEquals("2:16", t.header.clock.text);
-		assertEquals("bottom 20%", tile(t, "Luck").value.text);
+		assertEquals("rolled 20", tile(t, "Luck").value.text);
 		assertEquals("14 s slower", tile(t, "Luck").sub.text);
 		assertEquals("+80 thrall", tile(t, "Damage/expected").sub.text);
 		// T-134: the tile counts the thrall; its sub-line keeps the weapon's alone.
@@ -157,7 +164,7 @@ public class SidePanelModelTest
 		// Luck's tile edge takes its colour.
 		assertEquals(SidePanelStyle.COST, tile(t, "Luck").edge);
 		assertNotNull(t.curve);
-		assertEquals("bottom 20%", t.curve.headerValue.text);
+		assertEquals("rolled 20", t.curve.headerValue.text);
 		assertEquals("80% of fights with these attacks dealt more", t.curve.caption);
 		assertNotNull(t.details);
 		assertNull(t.loadout);
@@ -364,7 +371,7 @@ public class SidePanelModelTest
 		// T-030's two rows, as the loadout overlay has them.
 		assertEquals("48 max · 71%", t.loadout.specRows.get(0).right.text);
 		assertEquals("26.0 (8.2 burn)", t.loadout.specRows.get(1).right.text);
-		assertEquals("bottom 20%", t.lastFight.chip.text);
+		assertEquals("rolled 20", t.lastFight.chip.text);
 	}
 
 	@Test

@@ -107,6 +107,15 @@ class PvmPerformancePanel extends PluginPanel
 	static final java.util.Set<String> FOLDED_BY_DEFAULT = java.util.Collections.singleton(
 		SidePanelPartySection.PARTY_CHART);
 	static final String OPENED = ".opened";
+	/**
+	 * T-188: with Celebrations on, the Fight tab's sections fold below the kill card until opened, each kept open under
+	 * its own {@link #OPENED} key; the keys they had stay as they were, for Celebrations off and the other tabs.
+	 */
+	static final java.util.Set<String> FOLDED_UNDER_CARD = java.util.Collections.unmodifiableSet(
+		new java.util.HashSet<>(java.util.Arrays.asList("damage", "curve", "budget", "execution", "targets", "defence",
+			"later", "chart", "ticks", "details", "taken", SidePanelPartySection.PARTY)));
+	/** T-188: Celebrations for tests and renders, which have no config; null reads the setting. */
+	private Boolean celebrations;
 
 	/** The tabs, as {@link #visibleTab} holds them. T-176: the Party tab's gone; the party is on the Fight tab. */
 	static final int FIGHT_TAB = 0;
@@ -189,13 +198,36 @@ class PvmPerformancePanel extends PluginPanel
 				requestUpdate();
 			}
 		};
+		// T-188: the Fight tab's own: with Celebrations on, its sections fold under the card until they're opened.
+		final SidePanelSection.Folds fightFolds = new SidePanelSection.Folds()
+		{
+			@Override
+			public boolean isFolded(String id)
+			{
+				return underCard(id) ? !stored.isFolded(id + OPENED) : folds.isFolded(id);
+			}
+
+			@Override
+			public void setFolded(String id, boolean folded)
+			{
+				if (underCard(id))
+				{
+					stored.setFolded(id + OPENED, !folded);
+					requestUpdate();
+				}
+				else
+				{
+					folds.setFolded(id, folded);
+				}
+			}
+		};
 		final SidePanelFightTab.Actions actions = new Actions();
-		fightTab = new SidePanelFightTab(actions, folds, false, icons);
+		fightTab = new SidePanelFightTab(actions, fightFolds, false, icons);
 		historyTab = new SidePanelHistoryTab(historySource != null ? historySource : plugin == null ? null
 			: new HistorySource(), actions, folds);
 		tripTab = new SidePanelTripTab(actions, folds);
 		// T-130: the member selected on the meter. T-176: the party's blocks, placed by the Fight tab.
-		partySection = new SidePanelPartySection(actions, folds, icons, id ->
+		partySection = new SidePanelPartySection(actions, fightFolds, icons, id ->
 		{
 			partySelected = id;
 			requestUpdate();
@@ -521,6 +553,47 @@ class PvmPerformancePanel extends PluginPanel
 		return key;
 	}
 
+	/** T-188: T-187's standing as the card reads it ({@code claude/specs/t187-t188-record-api.md}); null for none. */
+	static SidePanelModel.Standing standing(BossRecords.Standing r)
+	{
+		if (r == null)
+		{
+			return null;
+		}
+		final SidePanelModel.Standing s = new SidePanelModel.Standing();
+		s.previousBestClock = r.previousBestClock;
+		s.newPb = r.newPb;
+		s.previousBestLuckRemoved = r.previousBestLuckRemoved;
+		s.newBestLuckRemoved = r.newBestLuckRemoved;
+		s.rank = r.rank;
+		s.ranked = r.ranked;
+		s.grade = r.grade == null ? null : r.grade.name();
+		s.basis = r.basis;
+		s.ticksToNext = r.ticksToNext;
+		s.next = r.next == null ? null : r.next.name();
+		s.streak = r.streak;
+		s.flawlessStreak = r.flawlessStreak;
+		return s;
+	}
+
+	/** T-188: whether Celebrations is on: the setting, else what a test set. */
+	boolean celebrations()
+	{
+		return celebrations != null ? celebrations : config != null && config.panelCelebrations();
+	}
+
+	/** T-188: for tests and renders, which have no config. */
+	void setCelebrations(boolean on)
+	{
+		celebrations = on;
+	}
+
+	/** T-188: a Fight tab section folded under the kill card by default, with Celebrations on. */
+	private boolean underCard(String id)
+	{
+		return celebrations() && FOLDED_UNDER_CARD.contains(id);
+	}
+
 	/** The plugin's state as the model's input; client thread only. */
 	private SidePanelModel.Input read(Fight fight, Encounter display, Encounter room, Raid raid, boolean whole, boolean pre,
 		List<Fight> history)
@@ -571,6 +644,7 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		in.kind = SidePanelModel.Kind.ROOM;
 		SidePanelModel.fillRoom(in, room);
+		in.celebrations = celebrations();
 		if (in.drain != null)
 		{
 			// T-142: a Defence drain helps magic too where the boss rolls magic defence off its Defence.
@@ -610,6 +684,17 @@ class PvmPerformancePanel extends PluginPanel
 			end = Math.max(end, f.getEndMillis());
 		}
 		in.endMillis = end;
+		if (in.killed)
+		{
+			// T-188: the game's kill count the kill message gave, for the card's corner.
+			for (Fight f : room.getFights())
+			{
+				in.kc = Math.max(in.kc, f.getContext() == null ? 0 : f.getContext().kc);
+			}
+			// T-188: the kill's place in its boss's record (T-187): a lookup, null until the kill's history save has run.
+			final BossRecords records = plugin == null || !in.celebrations ? null : plugin.getRecords();
+			in.standing = standing(records == null ? null : records.standing(room));
+		}
 		// T-095: a run has no "your average": comparing runs' clocks says nothing.
 		if (in.killed && room.getRaid() == null && in.warning == null && !in.run)
 		{

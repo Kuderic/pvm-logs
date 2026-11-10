@@ -62,6 +62,11 @@ final class SidePanelSection extends JPanel
 	private PanelSnapshot.Text hint = PanelSnapshot.Text.NONE;
 	/** T-105: a control in the hint's place (the Damage card's switch); null for the text hint. */
 	private JComponent hintComponent;
+	/** T-188: the header and, while folded, the one-line summary under it, on a card. */
+	private final JPanel head;
+	private final Summary summary = new Summary();
+	/** T-188: run when the section opens, so a body skipped while folded catches up. */
+	private final java.util.List<Runnable> onOpen = new java.util.ArrayList<>(1);
 
 	SidePanelSection(String id, String title, PanelSnapshot.Text hint, JComponent body, Folds folds)
 	{
@@ -72,21 +77,100 @@ final class SidePanelSection extends JPanel
 		this.body = body;
 		setOpaque(false);
 		header = new SidePanelParts.Line(PanelSnapshot.Text.title(title, SidePanelStyle.VALUE), hint);
-		header.setBorder(new EmptyBorder(4, 0, 0, 0));
 		header.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		header.setToolTipText(FOLD_TIP);
-		header.addMouseListener(new MouseAdapter()
+		final MouseAdapter click = new MouseAdapter()
 		{
 			@Override
 			public void mouseClicked(MouseEvent e)
 			{
 				toggle();
 			}
-		});
-		add(header);
+		};
+		header.addMouseListener(click);
+		head = new JPanel(new SidePanelStack(3));
+		head.add(header);
+		summary.setVisible(false);
+		summary.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		summary.addMouseListener(click);
+		head.add(summary);
+		add(head);
 		add(body);
 		body.setVisible(!folds.isFolded(id));
+		restyleHead();
 		setHint(hint);
+	}
+
+	/**
+	 * T-188: the header as before; folded with a summary, a card holding the title, its value and the line under them,
+	 * as the design canvas draws the folded sections under the kill card.
+	 */
+	private void restyleHead()
+	{
+		final boolean card = isFolded() && !summary.text.isEmpty();
+		head.setOpaque(card);
+		head.setBackground(SidePanelStyle.CARD);
+		head.setBorder(card ? new EmptyBorder(5, 7, 6, 7) : new EmptyBorder(4, 0, 0, 0));
+		summary.setVisible(card);
+	}
+
+	/**
+	 * T-188: the section's one line while folded ({@code axe 80% · claws 10% · thrall 10%}); null or empty for none.
+	 * Painted, cut to its width: a new value repaints it and lays nothing out, except when it comes or goes.
+	 */
+	void setSummary(PanelSnapshot.Text t)
+	{
+		final PanelSnapshot.Text now = t == null ? PanelSnapshot.Text.NONE : t;
+		final boolean had = !summary.text.isEmpty();
+		summary.text = now.text;
+		summary.colour = now.colour;
+		if (had != !now.text.isEmpty())
+		{
+			restyleHead();
+			revalidate();
+		}
+		summary.repaint();
+	}
+
+	/** T-188: the summary on show, for tests; empty for none. */
+	String summary()
+	{
+		return summary.isVisible() ? summary.text : "";
+	}
+
+	/** T-188: runs {@code r} each time the section opens. */
+	void onOpen(Runnable r)
+	{
+		onOpen.add(r);
+	}
+
+	/** T-188: one line of small text at a fixed height, cut with "…" to its width. */
+	private static final class Summary extends JComponent
+	{
+		String text = "";
+		java.awt.Color colour = SidePanelStyle.SECONDARY;
+
+		@Override
+		public java.awt.Dimension getPreferredSize()
+		{
+			return new java.awt.Dimension(0, SidePanelStyle.Type.SMALL.lineHeight());
+		}
+
+		@Override
+		protected void paintComponent(java.awt.Graphics g0)
+		{
+			if (text.isEmpty())
+			{
+				return;
+			}
+			final java.awt.Graphics2D g = (java.awt.Graphics2D) g0.create();
+			SidePanelStyle.textHints(g);
+			g.setFont(SidePanelStyle.Type.SMALL.font());
+			final java.awt.FontMetrics fm = g.getFontMetrics();
+			g.setColor(colour);
+			g.drawString(LedgerRows.cut(text, fm::stringWidth, getWidth()), 0, getHeight() - fm.getDescent());
+			g.dispose();
+		}
 	}
 
 	String id()
@@ -108,7 +192,16 @@ final class SidePanelSection extends JPanel
 	{
 		final boolean fold = body.isVisible();
 		folds.setFolded(id, fold);
+		if (!fold)
+		{
+			// T-188: the body was left as it was while folded; bring it up to date before it shows.
+			for (Runnable r : onOpen)
+			{
+				r.run();
+			}
+		}
 		body.setVisible(!fold);
+		restyleHead();
 		setHint(hint);
 		revalidate();
 		repaint();

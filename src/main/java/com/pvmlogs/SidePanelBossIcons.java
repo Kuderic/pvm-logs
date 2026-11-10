@@ -450,23 +450,39 @@ final class SidePanelBossIcons
 			{
 				return;
 			}
-			// The box in device pixels, at the screen's own scale, and the sprite made for that size.
-			final double scale = Math.min(t.getScaleX(), t.getScaleY());
-			final int device = (int) Math.round(box * scale);
-			final BufferedImage img = scaled(sprite, device);
-			if (img == null)
+			// Centred in the box (the box is centred in the component's height).
+			if (draw(g2, sprite, 0, (getHeight() - box) / 2, box))
 			{
-				return;
+				paints++;
 			}
-			// Centred in the box (the box is centred in the component's height), drawn pixel for pixel.
-			final int top = (getHeight() - box) / 2;
-			final Point2D corner = t.transform(new Point2D.Double(0, top), null);
-			final int dx = (int) Math.round(corner.getX()) + (device - img.getWidth()) / 2;
-			final int dy = (int) Math.round(corner.getY()) + (device - img.getHeight()) / 2;
-			g2.setTransform(new AffineTransform());
-			g2.drawImage(img, dx, dy, null);
-			g2.setTransform(t);
-			paints++;
 		}
+	}
+
+	/**
+	 * T-188: a loaded sprite centred in a {@code box} at ({@code x}, {@code y}), made for the screen's own scale and
+	 * drawn pixel for pixel, as {@link View} draws it. False when it isn't loaded or the transform is sheared.
+	 */
+	static boolean draw(Graphics2D g2, int sprite, int x, int y, int box)
+	{
+		final AffineTransform t = g2.getTransform();
+		if (sprite == NONE || image(sprite) == null || t.getShearX() != 0 || t.getShearY() != 0)
+		{
+			return false;
+		}
+		// The box in device pixels, at the screen's own scale, and the sprite made for that size.
+		final double scale = Math.min(t.getScaleX(), t.getScaleY());
+		final int device = (int) Math.round(box * scale);
+		final BufferedImage img = scaled(sprite, device);
+		if (img == null)
+		{
+			return false;
+		}
+		final Point2D corner = t.transform(new Point2D.Double(x, y), null);
+		final int dx = (int) Math.round(corner.getX()) + (device - img.getWidth()) / 2;
+		final int dy = (int) Math.round(corner.getY()) + (device - img.getHeight()) / 2;
+		g2.setTransform(new AffineTransform());
+		g2.drawImage(img, dx, dy, null);
+		g2.setTransform(t);
+		return true;
 	}
 }

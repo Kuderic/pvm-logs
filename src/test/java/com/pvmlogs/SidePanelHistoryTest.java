@@ -263,9 +263,9 @@ public class SidePanelHistoryTest
 		assertTrue(Double.isNaN(n.percentile));
 		assertEquals(LedgerRows.fasterOrSlower(n.luck), old.chip.text);
 		assertTrue(old.chip.text, old.chip.text.endsWith("faster"));
-		// Today's kept it: their chips are bands.
+		// Today's kept it: their chips are rolls (T-188: "rolled 20", the panel's one way to write luck).
 		final String band = rows.get(0).chip.text;
-		assertTrue(band, band.startsWith("bottom") || band.startsWith("top") || band.equals("average"));
+		assertTrue(band, band.matches("rolled \\d+"));
 	}
 
 	// ---- the saved kill view ----

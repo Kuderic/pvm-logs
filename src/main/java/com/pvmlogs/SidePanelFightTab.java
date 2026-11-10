@@ -359,7 +359,15 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				if (parts == Parts.ALL)
 				{
 					raidSwitch(tab);
-					header(tab);
+					// T-188: the kill card in the title's place, and the tiles', with Celebrations on.
+					if (tab.card != null)
+					{
+						killCard(tab);
+					}
+					else
+					{
+						header(tab);
+					}
 				}
 				// T-176: in a party, the party between the title and the tiles; with a member selected, their heading and
 				// panels in place of yours.
@@ -374,8 +382,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				}
 				banner(tab);
 				unscored(tab);
-				// The tiles under the header, the at-a-glance summary (Eric's pick, 07:45).
-				tiles(tab);
+				// The tiles under the header, the at-a-glance summary (Eric's pick, 07:45). T-188: the card holds them.
+				if (tab.card == null || parts != Parts.ALL)
+				{
+					tiles(tab);
+				}
 				damage(tab);
 				curve(tab);
 				budget(tab);
@@ -388,10 +399,68 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				strip(tab);
 				rowsSection(tab, "details", "Details", tab.details, t -> t.details);
 				rowsSection(tab, "taken", "Damage taken", tab.taken, t -> t.taken);
+				summaries(tab);
 				break;
 		}
 		revalidate();
 		repaint();
+	}
+
+	// ---- T-188: the kill card, and the sections under it ----
+
+	/** T-188: the kill card in place of the title and the four tiles; values repaint it, never lay it out. */
+	private void killCard(FightTab tab)
+	{
+		final SidePanelKillCard view = new SidePanelKillCard(tab.card, icons);
+		add(view);
+		updaters.add(t ->
+		{
+			if (t.card != null)
+			{
+				view.set(t.card);
+			}
+		});
+	}
+
+	/**
+	 * T-188 (T-186: a folded section's hidden body asked for layout on every value change): a section's body is updated
+	 * only while it's open. Opened, it catches up with the last snapshot at once.
+	 */
+	private void body(SidePanelSection section, Consumer<FightTab> update)
+	{
+		updaters.add(t ->
+		{
+			if (!section.isFolded())
+			{
+				update.accept(t);
+			}
+		});
+		section.onOpen(() ->
+		{
+			if (last != null)
+			{
+				update.accept(last.showing(target));
+			}
+		});
+	}
+
+	/** T-188: each section's one line while folded (Celebrations on); none with it off, as the tab was. */
+	private void summaries(FightTab tab)
+	{
+		if (tab.summaries.isEmpty())
+		{
+			return;
+		}
+		for (Component c : getComponents())
+		{
+			if (c instanceof SidePanelSection)
+			{
+				final SidePanelSection section = (SidePanelSection) c;
+				final String id = section.id();
+				section.setSummary(tab.summaries.get(id));
+				updaters.add(t -> section.setSummary(t.summaries.get(id)));
+			}
+		}
 	}
 
 	// ---- sections ----
@@ -568,10 +637,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		final SidePanelSection section = new SidePanelSection(id, title, rows.hint, list, folds);
 		add(section);
-		updaters.add(t ->
+		updaters.add(t -> section.setHint(get.apply(t).hint));
+		body(section, t ->
 		{
 			final PanelSnapshot.ListRows now = get.apply(t);
-			section.setHint(now.hint);
 			for (int i = 0; i < views.size(); i++)
 			{
 				views.get(i).set(now.rows.get(i));
@@ -628,8 +697,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			card.add(note);
 		}
-		add(new SidePanelSection("budget", "Where the time went", Text.NONE, card, folds));
-		updaters.add(t ->
+		final SidePanelSection section = new SidePanelSection("budget", "Where the time went", Text.NONE, card, folds);
+		add(section);
+		body(section, t ->
 		{
 			bar.set(t.budget);
 			for (int i = 0; i < lines.size(); i++)
@@ -721,22 +791,23 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		card.add(curve);
 		final JPanel legend = new JPanel(new LegendCells());
 		legend.setOpaque(false);
-		legend.add(new SidePanelText(Text.small("bottom 25%", SidePanelStyle.COST), false));
+		// T-188: the curve's ends in rolls, as luck is written everywhere: rolled 1 to 25, 76 to 100.
+		legend.add(new SidePanelText(Text.small(SidePanelModel.CURVE_LOW, SidePanelStyle.COST), false));
 		final SidePanelText middle = new SidePanelText(Text.small("middle half", SidePanelStyle.SECONDARY), false);
 		legend.add(centred(middle));
-		legend.add(new SidePanelText(Text.small("top 25%", SidePanelStyle.BETTER), true));
+		legend.add(new SidePanelText(Text.small(SidePanelModel.CURVE_HIGH, SidePanelStyle.BETTER), true));
 		card.add(legend);
 		final SidePanelParts.Paragraph caption = new SidePanelParts.Paragraph(tab.curve.caption, SidePanelStyle.SECONDARY,
 			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(caption);
 		final SidePanelSection section = new SidePanelSection("curve", "Luck", tab.curve.headerValue, card, folds);
 		add(section);
-		updaters.add(t ->
+		updaters.add(t -> section.setHint(t.curve.headerValue));
+		body(section, t ->
 		{
 			curve.set(t.curve.z);
 			curve.setToolTipText(t.curve.tooltip);
 			caption.set(t.curve.caption, SidePanelStyle.SECONDARY);
-			section.setHint(t.curve.headerValue);
 		});
 	}
 
@@ -843,6 +914,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			section.setHint(t.execution.hint);
 			// T-126: the sum moves with the figures; text only, no layout.
 			section.setTooltip(t.execution.tooltip);
+		});
+		body(section, t ->
+		{
 			for (int i = 0; i < bars.size(); i++)
 			{
 				bars.get(i).set(t.execution.parts.get(i));
@@ -887,9 +961,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		// T-099: the switch's view, when it isn't All.
 		final String on = tab.byTarget == null || SidePanelModel.ALL.equals(tab.byTarget.get(tab.target).label) ? ""
 			: " · " + tab.byTarget.get(tab.target).label.toLowerCase(java.util.Locale.ENGLISH);
-		add(new SidePanelSection("chart", "Damage over time", Text.small("weapon" + on, SidePanelStyle.SECONDARY), card,
-			folds));
-		updaters.add(t ->
+		final SidePanelSection section = new SidePanelSection("chart", "Damage over time", Text.small("weapon" + on,
+			SidePanelStyle.SECONDARY), card, folds);
+		add(section);
+		body(section, t ->
 		{
 			ends.set(new PanelSnapshot.Row(Text.small("0:00", SidePanelStyle.MUTED), Text.small(t.chart.end,
 				SidePanelStyle.MUTED)));
@@ -945,9 +1020,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		card.add(strip);
 		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(legend);
-		add(new SidePanelSection("ticks", "Ticks", Text.small("60 ticks a row", SidePanelStyle.SECONDARY), card, folds));
+		final SidePanelSection section = new SidePanelSection("ticks", "Ticks", Text.small("60 ticks a row",
+			SidePanelStyle.SECONDARY), card, folds);
+		add(section);
 		final int[] rows = {SidePanelTickStrip.rows(chartData.length())};
-		updaters.add(t ->
+		body(section, t ->
 		{
 			final List<SidePanelParts.Legend.Item> items = new ArrayList<>(4);
 			items.add(new SidePanelParts.Legend.Item(t.chart.attackColour, false, "attack", SidePanelStyle.SECONDARY));
@@ -997,8 +1074,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final SidePanelParts.Paragraph text = new SidePanelParts.Paragraph(tab.later, SidePanelStyle.SECONDARY,
 			SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(text);
-		add(new SidePanelSection("later", "Damage, charts, ticks", Text.NONE, card, folds));
-		updaters.add(t -> text.set(t.later, SidePanelStyle.SECONDARY));
+		final SidePanelSection section = new SidePanelSection("later", "Damage, charts, ticks", Text.NONE, card, folds);
+		add(section);
+		body(section, t -> text.set(t.later, SidePanelStyle.SECONDARY));
 	}
 
 	private void damage(FightTab tab)
@@ -1047,6 +1125,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			{
 				section.setHint(t.damage.hint);
 			}
+		});
+		body(section, t ->
+		{
 			for (int i = 0; i < rows.size(); i++)
 			{
 				rows.get(i).set(t.damage.rows.get(i));
@@ -1241,9 +1322,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		card.add(rows);
 		final SidePanelSection section = new SidePanelSection("defence", "Defence", tab.defence.hint, card, folds);
 		add(section);
-		updaters.add(t ->
+		updaters.add(t -> section.setHint(t.defence.hint));
+		body(section, t ->
 		{
-			section.setHint(t.defence.hint);
 			if (bar != null)
 			{
 				bar.set(t.defence.drop);
@@ -1306,9 +1387,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final SidePanelSection section = new SidePanelSection("defence", SidePanelModel.DRAINS, tab.defence.hint, card,
 			folds);
 		add(section);
-		updaters.add(t ->
+		updaters.add(t -> section.setHint(t.defence.hint));
+		body(section, t ->
 		{
-			section.setHint(t.defence.hint);
 			for (int i = 0; i < heads.size(); i++)
 			{
 				final PanelSnapshot.DrainBlock b = t.defence.blocks.get(i);
@@ -1370,12 +1451,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final SidePanelParts.RowsCard card = new SidePanelParts.RowsCard(rows.rows, 5);
 		final SidePanelSection section = new SidePanelSection(id, title, rows.hint, card, folds);
 		add(section);
-		updaters.add(t ->
-		{
-			final PanelSnapshot.Rows now = get.apply(t);
-			section.setHint(now.hint);
-			card.set(now.rows);
-		});
+		updaters.add(t -> section.setHint(get.apply(t).hint));
+		body(section, t -> card.set(get.apply(t).rows));
 	}
 
 	private void loadout(FightTab tab)

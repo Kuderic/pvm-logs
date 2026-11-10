@@ -405,6 +405,15 @@ final class SidePanelModel
 		LedgerHistory.Average average;
 		/** The luck-removed clock's median and quartiles over the same like kills; null for none. */
 		LedgerHistory.Spread luckRemoved;
+		/**
+		 * T-188: Celebrations (on by default): the kill card in place of the title and tiles, and the sections' one-line
+		 * summaries. Off, the tab is as it was.
+		 */
+		boolean celebrations;
+		/** T-188: the game's kill count after this kill ({@code FightContext.kc}), 0 unknown or live. */
+		int kc;
+		/** T-188: this kill's place in its boss's record (T-187), or null: live, not recorded yet, or not a counted kill. */
+		Standing standing;
 		LedgerRows.Loadout loadout;
 		/** The spec weapon's name for the loadout card, or null. */
 		String specName;
@@ -1303,6 +1312,437 @@ final class SidePanelModel
 			}
 		}
 		b.taken = taken(s, in, avoidable);
+		// T-188: the kill card and the folded sections' lines. A run keeps its light view; a whole raid its title.
+		if (in.celebrations && !run && in.kind == Kind.ROOM)
+		{
+			b.card = card(in, n, b, avoidable, warning);
+			b.summaries = summaries(in, n, b, avoidable, warning);
+		}
+	}
+
+	// ---- T-188: the kill card ----
+
+	/**
+	 * T-188 (Eric, 2026-11-09: "i like rolled 20 of 100"): luck's percentile as a roll of 1 to 100, the panel's one way
+	 * to write luck. Never 0: a fight can't be unluckier than every other.
+	 */
+	static int roll(double percentile)
+	{
+		return (int) Math.max(1, Math.min(100, Math.round(percentile * 100)));
+	}
+
+	/** T-188: the Luck curve's legend, its ends in rolls. */
+	static final String CURVE_LOW = "1 to 25";
+	static final String CURVE_HIGH = "76 to 100";
+
+	/** {@code rolled 20}: the short form, in section hints, list chips and kill rows. */
+	static String rolled(double percentile)
+	{
+		return "rolled " + roll(percentile);
+	}
+
+	/** {@code rolled 20 of 100}. */
+	static String rolledOf(double percentile)
+	{
+		return rolled(percentile) + " of 100";
+	}
+
+	/** T-188: luck's band while the fight runs, in words: no number until it ends. */
+	static String bandSoFar(double percentile)
+	{
+		return percentile < 0.25 ? "bottom quarter so far" : percentile > 0.75 ? "top quarter so far"
+			: "middle half so far";
+	}
+
+	/**
+	 * T-188: a kill's place in its boss's record (T-187), as the card reads it: your PB and the luck-removed PB before
+	 * this kill, whether it beat them, its rank, and the grade with its basis and the ticks to the next. Filled from
+	 * T-187's record by the panel; the side panel's own type, so the record's classes stay its own.
+	 */
+	static final class Standing
+	{
+		double previousBestClock = Double.NaN;
+		boolean newPb;
+		double previousBestLuckRemoved = Double.NaN;
+		boolean newBestLuckRemoved;
+		int rank;
+		int ranked;
+		/** {@code S}, {@code A}, {@code B} or {@code C}; null when execution is unknown. */
+		String grade;
+		/** {@code top 12% of last 50}, {@code lowest of 16}. */
+		String basis;
+		int ticksToNext;
+		/** The grade above, or null for an S. */
+		String next;
+		/** A or better in a row, this one included (T-189). */
+		int streak;
+		/** No avoidable damage in a row, this one included; -1 at a boss without attack rules (T-189). */
+		int flawlessStreak = -1;
+	}
+
+	/** T-188: the grade's colour: an S gold, an A green, a B white, a C muted grey. Never red. */
+	static Color gradeColour(String grade)
+	{
+		if (grade == null)
+		{
+			return SidePanelStyle.VALUE;
+		}
+		switch (grade)
+		{
+			case "S":
+				return SidePanelStyle.GOLD;
+			case "A":
+				return SidePanelStyle.GRADE_A;
+			case "B":
+				return SidePanelStyle.VALUE;
+			default:
+				return SidePanelStyle.SECONDARY;
+		}
+	}
+
+	/** T-188: {@code 2 ticks from an S}, {@code 1 tick from a B}; null with none. */
+	static String gradeTip(Standing st)
+	{
+		if (st == null || st.next == null || st.ticksToNext <= 0)
+		{
+			return null;
+		}
+		final String article = "A".equals(st.next) || "S".equals(st.next) ? "an " : "a ";
+		return LedgerRows.ticksWord(st.ticksToNext) + " from " + article + st.next;
+	}
+
+	/** T-188: {@code fastest of 17}, {@code 12th fastest of 16}; null with no rank. */
+	static String rank(Standing st)
+	{
+		if (st == null || st.rank <= 0 || st.ranked <= 0)
+		{
+			return null;
+		}
+		if (st.ranked == 1)
+		{
+			return "first kill tracked";
+		}
+		return (st.rank == 1 ? "fastest" : SidePanelParty.ordinal(st.rank) + " fastest") + " of "
+			+ LedgerRows.number(st.ranked);
+	}
+
+	/** T-188: a time in seconds as the title's clock writes it, in whole ticks. */
+	static String clockOf(double seconds)
+	{
+		return LedgerRows.clock((int) Math.round(seconds / LedgerRows.SECONDS_PER_TICK));
+	}
+
+	/** T-188: the kill card, live and after the kill. */
+	static PanelSnapshot.KillCard card(Input in, LedgerRows.Numbers n, PanelSnapshot.Builder b, boolean avoidable,
+		boolean warning)
+	{
+		final boolean live = !in.ended;
+		final PanelSnapshot.Header h = b.header;
+		final int rgb = in.raidType != null ? BossColours.of(in.raidType) : BossColours.of(in.name);
+		final Color tint = new Color(rgb < 0 ? BossColours.ACCENT : rgb);
+		final String corner = live ? "live" : in.kc > 0 ? "KC " + LedgerRows.number(in.kc) : "";
+		final Standing st = live ? null : in.standing;
+
+		// Beside the clock.
+		Text side1 = Text.NONE;
+		Text side2 = Text.NONE;
+		Text side3 = Text.NONE;
+		boolean newPb = false;
+		if (live)
+		{
+			side1 = Text.body(LedgerRows.number(n.damage) + " dmg", SidePanelStyle.BODY);
+			side2 = Text.small(warning || n.expected <= 0 ? "" : "expected " + LedgerRows.number(Math.round(n.expected)),
+				SidePanelStyle.SECONDARY);
+		}
+		else if (st != null && !Double.isNaN(st.previousBestClock))
+		{
+			newPb = st.newPb;
+			side1 = newPb ? Text.title("NEW PB", tint) : Text.small("your PB " + clockOf(st.previousBestClock),
+				SidePanelStyle.SECONDARY);
+			side2 = Text.body(LedgerRows.fasterOrSlower(st.previousBestClock - n.clock), SidePanelStyle.BODY);
+			final String rank = rank(st);
+			side3 = rank == null ? Text.NONE : Text.small(rank, SidePanelStyle.SECONDARY);
+		}
+		else if (in.average != null)
+		{
+			// Before the record has the kill: your usual, as Where the time went has it.
+			side1 = Text.small("your usual " + LedgerRows.duration(in.average.actual.median), SidePanelStyle.SECONDARY);
+			side2 = Text.body(LedgerRows.fasterOrSlower(in.average.actual.median - n.clock), SidePanelStyle.BODY);
+		}
+
+		// Skill.
+		final double execution = live ? n.executionLive : shownExecution(n, avoidable);
+		final double lost = lostSeconds(n, !live && avoidable);
+		final long lostTicks = LedgerRows.ticks(lost);
+		final String exec = Double.isNaN(execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(execution);
+		String grade = null;
+		Color gradeColour = SidePanelStyle.VALUE;
+		String gradeTip = null;
+		final Text big;
+		final List<Text> caption;
+		final Text skill1;
+		Text skill2 = Text.NONE;
+		if (live)
+		{
+			// Ticks lost so far: orange, the only orange live.
+			big = new Text(String.valueOf(lostTicks), lostTicks > 0 ? SidePanelStyle.COST : SidePanelStyle.MUTED,
+				SidePanelStyle.Type.CLOCK);
+			caption = Arrays.asList(Text.small(lostTicks == 1 ? "tick" : "ticks", SidePanelStyle.SECONDARY),
+				Text.small("lost", SidePanelStyle.SECONDARY));
+			skill1 = Text.small("execution " + exec, SidePanelStyle.SECONDARY);
+		}
+		else
+		{
+			skill1 = lostTicks >= 1 ? Text.small(SidePanelStyle.ticks(lost) + " lost", SidePanelStyle.COST)
+				: Text.small(Double.isNaN(execution) ? "" : "no time lost", SidePanelStyle.MUTED);
+			if (st != null && st.grade != null)
+			{
+				grade = st.grade;
+				gradeColour = gradeColour(grade);
+				gradeTip = gradeTip(st);
+				big = new Text(grade, gradeColour, SidePanelStyle.Type.CLOCK);
+				caption = Arrays.asList(Text.title(exec, SidePanelStyle.VALUE), Text.small("execution",
+					SidePanelStyle.SECONDARY));
+				skill2 = st.basis == null ? Text.NONE : Text.small(st.basis, SidePanelStyle.SECONDARY);
+			}
+			else
+			{
+				// No grade yet: the figure alone; the tile's corner says it's execution.
+				big = new Text(exec, SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK);
+				caption = Collections.emptyList();
+			}
+		}
+
+		// Luck: rolling live, rolled after; always violet.
+		int rolled = -1;
+		final Text luckLine;
+		if (warning)
+		{
+			luckLine = Text.small("boss data unsure", SidePanelStyle.MUTED);
+		}
+		else if (live)
+		{
+			luckLine = Double.isNaN(n.percentile) ? Text.small(n.expected <= 0 ? "no monster data yet" : "no spread yet",
+				SidePanelStyle.MUTED) : Text.small(bandSoFar(n.percentile), SidePanelStyle.LUCK);
+		}
+		else
+		{
+			rolled = Double.isNaN(n.percentile) ? -1 : roll(n.percentile);
+			luckLine = Double.isNaN(n.luck) ? Text.small(n.expected <= 0 ? "no monster data yet" : "",
+				SidePanelStyle.MUTED) : Text.small(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.LUCK);
+		}
+
+		// After the kill: the luck-removed clock and its PB, and one tip.
+		String luckRemoved = null;
+		String luckRemovedPb = null;
+		boolean newLuckRemovedPb = false;
+		String tip = null;
+		if (!live && !warning)
+		{
+			if (!Double.isNaN(n.expectedDuration))
+			{
+				luckRemoved = SidePanelStyle.roundedDuration(n.expectedDuration);
+				if (st != null && !Double.isNaN(st.previousBestLuckRemoved))
+				{
+					newLuckRemovedPb = st.newBestLuckRemoved;
+					luckRemovedPb = (newLuckRemovedPb ? "was " : "PB ")
+						+ SidePanelStyle.roundedDuration(st.previousBestLuckRemoved);
+				}
+			}
+			tip = tip(n, avoidable);
+		}
+
+		// Live: the weapon in hand, and its DPS.
+		String weapon = null;
+		int weaponItem = -1;
+		int weaponSprite = -1;
+		String weaponDps = null;
+		if (live && in.view != null && b.damage != null)
+		{
+			String key = null;
+			for (int i = in.view.attacks.size() - 1; i >= 0 && key == null; i--)
+			{
+				final FightTimeline.Attack a = in.view.attacks.get(i);
+				if (!a.special)
+				{
+					key = a.key;
+				}
+			}
+			for (PanelSnapshot.Source r : b.damage.rows)
+			{
+				if (key != null && key.equals(r.name))
+				{
+					weapon = r.name;
+					weaponItem = r.itemId;
+					weaponSprite = r.spriteId;
+					weaponDps = r.dps == null ? null : r.dps + " dps" + (r.expectedDps == null ? ""
+						: DOT + "expected " + r.expectedDps);
+				}
+			}
+		}
+		return new PanelSnapshot.KillCard(live, in.name, tint, h.icon, h.sub.text, h.subShort, corner, h.clock.text,
+			side1, side2, side3, newPb, grade, gradeColour, gradeTip, big, caption, skill1, skill2, rolled, luckLine,
+			luckRemoved, luckRemovedPb, newLuckRemovedPb, tip, weapon, weaponItem, weaponSprite, weaponDps);
+	}
+
+	/**
+	 * T-188: the one tip, from Execution's biggest loss (T-126's parts), in the unit its row has: ticks for uptime and
+	 * avoidable eating, damage for the setup's parts. Null when nothing was lost.
+	 */
+	static String tip(LedgerRows.Numbers n, boolean avoidable)
+	{
+		LedgerRows.Loss worst = null;
+		for (LedgerRows.Loss l : LedgerRows.executionLosses(n, avoidable))
+		{
+			if (l.points > 0.0005 && (worst == null || l.points > worst.points))
+			{
+				worst = l;
+			}
+		}
+		if (worst == null)
+		{
+			return null;
+		}
+		final String points = LedgerRows.partPercent(worst.points).replace("%", " points");
+		switch (worst.label)
+		{
+			case "uptime":
+				return TIP + "uptime, " + LedgerRows.ticksWord(LedgerRows.ticks(n.uptimeCost)) + " idle";
+			case "prayer":
+				return setupTip("prayer", n.prayerDamage, points);
+			case "gear":
+				return setupTip("gear switches", n.gearDamage, points);
+			case "stat boost":
+				return setupTip("the stat boost", n.boostDamage, points);
+			case "setup":
+				return setupTip("the setup", n.setupDamage, points);
+			default:
+				// Avoidable eating.
+				return TIP + "eating for avoidable hits, " + LedgerRows.ticksWord(LedgerRows.ticks(n.avoidableEatingCost));
+		}
+	}
+
+	/** T-188: the tip's opening words. */
+	static final String TIP = "Most lost: ";
+
+	private static String setupTip(String part, double damage, String points)
+	{
+		return TIP + part + ", " + (Double.isNaN(damage) || damage < 0.5 ? points
+			: LedgerRows.number(Math.round(damage)) + " damage");
+	}
+
+	/**
+	 * T-188: each section's one line while folded under the card: Damage's top three sources, Luck's damage against
+	 * expected, where the time went, Execution's losses, Damage taken, Details.
+	 */
+	static Map<String, Text> summaries(Input in, LedgerRows.Numbers n, PanelSnapshot.Builder b, boolean avoidable,
+		boolean warning)
+	{
+		final Map<String, Text> out = new LinkedHashMap<>();
+		if (b.damage != null)
+		{
+			final List<PanelSnapshot.Source> rows = new ArrayList<>(b.damage.rows);
+			rows.removeIf(r -> r.colour == SidePanelStyle.UNSCORED);
+			rows.sort((x, y) -> Double.compare(y.shareFraction, x.shareFraction));
+			final List<String> parts = new ArrayList<>();
+			for (int i = 0; i < rows.size() && parts.size() < 3; i++)
+			{
+				parts.add(shortName(rows.get(i).name) + " " + rows.get(i).share);
+			}
+			out.put("damage", Text.small(String.join(DOT, parts), SidePanelStyle.SECONDARY));
+		}
+		if (b.chart != null)
+		{
+			out.put("chart", Text.small(b.chart.youLegend + (b.chart.expectedShown ? DOT + b.chart.expectedLegend : ""),
+				SidePanelStyle.SECONDARY));
+			final List<String> ticks = new ArrayList<>();
+			if (b.chart.lost >= 0)
+			{
+				ticks.add("lost " + b.chart.lost);
+			}
+			if (b.chart.eating >= 0)
+			{
+				ticks.add("eating " + b.chart.eating);
+			}
+			if (!ticks.isEmpty())
+			{
+				out.put("ticks", Text.small(String.join(DOT, ticks), SidePanelStyle.SECONDARY));
+			}
+		}
+		if (b.curve != null && n.expected > 0)
+		{
+			out.put("curve", Text.small("rolls dealt " + Math.round(100 * n.damage / n.expected) + "% of expected",
+				SidePanelStyle.SECONDARY));
+		}
+		if (b.budget != null && !b.budget.rows.isEmpty())
+		{
+			final List<String> parts = new ArrayList<>();
+			parts.add("best " + b.budget.rows.get(0).value.text);
+			final long lost = LedgerRows.ticks(lostSeconds(n, avoidable));
+			if (lost > 0)
+			{
+				parts.add("lost " + LedgerRows.ticksWord(lost));
+			}
+			if (!warning && !Double.isNaN(n.luck) && Math.abs(n.luck) >= 0.5)
+			{
+				parts.add("luck " + SidePanelStyle.seconds(Math.abs(n.luck)));
+			}
+			out.put("budget", Text.small(String.join(DOT, parts), SidePanelStyle.SECONDARY));
+		}
+		if (b.execution != null)
+		{
+			final List<String> parts = new ArrayList<>();
+			if (!in.ended || !avoidable || Double.isNaN(n.avoidableEatingCost))
+			{
+				// Nothing: avoidable eating counts once the fight has ended at a boss with attack rules.
+			}
+			else if (LedgerRows.ticks(n.avoidableEatingCost) > 0)
+			{
+				parts.add("eating -" + LedgerRows.ticks(n.avoidableEatingCost) + LedgerRows.TICKS_SHORT);
+			}
+			if (LedgerRows.ticks(n.uptimeCost) > 0)
+			{
+				parts.add("uptime -" + LedgerRows.ticks(n.uptimeCost) + LedgerRows.TICKS_SHORT);
+			}
+			if (!Double.isNaN(n.setupDamage) && Math.round(n.setupDamage) > 0)
+			{
+				parts.add("-" + LedgerRows.number(Math.round(n.setupDamage)) + " dmg");
+			}
+			out.put("execution", Text.small(parts.isEmpty() ? "nothing lost" : String.join(DOT, parts),
+				SidePanelStyle.SECONDARY));
+		}
+		final LedgerRows.Scope s = in.scope;
+		if (b.taken != null)
+		{
+			final List<String> parts = new ArrayList<>();
+			final int taken = s.damageTaken();
+			final int avoid = s.damageTakenAvoidable();
+			if (in.ended && avoidable && avoid >= 0 && taken > 0)
+			{
+				parts.add(LedgerRows.number(avoid) + " avoidable (" + Math.round(100.0 * avoid / taken) + "%)");
+			}
+			parts.add(s.biggestHitTaken() > 0 ? "largest hit " + LedgerRows.number(s.biggestHitTaken()) : "no hits taken");
+			out.put("taken", Text.small(String.join(DOT, parts), SidePanelStyle.SECONDARY));
+		}
+		if (b.details != null)
+		{
+			final List<String> parts = new ArrayList<>();
+			parts.add("hits " + s.hits() + "/" + LedgerRows.oneDecimal(s.expectedHits()));
+			if (s.healed() > 0)
+			{
+				parts.add("boss healed " + LedgerRows.number(s.healed()));
+			}
+			out.put("details", Text.small(String.join(DOT, parts), SidePanelStyle.SECONDARY));
+		}
+		return out;
+	}
+
+	/** T-188: a source's short name in a summary: {@code tentacle} for "Abyssal tentacle (or)", {@code thrall}. */
+	static String shortName(String name)
+	{
+		final String plain = name.replaceAll("\\s*\\(.*\\)\\s*$", "").trim();
+		final int space = plain.lastIndexOf(' ');
+		return (space < 0 ? plain : plain.substring(space + 1)).toLowerCase(java.util.Locale.ROOT);
 	}
 
 	// ---- T-095: a run of monsters ----
@@ -1669,7 +2109,7 @@ final class SidePanelModel
 		}
 		else
 		{
-			tiles.add(tile("Luck", Text.title(LedgerRows.band(n.percentile), luck),
+			tiles.add(tile("Luck", Text.title(rolled(n.percentile), luck),
 				Text.small(LedgerRows.fasterOrSlower(n.luck), SidePanelStyle.hint(luckColour)), edge));
 		}
 
@@ -2688,7 +3128,7 @@ final class SidePanelModel
 		{
 			caption = curveShare(p) + "% of fights with these attacks dealt less";
 		}
-		return new PanelSnapshot.Curve(z, Text.title(LedgerRows.band(p), SidePanelStyle.of(luckColour)), caption,
+		return new PanelSnapshot.Curve(z, Text.title(rolled(p), SidePanelStyle.LUCK), caption,
 			curveTip(z, p));
 	}
 
@@ -2707,10 +3147,9 @@ final class SidePanelModel
 	 */
 	static String curveTip(double z, double p)
 	{
-		final String band = LedgerRows.band(p);
 		final boolean right = z >= 0;
 		final long share = curveShare(right ? 1 - p : p);
-		final String head = Character.toUpperCase(band.charAt(0)) + band.substring(1) + ": " + share
+		final String head = "Rolled " + roll(p) + " of 100: " + share
 			+ "% of fights with these attacks would have dealt " + (right ? "more" : "less") + ", the shaded "
 			+ (right ? "right" : "left") + " side.";
 		return head + " The curve is spread by damage, not by share of fights, so a small share is a thin sliver at its"
@@ -2782,7 +3221,7 @@ final class SidePanelModel
 		if (percentile >= 0)
 		{
 			final LedgerRows.Colour c = LedgerRows.percentileBand(percentile);
-			chip = Text.small(LedgerRows.band(percentile), c == LedgerRows.Colour.NEUTRAL ? SidePanelStyle.BODY
+			chip = Text.small(rolled(percentile), c == LedgerRows.Colour.NEUTRAL ? SidePanelStyle.BODY
 				: SidePanelStyle.of(c));
 			fill = SidePanelStyle.chip(c);
 		}
@@ -2857,7 +3296,7 @@ final class SidePanelModel
 		{
 			return null;
 		}
-		final String word = Double.isNaN(n.percentile) ? LedgerRows.fasterOrSlower(n.luck) : LedgerRows.band(n.percentile);
+		final String word = Double.isNaN(n.percentile) ? LedgerRows.fasterOrSlower(n.luck) : rolled(n.percentile);
 		final LedgerRows.Colour c = luckColour(n);
 		return Text.small(word, c == LedgerRows.Colour.NEUTRAL ? SidePanelStyle.BODY : SidePanelStyle.of(c));
 	}

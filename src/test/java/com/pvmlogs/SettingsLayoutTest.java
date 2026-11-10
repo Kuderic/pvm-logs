@@ -106,7 +106,7 @@ public class SettingsLayoutTest
 			"showOverlay", "overlayShowLoadout", "overlayAlwaysDps", "overlayDpsIdleSeconds", "overlayBossesOnly",
 			"overlayHoldSeconds",
 			"overlayCovers", "overlayLuck", "overlayParts", "overlayDetails",
-			"panelLive", "panelCharts", "panelLargerText", "panelSmoothFont", "shareWithParty",
+			"panelLive", "panelCharts", "panelCelebrations", "panelLargerText", "panelSmoothFont", "shareWithParty",
 			"debugLogging"), keys());
 	}
 
@@ -143,6 +143,8 @@ public class SettingsLayoutTest
 		assertEquals("Summary after the fight", names.get("overlayDetails"));
 		assertEquals("Update during fights", names.get("panelLive"));
 		assertEquals("Charts", names.get("panelCharts"));
+		// T-188.
+		assertEquals("Celebrations", names.get("panelCelebrations"));
 		// T-053.
 		assertEquals("Larger text", names.get("panelLargerText"));
 		assertEquals("Smooth font", names.get("panelSmoothFont"));
@@ -176,6 +178,8 @@ public class SettingsLayoutTest
 		assertTrue(d.overlayDetails());
 		assertTrue(d.panelLive());
 		assertTrue(d.panelCharts());
+		// T-188: on (the brief's default, for Eric to confirm).
+		assertTrue(d.panelCelebrations());
 		// T-053: both off, so the panel looks as it always has.
 		assertFalse(d.panelLargerText());
 		assertFalse(d.panelSmoothFont());
