@@ -543,6 +543,14 @@
       "defenceDrain": {
         "regenTicks": 20,
         "source": "OSRS Wiki, read 2026-10-28: User:Orion/Regen: a level every 20 ticks."
+      },
+      "stall": {
+        "name": "stall (strategy)",
+        "holdAboveHp": 400,
+        "hitsAbove": 2,
+        "beforeAttack": 14,
+        "attackGapTicks": 5,
+        "source": "T-191. OSRS Wiki, Cerberus/Strategies, read 2026-11-09: summoned souls start 'when Cerberus falls below 400 health' and come 'every seventh attack' (7, 14, 28); its No Ghosts method hits her 'to just above 400 hitpoints and wait until the 14th attack', so no souls come before the 28th. Eric (2026-11-09) also holds her there to her 7th and kills her before her 14th: both are excused, the stall ending by her 14th. Her attacks every 6 ticks (wiki, Cerberus), the triple attack's three parts 2 ticks apart (Strategies): one attack while its hits on the player started under 5 ticks apart. Two max hits above 400, not the brief's one: Eric's own stall waits 'then attack twice', and his logs hold her up to 73 above with a max of 61 (11-09 [20099]) and 115 above (11-03 [2002]); the common stall waits within one."
       }
     },
     {

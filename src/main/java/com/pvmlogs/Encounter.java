@@ -1090,6 +1090,17 @@ class Encounter
 		return total;
 	}
 
+	/** T-191: of the mechanics ticks, a strategy's stall. */
+	int getTicksStall()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getTicksStall();
+		}
+		return total;
+	}
+
 	int getTicksLostEating()
 	{
 		int total = 0;

@@ -2054,6 +2054,9 @@ final class SidePanelModel
 		// grey: not a cost, and not best play either, which is the time spent attacking with no losses at average luck.
 		// B = T - U + L - (Cu + Ce + M + Cb + Cp + Cg). Before T-081 it sat inside best play's stretch.
 		final double m = Double.isNaN(n.mechanicsCost) ? 0 : n.mechanicsCost;
+		// T-191: of it, a strategy's stall (Cerberus held above 400 hp), a stretch and a row of its own, so the time the trade
+		// costs is in plain view. Only known once the fight has ended.
+		final double stall = Double.isNaN(n.stallCost) ? 0 : Math.min(m, n.stallCost);
 		final double ca = avoidableShown(n, in) ? avoidableEating(n) : 0;
 		final boolean caCosting = LedgerRows.isCosting(ca, n.clock);
 		double costSum = e + m;
@@ -2085,7 +2088,11 @@ final class SidePanelModel
 				if (m > 0)
 				{
 					// Only where a boss's mechanic forced some: the bar of every other fight is as it was.
-					segments.add(new Segment(m, Fill.MECHANICS));
+					segments.add(new Segment(m - stall, Fill.MECHANICS));
+					if (stall > 0)
+					{
+						segments.add(new Segment(stall, Fill.MECHANICS));
+					}
 				}
 			}
 		}
@@ -2140,10 +2147,15 @@ final class SidePanelModel
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
 					Text.small("+" + SidePanelStyle.ticks(e - ca), SidePanelStyle.BODY)));
 			}
-			if (i == 0 && LedgerRows.ticks(m) >= 1)
+			if (i == 0 && LedgerRows.ticks(m - stall) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(MECHANICS, SidePanelStyle.BODY), null,
-					Text.small("+" + SidePanelStyle.ticks(m), SidePanelStyle.BODY)));
+					Text.small("+" + SidePanelStyle.ticks(m - stall), SidePanelStyle.BODY)));
+			}
+			if (i == 0 && LedgerRows.ticks(stall) >= 1)
+			{
+				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(STALL, SidePanelStyle.BODY), null,
+					Text.small("+" + SidePanelStyle.ticks(stall), SidePanelStyle.BODY)));
 			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
@@ -2198,6 +2210,8 @@ final class SidePanelModel
 
 	/** T-081: the time budget's and the strip's word for the ticks a boss's mechanic forced (T-074). */
 	static final String MECHANICS = "mechanics";
+	/** T-191: a strategy's stall, out of the mechanics' time. */
+	static final String STALL = "stall (strategy)";
 
 	/** {@code 23 s slower}, {@code 5 s faster}, {@code even}: this kill's time against a usual one. */
 	static String against(double seconds, double usual)

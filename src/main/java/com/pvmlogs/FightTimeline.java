@@ -282,6 +282,22 @@ final class FightTimeline
 		PerfProbe.stop(probe, PerfProbe.Slot.TIMELINE, t0);
 	}
 
+	/**
+	 * T-191: an idle tick recorded as lost was a strategy's stall, found at the fight's end: drawn as a mechanic's from
+	 * now on. A tick that isn't a lost one is left as it is.
+	 */
+	void excuseLost(int tick)
+	{
+		final int i = index(tick);
+		if (i < 0 || i >= length || states[i] != LOST)
+		{
+			return;
+		}
+		states[i] = MECHANIC;
+		lostTicks--;
+		mechanicTicks++;
+	}
+
 	/** {@link Fight#recordTickLost}, when it counts. */
 	void tickLost(boolean eating)
 	{

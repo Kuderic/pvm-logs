@@ -63,6 +63,8 @@ class SessionTotals
 	private int ticksLostOther;
 	// See Fight: idle ticks a boss's mechanic excused (T-074).
 	private int ticksMechanics;
+	// T-191: of those, a strategy's stall, moved out of the lost ticks as each fight ended.
+	private int ticksStall;
 	private int combatTicks;
 	// The ticks of the trip's scored fights only (T-024): the time its damage, expected and thrall/DoT/reflect totals come
 	// from, since those are fed behind isScored(). combatTicks stays every fight's, the Sire's respiratory systems included.
@@ -133,6 +135,7 @@ class SessionTotals
 		ticksLostEating = 0;
 		ticksLostOther = 0;
 		ticksMechanics = 0;
+		ticksStall = 0;
 		combatTicks = 0;
 		scoredCombatTicks = 0;
 		sumExpectedAccuracy = 0;
@@ -225,6 +228,15 @@ class SessionTotals
 	{
 		ticksMechanics++;
 		recordTick(scored);
+	}
+
+	/** T-191: a fight's idle ticks found at its end to be a strategy's stall: out of the lost ticks, into the mechanics'. */
+	void excuseStall(int n)
+	{
+		final int moved = Math.min(ticksLostOther, Math.max(0, n));
+		ticksLostOther -= moved;
+		ticksMechanics += moved;
+		ticksStall += moved;
 	}
 
 	/** A tick that passed while the weapon was still on cooldown, or an attack on an unscored target. */

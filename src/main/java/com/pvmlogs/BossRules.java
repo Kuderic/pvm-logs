@@ -220,6 +220,8 @@ class BossRules
 		DamageModifierRules damageModifiers;
 		/** T-074: the idle ticks its mechanics may excuse from uptime, by the damage-modifier state they ride on. */
 		List<UptimeAllowance> uptimeAllowances;
+		/** T-191: a stall the strategy guides teach (Cerberus's), excused from uptime after the fight; null for none. */
+		StallRule stall;
 		/**
 		 * T-088: a world has only one of this boss (the Giant Mole), so after a trip away the same npc id on the same
 		 * world is the same boss, whatever its index.
@@ -318,6 +320,28 @@ class BossRules
 		{
 			return "cast".equals(from);
 		}
+	}
+
+	/**
+	 * T-191: idle time a strategy calls for, held with the boss above an hp mark until her attack count passes a special:
+	 * Cerberus kept above 400 hp so her souls don't come on her 7th or 14th attack. An idle tick is the stall while she is
+	 * above {@link #holdAboveHp} by no more than {@link #hitsAbove} of the player's max hits, and before her
+	 * {@link #beforeAttack}th attack. Judged after the fight, from her attacks counted off her hits on the player, so
+	 * nothing live shows her count.
+	 */
+	static final class StallRule
+	{
+		/** What "Where the time went" calls it. */
+		String name;
+		/** The hp she is held above. */
+		int holdAboveHp;
+		/** How many of the player's max hits above the mark still count as held there. */
+		int hitsAbove;
+		/** The attack the stall waits for at the latest: idle from her starting it on is lost again. */
+		int beforeAttack;
+		/** Two of her hits on the player whose attacks started this far apart or more are two attacks; nearer, one. */
+		int attackGapTicks;
+		String source;
 	}
 
 	/**
