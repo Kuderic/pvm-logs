@@ -9157,7 +9157,9 @@ public class PvmPerformancePlugin extends Plugin
 		// T-187: the per-boss record, from records.json or seeded from this history and its backups.
 		try
 		{
-			final BossRecords records = new BossRecords(dir, gson);
+			// T-195: each kill's execution stamped with how its boss's rules score it (the rules as monsterStats loads them).
+			final BossRules rules = BossRules.load(gson, MonsterStatsProvider.rulesOverrideFile(dir));
+			final BossRecords records = new BossRecords(dir, gson, BossRecords.stamps(rules));
 			debug.log("%s", records.load(new ArrayList<>(history), System.currentTimeMillis()));
 			records.save();
 			bossRecords = records;
