@@ -864,7 +864,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		catch (IOException | RuntimeException e)
 		{
-			log.warn("PvM Logs: no data folder, so history, exports and debug files are off", e);
+			log.warn("Luck vs Skill: no data folder, so history, exports and debug files are off", e);
 			return null;
 		}
 	}
@@ -7712,7 +7712,7 @@ public class PvmPerformancePlugin extends Plugin
 				}
 				catch (IOException | RuntimeException e)
 				{
-					log.warn("PvM Logs: could not save the install id", e);
+					log.warn("Luck vs Skill: could not save the install id", e);
 				}
 			});
 		}
@@ -7724,7 +7724,7 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		catch (IOException e)
 		{
-			log.debug("PvM Logs: could not read the bundled rules", e);
+			log.debug("Luck vs Skill: could not read the bundled rules", e);
 		}
 		final String override = dir == null ? null : readText(dir.joinSegment("boss-rules.json"));
 		rulesRecord = portedCommit(rules == null ? null : rules.provenance()) + " rules " + FightContext.shortHash(bundled)
@@ -8408,7 +8408,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 		}
 		currentEncounter.add(fight);
-		log.debug("PvM Logs: fight on {} (npc {}) -> room '{}' group={} fights={}",
+		log.debug("Luck vs Skill: fight on {} (npc {}) -> room '{}' group={} fights={}",
 			fight.getTargetName(), fight.getTargetId(), currentEncounter.getName(),
 			fight.getGroupName(), currentEncounter.getFights().size());
 	}
@@ -9152,7 +9152,7 @@ public class PvmPerformancePlugin extends Plugin
 		catch (RuntimeException e)
 		{
 			debug.log("HISTORY couldn't be loaded: %s", e);
-			log.warn("PvM Logs: could not load history", e);
+			log.warn("Luck vs Skill: could not load history", e);
 		}
 		// T-187: the per-boss record, from records.json or seeded from this history and its backups.
 		try
@@ -9167,7 +9167,7 @@ public class PvmPerformancePlugin extends Plugin
 		catch (IOException | RuntimeException e)
 		{
 			debug.log("RECORDS couldn't be loaded or saved: %s", e);
-			log.warn("PvM Logs: could not load the boss records", e);
+			log.warn("Luck vs Skill: could not load the boss records", e);
 		}
 		if (panel != null)
 		{
@@ -9193,7 +9193,7 @@ public class PvmPerformancePlugin extends Plugin
 			catch (IOException | RuntimeException e)
 			{
 				debug.log("HISTORY couldn't be saved: %s", e.getMessage());
-				log.warn("PvM Logs: could not save history", e);
+				log.warn("Luck vs Skill: could not save history", e);
 			}
 			noteRecords(snapshot);
 		});
@@ -9226,7 +9226,7 @@ public class PvmPerformancePlugin extends Plugin
 		catch (IOException | RuntimeException e)
 		{
 			debug.log("RECORDS couldn't be updated: %s", e.getMessage());
-			log.warn("PvM Logs: could not update the boss records", e);
+			log.warn("Luck vs Skill: could not update the boss records", e);
 		}
 	}
 
@@ -9255,7 +9255,7 @@ public class PvmPerformancePlugin extends Plugin
 		catch (InterruptedException | java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e)
 		{
 			// Not finished: the file on disk is still the last whole one (HistoryStore writes beside it, then moves).
-			log.warn("PvM Logs: the last history save didn't finish before shutdown", e);
+			log.warn("Luck vs Skill: the last history save didn't finish before shutdown", e);
 		}
 	}
 
@@ -9580,7 +9580,7 @@ public class PvmPerformancePlugin extends Plugin
 			}
 			catch (IOException | RuntimeException e)
 			{
-				log.warn("PvM Logs export failed", e);
+				log.warn("Luck vs Skill: export failed", e);
 				setStatus("Export failed: " + e.getMessage());
 			}
 		});
