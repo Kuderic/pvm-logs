@@ -316,7 +316,8 @@ final class SidePanelParty
 		final String[] luck = {luckKnown ? SidePanelModel.rolled(f.p) : "", luckKnown ? seconds(f.ls) : ""};
 		final String[] exec = {f.x >= 0 ? LedgerRows.partPercent(f.x) : "", f.il > 0 ? "-" + f.il + LedgerRows.TICKS_SHORT
 			: ""};
-		final Color luckColour = luckKnown ? SidePanelStyle.of(LedgerRows.percentileBand(f.p)) : SidePanelStyle.MUTED;
+		// T-194: the roll in its strength of luck's violet, never skill's colours.
+		final Color luckColour = luckKnown ? SidePanelModel.luckInk(f.p) : SidePanelStyle.MUTED;
 		final String place = ordinal(rank) + " of " + of + " · " + share(all, total) + " · " + dps(all, seconds) + " dps";
 		final PanelSnapshot.PartyBreakdown breakdown = new PanelSnapshot.PartyBreakdown(m.you ? "You" : m.name, place,
 			attacks(f, seconds, in.itemNames), summary(f, !in.live));
@@ -412,7 +413,7 @@ final class SidePanelParty
 		if (after && f.p >= 0)
 		{
 			rows.add(row("luck", SidePanelModel.rolled(f.p) + " (" + LedgerRows.fasterOrSlower(f.ls) + ")",
-				SidePanelStyle.of(LedgerRows.percentileBand(f.p)), false));
+				SidePanelModel.luckInk(f.p), false));
 		}
 		if (f.x >= 0)
 		{

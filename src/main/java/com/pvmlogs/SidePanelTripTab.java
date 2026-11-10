@@ -280,6 +280,11 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 				: r.suffix.isEmpty() ? null : Text.body(r.suffix, c));
 			clock.set(Text.title(r.clock, c));
 			chip.set(r.chip, r.chipFill);
+			// T-194: the roll's words on hover.
+			if (!java.util.Objects.equals(r.chipTip, chip.getToolTipText()))
+			{
+				chip.setToolTipText(r.chipTip);
+			}
 			icon.set(r.icon);
 		}
 

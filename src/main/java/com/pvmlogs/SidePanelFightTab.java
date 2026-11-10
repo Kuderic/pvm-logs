@@ -752,7 +752,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			// T-118: Luck's and Execution's time is in ticks; say what a tick is. T-126: Execution's adds its sum.
 			if ("Luck".equals(t.label.text))
 			{
-				v.setToolTipText(SidePanelModel.TICK_NOTE);
+				// T-194: with the roll's words first.
+				v.setToolTipText(t.tooltip != null ? t.tooltip : SidePanelModel.TICK_NOTE);
 			}
 			else if ("Execution".equals(t.label.text))
 			{

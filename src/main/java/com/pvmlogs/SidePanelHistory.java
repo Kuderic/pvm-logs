@@ -808,6 +808,8 @@ final class SidePanelHistory
 		final int kills;
 		/** T-190: the kill's grade from T-187's record (S to C), or null; with Celebrations on, in Execution's place. */
 		final String grade;
+		/** T-194: the luck chip's tooltip, its words ({@code top 4% · dealt 112% of expected · 9 s faster}); null for none. */
+		String chipTip;
 
 		KillRow(Encounter room, String clock, String date, Text chip, Color chipFill, String execution, String name,
 			boolean ended)
@@ -815,13 +817,11 @@ final class SidePanelHistory
 			this(room, clock, date, chip, chipFill, execution, name, ended, -1);
 		}
 
-		/** T-190: this row with its grade, and luck as a violet roll on a neutral chip. */
+		/** T-190: this row with its grade. */
 		private KillRow(KillRow r, String grade)
 		{
-			this(r.room, r.clock, r.date, r.chip == null || r.chip.text.startsWith("rolled") ? r.chip == null ? null
-				: Text.small(r.chip.text, SidePanelStyle.LUCK) : r.chip, r.chip == null ? r.chipFill
-				: r.chip.text.startsWith("rolled") ? SidePanelStyle.CHIP_NEUTRAL : r.chipFill, r.execution, r.name, r.ended,
-				r.kills, grade);
+			this(r.room, r.clock, r.date, r.chip, r.chipFill, r.execution, r.name, r.ended, r.kills, grade);
+			chipTip = r.chipTip;
 		}
 
 		KillRow withGrade(String g)
@@ -900,7 +900,8 @@ final class SidePanelHistory
 		if (!Double.isNaN(v.fastest.value) && v.fastest.value > 0)
 		{
 			bests.add(new Row(Text.body("fastest", SidePanelStyle.SECONDARY), Double.isNaN(v.fastest.luckPercentile)
-				? Text.NONE : Text.small(" " + SidePanelModel.rolled(v.fastest.luckPercentile), SidePanelStyle.LUCK),
+				? Text.NONE : Text.small(" " + SidePanelModel.rolled(v.fastest.luckPercentile),
+				SidePanelModel.luckInk(v.fastest.luckPercentile)),
 				Text.title(SidePanelModel.clockOf(v.fastest.value), SidePanelStyle.VALUE)));
 		}
 		if (!Double.isNaN(v.luckRemoved.value))
@@ -1025,10 +1026,12 @@ final class SidePanelHistory
 		}
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(room));
 		final boolean warning = room.getStatsWarning() != null;
-		return new KillRow(room, LedgerRows.clock(room.getCombatTicks()),
+		final KillRow row = new KillRow(room, LedgerRows.clock(room.getCombatTicks()),
 			end > 0 ? SidePanelModel.rowDate(end, now, zone) : "", SidePanelModel.chip(n, warning),
 			chipFill(n, warning), Double.isNaN(n.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(n.execution),
 			room.getName(), !isKill(room));
+		row.chipTip = warning ? null : SidePanelModel.luckWords(n);
+		return row;
 	}
 
 	/**
@@ -1048,7 +1051,7 @@ final class SidePanelHistory
 
 	private static Color chipFill(LedgerRows.Numbers n, boolean warning)
 	{
-		return warning || Double.isNaN(n.luck) ? null : SidePanelStyle.chip(SidePanelModel.luckColour(n));
+		return SidePanelModel.chipFill(n, warning);
 	}
 
 	/** {@code Show 29 more}, or null when every kill is shown. */
@@ -1240,14 +1243,18 @@ final class SidePanelHistory
 		{
 			// T-095: the run being fought: its kills and kills/hr, never "(ended)".
 			final KillRow r = runRow(running, "");
-			out.add(new KillRow(running, r.clock, "", r.chip, r.chipFill, "", r.name, false, r.kills));
+			final KillRow row = new KillRow(running, r.clock, "", r.chip, r.chipFill, "", r.name, false, r.kills);
+			row.chipTip = r.chipTip;
+			out.add(row);
 		}
 		else
 		{
 			final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(running));
 			final boolean warning = running.getStatsWarning() != null;
-			out.add(new KillRow(running, LedgerRows.clock(running.getCombatTicks()), "", SidePanelModel.chip(n, warning),
-				chipFill(n, warning), "", running.getName(), false));
+			final KillRow row = new KillRow(running, LedgerRows.clock(running.getCombatTicks()), "",
+				SidePanelModel.chip(n, warning), chipFill(n, warning), "", running.getName(), false);
+			row.chipTip = warning ? null : SidePanelModel.luckWords(n);
+			out.add(row);
 		}
 		for (KillRow r : saved)
 		{

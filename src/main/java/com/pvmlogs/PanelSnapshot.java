@@ -373,6 +373,8 @@ final class PanelSnapshot
 		final String suffix;
 		/** T-102: an ended room the player died in (T-100): {@code (died)} in place of {@code (ended)}. */
 		final boolean died;
+		/** T-194: the luck chip's tooltip, its words; null for none. */
+		String chipTip;
 
 		TripRow(String name, boolean ended, String clock, Text chip, Color chipFill)
 		{
@@ -631,6 +633,13 @@ final class PanelSnapshot
 		{
 			this.part = true;
 			this.tip = tip;
+			return this;
+		}
+
+		/** T-194: the row's tooltip, its luck in words; null leaves it without. */
+		ListRow tip(String t)
+		{
+			this.tip = t;
 			return this;
 		}
 
@@ -1535,6 +1544,8 @@ final class PanelSnapshot
 		final String weaponDps;
 		/** T-189: the badges earned, only after a kill and only when earned; empty for none. */
 		final List<Badge> badges;
+		/** T-194: the roll's words for its tooltip ({@code top 4% · dealt 112% of expected · 9 s faster}); null for none. */
+		String luckWords;
 
 		KillCard(boolean live, String boss, Color tint, int icon, String sub, List<String> subShort, String corner,
 			String clock, Text side1, Text side2, Text side3, boolean newPb, String grade, Color gradeColour,
@@ -1606,6 +1617,7 @@ final class PanelSnapshot
 			weaponItem = c.weaponItem;
 			weaponSprite = c.weaponSprite;
 			weaponDps = c.weaponDps;
+			luckWords = c.luckWords;
 			this.badges = list(badges);
 		}
 
