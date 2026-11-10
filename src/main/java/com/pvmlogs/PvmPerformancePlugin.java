@@ -533,6 +533,9 @@ public class PvmPerformancePlugin extends Plugin
 	// Rend lands five ticks after its throw, so a second Soul Rend fired before the first was booked took its place, and
 	// the first was scored as an ordinary attack (Eric's 14:02 Yama log, the throw on [7608]).
 	private final java.util.Deque<Integer> unspentSpecDrops = new java.util.ArrayDeque<>();
+	// T-185: the weapon in hand as each of those falls came, by its tick: the special's own, whatever was held before a
+	// switch on its tick.
+	private final Map<Integer, Integer> specWeaponByDrop = new HashMap<>();
 	// T-145: the tick the energy last fell with a special's weapon held: a throw, whether or not it pays experience.
 	private int specThrowTick = Integer.MIN_VALUE;
 	// T-145: a special whose miss pays nothing and shows nothing (the Eye of Ayak's Soul Rend), watched until the tick
@@ -893,6 +896,7 @@ public class PvmPerformancePlugin extends Plugin
 		// Both re-read from scratch: a stale energy reading across a reset would look like a special the moment the bar came
 		// back lower than it was.
 		unspentSpecDrops.clear();
+		specWeaponByDrop.clear();
 		specThrowTick = Integer.MIN_VALUE;
 		pendingSpecial = null;
 		specEnergy = -1;
@@ -3722,14 +3726,18 @@ public class PvmPerformancePlugin extends Plugin
 		// on Verzik's first phase, its own exemption from the cap. Decided HERE rather than when the figures were sampled
 		// because the energy varp can arrive after that tick's onGameTick has already run, so whether the attack was a
 		// special is only reliably known by the time it is booked.
-		final boolean special = unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick) != Integer.MIN_VALUE
-			&& specAverageHit >= 0;
+		final int specDrop = unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick);
+		final boolean special = specDrop != Integer.MIN_VALUE && specAverageHit >= 0;
 		double expectedChances =
 			combatCalc.attackLandChance(accuracy, targetId);
+		// T-185: the special's weapon: the one in hand as its energy fell. The tick before a switch is the ordinary row's
+		// rule; a Dragon warhammer switched to and specced on one tick read as the Burning claws held before it, named
+		// twice on the Damage card and left out of the draining specials ([6672] of Eric's log of 2026-11-09 15:33).
+		final int specWeaponId = special ? specialWeapon(specWeaponByDrop, specDrop,
+			weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick), combatCalc.equippedWeaponId())) : -1;
 		// The special in hand on the tick it was thrown, for its drain's outcomes (T-050).
 		final net.runelite.client.plugins.specialcounter.SpecialWeapon specWeapon = special
-			? DrainLuck.weaponFor(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick),
-				combatCalc.equippedWeaponId())) : null;
+			? DrainLuck.weaponFor(specWeaponId) : null;
 		// T-149: Tekton's first warhammer or elder maul to reach him always lands (wiki, Tekton). A melee blow is booked by
 		// its splat, so it lands now; one booked otherwise, the tick after it went out.
 		final boolean certain = special && drain.firstSpecialCertain(fight.getTargetIndex(), targetId,
@@ -3738,11 +3746,11 @@ public class PvmPerformancePlugin extends Plugin
 		if (special)
 		{
 			// The special's weapon, for the fight's record (T-110), and the name the Damage card gives it (T-166).
-			final String specWeaponName = combatCalc.itemLabel(
-				weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackOriginTick), combatCalc.equippedWeaponId()));
+			final String specWeaponName = combatCalc.itemLabel(specWeaponId);
 			fight.context().specWeapons = FightContext.addOnce(fight.context().specWeapons, specWeaponName);
 			// Spent: one activation books one attack, so the next attack inside the window cannot claim it too.
-			unspentSpecDrops.remove(unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick));
+			unspentSpecDrops.remove(specDrop);
+			specWeaponByDrop.remove(specDrop);
 			expectDelayedSplat(fight, attackTick);
 			final FightTimeline line = timelines.of(fight);
 			if (line != null)
@@ -6210,10 +6218,10 @@ public class PvmPerformancePlugin extends Plugin
 			final double boostShare = mechanic ? 1 : attackObservedBoostShare;
 			final boolean drained = !mechanic && attackObservedDrained;
 			// T-137: whether a special threw it, asked before the scoring below spends its energy fall.
-			final SpecialAttack thrownSpecial = unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick)
-				== Integer.MIN_VALUE ? null
-				: SpecialAttack.forItem(weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackTick),
-				combatCalc.equippedWeaponId()));
+			final int thrownDrop = unspentSpecialFor(unspentSpecDrops, attackOriginTick, attackTick);
+			final SpecialAttack thrownSpecial = thrownDrop == Integer.MIN_VALUE ? null
+				: SpecialAttack.forItem(specialWeapon(specWeaponByDrop, thrownDrop,
+				weaponByTick.getOrDefault(heldTick(attackSwitchTick, attackTick), combatCalc.equippedWeaponId())));
 			// Worked out both ways while the loadout and boost are the ones that threw the attack. Which applies is decided by
 			// the prayer, and for a projectile that is not known until it lands.
 			final double ifPrayed = combatCalc.actualAverageHit(targetId, true);
@@ -6380,9 +6388,11 @@ public class PvmPerformancePlugin extends Plugin
 		final int proofTick = Math.max(xpThrowTick, specThrowTick);
 		final Integer xpSpeed = speedByTick.get(proofTick);
 		// T-137: a special's XP proves its own speed's worth (a Soul Rend's 5 against the staff's 3).
-		final SpecialAttack xpSpecial = proofTick == Integer.MIN_VALUE
-			|| unspentSpecialFor(unspentSpecDrops, proofTick) == Integer.MIN_VALUE ? null
-			: SpecialAttack.forItem(weaponByTick.getOrDefault(proofTick, combatCalc.equippedWeaponId()));
+		final int proofDrop = proofTick == Integer.MIN_VALUE ? Integer.MIN_VALUE
+			: unspentSpecialFor(unspentSpecDrops, proofTick);
+		final SpecialAttack xpSpecial = proofDrop == Integer.MIN_VALUE ? null
+			: SpecialAttack.forItem(specialWeapon(specWeaponByDrop, proofDrop,
+			weaponByTick.getOrDefault(proofTick, combatCalc.equippedWeaponId())));
 		final boolean provenByXp = attackOverdue(client.getTickCount(), attackDueTick, lag)
 			&& throwProvenByXp(client.getTickCount(), attackDueTick, proofTick,
 			speedAfter(xpSpeed != null ? xpSpeed : combatCalc.attackSpeedTicks(), xpSpecial, false));
@@ -6846,6 +6856,16 @@ public class PvmPerformancePlugin extends Plugin
 	 * thrown with (T-065): the one before a switch since the throw, else {@code
 	 * otherwise}, the tick each record was already read from.
 	 */
+	/**
+	 * T-185: a special's weapon: the one in hand as its energy fell ({@code byDrop}, by the fall's tick), or, where none
+	 * was kept, {@code otherwise} (the weapon held on its throw's tick, before a switch).
+	 */
+	static int specialWeapon(Map<Integer, Integer> byDrop, int dropTick, int otherwise)
+	{
+		final Integer atDrop = byDrop.get(dropTick);
+		return atDrop != null && atDrop > 0 ? atDrop : otherwise;
+	}
+
 	static int heldTick(int switchTick, int otherwise)
 	{
 		return switchTick == Integer.MIN_VALUE ? otherwise : switchTick - 1;
@@ -7083,9 +7103,13 @@ public class PvmPerformancePlugin extends Plugin
 				}
 			}
 			unspentSpecDrops.addLast(specFiredTick);
+			if (thrown != null)
+			{
+				specWeaponByDrop.put(specFiredTick, combatCalc.equippedWeaponId());
+			}
 			while (unspentSpecDrops.size() > SPEC_DROPS_KEPT)
 			{
-				unspentSpecDrops.removeFirst();
+				specWeaponByDrop.remove(unspentSpecDrops.removeFirst());
 			}
 			recentSpecDrops.addLast(specFiredTick);
 			while (recentSpecDrops.size() > SPEC_DROPS_KEPT)
