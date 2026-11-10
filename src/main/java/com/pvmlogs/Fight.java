@@ -206,6 +206,9 @@ class Fight
 	// Idle ticks a boss's mechanic forced, inside its allowance (T-074): neutral, like eating, but not lost either. Counted
 	// in combatTicks, so the uptime leaves them out as it leaves eating out. Additive: a fight saved before has none.
 	private int ticksMechanics;
+	// T-191: of those, the stall a strategy calls for (Cerberus held above 400 hp until her 7th or 14th attack), moved out
+	// of the lost ticks once the fight has ended, never while it runs. Additive: a fight saved before has none.
+	private int ticksStall;
 	private int combatTicks;
 	private boolean attacking;
 	// This session's attack-by-attack and tick-by-tick record (T-035), fed from the methods below where each counts, so
@@ -1231,6 +1234,33 @@ class Fight
 		{
 			timeline.tickMechanic();
 		}
+	}
+
+	/**
+	 * T-191: the fight is over, and these idle ticks it counted as lost were a strategy's stall: they move to the
+	 * mechanics ticks, as the stall's, and the timeline draws them so. Never more than were lost.
+	 *
+	 * @param countedTicks the ticks the idle ticks were counted on
+	 * @return how many moved
+	 */
+	int excuseStall(java.util.List<Integer> countedTicks)
+	{
+		final int n = Math.min(ticksLostOther, countedTicks == null ? 0 : countedTicks.size());
+		if (n <= 0)
+		{
+			return 0;
+		}
+		ticksLostOther -= n;
+		ticksMechanics += n;
+		ticksStall += n;
+		if (timeline != null)
+		{
+			for (int i = 0; i < n; i++)
+			{
+				timeline.excuseLost(countedTicks.get(i));
+			}
+		}
+		return n;
 	}
 
 	/** Every tick off cooldown with no attack, whatever the reason. */

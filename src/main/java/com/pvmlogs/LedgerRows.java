@@ -35,6 +35,8 @@ final class LedgerRows
 	static final String EATING = " eating";
 	/** T-080: idle time a boss's mechanic forced (T-074), neutral like eating: {@code  mechanics  10 ticks}. */
 	static final String MECHANICS = " mechanics";
+	/** T-191: a strategy's stall (Cerberus held above 400 hp until her 7th or 14th attack). */
+	static final String STALL = " stall (strategy)";
 	/** T-051's rows: the target's Defence and Magic, the drains' worth over a raid or trip, and the specials' luck. */
 	static final String DEFENCE = " defence";
 	static final String MAGIC = " magic";
@@ -401,6 +403,12 @@ final class LedgerRows
 			return 0;
 		}
 
+		/** T-191: of {@link #ticksMechanics()}, a strategy's stall (Cerberus held above 400 hp); 0 for none or an old kill. */
+		default int ticksStall()
+		{
+			return 0;
+		}
+
 		/**
 		 * T-041/T-043: the eating ticks the avoidable hits cost, over the ended
 		 * fights at a boss with attack rules; -1 when none (a running fight, no
@@ -636,6 +644,12 @@ final class LedgerRows
 				return room.getTicksMechanics();
 			}
 
+			@Override
+			public int ticksStall()
+			{
+				return room.getTicksStall();
+			}
+
 			public double avoidableEatingTicks()
 			{
 				return room.getAvoidableEatingTicks();
@@ -850,6 +864,12 @@ final class LedgerRows
 				return raid.getTicksMechanics();
 			}
 
+			@Override
+			public int ticksStall()
+			{
+				return raid.getTicksStall();
+			}
+
 			public double avoidableEatingTicks()
 			{
 				return raid.getAvoidableEatingTicks();
@@ -1042,6 +1062,12 @@ final class LedgerRows
 			public int ticksMechanics()
 			{
 				return trip.getTicksMechanics();
+			}
+
+			@Override
+			public int ticksStall()
+			{
+				return trip.getTicksStall();
 			}
 
 			public double avoidableEatingTicks()
@@ -1314,6 +1340,8 @@ final class LedgerRows
 		 * and out of the setup's time, as eating is; never a cost.
 		 */
 		final double mechanicsCost;
+		/** T-191: of {@link #mechanicsCost}, the seconds a strategy's stall took, shown as its own part; never a cost. */
+		final double stallCost;
 		/**
 		 * T-043: the eating the avoidable hits cost, in seconds, and its share
 		 * kept (1 − avoidable eating ticks ÷ combat ticks); NaN when unknown (a
@@ -1389,6 +1417,7 @@ final class LedgerRows
 			uptimeCost = idle * SECONDS_PER_TICK;
 			eatingCost = eating * SECONDS_PER_TICK;
 			mechanicsCost = Math.max(0, s.ticksMechanics()) * SECONDS_PER_TICK;
+			stallCost = Math.min(Math.max(0, s.ticksStall()), Math.max(0, s.ticksMechanics())) * SECONDS_PER_TICK;
 
 			efficiency = s.efficiency();
 			final boolean setupKnown = efficiency >= 0;
@@ -2052,10 +2081,17 @@ final class LedgerRows
 	 */
 	private static void mechanics(List<Row> rows, Numbers n)
 	{
-		final long ticks = ticks(n.mechanicsCost);
+		// T-191: a strategy's stall is a part of its own, after the fight: the cost of the trade it makes, in plain view.
+		final double stall = Double.isNaN(n.stallCost) ? 0 : n.stallCost;
+		final long ticks = ticks(n.mechanicsCost - stall);
 		if (ticks >= 1)
 		{
 			rows.add(neutralTicks(MECHANICS, ticks));
+		}
+		final long stallTicks = ticks(stall);
+		if (stallTicks >= 1)
+		{
+			rows.add(neutralTicks(STALL, stallTicks));
 		}
 	}
 

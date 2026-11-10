@@ -479,6 +479,10 @@ public class PvmPerformancePlugin extends Plugin
 	private final Map<Integer, String> modifiersByTick = new HashMap<>();
 	// Downtime the boss's mechanics force, excused from uptime up to each allowance's cap (T-074).
 	private final MechanicAllowances mechanics = new MechanicAllowances(line -> debug.log("%s", line));
+	// T-191: a strategy's stall (Cerberus held above 400 hp), heard during the fight and judged only at its end, so no
+	// live figure moves with her attack count. Null for a boss with none; its fight is the one it listens to.
+	private StrategyStall stall;
+	private Fight stallFight;
 	// The figures as they stood when the attack was seen, or on the tick before a switch since it was thrown (T-065). The
 	// per-tick snapshot is written at GameTick, after any switch made during it, and a projectile surfaces two ticks after
 	// its throw, by when the weapon that threw it may be gone.
@@ -1558,6 +1562,56 @@ public class PvmPerformancePlugin extends Plugin
 			attackNames.onHit(tick, hitsplat.getAmount(), hitsplat.getHitsplatType(), protection,
 				targetSeen.actions(tick, current.getTargetIndex()));
 			eatingReplay.damage(tick, hitsplat.getAmount());
+		}
+		// T-191: her hits on the player give her attack count, kept inside the stall's judge until the fight ends.
+		if (fighting && kind == HitsplatKind.HIT_TAKEN && stallTracking())
+		{
+			stall.onHitOnPlayer(tick, targetSeen.actions(tick, current.getTargetIndex()));
+		}
+	}
+
+	/** Whether the open fight's boss has a strategy's stall to judge (T-191); looked up once a fight. */
+	private boolean stallTracking()
+	{
+		if (current == null || current.isEnded())
+		{
+			return false;
+		}
+		if (stallFight != current)
+		{
+			stallFight = current;
+			final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+			final BossRules.Boss boss = rules == null ? null : rules.forNpc(current.getTargetId());
+			stall = boss != null && StrategyStall.usable(boss.stall) ? new StrategyStall(boss.stall) : null;
+		}
+		return stall != null;
+	}
+
+	/**
+	 * The fight is ending (T-191): the idle ticks that were a strategy's stall leave the lost ticks for the mechanics',
+	 * as the stall's. Only now: nothing live moved with her attack count.
+	 */
+	private void settleStall(Fight fight)
+	{
+		final StrategyStall judged = stallFight == fight ? stall : null;
+		stall = null;
+		stallFight = null;
+		if (judged == null)
+		{
+			return;
+		}
+		final StrategyStall.Result result = judged.settle();
+		debug.log("%s", result.line);
+		final List<Integer> ticks = new ArrayList<>();
+		for (StrategyStall.Idle idle : result.excused)
+		{
+			ticks.add(idle.countedTick);
+		}
+		final int moved = fight.excuseStall(ticks);
+		if (moved > 0)
+		{
+			trip(fight).excuseStall(moved);
+			fight.context().addWindow(judged.name(), moved, 0);
 		}
 	}
 
@@ -6458,6 +6512,12 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			trip(current).recordTickLost(eating, current.isScored());
 		}
+		// T-191: lost for now; whether it was a strategy's stall is judged when the fight ends.
+		if (!eating && counts && stallTracking())
+		{
+			stall.idle(client.getTickCount(), client.getTickCount() - lag, targetNpc == null ? -1 : hpLeftBefore(targetNpc),
+				targetNpc == null ? 0 : combatCalc.maxHit(targetNpc.getId()));
+		}
 		// Only booked once the fight has an attack in it, so a lost tick that is NOT counted says so - that gap is what a
 		// safespot report looks like from here.
 		debug.log("tick LOST%s: overdue since %d + lag %d%s",
@@ -7530,6 +7590,8 @@ public class PvmPerformancePlugin extends Plugin
 		// Tags stripped: some names carry colour markup and it was reaching the CSV verbatim, "<col=00ffff>Rubble</col>" and
 		// all.
 		mechanics.reset();
+		stall = null;
+		stallFight = null;
 		punishAnimTicks.clear();
 		lastBossAnim = Integer.MIN_VALUE;
 		current = new Fight(Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(),
@@ -8794,6 +8856,7 @@ public class PvmPerformancePlugin extends Plugin
 		barCheckOnReturn = false;
 		unlistedAdds.reset(Integer.MIN_VALUE);
 		mechanics.finish();
+		settleStall(current);
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
 				+ "combatTicks=%d expDamage=%.1f",
 			current.getTargetName(), current.getTargetId(), reason, current.getAttempts(), current.getAttacksMade(),

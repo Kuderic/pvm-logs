@@ -35,6 +35,8 @@ final class LedgerExamples
 		int ticksLostEating;
 		/** T-080: idle ticks a boss's mechanic forced (T-074); none unless a test says so. */
 		int ticksMechanics;
+		// T-191: of those, a strategy's stall.
+		int ticksStall;
 		// T-043: unknown unless a test says otherwise, as for a running fight, an unruled boss or an old kill.
 		double avoidableEatingTicks = -1;
 		int damageTakenAvoidable = -1;
@@ -229,6 +231,12 @@ final class LedgerExamples
 		public int ticksMechanics()
 		{
 			return ticksMechanics;
+		}
+
+		@Override
+		public int ticksStall()
+		{
+			return ticksStall;
 		}
 
 		public double avoidableEatingTicks()
