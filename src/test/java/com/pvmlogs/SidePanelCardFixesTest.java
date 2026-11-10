@@ -83,13 +83,13 @@ public class SidePanelCardFixesTest
 				final BufferedImage img = paint(card);
 				final Rectangle box = card.gradeBox;
 				assertTrue(grade, box.width > 0);
-				final Color ink = SidePanelModel.gradeColour(grade);
 				int letter = 0;
 				for (int y = box.y + 1; y < box.y + box.height - 1; y++)
 				{
 					for (int x = box.x + 1; x < box.x + box.width - 1; x++)
 					{
-						if (near(img.getRGB(x, y), ink))
+						// Any pixel off the chip's ground is the letter's, smoothed or not (CI's fonts may smooth it).
+						if (!near(img.getRGB(x, y), SidePanelStyle.CARD))
 						{
 							letter++;
 							// No letter pixel against the edge: a pixel of clear ground either side, and above and below.
