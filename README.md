@@ -7,7 +7,7 @@ It works out what each of your attacks should have done, from your gear, levels,
 ## What it shows
 
 ### The kill card
-The side panel's Fight tab opens on a card with three numbers: your **Time**, your **Skill** and your **Luck**. Everything else folds below it, one click away.
+The side panel's Fight tab opens on a card with three numbers: your **Time**, your **Skill** and your **Luck**, with your DPS against expected under them (`DPS 7.5 · exp 7.6`). Damage is open below it; the rest folds, one click away, each with its number on its folded line.
 
 <table>
 <tr>
@@ -28,13 +28,13 @@ The side panel's Fight tab opens on a card with three numbers: your **Time**, yo
   - **Clean run:** not one idle tick, and your prayer, gear and boosts as good as they could be;
   - **3 A's in a row** (and longer streaks): grade A or better on your last three kills here.
 
-During the fight the card shows the clock, the share of the fight you've spent attacking with a strip of your idle moments so far, and your luck so far. Every number explains itself in its tooltip.
+During the fight the card shows the clock, your uptime (the share of the fight you've spent attacking) with a strip of your idle moments so far, your luck so far as a word and a marker on the 1–100 track (the roll itself is the kill's), and your DPS against expected. Every number explains itself in its tooltip, and the sign is the same everywhere: + is time gained, − time lost.
 
 **Celebrations** (on by default) is the card and its kill-end moment, when the roll lands and the grade shows. Turn it off under the plugin's Side panel settings for the plain Fight tab: the boss's title and four tiles, every section as you left it.
 
 ### Below the card
-- **Damage:** your damage by weapon, spell and special, each with its DPS against expected; your thrall, burn and the rest apart; at a boss with adds, the boss, its adds or both. A timeline of your damage against average rolls.
-- **Luck, Where the time went, Skill:** the luck curve; the kill's time split into best play, the ticks you lost and what luck saved or cost; uptime, prayer, gear and stat boost.
+- **Damage:** your damage against expected in its header (`234 · exp 240`); each weapon, spell and special with its DPS against expected (`6.8 dps · exp 7.2`), to judge which weapon does best against a boss or its adds; your thrall, burn and the rest apart; at a boss with adds, the boss, its adds or both. A timeline of your damage against average rolls.
+- **Luck, Where the time went, Skill:** the luck curve; the kill's time split into best play, what skill lost and what luck saved or cost (`skill −0.7 s · luck −1 s`); uptime, prayer, gear and stat boost.
 - **Defence:** when your special attacks (or your party's) lower the boss's Defence, the Defence left, each special against its chance, and what the drain was worth. A missed special counts as bad luck.
 - **Damage taken,** after the fight by kind. At a boss with attack rules (Vardorvis so far), the food you ate because of damage you could have avoided counts against your skill, and damage taken says how much was avoidable.
 - **Your party:** in a RuneLite party, the members' damage, DPS and share at the top of the Fight tab, and after a room their Luck and Skill, from members who run Luck vs Skill too; click one to see their Fight tab. Members who don't run it are listed by name and picture; with just one of them, their damage is shown as about what the boss took that you didn't deal. Discord pictures show when RuneLite's Discord plugin provides them.
