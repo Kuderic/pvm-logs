@@ -176,12 +176,11 @@ public class SidePanelLuckStrengthTest
 		assertEquals(SidePanelModel.LuckStrength.BRIGHT, SidePanelModel.strength(card.rolled));
 		assertTrue(card.luckWords, card.luckWords.startsWith("rolled 81 of 100 · top 19% · dealt 112% of expected · "));
 		assertNull(SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card.luckWords);
-		// Its badges keep them; under the roll, its effect in words, in its strength.
+		// Its badges keep them. T-196: the strength's word is the chip beside the roll; the effect is a sentence.
 		assertEquals(card.luckWords, card.withBadges(new ArrayList<>()).luckWords);
-		assertTrue(card.luckLine.text, card.luckLine.text.startsWith("lucky · "));
-		assertEquals(SidePanelStyle.LUCK_BRIGHT, card.luckLine.colour);
-		final SidePanelModel.Input unlucky = SidePanelKillCardExamples.vardorvisKill();
-		assertEquals("unlucky · 14 s slower", SidePanelModel.fight(unlucky).card.luckLine.text);
+		assertEquals("lucky", SidePanelModel.strengthWord(SidePanelModel.strength(card.rolled)));
+		assertEquals("unlucky", SidePanelModel.strengthWord(SidePanelModel.strength(
+			SidePanelModel.fight(SidePanelKillCardExamples.vardorvisKill()).card.rolled)));
 	}
 
 	@Test

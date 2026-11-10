@@ -4,6 +4,7 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.GridLayout;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import javax.swing.JPanel;
 import org.junit.Test;
@@ -15,13 +16,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * T-188 (Eric, 2026-11-09: "let's choose A for all of them. No pace against pb mid fight"; "i like rolled 20 of 100"):
- * the kill card in place of the title and tiles, live and after the kill; luck written one way; the sections folded
- * below it, their bodies left alone while folded; Celebrations off as the tab was.
+ * T-188, redrawn by T-196's clarity pass (Eric approved the canvas's top row): the kill card's four blocks after the
+ * kill, Speed, Your play, Luck and Fix next, each in plain words with its scale and no ticks; live, the clock, your
+ * play so far with its idle moments, luck so far and the weapon; luck written one way; the sections folded below it,
+ * their bodies left alone while folded; Celebrations off as the tab was.
  */
 public class SidePanelKillCardTest
 {
-	private static PvmPerformancePanel panel(SidePanelModel.Input in)
+	static PvmPerformancePanel panel(SidePanelModel.Input in)
 	{
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.setCelebrations(in.celebrations);
@@ -29,7 +31,7 @@ public class SidePanelKillCardTest
 		return p;
 	}
 
-	private static <T> List<T> all(Container c, Class<T> type)
+	static <T> List<T> all(Container c, Class<T> type)
 	{
 		final List<T> out = new ArrayList<>();
 		for (Component k : c.getComponents())
@@ -59,91 +61,161 @@ public class SidePanelKillCardTest
 		return false;
 	}
 
-	@Test
-	public void liveTheCardHasNoGradeTipRollOrPb()
+	/** Every word the card says, its tooltips' fixed words included. */
+	static List<String> words(PanelSnapshot.KillCard c)
 	{
-		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card;
-		assertNotNull(c);
-		assertTrue(c.live);
-		assertEquals("live", c.corner);
-		assertEquals("0:42", c.clock);
-		// Damage against expected beside the clock; no PB, pace or rank in any form.
-		assertEquals("428 dmg", c.side1.text);
-		assertEquals("expected 403", c.side2.text);
-		assertTrue(c.side3.isEmpty());
-		assertFalse(c.newPb);
-		// Skill: ticks lost so far, orange, and execution so far; no grade.
-		assertNull(c.grade);
-		assertEquals("2", c.big.text);
-		assertEquals(SidePanelStyle.COST, c.big.colour);
-		assertEquals("execution 96%", c.skill1.text);
-		// Luck rolling: its band in words, violet, and no number.
-		assertEquals(-1, c.rolled);
-		assertEquals("middle half so far", c.luckLine.text);
-		assertEquals(SidePanelStyle.LUCK, c.luckLine.colour);
-		// No tip or luck-removed row live; the weapon in hand with its DPS.
-		assertNull(c.tip);
-		assertNull(c.luckRemoved);
-		assertEquals("Hunters' sunlight crossbow", c.weapon);
-		assertEquals("15.6 dps · expected 15.6", c.weaponDps);
+		final List<String> out = new ArrayList<>(Arrays.asList(c.corner, c.clock, c.versus.text, c.versusWhat, c.rank,
+			c.play, c.lost, c.lostWhy, c.better, c.next, c.idle, c.idleOf, c.luckSoFar.text, c.dealt, c.luckSentence,
+			c.averageLuck, c.averageLuckWas, c.luckNote, c.luckWords, c.fix, c.weaponRate, SidePanelModel.PERFECT,
+			SidePanelKillCard.SPEED_TRACK_TIP));
+		out.removeIf(java.util.Objects::isNull);
+		return out;
 	}
 
+	// ---- after the kill: the four blocks ----
+
 	@Test
-	public void afterTheKillItHasThePbRankGradeRollAndTip()
+	public void speedSaysHowFastAgainstYourBestWithItsTrackAndRank()
 	{
 		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card;
-		assertFalse(c.live);
-		assertEquals("KC 555", c.corner);
+		assertEquals("kill 555", c.corner);
 		assertEquals("1:26", c.clock);
-		assertEquals("your PB 1:05", c.side1.text);
-		assertEquals("21 s slower", c.side2.text);
-		assertEquals("42nd fastest of 199", c.side3.text);
-		// The grade from T-187's record, its basis and the ticks to the next.
-		assertEquals("A", c.grade);
-		assertEquals(SidePanelStyle.GRADE_A, c.gradeColour);
-		assertEquals("2 ticks from an S", c.gradeTip);
-		assertEquals("A", c.big.text);
-		assertEquals("99%", c.bigCaption.get(0).text);
-		assertEquals("2 ticks lost", c.skill1.text);
-		assertEquals("top 10% of last 50", c.skill2.text);
-		// Luck rolled 81 of 100, lucky, 10 s faster, in luck's bright violet (T-194).
-		assertEquals(81, c.rolled);
-		assertEquals("lucky · 10 s faster", c.luckLine.text);
-		assertEquals(SidePanelStyle.LUCK_BRIGHT, c.luckLine.colour);
-		// Luck removed and its own PB; the tip from the biggest loss.
-		assertEquals("1:36", c.luckRemoved);
-		assertEquals("PB 1:12", c.luckRemovedPb);
-		assertFalse(c.newLuckRemovedPb);
-		assertEquals("Most lost: uptime, 1 tick idle", c.tip);
-		assertNull(c.weapon);
+		assertEquals("21 s slower", c.versus.text);
+		assertEquals("than your best, 1:05", c.versusWhat);
+		// The track: from your best to your slow end (the 90th percentile), your usual ticked, this kill on it.
+		assertTrue(c.speedTrack());
+		assertEquals(65.4, c.trackBest, 1e-9);
+		assertEquals(94.2, c.trackUsual, 1e-9);
+		assertEquals(120.6, c.trackSlow, 1e-9);
+		assertEquals(86.4, c.trackClock, 1e-6);
+		assertEquals("42nd fastest of your 199 kills", c.rank);
 	}
 
 	@Test
-	public void aPbKillSaysNewPbInTheBossColourAndOnlyTheLuckRemovedPbIsGold()
+	public void yourPlaySaysHowWellWithTheGradeItsZonesAndWhatAnSWouldTake()
+	{
+		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card;
+		assertEquals("A", c.grade);
+		assertEquals(SidePanelStyle.GRADE_A, c.gradeColour);
+		assertEquals("99% of a perfect fight", c.play);
+		assertEquals("perfect: always attacking, best gear, prayers and boosts", SidePanelModel.PERFECT);
+		// The loss in seconds, with its causes: one idle tick, and the boost's 5 damage.
+		assertEquals("1.1 s lost", c.lost);
+		assertEquals("(0.6 s idle, a boost wore off)", c.lostWhy);
+		// The zones' marker and words from the record's basis, "top 10% of last 50".
+		assertEquals(0.90, c.share, 1e-9);
+		assertEquals("better than 90% of your last 50 kills", c.better);
+		assertEquals("1.2 s more attacking would make it an S", c.next);
+	}
+
+	@Test
+	public void luckSaysHowLuckyWithItsRollTrackAndPlainWords()
+	{
+		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card;
+		assertEquals(81, c.rolled);
+		assertEquals("lucky", SidePanelModel.strengthWord(SidePanelModel.strength(c.rolled)));
+		assertEquals("Your hits did 12% more damage than average rolls: 10 s faster.", c.luckSentence);
+		// The luck-removed time is Luck's "with average luck"; its best isn't on the card unless this kill beats it.
+		assertEquals("With average luck this kill takes 1:36.", c.averageLuck);
+		assertFalse(c.newBestAverageLuck);
+		assertNull(c.averageLuckWas);
+		// An unlucky roll in the same words.
+		final PanelSnapshot.KillCard v = SidePanelModel.fight(SidePanelKillCardExamples.vardorvisKill()).card;
+		assertEquals(20, v.rolled);
+		assertEquals("Your hits did 12% less damage than average rolls: 14 s slower.", v.luckSentence);
+	}
+
+	@Test
+	public void fixNextIsOneSentenceFromTheBiggestLoss()
+	{
+		assertEquals("Nearly perfect. Your biggest loss: 0.6 s standing still, not attacking.",
+			SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card.fix);
+		assertEquals("Your biggest loss: 15 s standing still, not attacking.",
+			SidePanelModel.fight(SidePanelKillCardExamples.vardorvisKill()).card.fix);
+		// The boost as the biggest loss, in damage.
+		final SidePanelModel.Input boost = SidePanelKillCardExamples.araxxorKill();
+		final LedgerExamples.FakeScope s = (LedgerExamples.FakeScope) boost.scope;
+		s.ticksLost = 2;
+		s.ticksLostEating = 2;
+		assertEquals("Nearly perfect. Your biggest loss: 5 damage from a boost wearing off.",
+			SidePanelModel.fight(boost).card.fix);
+	}
+
+	@Test
+	public void aPbKillSaysNewPbAndOnlyTheBestWithAverageLuckIsGold()
 	{
 		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.pbKill()).card;
 		assertTrue(c.newPb);
-		assertEquals("NEW PB", c.side1.text);
-		assertEquals(c.tint, c.side1.colour);
-		assertEquals(new java.awt.Color(BossColours.of("Araxxor")), c.tint);
-		assertEquals("2 s faster", c.side2.text);
-		assertEquals("fastest of 17", c.side3.text);
-		// The luck that helped, beside it.
-		assertEquals("lucky · 10 s faster", c.luckLine.text);
-		assertTrue(c.newLuckRemovedPb);
-		assertEquals("was 1:37", c.luckRemovedPb);
+		assertEquals("NEW PB", c.versus.text);
+		assertEquals(new java.awt.Color(BossColours.of("Araxxor")), c.versus.colour);
+		assertEquals("your best was 1:28", c.versusWhat);
+		assertEquals("your fastest of 17 kills", c.rank);
+		// The gold star: a new best with average luck, with the one it beat.
+		assertTrue(c.newBestAverageLuck);
+		assertEquals("was 1:37", c.averageLuckWas);
+		assertTrue(c.structure().contains("*"));
 	}
 
 	@Test
 	public void beforeTheRecordHasTheKillItShowsYourUsualAndNoGrade()
 	{
 		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.unrecorded()).card;
-		assertEquals("your usual 1:34", c.side1.text);
-		assertEquals("8 s faster", c.side2.text);
+		assertEquals("8 s faster", c.versus.text);
+		assertEquals("than your usual, 1:34", c.versusWhat);
+		assertFalse("no best, no track", c.speedTrack());
+		assertNull(c.rank);
 		assertNull(c.grade);
-		assertEquals("99%", c.big.text);
-		assertTrue(c.bigCaption.isEmpty());
-		assertNull(c.luckRemovedPb);
+		assertEquals("99% of a perfect fight", c.play);
+		assertTrue(Double.isNaN(c.share));
+		assertNull(c.better);
+	}
+
+	@Test
+	public void noTicksOnTheCard()
+	{
+		for (SidePanelModel.Input in : new SidePanelModel.Input[]{SidePanelKillCardExamples.araxxorKill(),
+			SidePanelKillCardExamples.araxxorLive(), SidePanelKillCardExamples.pbKill(),
+			SidePanelKillCardExamples.unrecorded(), SidePanelKillCardExamples.vardorvisKill(),
+			SidePanelKillCardExamples.vardorvisLive(), SidePanelKillCardExamples.allBadges()})
+		{
+			for (String w : words(SidePanelModel.fight(in).card))
+			{
+				assertFalse(w, w.toLowerCase(java.util.Locale.ROOT).matches(".*\\btick.*"));
+			}
+		}
+	}
+
+	@Test
+	public void secondsAreWrittenOneWay()
+	{
+		assertEquals("0.6 s", SidePanelModel.secs(0.6));
+		assertEquals("1.2 s", SidePanelModel.secs(1.2));
+		assertEquals("1 s", SidePanelModel.secs(1.0));
+		assertEquals("14 s", SidePanelModel.secs(14.2));
+		assertEquals("1:05", SidePanelModel.secs(65.4));
+	}
+
+	@Test
+	public void theBasisReadsBackAsItsShare()
+	{
+		// Every basis the record writes (T-187's words) reads back within a percent, and the fixed bands read as none.
+		for (int k = 0; k <= 100; k++)
+		{
+			final double share = k / 100.0;
+			final SidePanelModel.Basis b = SidePanelModel.Basis.of(BossRecords.basis(share, 50));
+			assertNotNull(BossRecords.basis(share, 50), b);
+			assertEquals(BossRecords.basis(share, 50), share, b.share, 0.0101);
+			assertEquals(50, b.of);
+		}
+		assertEquals("your best of your last 50 kills", SidePanelModel.Basis.of("best of last 50").words());
+		assertEquals("your lowest of your last 16 kills", SidePanelModel.Basis.of("lowest of last 16").words());
+		assertEquals("better than 8% of your last 50 kills", SidePanelModel.Basis.of("bottom 8% of last 50").words());
+		assertNull(SidePanelModel.Basis.of("fixed bands (3 kills)"));
+		final SidePanelModel.Input fixed = SidePanelKillCardExamples.araxxorKill();
+		fixed.standing.basis = "fixed bands (3 kills)";
+		final PanelSnapshot.KillCard c = SidePanelModel.fight(fixed).card;
+		assertTrue(Double.isNaN(c.share));
+		assertEquals("graded on fixed bands (3 kills)", c.better);
 	}
 
 	@Test
@@ -158,6 +230,57 @@ public class SidePanelKillCardTest
 		assertEquals(SidePanelStyle.SECONDARY, SidePanelModel.gradeColour("C"));
 	}
 
+	// ---- live ----
+
+	@Test
+	public void liveItShowsIdleTimeAndLuckSoFarAndNoGradeRollOrPb()
+	{
+		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card;
+		assertTrue(c.live);
+		assertEquals("live", c.corner);
+		assertEquals("0:42", c.clock);
+		// Your play so far: idle time against the clock, the share attacking, the fight so far.
+		assertEquals("1.2 s", c.idle);
+		assertEquals("of 42 s", c.idleOf);
+		assertEquals("97% attacking", c.play);
+		assertNotNull(c.strip);
+		assertEquals(70, c.strip.length);
+		int idle = 0;
+		for (byte b : c.strip)
+		{
+			idle += b == PanelSnapshot.KillCard.STRIP_IDLE ? 1 : 0;
+		}
+		assertEquals("the timeline's two lost ticks", 2, idle);
+		// Luck so far: its strength, no number; the damage against average rolls, which is luck.
+		assertEquals("average so far", c.luckSoFar.text);
+		assertEquals(SidePanelStyle.LUCK, c.luckSoFar.colour);
+		assertEquals("You've dealt 428. Average rolls: 403.", c.dealt);
+		// The weapon: its damage a second, no "expected".
+		assertEquals("Hunters' sunlight crossbow", c.weapon);
+		assertEquals("15.6 damage a second", c.weaponRate);
+		// Never a grade, a roll number or a PB live.
+		assertNull(c.grade);
+		assertEquals(-1, c.rolled);
+		assertEquals("", c.versus.text);
+		assertNull(c.rank);
+		assertNull(c.fix);
+	}
+
+	@Test
+	public void theStripKeepsAtMostOneBucketAPixel()
+	{
+		final byte[] states = new byte[1000];
+		states[0] = FightTimeline.LOST;
+		states[999] = FightTimeline.EATING;
+		final byte[] strip = SidePanelModel.strip(states, SidePanelModel.STRIP_BUCKETS);
+		assertEquals(SidePanelModel.STRIP_BUCKETS, strip.length);
+		assertEquals(PanelSnapshot.KillCard.STRIP_IDLE, strip[0]);
+		assertEquals(PanelSnapshot.KillCard.STRIP_EATING, strip[strip.length - 1]);
+		assertEquals(3, SidePanelModel.strip(new byte[3], SidePanelModel.STRIP_BUCKETS).length);
+	}
+
+	// ---- luck, written one way ----
+
 	@Test
 	public void luckIsWrittenOneWay()
 	{
@@ -166,12 +289,17 @@ public class SidePanelKillCardTest
 		// Never 0; 100 at the very top.
 		assertEquals(1, SidePanelModel.roll(0.001));
 		assertEquals(100, SidePanelModel.roll(0.999));
-		// No band words anywhere on the tab, Celebrations on or off: the card, the tiles, the Luck section, the lists.
+		// Celebrations off: the Luck section's header is the roll. On: its strength in words; the roll is its line.
+		assertEquals("rolled 81", SidePanelModel.fight(SidePanelKillCardExamples.off()).curve.headerValue.text);
+		final PanelSnapshot.FightTab on = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill());
+		assertEquals("lucky", on.curve.headerValue.text);
+		assertEquals("rolled 81 of 100 · lucky", on.summaries.get("curve").text);
+		assertEquals("rolled 81 of 100: of 100 fights with these attacks, 81 dealt less damage.", on.curve.caption);
+		// No band words anywhere on the tab, Celebrations on or off.
 		for (SidePanelModel.Input in : new SidePanelModel.Input[]{SidePanelKillCardExamples.araxxorKill(),
 			SidePanelKillCardExamples.off(), SidePanelKillCardExamples.vardorvisKill()})
 		{
 			final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
-			assertTrue(t.curve.headerValue.text, t.curve.headerValue.text.matches("rolled \\d+"));
 			if (t.tiles != null)
 			{
 				for (PanelSnapshot.Tile tile : t.tiles)
@@ -188,20 +316,31 @@ public class SidePanelKillCardTest
 		}
 	}
 
+	// ---- the tab ----
+
 	@Test
 	public void celebrationsOffIsTodaysTab()
 	{
 		final PvmPerformancePanel off = panel(SidePanelKillCardExamples.off());
 		assertTrue(all(off.fightTab(), SidePanelKillCard.class).isEmpty());
 		assertTrue(hasTiles(off.fightTab()));
-		assertNull(SidePanelModel.fight(SidePanelKillCardExamples.off()).card);
-		assertTrue(SidePanelModel.fight(SidePanelKillCardExamples.off()).summaries.isEmpty());
-		// Today's sections open, as before.
+		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelKillCardExamples.off());
+		assertNull(tab.card);
+		assertNull(tab.clear);
+		assertTrue(tab.summaries.isEmpty());
+		// Today's sections, open and named as before: Execution, Damage over time, Ticks and Details are all there.
+		final List<String> titles = new ArrayList<>();
 		for (SidePanelSection s : all(off.fightTab(), SidePanelSection.class))
 		{
 			assertFalse(s.id(), s.isFolded());
 			assertEquals(s.id(), "", s.summary());
+			titles.add(s.title());
 		}
+		assertTrue(titles.toString(), titles.containsAll(Arrays.asList("Damage", "Luck", "Where the time went",
+			"Execution", "Damage over time", "Ticks", "Details", "Damage taken")));
+		assertTrue(all(off.fightTab(), SidePanelShareBar.class).isEmpty());
+		// Your line in the chart keeps luck's band colour there, as it was.
+		assertEquals(SidePanelStyle.BETTER, tab.chart.actual);
 		final PvmPerformancePanel on = panel(SidePanelKillCardExamples.araxxorKill());
 		assertEquals(1, all(on.fightTab(), SidePanelKillCard.class).size());
 		assertFalse(hasTiles(on.fightTab()));
@@ -210,36 +349,125 @@ public class SidePanelKillCardTest
 	}
 
 	@Test
-	public void theSectionsFoldBelowTheCardWithALineEach()
+	public void theSectionsAreRenamedAndMergedUnderTheCard()
 	{
 		final PvmPerformancePanel p = panel(SidePanelKillCardExamples.araxxorKill());
-		final List<String> lines = new ArrayList<>();
+		final List<String> ids = new ArrayList<>();
+		final List<String> titles = new ArrayList<>();
 		for (SidePanelSection s : all(p.fightTab(), SidePanelSection.class))
 		{
-			// T-194: Damage opens by default; the rest fold with a line each.
-			if (s.id().equals("damage"))
-			{
-				assertFalse(s.isFolded());
-				s.toggle();
-			}
-			assertTrue(s.id(), s.isFolded());
-			lines.add(s.id() + ": " + s.summary());
+			ids.add(s.id());
+			titles.add(s.title());
 		}
-		assertTrue(lines.toString(), lines.contains("damage: tentacle 87% · crossbow 6% · thrall 5%"));
-		assertTrue(lines.toString(), lines.contains("curve: rolls dealt 112% of expected"));
-		assertTrue(lines.toString(), lines.contains("budget: best 1:34 · lost 2 ticks · luck 10 s"));
-		assertTrue(lines.toString(), lines.contains("execution: uptime -1t · -5 dmg"));
-		assertTrue(lines.toString(), lines.contains("taken: largest hit 3"));
-		assertTrue(lines.toString(), lines.contains("details: hits 30/29.6"));
-		// Opened, a section is today's card and its line goes; the fold is kept under its own key.
-		final SidePanelSection curve = SidePanelPictures.sectionOf(p.fightTab(), "curve");
-		curve.toggle();
-		assertFalse(curve.isFolded());
-		assertEquals("", curve.summary());
-		final PvmPerformancePanel again = panel(SidePanelKillCardExamples.araxxorKill());
-		assertTrue("each panel its own folds in tests", SidePanelPictures.sectionOf(again.fightTab(), "curve")
-			.isFolded());
-		assertFalse(SidePanelPictures.sectionOf(again.fightTab(), "damage").isFolded());
+		assertEquals(Arrays.asList("damage", "curve", "budget", "execution", "taken"), ids);
+		assertEquals(Arrays.asList("Damage", "Luck", "Where the time went", "Your play", "Damage taken"), titles);
+		// Damage: open, its share bar, its rows, and second by second (was Damage over time).
+		final SidePanelSection damage = SidePanelPictures.sectionOf(p.fightTab(), "damage");
+		assertFalse(damage.isFolded());
+		assertEquals(1, all(damage, SidePanelShareBar.class).size());
+		assertEquals(Arrays.asList("tentacle", "crossbow · thrall · warhammer"),
+			Arrays.asList(SidePanelShareBar.names(all(damage, SidePanelShareBar.class).get(0).rows())));
+		assertEquals(1, all(damage, SidePanelDamageChart.class).size());
+		assertTrue(texts(damage).contains(SidePanelFightTab.SECOND_BY_SECOND));
+		assertTrue(texts(damage).toString(), texts(damage).contains("10.8 damage a second"));
+		assertFalse(texts(damage).toString(), texts(damage).toString().contains("expected"));
+		// Your play (was Execution): plain part names, and the attack rhythm (was Ticks) in it.
+		final SidePanelSection play = SidePanelPictures.sectionOf(p.fightTab(), "execution");
+		play.toggle();
+		assertEquals(1, all(play, SidePanelTickStrip.class).size());
+		final List<String> playTexts = texts(play);
+		assertTrue(playTexts.toString(), playTexts.containsAll(Arrays.asList("Attacking", "Right prayers", "Best gear worn",
+			"Stats boosted", SidePanelFightTab.ATTACK_RHYTHM, "0.6 s standing still", "a boost wore off: 5 damage")));
+		assertFalse(playTexts.toString(), playTexts.contains("uptime"));
+		// Luck: its hits, from Details.
+		final SidePanelSection luck = SidePanelPictures.sectionOf(p.fightTab(), "curve");
+		luck.toggle();
+		assertTrue(texts(luck).toString(), texts(luck).containsAll(Arrays.asList("hits that landed", "30 (average 29.6)",
+			"damage per landed hit", "30 (average 27)")));
+		// Your line in the chart is white: luck only ever in its violet.
+		assertEquals(SidePanelStyle.VALUE, SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).chart.actual);
+		// No "expected" on any row: a special's damage reads against average rolls (Vardorvis's claws).
+		final SidePanelSection claws = SidePanelPictures.sectionOf(panel(SidePanelKillCardExamples.vardorvisKill())
+			.fightTab(), "damage");
+		assertFalse(texts(claws).toString(), texts(claws).toString().contains("expected"));
+		assertTrue(texts(claws).toString(), texts(claws).toString().contains("(average 88)"));
+	}
+
+	@Test
+	public void detailsAreGoneAndTheBossesHealingShowsOnlyWhenItIsntZero()
+	{
+		final PanelSnapshot.FightTab t = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill());
+		assertFalse(t.summaries.containsKey("details"));
+		assertFalse(t.summaries.containsKey("chart"));
+		assertFalse(t.summaries.containsKey("ticks"));
+		assertNull(t.clear.healed);
+		final PvmPerformancePanel p = panel(SidePanelKillCardExamples.araxxorKill());
+		for (String gone : new String[]{"details", "chart", "ticks"})
+		{
+			for (SidePanelSection s : all(p.fightTab(), SidePanelSection.class))
+			{
+				assertNotEquals(gone, s.id());
+			}
+		}
+		final SidePanelModel.Input healed = SidePanelKillCardExamples.araxxorKill();
+		((LedgerExamples.FakeScope) healed.scope).healed = 12;
+		final PanelSnapshot.FightTab h = SidePanelModel.fight(healed);
+		assertEquals("Boss healed", h.clear.healed.left.text);
+		assertEquals("12", h.clear.healed.right.text);
+		assertTrue(texts(SidePanelPictures.sectionOf(panel(healed).fightTab(), "damage")).contains("Boss healed"));
+	}
+
+	@Test
+	public void eachFoldedSectionHasItsLineAndPicture()
+	{
+		final PvmPerformancePanel p = panel(SidePanelKillCardExamples.araxxorKill());
+		final SidePanelSection luck = SidePanelPictures.sectionOf(p.fightTab(), "curve");
+		assertEquals("rolled 81 of 100 · lucky", luck.summary());
+		assertEquals(PanelSnapshot.Mark.Kind.LUCK, luck.summaryMark().kind);
+		assertEquals(81, luck.summaryMark().roll);
+		final SidePanelSection time = SidePanelPictures.sectionOf(p.fightTab(), "budget");
+		assertEquals("perfect 1:34, lost 1.1 s, luck saved 9.8 s", time.summary());
+		final PanelSnapshot.Mark bar = time.summaryMark();
+		assertEquals(PanelSnapshot.Mark.Kind.TIME, bar.kind);
+		assertTrue(bar.luckSaved);
+		assertEquals(1, bar.kept + bar.lost + bar.luck, 0.15);
+		final SidePanelSection play = SidePanelPictures.sectionOf(p.fightTab(), "execution");
+		assertEquals("attacking 99% of the time", play.summary());
+		assertEquals("A", play.summaryMark().grade);
+		assertEquals("biggest single hit: 3", SidePanelPictures.sectionOf(p.fightTab(), "taken").summary());
+		// Unlucky: luck's cost comes after the loss.
+		final SidePanelSection unlucky = SidePanelPictures.sectionOf(panel(SidePanelKillCardExamples.vardorvisKill())
+			.fightTab(), "budget");
+		assertEquals("perfect 1:41, lost 17 s, luck cost 14 s", unlucky.summary());
+		assertFalse(unlucky.summaryMark().luckSaved);
+	}
+
+	@Test
+	public void theMergedSectionsOldFoldKeysStillOpenThem()
+	{
+		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
+		p.setCelebrations(true);
+		final SidePanelSection.Folds folds = p.fightFolds();
+		assertTrue(folds.isFolded("execution"));
+		assertTrue(folds.isFolded("curve"));
+		// Ticks and Details left open (T-188's keys, "ticks.opened" and "details.opened") open the sections they're in.
+		folds.setFolded("ticks", false);
+		folds.setFolded("details", false);
+		assertFalse(folds.isFolded("execution"));
+		assertFalse(folds.isFolded("curve"));
+		// Folding Your play writes the old key too, so it stays folded.
+		folds.setFolded("execution", true);
+		assertTrue(folds.isFolded("execution"));
+		assertTrue(folds.isFolded("ticks"));
+		// Damage over time left open opens Damage, which opens by default anyway; folding Damage folds it.
+		folds.setFolded("chart", false);
+		assertFalse(folds.isFolded("damage"));
+		folds.setFolded("damage", true);
+		assertTrue(folds.isFolded("damage"));
+		// Celebrations off reads only its own keys.
+		p.setCelebrations(false);
+		folds.setFolded("details", false);
+		assertFalse(folds.isFolded("execution"));
 	}
 
 	@Test
@@ -249,29 +477,33 @@ public class SidePanelKillCardTest
 		p.setCelebrations(true);
 		final SidePanelModel.Input first = SidePanelKillCardExamples.araxxorKill();
 		p.apply(new PanelSnapshot(SidePanelModel.fight(first), null, SidePanelParty.party(new SidePanelParty.Input())));
-		final SidePanelSection details = SidePanelPictures.sectionOf(p.fightTab(), "details");
-		assertTrue(details.isFolded());
-		final String before = rowsText(details);
-		// The next snapshot: two more hits. Folded, the body keeps what it had; its line moves.
+		final SidePanelSection taken = SidePanelPictures.sectionOf(p.fightTab(), "taken");
+		assertTrue(taken.isFolded());
+		final String before = rowsText(taken);
+		// The next snapshot: a bigger hit. Folded, the body keeps what it had; its line moves.
 		final SidePanelModel.Input next = SidePanelKillCardExamples.araxxorKill();
-		((LedgerExamples.FakeScope) next.scope).hits = 32;
+		((LedgerExamples.FakeScope) next.scope).biggestHitTaken = 9;
 		p.apply(new PanelSnapshot(SidePanelModel.fight(next), null, SidePanelParty.party(new SidePanelParty.Input())));
-		assertEquals(before, rowsText(details));
-		assertEquals("hits 32/29.6", details.summary());
+		assertEquals(before, rowsText(taken));
+		assertEquals("biggest single hit: 9", taken.summary());
 		// Opened, it catches up at once.
-		details.toggle();
-		assertNotEquals(before, rowsText(details));
-		assertTrue(rowsText(details), rowsText(details).contains("32/29.6"));
+		taken.toggle();
+		assertNotEquals(before, rowsText(taken));
+	}
+
+	private static List<String> texts(Container c)
+	{
+		final List<String> out = new ArrayList<>();
+		for (SidePanelText t : all(c, SidePanelText.class))
+		{
+			out.add(t.getText());
+		}
+		return out;
 	}
 
 	private static String rowsText(SidePanelSection s)
 	{
-		final StringBuilder b = new StringBuilder();
-		for (SidePanelText t : all(s, SidePanelText.class))
-		{
-			b.append(t.getText()).append('|');
-		}
-		return b.toString();
+		return String.join("|", texts(s));
 	}
 
 	@Test

@@ -127,6 +127,11 @@ public final class SidePanelPictures
 			historyProgress(out);
 			return;
 		}
+		if (args.length > 1 && "clarity".equals(args[1]))
+		{
+			clarity(out);
+			return;
+		}
 		if (args.length > 1 && "luck".equals(args[1]))
 		{
 			luckStrengths(out);
@@ -1951,6 +1956,35 @@ public final class SidePanelPictures
 					SidePanelPictures::showAll, scale));
 				write(dir, "c-card-lucky-81", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
 				write(dir, "d-card-unlucky-20", scale, fightTab(SidePanelKillCardExamples.vardorvisKill(), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-196: the clarity pass on the Araxxor KC 555 kill, live (0:42) and after the kill (folded as it opens, and every
+	 * section opened), the PB kill with the gold star, and the unlucky Vardorvis kill. Normal, Smooth and Larger, 1x and
+	 * 2x.
+	 */
+	private static void clarity(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-araxxor-live", scale, fightTab(SidePanelKillCardExamples.araxxorLive(), scale));
+				write(dir, "b-araxxor-kill", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "c-araxxor-kill-opened", scale, opened(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "d-pb-kill", scale, fightTab(SidePanelKillCardExamples.pbKill(), scale));
+				write(dir, "e-vardorvis-unlucky", scale, fightTab(SidePanelKillCardExamples.vardorvisKill(), scale));
+				write(dir, "f-celebrations-off", scale, fightTab(SidePanelKillCardExamples.off(), scale));
 			}
 		}
 		smooth = false;

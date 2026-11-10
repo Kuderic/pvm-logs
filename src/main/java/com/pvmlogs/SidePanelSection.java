@@ -120,16 +120,30 @@ final class SidePanelSection extends JPanel
 	 */
 	void setSummary(PanelSnapshot.Text t)
 	{
+		setSummary(t, null);
+	}
+
+	/** T-196: the line with its small picture before it (Luck's track, the time's bar, the grade's chip); null for none. */
+	void setSummary(PanelSnapshot.Text t, PanelSnapshot.Mark mark)
+	{
 		final PanelSnapshot.Text now = t == null ? PanelSnapshot.Text.NONE : t;
 		final boolean had = !summary.text.isEmpty();
+		final boolean tallBefore = summary.tall();
 		summary.text = now.text;
 		summary.colour = now.colour;
-		if (had != !now.text.isEmpty())
+		summary.mark = mark;
+		if (had != !now.text.isEmpty() || tallBefore != summary.tall())
 		{
 			restyleHead();
 			revalidate();
 		}
 		summary.repaint();
+	}
+
+	/** T-196: the summary's picture, for tests; null for none. */
+	PanelSnapshot.Mark summaryMark()
+	{
+		return summary.isVisible() ? summary.mark : null;
 	}
 
 	/** T-188: the summary on show, for tests; empty for none. */
@@ -147,13 +161,22 @@ final class SidePanelSection extends JPanel
 	/** T-188: one line of small text at a fixed height, cut with "…" to its width. */
 	private static final class Summary extends JComponent
 	{
+		static final int TIME_BAR = 6;
+		static final int LUCK_TRACK_W = 44;
 		String text = "";
 		java.awt.Color colour = SidePanelStyle.SECONDARY;
+		PanelSnapshot.Mark mark;
+
+		/** The time's bar takes a line of its own above the words. */
+		boolean tall()
+		{
+			return mark != null && mark.kind == PanelSnapshot.Mark.Kind.TIME;
+		}
 
 		@Override
 		public java.awt.Dimension getPreferredSize()
 		{
-			return new java.awt.Dimension(0, SidePanelStyle.Type.SMALL.lineHeight());
+			return new java.awt.Dimension(0, SidePanelStyle.Type.SMALL.lineHeight() + (tall() ? TIME_BAR + 4 : 0));
 		}
 
 		@Override
@@ -167,9 +190,71 @@ final class SidePanelSection extends JPanel
 			SidePanelStyle.textHints(g);
 			g.setFont(SidePanelStyle.Type.SMALL.font());
 			final java.awt.FontMetrics fm = g.getFontMetrics();
+			final int line = SidePanelStyle.Type.SMALL.lineHeight();
+			final int w = getWidth();
+			int x = 0;
+			if (mark != null)
+			{
+				x = paintMark(g, mark, w, getHeight() - line, line);
+			}
 			g.setColor(colour);
-			g.drawString(LedgerRows.cut(text, fm::stringWidth, getWidth()), 0, getHeight() - fm.getDescent());
+			g.drawString(LedgerRows.cut(text, fm::stringWidth, w - x), x, getHeight() - fm.getDescent());
 			g.dispose();
+		}
+
+		/** The picture; returns where the words start. */
+		private static int paintMark(java.awt.Graphics2D g, PanelSnapshot.Mark m, int w, int lineTop, int line)
+		{
+			switch (m.kind)
+			{
+				case TIME:
+				{
+					// The perfect fight, what was lost, and luck's stretch striped in its violet.
+					g.setColor(SidePanelStyle.TRACK);
+					g.fillRect(0, 0, w, TIME_BAR);
+					final int kept = (int) Math.round(m.kept * w);
+					final int lost = (int) Math.round((m.kept + m.lost) * w);
+					g.setColor(SidePanelStyle.KEPT);
+					g.fillRect(0, 0, kept, TIME_BAR);
+					g.setColor(SidePanelStyle.COST);
+					g.fillRect(kept, 0, Math.max(m.lost > 0 ? 1 : 0, lost - kept), TIME_BAR);
+					final int from = m.luckSaved ? (int) Math.round((1 - m.luck) * w) : lost;
+					final int to = m.luckSaved ? w : (int) Math.round((m.kept + m.lost + m.luck) * w);
+					g.setColor(SidePanelStyle.LUCK);
+					for (int x = from; x < to; x += 3)
+					{
+						g.fillRect(x, 0, Math.min(2, to - x), TIME_BAR);
+					}
+					return 0;
+				}
+				case LUCK:
+				{
+					final int h = 6;
+					final int y = lineTop + (line - h) / 2;
+					final int a = LUCK_TRACK_W / 4;
+					final int b = LUCK_TRACK_W * 3 / 4;
+					g.setColor(SidePanelStyle.LUCK_TRACK_DIM);
+					g.fillRect(0, y, a, h);
+					g.setColor(SidePanelStyle.LUCK_TRACK_NORMAL);
+					g.fillRect(a, y, b - a, h);
+					g.setColor(SidePanelStyle.LUCK_TRACK_BRIGHT);
+					g.fillRect(b, y, LUCK_TRACK_W - b, h);
+					final int at = (int) Math.round((Math.max(1, Math.min(100, m.roll)) - 1) / 99.0 * (LUCK_TRACK_W - 2));
+					g.setColor(SidePanelStyle.VALUE);
+					g.fillRect(at, y - 2, 2, h + 4);
+					return LUCK_TRACK_W + 6;
+				}
+				default:
+				{
+					// The grade's chip: its letter in its colour, edged with it.
+					final java.awt.FontMetrics fm = g.getFontMetrics();
+					final int cw = fm.stringWidth(m.grade) + 6;
+					g.setColor(m.colour);
+					g.drawRect(0, lineTop, cw - 1, line - 1);
+					g.drawString(m.grade, 3, lineTop + line - fm.getDescent());
+					return cw + 5;
+				}
+			}
 		}
 	}
 

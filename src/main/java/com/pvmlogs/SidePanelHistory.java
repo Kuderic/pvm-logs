@@ -1118,6 +1118,7 @@ final class SidePanelHistory
 		{
 			in.average = LedgerHistory.of(history, room);
 			in.luckRemoved = in.average == null ? null : SidePanelModel.luckRemoved(history, room);
+			in.slowEnd = in.average == null ? Double.NaN : SidePanelModel.slowEnd(history, room);
 		}
 		if (!fromThisSession(room, sessionStart))
 		{
