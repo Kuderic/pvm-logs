@@ -155,7 +155,9 @@ public class SidePanelDamageSwitchTest
 		final SidePanelSection damage = section(view, "damage");
 		damage.toggle();
 		assertFalse(only(view).isVisible());
-		assertTrue(texts(all(damage.getComponent(0), SidePanelText.class)).contains(SidePanelSection.FOLDED_MARK));
+		// T-198: the chevron says it opens, no "+".
+		assertFalse(damage.chevronOpen());
+		assertEquals(SidePanelSection.OPEN_TIP, damage.headerTip());
 		damage.toggle();
 		assertTrue(only(view).isVisible());
 	}

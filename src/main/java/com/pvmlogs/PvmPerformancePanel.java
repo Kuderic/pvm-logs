@@ -77,8 +77,6 @@ class PvmPerformancePanel extends PluginPanel
 		return fightFolds;
 	}
 
-	/** T-196: the Speed track's slow end, cached with the average. */
-	private double slowEnd = Double.NaN;
 	/** T-130 review: where the Fight tab's copy of the chart was last sent to. */
 	private final ChartBook chartBook = new ChartBook();
 	/** The Damage rows' sums, kept between snapshots so a long fight's build costs what a short one's does (T-046). */
@@ -764,7 +762,6 @@ class PvmPerformancePanel extends PluginPanel
 			averages(history, room);
 			in.average = average;
 			in.luckRemoved = luckRemoved;
-			in.slowEnd = slowEnd;
 		}
 		return in;
 	}
@@ -1347,7 +1344,6 @@ class PvmPerformancePanel extends PluginPanel
 			final List<Fight> copy = new ArrayList<>(history);
 			average = LedgerHistory.of(copy, room);
 			luckRemoved = average == null ? null : SidePanelModel.luckRemoved(copy, room);
-			slowEnd = average == null ? Double.NaN : SidePanelModel.slowEnd(copy, room);
 		}
 	}
 

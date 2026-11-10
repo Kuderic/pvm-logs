@@ -151,7 +151,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	private Parts parts = Parts.ALL;
 	/**
 	 * T-196: the clarity pass's sections under the card (Celebrations on, the tab's own panels): Damage holds its
-	 * second by second chart and the boss's healing, Luck its hits, Your play (was Execution) its attack rhythm; Damage
+	 * Timeline chart and the boss's healing, Luck its hits, Your play (was Execution) its attack rhythm; Damage
 	 * over time, Ticks and Details aren't sections of their own.
 	 */
 	private boolean clearPass;
@@ -507,7 +507,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 	}
 
-	/** T-196: a small heading inside a section's card, with its note on the right: {@code Second by second}. */
+	/** T-196: a small heading inside a section's card, with its note on the right: {@code Timeline}. */
 	private static JComponent subhead(String title, String note)
 	{
 		return new SidePanelParts.Line(Text.small(title, SidePanelStyle.BODY), note == null ? Text.NONE
@@ -848,10 +848,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		// damage"), then the curve in luck's three strengths, then the hits against average.
 		final SidePanelParts.Paragraph caption = new SidePanelParts.Paragraph(tab.curve.caption, clearPass
 			? SidePanelStyle.BODY : SidePanelStyle.SECONDARY, SidePanelStyle.Type.SMALL, SidePanelStyle.CONTENT_WIDTH - 14);
-		if (clearPass)
-		{
-			card.add(caption);
-		}
 		final SidePanelLuckCurve curve = new SidePanelLuckCurve(tab.curve.z, clearPass);
 		curve.setToolTipText(tab.curve.tooltip);
 		card.add(curve);
@@ -874,6 +870,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		card.add(legend);
 		if (!clearPass)
 		{
+			// T-198: under the card the caption's words are the curve's tooltip: no sentence on the panel.
 			card.add(caption);
 		}
 		final SidePanelParts.RowsCard hits = clearPass && !tab.clear.luckHits.isEmpty()
@@ -1000,7 +997,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			final JPanel box = SidePanelParts.stack(5);
 			box.setBorder(javax.swing.BorderFactory.createCompoundBorder(javax.swing.BorderFactory.createMatteBorder(1, 0, 0,
 				0, SidePanelStyle.DIVIDER), new EmptyBorder(6, 0, 0, 0)));
-			box.add(subhead(ATTACK_RHYTHM, "a row = 36 s"));
+			box.add(subhead(ATTACK_RHYTHM, "36 s a row"));
 			rhythm = stripPiece(tab, box);
 			card.add(box);
 		}
@@ -1031,9 +1028,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
-	/** T-196: Execution's name under the card, and its strip's. */
+	/** T-196: Execution's name under the card, and its strip's (T-198: one word). */
 	static final String YOUR_PLAY = "Your play";
-	static final String ATTACK_RHYTHM = "Your attack rhythm";
+	static final String ATTACK_RHYTHM = "Rhythm";
 
 	/** Damage over time (T-036): the chart in a card, its two ends' times under it, and a legend. */
 	private void chart(FightTab tab)
@@ -1158,8 +1155,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		final boolean plain = clearPass;
 		if (plain)
 		{
-			card.add(new SidePanelParts.Paragraph(RHYTHM_NOTE, SidePanelStyle.SECONDARY, SidePanelStyle.Type.SMALL,
-				SidePanelStyle.CONTENT_WIDTH - 14));
+			// T-198: the unit's words on hover, not on the panel.
+			strip.setToolTipText(SidePanelStyle.wrapTip("One mark per game tick (0.6 s), 60 to a row (36 s): attacking,"
+				+ " special, idle (off cooldown with no attack) and eating."));
 		}
 		final int[] rows = {SidePanelTickStrip.rows(chartData.length())};
 		return new Piece(card, t ->
@@ -1196,9 +1194,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			strip.update();
 		});
 	}
-
-	/** T-196: the attack rhythm's one mention of the game's unit. */
-	static final String RHYTHM_NOTE = "one mark per game tick (0.6 s)";
 
 	/** A saved kill's dashed card in the damage rows' place (spec 3.2), with the canvas's title. */
 	private void later(FightTab tab)
@@ -1255,7 +1250,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				SidePanelStyle.CONTENT_WIDTH - 14));
 			list.add(card);
 		}
-		// T-196: the boss's healing, only when it isn't 0 (was in Details); then second by second (was Damage over time).
+		// T-196: the boss's healing, only when it isn't 0 (was in Details); then its Timeline (was Damage over time).
 		final SidePanelParts.Line healed = clearPass && tab.clear.healed != null ? new SidePanelParts.Line(tab.clear.healed)
 			: null;
 		if (healed != null)
@@ -1268,7 +1263,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		if (clearPass && tab.chart != null)
 		{
 			final JPanel box = SidePanelParts.card(5);
-			box.add(subhead(SECOND_BY_SECOND, null));
+			box.add(subhead(TIMELINE, null));
 			seconds = chartPiece(tab, box);
 			list.add(box);
 		}
@@ -1318,8 +1313,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
-	/** T-196: Damage's chart, merged in from Damage over time. */
-	static final String SECOND_BY_SECOND = "Second by second";
+	/** T-196: Damage's chart, merged in from Damage over time; T-198 (Eric: "should be renamed to Timeline"). */
+	static final String TIMELINE = "Timeline";
 
 	/**
 	 * T-105: the Damage card's switch in its header, {@code boss · adds · all} in small lower-case text like the other
