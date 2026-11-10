@@ -62,8 +62,27 @@ final class BossRecords
 	/** The standings kept in memory for {@link #standing}: this session's kills, and each key's newest from the file. */
 	static final int STANDINGS_KEPT = 500;
 	static final double SECONDS_PER_TICK = 0.6;
-	/** 2 (T-192): the badges counted. A file of version 1 has them counted once, from history and its backups. */
-	static final int VERSION = 2;
+	/**
+	 * 2 (T-192): the badges counted. A file of version 1 has them counted once, from history and its backups.
+	 * 3 (T-195): each execution in the grade's window saved with its scoring stamp; a file before it is stamped once.
+	 */
+	static final int VERSION = 3;
+	/**
+	 * T-195: the execution formula's own version, part of every scoring stamp. Raise it when {@code Numbers.execution}
+	 * changes how it scores every boss, so every window starts again.
+	 */
+	static final int EXECUTION_FORMULA = 1;
+	/**
+	 * T-195, once (records version 3): the scoring changes made before stamps were saved, by boss, with the first build
+	 * (its commit time, as a fight's build line gives it) that scored that way. A kill on an earlier build, or with no
+	 * build saved, was scored the old way. Changes after T-195 are told by the stamps, not by this.
+	 * <ul>
+	 * <li>Cerberus: T-191's stall excused, merged 2026-11-09 20:42 (#215, in {@code e853e64}).</li>
+	 * </ul>
+	 */
+	static final Map<String, String> SCORED_SINCE = Collections.singletonMap("Cerberus", "2026-11-09 20:42");
+	private static final java.util.regex.Pattern COMMITTED =
+		java.util.regex.Pattern.compile("committed (\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2})");
 
 	enum Grade
 	{
@@ -248,6 +267,7 @@ final class BossRecords
 		private final int[] clocks;
 		private final int[] counts;
 		private final double[] executions;
+		private final boolean sinceChange;
 		private final Map<Long, Grade> gradeByStart;
 
 		private View(Record r)
@@ -290,7 +310,22 @@ final class BossRecords
 				clocks[i] = e.getKey();
 				counts[i++] = e.getValue();
 			}
-			executions = r.executions.stream().mapToDouble(Double::doubleValue).toArray();
+			// The grade a kill not yet recorded would get: against the kills scored as the newest was (T-195).
+			final List<Double> same = new ArrayList<>();
+			boolean other = false;
+			for (int j = 0; j < r.executions.size(); j++)
+			{
+				if (java.util.Objects.equals(r.executionStamps.get(j), r.streakStamp))
+				{
+					same.add(r.executions.get(j));
+				}
+				else
+				{
+					other = true;
+				}
+			}
+			executions = same.stream().mapToDouble(Double::doubleValue).toArray();
+			sinceChange = other;
 		}
 
 		/** "Nth fastest": 1 + the recorded kills strictly faster than {@code clockSeconds}. Of {@link #kills}. */
@@ -308,7 +343,7 @@ final class BossRecords
 		/** The grade {@code execution} would get against the last 50 recorded (a kill not yet recorded); null if NaN. */
 		Graded grade(double execution, double clockSeconds)
 		{
-			return BossRecords.grade(execution, clockSeconds, executions);
+			return BossRecords.grade(execution, clockSeconds, executions, sinceChange);
 		}
 
 		/** T-192: how many kills earned {@code badge}; 0 when never (or Flawless without attack rules). */
@@ -380,6 +415,10 @@ final class BossRecords
 		TreeMap<Integer, Integer> clocks = new TreeMap<>();
 		/** The last {@link #GRADE_WINDOW} executions, oldest first. */
 		List<Double> executions = new ArrayList<>();
+		/** T-195: each of {@link #executions}' scoring stamp ({@link #scoringStamp}), in step with it. */
+		List<String> executionStamps = new ArrayList<>();
+		/** T-195: the newest kill's scoring stamp: the A streak runs only while it stays the same. */
+		String streakStamp;
 		/** S, A, B, C. */
 		int[] grades = new int[4];
 		/** The last {@link #TREND_KILLS} kills, oldest first. */
@@ -416,9 +455,19 @@ final class BossRecords
 	// The kills recorded since recordedLines was last asked, as the debug log's lines.
 	private final List<String> recorded = new ArrayList<>();
 
+	// T-195: a fight's boss (by npc id) to its scoring stamp.
+	private final java.util.function.IntFunction<String> stamps;
+
 	BossRecords(Filepath dir, Gson gson)
 	{
+		this(dir, gson, id -> scoringStamp(null));
+	}
+
+	/** {@code stamps}: npc id to the scoring stamp of its boss's rules ({@link #stamps(BossRules)}). */
+	BossRecords(Filepath dir, Gson gson, java.util.function.IntFunction<String> stamps)
+	{
 		this.dir = dir;
+		this.stamps = stamps;
 		// An unknown best or luck is NaN, which plain JSON has no word for: written as NaN, read back leniently (as
 		// Gson's fromJson reads).
 		this.gson = gson.newBuilder().serializeSpecialFloatingPointValues().create();
@@ -477,6 +526,15 @@ final class BossRecords
 	 */
 	static Graded grade(double execution, double clockSeconds, double[] earlier)
 	{
+		return grade(execution, clockSeconds, earlier, false);
+	}
+
+	/**
+	 * The same, {@code earlier} being only the kills scored as this one is (T-195); {@code sinceChange} when kills scored
+	 * otherwise were left out, so the fixed bands say "since the rules changed".
+	 */
+	static Graded grade(double execution, double clockSeconds, double[] earlier, boolean sinceChange)
+	{
 		if (Double.isNaN(execution))
 		{
 			return null;
@@ -490,7 +548,8 @@ final class BossRecords
 			final double up = g == Grade.C ? BAND_B : g == Grade.B ? BAND_A : g == Grade.A ? BAND_S : Double.NaN;
 			final int ticks = Double.isNaN(up) || combatTicks <= 0 ? 0
 				: Math.max(1, (int) Math.ceil((up - execution) * combatTicks - 1e-9));
-			return new Graded(g, "fixed bands (" + n + (n == 1 ? " kill)" : " kills)"), ticks);
+			return new Graded(g, "fixed bands (" + n + (n == 1 ? " kill" : " kills")
+				+ (sinceChange ? " since the rules changed)" : ")"), ticks);
 		}
 		final double share = share(execution, window);
 		final Grade g = byShare(share);
@@ -563,6 +622,8 @@ final class BossRecords
 		final int kc;
 		/** {@link Badges#cleanRun}. */
 		final boolean cleanRun;
+		/** T-195: how its execution was scored ({@link #scoringStamp}). */
+		final String stamp;
 
 		KillFigures(LedgerHistory.Like like, long startMillis, double clock, double execution, double luckRemoved,
 			double percentile, Boolean flawless)
@@ -573,6 +634,13 @@ final class BossRecords
 		KillFigures(LedgerHistory.Like like, long startMillis, double clock, double execution, double luckRemoved,
 			double percentile, Boolean flawless, int kc, boolean cleanRun)
 		{
+			this(like, startMillis, clock, execution, luckRemoved, percentile, flawless, kc, cleanRun, scoringStamp(null));
+		}
+
+		KillFigures(LedgerHistory.Like like, long startMillis, double clock, double execution, double luckRemoved,
+			double percentile, Boolean flawless, int kc, boolean cleanRun, String stamp)
+		{
+			this.stamp = stamp;
 			this.like = like;
 			this.startMillis = startMillis;
 			this.clock = clock;
@@ -585,7 +653,7 @@ final class BossRecords
 		}
 
 		/** The after-kill execution (with avoidable eating, at bosses with attack rules), as the card shows it. */
-		static KillFigures of(Encounter room)
+		static KillFigures of(Encounter room, String stamp)
 		{
 			final LedgerRows.Scope scope = LedgerRows.of(room);
 			final LedgerRows.Numbers n = new LedgerRows.Numbers(scope);
@@ -597,7 +665,7 @@ final class BossRecords
 				kc = Math.max(kc, fight.getContext() == null ? 0 : fight.getContext().kc);
 			}
 			return new KillFigures(LedgerHistory.Like.of(room), room.getStartMillis(), n.clock, n.execution,
-				n.expectedDuration, n.percentile, flawless, kc, Badges.cleanRun(n));
+				n.expectedDuration, n.percentile, flawless, kc, Badges.cleanRun(n), stamp);
 		}
 	}
 
@@ -631,7 +699,21 @@ final class BossRecords
 			return false;
 		}
 		final int ticks = ticks(k.clock);
-		final Graded graded = grade(k.execution, k.clock, r.executions.stream().mapToDouble(Double::doubleValue).toArray());
+		// T-195: against the kills scored as this one is; the rest are left out of the grade, not of the bests or rank.
+		final List<Double> same = new ArrayList<>();
+		boolean other = false;
+		for (int i = 0; i < r.executions.size(); i++)
+		{
+			if (java.util.Objects.equals(r.executionStamps.get(i), k.stamp))
+			{
+				same.add(r.executions.get(i));
+			}
+			else
+			{
+				other = true;
+			}
+		}
+		final Graded graded = grade(k.execution, k.clock, same.stream().mapToDouble(Double::doubleValue).toArray(), other);
 		final Kill kill = new Kill();
 		kill.startMillis = k.startMillis;
 		kill.clockTicks = ticks;
@@ -684,16 +766,21 @@ final class BossRecords
 		if (!Double.isNaN(k.execution))
 		{
 			r.executions.add(k.execution);
+			r.executionStamps.add(k.stamp);
 			while (r.executions.size() > GRADE_WINDOW)
 			{
 				r.executions.remove(0);
+				r.executionStamps.remove(0);
 			}
 		}
 		if (graded != null)
 		{
 			r.grades[graded.grade.ordinal()]++;
 		}
-		r.streak = graded != null && graded.grade.atLeastA() ? r.streak + 1 : 0;
+		// T-195: the A streak starts again where the scoring changed.
+		final int before = java.util.Objects.equals(r.streakStamp, k.stamp) ? r.streak : 0;
+		r.streak = graded != null && graded.grade.atLeastA() ? before + 1 : 0;
+		r.streakStamp = k.stamp;
 		r.longestStreak = Math.max(r.longestStreak, r.streak);
 		if (k.flawless != null)
 		{
@@ -747,7 +834,7 @@ final class BossRecords
 	boolean noteHistory(List<Fight> history, int recentFights)
 	{
 		boolean any = false;
-		for (KillFigures k : figures(history, recentFights, newestByKey()))
+		for (KillFigures k : figures(history, recentFights, newestByKey(), this::liveStamp))
 		{
 			any |= record(k);
 		}
@@ -759,7 +846,8 @@ final class BossRecords
 	 * bosses so each record's streaks and windows run in order: for the bosses of the last {@code recentFights} fights,
 	 * or all when 0.
 	 */
-	private static List<KillFigures> figures(List<Fight> history, int recentFights, Map<String, Long> newest)
+	private static List<KillFigures> figures(List<Fight> history, int recentFights, Map<String, Long> newest,
+		java.util.function.Function<Encounter, String> stampOf)
 	{
 		final Set<String> names = new HashSet<>();
 		final int upTo = recentFights <= 0 ? history.size() : Math.min(history.size(), recentFights);
@@ -781,7 +869,7 @@ final class BossRecords
 				final Long seen = newest.get(key(LedgerHistory.Like.of(room)));
 				if ((seen == null || room.getStartMillis() > seen) && LedgerHistory.counts(room, none))
 				{
-					kills.add(KillFigures.of(room));
+					kills.add(KillFigures.of(room, stampOf.apply(room)));
 				}
 			}
 		}
@@ -800,6 +888,249 @@ final class BossRecords
 			}
 		}
 		return newest;
+	}
+
+	// ---- how an execution was scored (T-195) ----
+
+	/** What of a boss's rules changes its execution: Gson's, so the stamp is a hash of this as JSON. */
+	private static final class ScoringParts
+	{
+		int formula;
+		List<BossRules.UptimeAllowance> uptimeAllowances;
+		List<BossRules.StateRule> allowanceStates;
+		BossRules.StallRule stall;
+		BossRules.ChaseRule chaseByDistance;
+		BossRules.MeleePunish meleePunish;
+		/** By "version|maxHp": the attack rules that tell avoidable damage, so avoidable eating. */
+		TreeMap<String, BossRules.AttacksOnPlayer> attacksOnPlayer;
+	}
+
+	private static final Gson STAMP_GSON = new com.google.gson.GsonBuilder().serializeSpecialFloatingPointValues().create();
+
+	/**
+	 * T-195: how a boss's execution is scored, as a stamp: {@code e<formula>-<hash>}, the hash (FNV-1a, as a fight's
+	 * rules hash is) of what in its {@code boss-rules.json} entry changes execution: its uptime allowances and the
+	 * states they ride on, its stall, its chase rule, its punish, and its versions' attack rules (avoidable eating); with
+	 * {@link #EXECUTION_FORMULA}. A boss with none of these has the formula's stamp alone.
+	 */
+	static String scoringStamp(BossRules.Boss boss)
+	{
+		final ScoringParts p = new ScoringParts();
+		p.formula = EXECUTION_FORMULA;
+		if (boss != null)
+		{
+			p.uptimeAllowances = boss.uptimeAllowances;
+			p.stall = boss.stall;
+			p.chaseByDistance = boss.chaseByDistance;
+			p.meleePunish = boss.meleePunish;
+			if (boss.uptimeAllowances != null && boss.damageModifiers != null && boss.damageModifiers.states != null)
+			{
+				final Set<String> named = new HashSet<>();
+				for (BossRules.UptimeAllowance a : boss.uptimeAllowances)
+				{
+					if (a != null)
+					{
+						named.add(a.state);
+					}
+				}
+				p.allowanceStates = new ArrayList<>();
+				for (BossRules.StateRule st : boss.damageModifiers.states)
+				{
+					if (st != null && named.contains(st.name))
+					{
+						p.allowanceStates.add(st);
+					}
+				}
+			}
+			if (boss.variants != null)
+			{
+				for (BossRules.Variant v : boss.variants)
+				{
+					if (v != null && v.attacksOnPlayer != null)
+					{
+						if (p.attacksOnPlayer == null)
+						{
+							p.attacksOnPlayer = new TreeMap<>();
+						}
+						p.attacksOnPlayer.put(v.version + "|" + v.maxHp, v.attacksOnPlayer);
+					}
+				}
+			}
+		}
+		return "e" + EXECUTION_FORMULA + "-" + FightContext.shortHash(STAMP_GSON.toJson(p));
+	}
+
+	/** Npc id to its boss's scoring stamp under {@code rules} (worked out once a boss). */
+	static java.util.function.IntFunction<String> stamps(BossRules rules)
+	{
+		final Map<BossRules.Boss, String> byBoss = new java.util.concurrent.ConcurrentHashMap<>();
+		final String none = scoringStamp(null);
+		return id ->
+		{
+			final BossRules.Boss boss = rules == null ? null : rules.forNpc(id);
+			return boss == null ? none : byBoss.computeIfAbsent(boss, BossRecords::scoringStamp);
+		};
+	}
+
+	/** The boss a room was fought on: its first scored fight's npc, else its first fight's. */
+	private static int npcOf(Encounter room)
+	{
+		for (Fight f : room.getFights())
+		{
+			if (f.isScored())
+			{
+				return f.getTargetId();
+			}
+		}
+		return room.getFights().isEmpty() ? -1 : room.getFights().get(0).getTargetId();
+	}
+
+	/** A kill just saved was scored by the rules in force: theirs. */
+	private String liveStamp(Encounter room)
+	{
+		return stamps.apply(npcOf(room));
+	}
+
+	/**
+	 * Once (version 3): how an old kill was scored. The rules in force, unless {@link #SCORED_SINCE} says its boss's
+	 * scoring changed after the build it was fought on: then {@code before <date>}.
+	 */
+	private String migrationStamp(Encounter room)
+	{
+		final String since = SCORED_SINCE.get(room.getName());
+		if (since != null)
+		{
+			String committed = null;
+			boolean release = false;
+			for (Fight f : room.getFights())
+			{
+				final String build = f.getContext() == null ? null : f.getContext().build;
+				if (build == null)
+				{
+					continue;
+				}
+				release |= build.startsWith("release");
+				final java.util.regex.Matcher m = COMMITTED.matcher(build);
+				if (m.find())
+				{
+					committed = m.group(1);
+				}
+			}
+			// A Plugin Hub release came after; no build saved (before T-110) or an earlier commit was scored the old way.
+			if (!release && (committed == null || committed.compareTo(since) < 0))
+			{
+				return "before " + since;
+			}
+		}
+		return liveStamp(room);
+	}
+
+	/**
+	 * T-195, once, for a file before version 3: each record's window of executions stamped with how they were scored,
+	 * from its kills in history and the backups. Where every one was scored as its boss is now, only the stamps are
+	 * added. Where its scoring changed inside the window ({@link #SCORED_SINCE}), its grades are replayed so the kills
+	 * since grade against each other alone: the window, the grades and their spread, the trend's grades, the A streak
+	 * (and its best) and the badge counts; the bests, the clocks, the kills and the Flawless streak are kept. Returns the
+	 * debug log's words.
+	 */
+	private String stampScoring(List<Fight> history)
+	{
+		final Merged merged = merge(history);
+		final Map<String, List<KillFigures>> byRecord = new HashMap<>();
+		for (KillFigures k : figures(merged.fights, 0, Collections.emptyMap(), this::migrationStamp))
+		{
+			final Record r = k.like == null || k.like.name == null ? null : byKey.get(key(k.like));
+			if (r != null && k.startMillis <= r.lastStartMillis)
+			{
+				byRecord.computeIfAbsent(key(k.like), x -> new ArrayList<>()).add(k);
+			}
+		}
+		int stamped = 0;
+		final List<String> regraded = new ArrayList<>();
+		for (Map.Entry<String, Record> e : byKey.entrySet())
+		{
+			final Record r = e.getValue();
+			final List<KillFigures> kills = byRecord.getOrDefault(e.getKey(), Collections.emptyList());
+			if (kills.isEmpty())
+			{
+				continue;
+			}
+			final List<KillFigures> graded = new ArrayList<>();
+			for (KillFigures k : kills)
+			{
+				if (!Double.isNaN(k.execution))
+				{
+					graded.add(k);
+				}
+			}
+			final List<KillFigures> window = graded.subList(Math.max(0, graded.size() - GRADE_WINDOW), graded.size());
+			final String now = kills.get(kills.size() - 1).stamp;
+			boolean changed = false;
+			for (KillFigures k : window)
+			{
+				changed |= !java.util.Objects.equals(k.stamp, now);
+			}
+			stamped++;
+			if (!changed)
+			{
+				r.executionStamps = new ArrayList<>(Collections.nCopies(r.executions.size(), now));
+				r.streakStamp = now;
+				continue;
+			}
+			final BossRecords replay = new BossRecords(dir, gson, stamps);
+			for (KillFigures k : kills)
+			{
+				replay.record(k);
+			}
+			final Record again = replay.byKey.get(e.getKey());
+			if (again == null)
+			{
+				continue;
+			}
+			r.executions = again.executions;
+			r.executionStamps = again.executionStamps;
+			r.grades = again.grades;
+			r.streak = again.streak;
+			r.longestStreak = again.longestStreak;
+			r.streakStamp = again.streakStamp;
+			r.badges[Badges.Badge.THREE_IN_A_ROW.ordinal()] = again.badges[Badges.Badge.THREE_IN_A_ROW.ordinal()];
+			final Map<Long, Grade> gradeOf = new HashMap<>();
+			for (Point p : again.trend)
+			{
+				gradeOf.put(p.start, p.grade);
+			}
+			for (Point p : r.trend)
+			{
+				if (gradeOf.containsKey(p.start))
+				{
+					p.grade = gradeOf.get(p.start);
+				}
+			}
+			if (r.last != null && again.last != null && r.last.startMillis == again.last.startMillis)
+			{
+				r.last.grade = again.last.grade;
+				r.last.basis = again.last.basis;
+				r.last.ticksToNext = again.last.ticksToNext;
+				r.last.streak = again.last.streak;
+				r.last.badges = again.last.badges;
+				standings.put(r.last.startMillis, new Standing(r.last));
+			}
+			final int[] since = new int[Grade.values().length];
+			int n = 0;
+			for (Point p : again.trend)
+			{
+				final KillFigures k = kills.stream().filter(x -> x.startMillis == p.start).findFirst().orElse(null);
+				if (k != null && java.util.Objects.equals(k.stamp, now) && p.grade != null)
+				{
+					since[p.grade.ordinal()]++;
+					n++;
+				}
+			}
+			regraded.add(String.format("%s (%d hp, %s) regraded: its %d kills since its scoring changed grade S %d, A %d, "
+				+ "B %d, C %d, A streak %d", r.name, r.maxHp, r.solo ? "solo" : "party", n, since[0], since[1], since[2],
+				since[3], r.streak));
+		}
+		return "scoring stamped for " + stamped + " bosses" + (regraded.isEmpty() ? "" : "; " + String.join("; ", regraded));
 	}
 
 	// ---- the file ----
@@ -846,7 +1177,8 @@ final class BossRecords
 				{
 					keepLastGood(file);
 				}
-				final String counted = read.version < 2 ? "; " + countBadges(history) : "";
+				final String counted = (read.version < 2 ? "; " + countBadges(history) : "")
+					+ (read.version < 3 ? "; " + stampScoring(history) : "");
 				// Anything since it was last saved (a crash before the save): caught up from history.
 				final boolean caught = noteHistory(history, 0);
 				return String.format("RECORDS loaded %d bosses from %s%s%s", byKey.size(), FILE,
@@ -868,7 +1200,8 @@ final class BossRecords
 			if (good != null)
 			{
 				put(good.records);
-				final String counted = good.version < 2 ? "; " + countBadges(history) : "";
+				final String counted = (good.version < 2 ? "; " + countBadges(history) : "")
+					+ (good.version < 3 ? "; " + stampScoring(history) : "");
 				noteHistory(history, 0);
 				return String.format("RECORDS %s; loaded %d bosses from %s, caught up from history%s", why, byKey.size(),
 					LAST_GOOD, counted);
@@ -947,7 +1280,7 @@ final class BossRecords
 		final Merged merged = merge(history);
 		final BossRecords replay = new BossRecords(dir, gson);
 		int kills = 0;
-		for (KillFigures k : figures(merged.fights, 0, Collections.emptyMap()))
+		for (KillFigures k : figures(merged.fights, 0, Collections.emptyMap(), this::migrationStamp))
 		{
 			final Record r = k.like == null || k.like.name == null ? null : byKey.get(key(k.like));
 			if (r != null && k.startMillis <= r.lastStartMillis && replay.record(k))
@@ -1060,6 +1393,18 @@ final class BossRecords
 			if (r.trend == null)
 			{
 				r.trend = new ArrayList<>();
+			}
+			if (r.executionStamps == null)
+			{
+				r.executionStamps = new ArrayList<>();
+			}
+			while (r.executionStamps.size() < r.executions.size())
+			{
+				r.executionStamps.add(0, null);
+			}
+			while (r.executionStamps.size() > r.executions.size())
+			{
+				r.executionStamps.remove(0);
 			}
 			if (r.badges == null || r.badges.length != Badges.Badge.values().length)
 			{

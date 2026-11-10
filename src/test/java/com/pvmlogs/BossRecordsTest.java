@@ -24,13 +24,18 @@ import net.runelite.client.util.Filepath;
 import org.junit.Before;
 import org.junit.Test;
 
-/** T-187: the per-boss record (records.json) that outlives history's budget, and the grade it holds; T-192: its badge counts. */
+/**
+ * T-187: the per-boss record (records.json) that outlives history's budget, and the grade it holds; T-192: its badge
+ * counts; T-195: the grade only against kills scored the same way.
+ */
 public class BossRecordsTest
 {
 	private static final Gson GSON = new Gson();
 	private static final String BOSS = "Vardorvis";
 	private static final LedgerHistory.Like LIKE = new LedgerHistory.Like(BOSS, 700, true);
 	private static final long NOW = 1_762_700_000_000L;
+	/** Cerberus, as boss-rules.json lists her. */
+	private static final int CERBERUS_ID = 5862;
 
 	private Path tmp;
 	private Filepath dir;
@@ -103,7 +108,7 @@ public class BossRecordsTest
 		// The fastest: 150 ticks, 90 s (kill 1, i = 0), with its luck.
 		assertEquals(90.0, v.fastest.value, 1e-9);
 		assertEquals(1_000_000L, v.fastest.millis);
-		assertEquals(BossRecords.roll(BossRecords.KillFigures.of(room(oldest.get(0))).percentile), v.fastest.roll());
+		assertEquals(BossRecords.roll(BossRecords.KillFigures.of(room(oldest.get(0)), null).percentile), v.fastest.roll());
 		// Every kill's clock is ranked: 150..209 ticks, one each, so 180 ticks (108 s) is the 31st fastest of 60.
 		assertEquals(1, v.rank(90.0));
 		assertEquals(31, v.rank(108.0));
@@ -113,7 +118,7 @@ public class BossRecordsTest
 		double bestLuckRemoved = Double.MAX_VALUE;
 		for (Fight f : oldest)
 		{
-			final BossRecords.KillFigures k = BossRecords.KillFigures.of(room(f));
+			final BossRecords.KillFigures k = BossRecords.KillFigures.of(room(f), null);
 			bestExecution = Math.max(bestExecution, k.execution);
 			bestLuckRemoved = Math.min(bestLuckRemoved, k.luckRemoved);
 		}
@@ -499,7 +504,8 @@ public class BossRecordsTest
 		assertEquals(2, count(v, Badges.Badge.HUNDREDTH_KILL));
 		assertEquals(6, count(v, Badges.Badge.CLEAN_RUN));
 		assertEquals("RECORDS loaded 1 bosses from records.json; badges counted for 1 bosses from 60 kills (history and 1 "
-			+ "backups): 100th kill 2, Flawless 0, Clean run 6, 3 A's in a row " + count(expected, Badges.Badge.THREE_IN_A_ROW),
+			+ "backups): 100th kill 2, Flawless 0, Clean run 6, 3 A's in a row " + count(expected, Badges.Badge.THREE_IN_A_ROW)
+			+ "; scoring stamped for 1 bosses",
 			line);
 		// Nothing else moved: the bests, the streaks, the rank, the grades.
 		assertEquals(expected.kills, v.kills);
@@ -515,5 +521,219 @@ public class BossRecordsTest
 		// Saved as version 2: the next load counts nothing again.
 		loaded.save();
 		assertEquals("RECORDS loaded 1 bosses from records.json", new BossRecords(dir, GSON).load(history, NOW));
+	}
+
+	// ---- T-195: the grade compares only kills scored the same way ----
+
+	private static BossRecords.KillFigures scored(LedgerHistory.Like like, long start, double clock, double execution,
+		String stamp)
+	{
+		return new BossRecords.KillFigures(like, start, clock, execution, 98, 0.5, null, 0, false, stamp);
+	}
+
+	@Test
+	public void aRulesChangeStartsTheWindowAgainWithFixedBandsUnderTen()
+	{
+		final BossRecords records = new BossRecords(dir, GSON);
+		// 20 kills scored the old way, at 0.80 to 0.89: Cerberus before her stall was excused.
+		for (int i = 0; i < 20; i++)
+		{
+			records.record(scored(LIKE, (i + 1) * 1000L, 100, 0.80 + 0.005 * i, "old"));
+		}
+		// The first kill scored the new way, at 0.93: against the old ones it would be the best of 20, an S.
+		assertEquals(BossRecords.Grade.S, records.view(LIKE).grade(0.93, 100).grade);
+		records.record(scored(LIKE, 30_000L, 100, 0.93, "new"));
+		BossRecords.Standing s = records.view(LIKE).last;
+		// Against no kill scored its way: the fixed bands, which call 93% a B.
+		assertEquals(BossRecords.Grade.B, s.grade);
+		assertEquals("fixed bands (0 kills since the rules changed)", s.basis);
+		for (int i = 0; i < 3; i++)
+		{
+			records.record(scored(LIKE, 31_000L + i * 1000L, 100, 0.94, "new"));
+		}
+		assertEquals("fixed bands (3 kills since the rules changed)", records.view(LIKE).last.basis);
+		// From 10 kills scored the new way, their own spread.
+		for (int i = 0; i < 6; i++)
+		{
+			records.record(scored(LIKE, 40_000L + i * 1000L, 100, 0.95 + 0.005 * i, "new"));
+		}
+		records.record(scored(LIKE, 50_000L, 100, 0.999, "new"));
+		assertEquals("best of last 10", records.view(LIKE).last.basis);
+		// The view grades a kill not yet recorded the same way.
+		assertEquals("lowest of last 11", records.view(LIKE).grade(0.90, 100).basis);
+	}
+
+	@Test
+	public void otherBossesWindowsAreUntouched()
+	{
+		final LedgerHistory.Like other = new LedgerHistory.Like("Araxxor", 1020, true);
+		final BossRecords records = new BossRecords(dir, GSON);
+		for (int i = 0; i < 12; i++)
+		{
+			records.record(scored(other, (i + 1) * 1000L, 90, 0.90 + 0.005 * i, "araxxor"));
+			records.record(scored(LIKE, (i + 1) * 1000L + 500, 100, 0.90, "old"));
+		}
+		records.record(scored(LIKE, 20_000L, 100, 0.95, "new"));
+		records.record(scored(other, 21_000L, 90, 0.999, "araxxor"));
+		assertEquals("best of last 12", records.view(other).last.basis);
+		assertEquals("fixed bands (0 kills since the rules changed)", records.view(LIKE).last.basis);
+	}
+
+	@Test
+	public void theStreakRestartsAtTheChange()
+	{
+		final BossRecords records = new BossRecords(dir, GSON);
+		for (int i = 0; i < 4; i++)
+		{
+			records.record(scored(LIKE, (i + 1) * 1000L, 100, 0.997, "old"));
+		}
+		assertEquals(4, records.view(LIKE).streak);
+		// An S under the new scoring: a streak of 1, not 5; the best stays 4.
+		records.record(scored(LIKE, 10_000L, 100, 0.999, "new"));
+		BossRecords.View v = records.view(LIKE);
+		assertEquals(1, v.streak);
+		assertEquals(4, v.longestStreak);
+		records.record(scored(LIKE, 11_000L, 100, 0.999, "new"));
+		records.record(scored(LIKE, 12_000L, 100, 0.999, "new"));
+		v = records.view(LIKE);
+		assertEquals(3, v.streak);
+		// Its own "3 A's in a row", the second run counted.
+		assertEquals(2, v.badgeCount(Badges.Badge.THREE_IN_A_ROW));
+		assertTrue(v.last.badges.contains(Badges.Badge.THREE_IN_A_ROW));
+	}
+
+	@Test
+	public void theBestsAndTheRankIgnoreTheStamp()
+	{
+		final BossRecords records = new BossRecords(dir, GSON);
+		records.record(scored(LIKE, 1000L, 90, 0.99, "old"));
+		records.record(scored(LIKE, 2000L, 120, 0.80, "old"));
+		records.record(scored(LIKE, 3000L, 100, 0.95, "new"));
+		final BossRecords.View v = records.view(LIKE);
+		assertEquals(3, v.kills);
+		assertEquals(90, v.fastest.value, 0.31);
+		assertEquals(0.99, v.execution.value, 1e-12);
+		assertEquals(2, v.last.rank);
+		assertEquals(3, v.last.ranked);
+		assertFalse(v.last.newPb);
+		assertEquals(90, v.last.previousBestClock, 0.31);
+	}
+
+	@Test
+	public void theStampReadsOnlyWhatScoresExecution()
+	{
+		final BossRules.Boss cerberus = new BossRules.Boss();
+		cerberus.name = "Cerberus";
+		final String none = BossRecords.scoringStamp(null);
+		assertEquals(none, BossRecords.scoringStamp(cerberus));
+		assertTrue(none, none.startsWith("e" + BossRecords.EXECUTION_FORMULA + "-"));
+		// Notes, xp and hitpoints margins don't score execution.
+		cerberus.notes = "a note";
+		cerberus.xpBonus = 0.1;
+		cerberus.countedHpMargin = 3;
+		assertEquals(none, BossRecords.scoringStamp(cerberus));
+		// A stall does (T-191), and a change to it.
+		cerberus.stall = new BossRules.StallRule();
+		cerberus.stall.holdAboveHp = 400;
+		final String stalled = BossRecords.scoringStamp(cerberus);
+		assertFalse(stalled.equals(none));
+		cerberus.stall.holdAboveHp = 380;
+		assertFalse(stalled.equals(BossRecords.scoringStamp(cerberus)));
+		// So do an allowance and attack rules.
+		final BossRules.Boss leviathan = new BossRules.Boss();
+		leviathan.uptimeAllowances = new ArrayList<>(Collections.singletonList(new BossRules.UptimeAllowance()));
+		assertFalse(none.equals(BossRecords.scoringStamp(leviathan)));
+		// The bundled rules: Cerberus's stamp isn't the formula's alone, and is the same twice.
+		final BossRules rules = BossRules.load(GSON, null);
+		final java.util.function.IntFunction<String> stamps = BossRecords.stamps(rules);
+		final int cerberusId = CERBERUS_ID;
+		assertEquals(stamps.apply(cerberusId), stamps.apply(cerberusId));
+		assertFalse(none.equals(stamps.apply(cerberusId)));
+		assertEquals(none, stamps.apply(-1));
+	}
+
+	private static Fight cerberusKill(long start, int ticks, int lost, String build)
+	{
+		final Fight f = kill(start, ticks, lost, 0);
+		final Fight c = new Fight("Cerberus", CERBERUS_ID, 1, 600, start, null, 0);
+		// The same kill on Cerberus: rebuilt by its JSON, with its name and build.
+		final com.google.gson.JsonObject o = GSON.toJsonTree(f).getAsJsonObject();
+		o.add("targetName", GSON.toJsonTree(c.getTargetName()));
+		o.add("targetId", GSON.toJsonTree(c.getTargetId()));
+		o.add("maxHp", GSON.toJsonTree(600));
+		final Fight out = GSON.fromJson(o, Fight.class);
+		if (build != null)
+		{
+			out.context().build = build;
+		}
+		return out;
+	}
+
+	@Test
+	public void aFileBeforeStampsIsStampedAndCerberusRegradedFromHerRulesChange() throws IOException
+	{
+		// Cerberus: 30 kills on a build before T-191 (executions about 0.80 to 0.86), then 13 on one with it (0.93 up).
+		final List<Fight> oldest = new ArrayList<>();
+		for (int i = 0; i < 30; i++)
+		{
+			oldest.add(cerberusKill((i + 1) * 1_000_000L, 150, 22 + i % 8, "build 510dfe5 (master, clean, committed "
+				+ "2026-11-08 22:40, built 2026-11-08 22:41)"));
+		}
+		for (int i = 0; i < 13; i++)
+		{
+			oldest.add(cerberusKill(40_000_000L + i * 1_000_000L, 150, i % 9, "build e853e64 (master, clean, committed "
+				+ "2026-11-09 20:42, built 2026-11-09 21:20)"));
+		}
+		// And Vardorvis, on the old build: only stamped.
+		final List<Fight> vardorvis = sixtyOldestFirst();
+		final List<Fight> all = new ArrayList<>(oldest);
+		all.addAll(vardorvis);
+		all.sort((a, b) -> Long.compare(a.getStartMillis(), b.getStartMillis()));
+		// Recorded as #218 did, without stamps: every kill against every earlier one.
+		final BossRecords before = new BossRecords(dir, GSON, id -> "unstamped");
+		before.noteHistory(newestFirst(all), 0);
+		final LedgerHistory.Like cerberus = new LedgerHistory.Like("Cerberus", 600, true);
+		final BossRecords.View was = before.view(cerberus);
+		final BossRecords.View vardorvisWas = before.view(LIKE);
+		assertTrue("all A or better against the old kills", was.streak >= 10);
+		before.save();
+		final JsonObject file = new JsonParser().parse(new String(Files.readAllBytes(tmp.resolve(BossRecords.FILE)),
+			StandardCharsets.UTF_8)).getAsJsonObject();
+		file.addProperty("version", 2);
+		for (JsonElement r : file.getAsJsonArray("records"))
+		{
+			r.getAsJsonObject().remove("executionStamps");
+			r.getAsJsonObject().remove("streakStamp");
+		}
+		Files.write(tmp.resolve(BossRecords.FILE), file.toString().getBytes(StandardCharsets.UTF_8));
+
+		final BossRecords loaded = new BossRecords(dir, GSON, BossRecords.stamps(BossRules.load(GSON, null)));
+		final String line = loaded.load(newestFirst(all), NOW);
+		assertTrue(line, line.contains("scoring stamped for 2 bosses; Cerberus (600 hp, solo) regraded: its 13 kills "
+			+ "since its scoring changed grade S "));
+		final BossRecords.View v = loaded.view(cerberus);
+		// The 13 graded against each other alone: the first 10 by the fixed bands, then their own spread.
+		assertTrue(line, v.streak < was.streak);
+		assertTrue(v.last.basis, v.last.basis.endsWith("of last 12"));
+		assertEquals(was.kills, v.grades[0] + v.grades[1] + v.grades[2] + v.grades[3]);
+		// Kept: the kills, the bests, the rank.
+		assertEquals(was.kills, v.kills);
+		assertEquals(was.fastest.value, v.fastest.value, 0);
+		assertEquals(was.execution.value, v.execution.value, 0);
+		assertEquals(was.rank(90), v.rank(90));
+		// Vardorvis: stamped only, his grades as they were.
+		final BossRecords.View vv = loaded.view(LIKE);
+		assertArrayEquals(vardorvisWas.grades, vv.grades);
+		assertEquals(vardorvisWas.streak, vv.streak);
+		assertEquals(vardorvisWas.last.basis, vv.last.basis);
+		// A new Vardorvis kill grades against his whole window, as before.
+		final Fight next = kill(200_000_000L, 160, 3, 0);
+		all.add(next);
+		loaded.noteHistory(newestFirst(all), PvmPerformancePlugin.RECORDS_RECENT_FIGHTS);
+		assertTrue(loaded.view(LIKE).last.basis, loaded.view(LIKE).last.basis.endsWith("of last 50"));
+		// Saved as version 3: the next load stamps nothing again.
+		loaded.save();
+		assertEquals("RECORDS loaded 2 bosses from records.json",
+			new BossRecords(dir, GSON, BossRecords.stamps(BossRules.load(GSON, null))).load(newestFirst(all), NOW));
 	}
 }
