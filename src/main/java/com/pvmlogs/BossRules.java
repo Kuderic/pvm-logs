@@ -824,7 +824,7 @@ class BossRules
 		}
 		catch (IOException | RuntimeException e)
 		{
-			log.warn("PvM Logs: bundled boss rules unreadable", e);
+			log.warn("Luck vs Skill: bundled boss rules unreadable", e);
 		}
 		RulesFile user = null;
 		if (userOverride != null && userOverride.isFile())
@@ -835,7 +835,7 @@ class BossRules
 			}
 			catch (IOException | RuntimeException e)
 			{
-				log.warn("PvM Logs: boss rules override {} unreadable, ignored", userOverride, e);
+				log.warn("Luck vs Skill: boss rules override {} unreadable, ignored", userOverride, e);
 			}
 		}
 		return merge(bundled, user);
@@ -851,7 +851,8 @@ class BossRules
 		}
 		if (file.schemaVersion > SCHEMA_VERSION)
 		{
-			log.warn("PvM Logs: boss rules schema {} is newer than {}, ignored", file.schemaVersion, SCHEMA_VERSION);
+			log.warn("Luck vs Skill: boss rules schema {} is newer than {}, ignored", file.schemaVersion,
+				SCHEMA_VERSION);
 			return null;
 		}
 		return file;
