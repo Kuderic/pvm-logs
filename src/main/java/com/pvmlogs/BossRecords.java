@@ -653,6 +653,12 @@ final class BossRecords
 		}
 
 		/** The after-kill execution (with avoidable eating, at bosses with attack rules), as the card shows it. */
+		static KillFigures of(Encounter room)
+		{
+			return of(room, scoringStamp(null));
+		}
+
+		/** The same, its execution stamped as scored by {@code stamp} (T-195). */
 		static KillFigures of(Encounter room, String stamp)
 		{
 			final LedgerRows.Scope scope = LedgerRows.of(room);
