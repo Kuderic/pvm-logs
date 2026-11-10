@@ -3379,13 +3379,14 @@ public class PvmPerformancePlugin extends Plugin
 				// hit chance, and without a hit chance there is no expected damage and no expected dps. That is what an
 				// overlay showing a max hit and nothing under it is saying.
 				// T-159: avg is as scored, capped at the hp left; dps is the gear's rate, uncapped, as the overlay shows it.
-				debug.log("expected vs %s (npc %d%s): max %d, acc %.3f, avg %.2f (capped at the hp left), gear's dps %.2f%s%s",
+				// T-203: golembane and the target's flat armour, where they apply, after the dps.
+				debug.log("expected vs %s (npc %d%s): max %d, acc %.3f, avg %.2f (capped at the hp left), gear's dps %.2f%s%s%s",
 					shown.getTargetName(), expectedForNpcId,
 					judgedBy == null ? "" : String.format(", '%s' def %d, %d hp left (%s)", version, defence,
 						health.remaining(shown.getTargetIndex(), client.getTickCount()),
 						health.source(shown.getTargetIndex(), client.getTickCount())),
 					expectedMaxHit, expectedAccuracy, expectedAverageHit,
-					expectedDps, expectedAccuracy < 0 ? "  <- NO MONSTER STATS FOR THIS ID" : "",
+					expectedDps, combatCalc.targetEffectsNote(expectedForNpcId), expectedAccuracy < 0 ? "  <- NO MONSTER STATS FOR THIS ID" : "",
 					// A guardian reads zero for everything unless a pickaxe is in hand, which is the mechanic and not a fault.
 					EncounterGroup.isGuardian(expectedForNpcId)
 						? "  (guardian: only a pickaxe does damage here)" : "");

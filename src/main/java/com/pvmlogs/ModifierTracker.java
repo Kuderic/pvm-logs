@@ -946,6 +946,16 @@ final class ModifierTracker
 	 */
 	static DamageMoments moments(List<BossRules.ModifierRule> mods, int[] maxima, double accuracy, int cap, boolean push)
 	{
+		return moments(mods, maxima, accuracy, cap, push, 0);
+	}
+
+	/**
+	 * As above, with the target's flat armour as {@code shift} on every landed hitsplat after the modifiers, never below 0,
+	 * before the cap (T-203: the DPS calc applies it last among the target's transforms, on accurate hitsplats alone).
+	 */
+	static DamageMoments moments(List<BossRules.ModifierRule> mods, int[] maxima, double accuracy, int cap, boolean push,
+		int shift)
+	{
 		final boolean pushZero = push && !hasPoiseBand(mods);
 		final int rolls = rolls(mods);
 		double mean = 0;
@@ -965,7 +975,7 @@ final class ModifierTracker
 			for (int r = lo; r <= hi; r++)
 			{
 				final double each = accuracy * rollChance(r - lo, hi - lo, rolls);
-				final double v = Math.min(cap, damage(mods, pushZero && r == 0 ? 1 : r, max, true, hit));
+				final double v = Math.min(cap, Math.max(0, damage(mods, pushZero && r == 0 ? 1 : r, max, true, hit) + shift));
 				m += each * v;
 				second += each * v * v;
 			}
