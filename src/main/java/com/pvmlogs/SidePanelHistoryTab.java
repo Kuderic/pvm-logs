@@ -618,7 +618,7 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 		// T-095: a kind fought in runs lists its runs: their time and kills/hr, no luck or execution.
 		final boolean runs = rows.stream().anyMatch(r -> r.kills >= 0);
 		content.add(new SidePanelSection("historyKills", runs ? "Runs" : "Kills",
-			Text.small(runs ? "time · kills/hr" : graded ? "time · luck · grade" : "time · luck · execution",
+			Text.small(runs ? "time · kills/hr" : graded ? "time · luck · grade" : "time · luck · skill",
 				SidePanelStyle.SECONDARY), list, folds));
 	}
 

@@ -28,8 +28,8 @@ public class SidePanelTicksTest
 	{
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(SidePanelExamples.dead());
 		assertEquals("14 s slower", tile(t, "Luck").sub.text);
-		assertEquals("29 ticks lost", tile(t, "Execution").sub.text);
-		assertEquals("29t lost", tile(t, "Execution").subShort);
+		assertEquals("29 ticks lost", tile(t, "Skill").sub.text);
+		assertEquals("29t lost", tile(t, "Skill").subShort);
 	}
 
 	@Test
@@ -43,7 +43,7 @@ public class SidePanelTicksTest
 			final boolean luck = r.label.text.startsWith("luck");
 			final boolean setup = SETUP.contains(r.label.text);
 			assertTrue(r.label.text + " " + r.value.text, r.value.text.matches(luck
-				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "\\+\\d+ ticks?"));
+				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "\u2212\\d+ ticks?"));
 		}
 		// "your average 1:54 … 23 s slower", "luck removed 2:02 … 5 s slower than 1:57": clocks, and seconds.
 		for (PanelSnapshot.Row r : b.average)

@@ -165,7 +165,7 @@ final class SidePanelModel
 	static final String CORE_TIP = "Your hits on her core, at their own value (not the ×5 it passes on to her), against"
 		+ " what was expected of them.";
 	static final String PASSED_ON_TIP = "The core passes five times its damage on to her: her hitpoints. It's your hits"
-		+ " on the core again, so no luck, execution or total counts it.";
+		+ " on the core again, so no luck, skill or total counts it.";
 
 	/** One room of the raid, for the whole raid's Rooms list. */
 	static final class Room
@@ -647,7 +647,7 @@ final class SidePanelModel
 	static final String ALL = "All";
 	/** T-099: the switch's default, the boss: what players compare weapons by. */
 	static final int DEFAULT_TARGET = 0;
-	static final String WHOLE_KILL = "Luck and Execution cover the whole kill.";
+	static final String WHOLE_KILL = "Luck and skill cover the whole kill.";
 
 	/**
 	 * T-099: a room's fights on its boss's parts and on its adds, as two rooms, or null when it has no switch: no adds
@@ -1241,7 +1241,7 @@ final class SidePanelModel
 		}
 		if (in.unscored && !raid)
 		{
-			b.unscoredNote = "Luck, DPS and execution count the " + in.scoredName + "'s fights only ("
+			b.unscoredNote = "Luck, DPS and skill count the " + in.scoredName + "'s fights only ("
 				+ LedgerRows.duration(n.scoredClock) + "). The clock is the whole room.";
 		}
 		if (!raid && in.targets.size() > 1)
@@ -1266,7 +1266,9 @@ final class SidePanelModel
 				final String specs = specsShareOfLuck(in.drain);
 				if (specs != null)
 				{
-					b.curve = new PanelSnapshot.Curve(b.curve.z, b.curve.headerValue, b.curve.caption + ". " + specs);
+					// T-199: with its tooltip, which this used to drop ("<br>null" on the Luck section's hover).
+					b.curve = new PanelSnapshot.Curve(b.curve.z, b.curve.headerValue, b.curve.caption + ". " + specs,
+						b.curve.tooltip);
 				}
 			}
 			else if (!Double.isNaN(n.luck))
@@ -1336,7 +1338,7 @@ final class SidePanelModel
 	{
 		if (b.damage != null)
 		{
-			b.damage = plainRates(b.damage);
+			b.damage = againstExpected(plainRates(b.damage), in, n, warning);
 		}
 		if (b.byTarget != null)
 		{
@@ -1353,8 +1355,8 @@ final class SidePanelModel
 			final String specs = specsShareOfLuck(in.drain);
 			// T-198: no sentence on the panel; the curve's words are its tooltip.
 			b.curve = new PanelSnapshot.Curve(b.curve.z, Text.title(strengthWord(strength(p)), luckInk(p)), "",
-				rolledOf(p) + ": of 100 fights with these attacks, " + curveShare(p) + " dealt less damage."
-				+ (specs == null ? "" : " " + specs + ".") + "<br>" + b.curve.tooltip);
+				tipLines(rolledOf(p) + ": of 100 fights with these attacks, " + curveShare(p) + " dealt less damage."
+				+ (specs == null ? "" : " " + specs + "."), b.curve.tooltip));
 		}
 		if (b.execution != null)
 		{
@@ -1387,13 +1389,35 @@ final class SidePanelModel
 		final PanelSnapshot.Mark time = timeMark(n, avoidable, warning);
 		if (b.budget != null && time != null)
 		{
-			marks.put("budget", time);
+			marks.put("budget", time.withRuns(budgetRuns(n, avoidable, warning)));
 		}
 		if (b.card != null && b.card.grade != null)
 		{
 			marks.put("execution", PanelSnapshot.Mark.grade(b.card.grade, b.card.gradeColour));
 		}
 		b.clear = new PanelSnapshot.Clear(healed, hits, marks);
+	}
+
+	/**
+	 * T-199 (Eric: "Why did we remove expected dps?"): Damage's header against expected, {@code 952 · exp 803}, as the
+	 * old Damage/expected tile had it: your weapons' damage and what average rolls of the same attacks would deal. The
+	 * thrall's and other damage outside both, and the whole, on hover. Under the warning, or with nothing expected, the
+	 * header stays the whole ({@code 1,044 yours}).
+	 */
+	static PanelSnapshot.Sources againstExpected(PanelSnapshot.Sources d, Input in, LedgerRows.Numbers n, boolean warning)
+	{
+		if (warning || n.expected <= 0)
+		{
+			return d;
+		}
+		final String damage = LedgerRows.number(n.damage);
+		final String expected = LedgerRows.number(Math.round(n.expected));
+		final String other = otherDamage(in);
+		final String tip = tipLines("Your weapons dealt " + damage + "; average rolls of the same attacks: " + expected
+			+ ".", other.isEmpty() ? null : "Not in either: " + other.substring(1) + ".", d.hint.text.isEmpty() ? null
+			: "All your damage: " + d.hint.text.split(" ")[0] + ".");
+		return new PanelSnapshot.Sources(Text.small(damage + DOT + "exp " + expected, SidePanelStyle.SECONDARY), d.rows,
+			tip);
 	}
 
 	/**
@@ -1408,8 +1432,11 @@ final class SidePanelModel
 		{
 			if (r.dps != null)
 			{
-				rows.add(new PanelSnapshot.Source(r.name, r.dps + " dps", Collections.<String>emptyList(), r.damage, r.share,
-					r.shareFraction, r.colour, r.itemId, r.spriteId, r.tooltip, r.dps, null));
+				// T-199 (Eric uses it to judge which weapon is best against a boss or its adds): "10.8 dps · exp 10.2".
+				final String sub = r.dps + " dps" + (r.expectedDps == null ? "" : DOT + "exp " + r.expectedDps);
+				rows.add(new PanelSnapshot.Source(r.name, sub, r.expectedDps == null ? Collections.<String>emptyList()
+					: Collections.singletonList(r.dps + " dps"), r.damage, r.share, r.shareFraction, r.colour, r.itemId,
+					r.spriteId, r.tooltip, r.dps, r.expectedDps));
 				continue;
 			}
 			final List<String> shorter = new ArrayList<>(r.subShort.size());
@@ -1430,7 +1457,10 @@ final class SidePanelModel
 			.replaceAll("\\((expected|exp) ([\\d,]+)\\)", "(average $2)");
 	}
 
-	/** T-196: Your play's parts in plain names, each with its share and what it cost under the bar. */
+	/**
+	 * T-196: Skill's parts, each with its share and what it cost under the bar. T-199 (Eric: "non OSRS termy"): in the
+	 * words players use: Uptime, Offensive prayers, Gear, Boosts.
+	 */
 	static PanelSnapshot.Parts plainParts(PanelSnapshot.Parts parts, LedgerRows.Numbers n, boolean avoidable)
 	{
 		final List<Part> out = new ArrayList<>(parts.parts.size());
@@ -1441,7 +1471,7 @@ final class SidePanelModel
 			switch (p.label.text)
 			{
 				case "uptime":
-					name = "Attacking";
+					name = "Uptime";
 					note = n.uptimeCost >= 0.05 ? "\u2212" + secs(n.uptimeCost) + " idle" : "";
 					break;
 				case "avoidable eating":
@@ -1449,15 +1479,15 @@ final class SidePanelModel
 					note = avoidableEating(n) >= 0.05 ? "\u2212" + secs(avoidableEating(n)) + " eating" : "";
 					break;
 				case PRAYER:
-					name = "Right prayers";
+					name = "Offensive prayers";
 					note = costNote(n.prayerDamage);
 					break;
 				case GEAR:
-					name = "Best gear worn";
+					name = "Gear";
 					note = costNote(n.gearDamage);
 					break;
 				case BOOST:
-					name = "Stats boosted";
+					name = "Boosts";
 					note = costNote(n.boostDamage);
 					break;
 				default:
@@ -1725,6 +1755,7 @@ final class SidePanelModel
 		final String corner = live ? "live" : in.kc > 0 ? "kill " + LedgerRows.number(in.kc) : "";
 		final PanelSnapshot.KillCard c = new PanelSnapshot.KillCard(live, in.name, tint, h.icon, h.sub.text, h.subShort,
 			corner, h.clock.text);
+		rates(c, in, n, warning);
 		if (live)
 		{
 			// T-198 (Eric: "kinda pointless since damage already shows main weapon"): no Weapon row.
@@ -1739,6 +1770,22 @@ final class SidePanelModel
 		// T-198 (Eric: "it usually just says you were standing still for like 3 ticks"): no Fix next. Your play's loss line
 		// already names the biggest loss and its causes.
 		return warning ? c : c.withBadges(badges(in));
+	}
+
+	/**
+	 * T-199 (Eric: "Why did we remove expected dps?"): the card's DPS line, {@code DPS 5.9 · exp 5.3}, live and after
+	 * the kill: all your damage over the scored clock against average rolls of the same attacks (the old DPS tile, T-134).
+	 * Expected is hidden under the warning, as luck is. Each part's rate and what "exp" is on hover.
+	 */
+	static void rates(PanelSnapshot.KillCard c, Input in, LedgerRows.Numbers n, boolean warning)
+	{
+		c.dps = Double.isNaN(n.dps) ? null : LedgerRows.oneDecimal(n.dps);
+		c.expDps = warning || Double.isNaN(n.expectedDps) ? null : LedgerRows.oneDecimal(n.expectedDps);
+		final String parts = dpsTooltip(n, in);
+		c.dpsTip = tipLines(c.dps == null ? "No DPS yet: it starts with your first attack." : null,
+			parts == null ? null : parts.replace("<html>", "").replace("</html>", ""),
+			c.expDps == null ? null : "Exp " + c.expDps + ": the DPS of average rolls with the same attacks (luck taken"
+				+ " out).", warning ? "Boss data unsure: expected is hidden." : null);
 	}
 
 	// ---- T-196: the card's blocks ----
@@ -1801,7 +1848,7 @@ final class SidePanelModel
 	}
 
 	/** T-196: what perfect means. */
-	static final String PERFECT = "perfect: always attacking, best gear, prayers and boosts";
+	static final String PERFECT = "perfect: full uptime, best gear, offensive prayers and boosts";
 
 	/**
 	 * T-198: the Skill tile after the kill: the grade chip, {@code 99%} of a perfect fight, {@code −1.1 s} lost; on hover
@@ -1833,14 +1880,18 @@ final class SidePanelModel
 			c.grade = st.grade;
 			c.gradeColour = gradeColour(st.grade);
 			final Basis basis = Basis.of(st.basis);
-			tip.add("Grade " + st.grade + " from your play only (never luck)" + (st.basis == null ? "." : ": "
+			tip.add("Grade " + st.grade + " from skill only (never luck)" + (st.basis == null ? "." : ": "
 				+ (basis == null ? st.basis : basis.words()) + "."));
 			if (st.next != null && st.ticksToNext > 0)
 			{
 				final String article = "A".equals(st.next) || "S".equals(st.next) ? "an " : "a ";
-				tip.add(secs(st.ticksToNext * LedgerRows.SECONDS_PER_TICK) + " more attacking would make it " + article
+				tip.add(secs(st.ticksToNext * LedgerRows.SECONDS_PER_TICK) + " more uptime would make it " + article
 					+ st.next + ".");
 			}
+		}
+		if (c.skill != null)
+		{
+			tip.add(SIGN_RULE);
 		}
 		c.skillTip = tip.isEmpty() ? null : String.join("<br>", tip);
 	}
@@ -1863,9 +1914,9 @@ final class SidePanelModel
 		switch (worst.label)
 		{
 			case "uptime":
-				return secs(n.uptimeCost) + " standing still";
+				return secs(n.uptimeCost) + " idle";
 			case "prayer":
-				return damageWords(n.prayerDamage) + " without the right prayer";
+				return damageWords(n.prayerDamage) + " without the right offensive prayer";
 			case "gear":
 				return damageWords(n.gearDamage) + " without your best gear";
 			case "stat boost":
@@ -1973,6 +2024,28 @@ final class SidePanelModel
 		}
 	}
 
+	/**
+	 * T-199 (Eric: "There's a <br>null tooltip bug in luck"): a tooltip's lines joined by {@code <br>}, leaving out any
+	 * that's null or empty, so no hover reads "null", an empty line or a stray break.
+	 */
+	static String tipLines(String... lines)
+	{
+		final StringBuilder out = new StringBuilder();
+		for (String l : lines)
+		{
+			if (l == null || l.trim().isEmpty() || "null".equals(l))
+			{
+				continue;
+			}
+			if (out.length() > 0)
+			{
+				out.append("<br>");
+			}
+			out.append(l);
+		}
+		return out.length() == 0 ? null : out.toString();
+	}
+
 	/** T-198: luck's time on the card: {@code +10 s} when it saved time, {@code −9 s} when it cost some. */
 	static String luckTime(double luckSeconds)
 	{
@@ -2017,6 +2090,10 @@ final class SidePanelModel
 				&& st.newBestLuckRemoved && !Double.isNaN(st.previousBestLuckRemoved) ? ", a new best (was "
 				+ SidePanelStyle.roundedDuration(st.previousBestLuckRemoved) + ")." : "."));
 		}
+		if (c.luckTime != null)
+		{
+			tip.add(SIGN_RULE);
+		}
 		tip.add("Luck, not skill.");
 		c.luckTip = String.join("<br>", tip);
 	}
@@ -2028,9 +2105,9 @@ final class SidePanelModel
 		final double idle = Double.isNaN(n.uptimeCost) ? 0 : n.uptimeCost;
 		c.lost = idle >= 0.05 ? "−" + secs(idle) : null;
 		c.strip = in.view == null ? null : strip(in.view.states, STRIP_BUCKETS);
-		c.skillTip = (c.skill == null ? "" : c.skill + " of the fight attacking.<br>") + "Idle " + secs(idle) + " of "
+		c.skillTip = (c.skill == null ? "" : "Uptime " + c.skill + ".<br>") + "Idle " + secs(idle) + " of "
 			+ secs(n.clock) + ": off cooldown with no attack. The strip is the fight so far, idle moments in orange."
-			+ " Avoidable eating counts once the fight ends.";
+			+ " Avoidable eating counts once the fight ends." + (c.lost == null ? "" : "<br>" + SIGN_RULE);
 	}
 
 	/** T-196: the live strip's buckets at most: about one per pixel of the card. */
@@ -2068,6 +2145,8 @@ final class SidePanelModel
 		}
 		c.luckWord = Double.isNaN(n.percentile) ? Text.small(n.expected <= 0 ? "no data" : "no spread",
 			SidePanelStyle.MUTED) : Text.title(strengthWord(strength(n.percentile)), luckInk(n.percentile));
+		// T-199: the track live, marked where luck so far sits; no number on it.
+		c.luckAt = Double.isNaN(n.percentile) ? 0 : roll(n.percentile);
 		c.luckTip = (n.expected > 0 ? "You've dealt " + LedgerRows.number(n.damage) + ". Average rolls: "
 			+ LedgerRows.number(Math.round(n.expected)) + ".<br>" : "") + "Luck rolls with every hit; its number comes when"
 			+ " the fight ends.";
@@ -2124,9 +2203,10 @@ final class SidePanelModel
 		final Map<String, Text> out = new LinkedHashMap<>();
 		if (b.damage != null)
 		{
-			// The header's total ("952 yours"), thrall and all, as one number.
+			// The header's total ("952 yours"), thrall and all, as one number; T-199: against expected where the header
+			// has it, "952 · exp 803".
 			final String total = b.damage.hint.text.isEmpty() ? LedgerRows.number(n.damage)
-				: b.damage.hint.text.split(" ")[0];
+				: b.damage.hint.text.contains("exp ") ? b.damage.hint.text : b.damage.hint.text.split(" ")[0];
 			out.put("damage", Text.small(total, SidePanelStyle.BODY));
 		}
 		if (b.curve != null && !Double.isNaN(n.percentile))
@@ -2135,9 +2215,14 @@ final class SidePanelModel
 		}
 		if (b.budget != null && !b.budget.rows.isEmpty())
 		{
-			final String lost = "\u2212" + secs(Math.max(0, lostSeconds(n, avoidable)));
-			out.put("budget", Text.small(warning || Double.isNaN(n.luck) ? lost : lost + DOT + luckTime(n.luck),
-				SidePanelStyle.SECONDARY));
+			// T-199: each number with its label, "skill −1.1 s · luck +10 s"; the mark paints them in their colours.
+			final StringBuilder line = new StringBuilder();
+			final Text[] runs = budgetRuns(n, avoidable, warning);
+			for (Text r : runs)
+			{
+				line.append(r.text);
+			}
+			out.put("budget", Text.small(line.toString(), runs[0].colour));
 		}
 		if (b.execution != null)
 		{
@@ -2145,8 +2230,10 @@ final class SidePanelModel
 			if (!Double.isNaN(shown))
 			{
 				final double idle = Double.isNaN(n.uptimeCost) ? 0 : n.uptimeCost;
-				out.put("execution", Text.small(LedgerRows.partPercent(shown) + (in.ended || idle < 0.05 ? ""
-					: DOT + "\u2212" + secs(idle)), SidePanelStyle.BODY));
+				// T-199: live it's uptime, labelled, and the idle time with its label: "uptime 97% · idle −1.2 s".
+				out.put("execution", Text.small(in.ended ? LedgerRows.partPercent(shown) : "uptime "
+					+ LedgerRows.partPercent(shown) + (idle < 0.05 ? "" : DOT + "idle \u2212" + secs(idle)),
+					SidePanelStyle.BODY));
 			}
 		}
 		final LedgerRows.Scope s = in.scope;
@@ -2157,6 +2244,27 @@ final class SidePanelModel
 		}
 		return out;
 	}
+
+	/**
+	 * T-199 (Eric: "why are there two numbers, one plus and one minus, with no labels?"): Where the time went's folded
+	 * line, each number with its label: {@code skill −1.1 s} in skill's loss orange ({@code skill ±0 s} muted with no
+	 * loss), then {@code luck +10 s} in luck's violet. One sign rule on the panel: + is time gained, − time lost.
+	 */
+	static Text[] budgetRuns(LedgerRows.Numbers n, boolean avoidable, boolean warning)
+	{
+		final double lost = Math.max(0, lostSeconds(n, avoidable));
+		final Text skill = lost >= 0.05 ? Text.small("skill \u2212" + secs(lost), SidePanelStyle.COST)
+			: Text.small("skill \u00b10 s", SidePanelStyle.MUTED);
+		if (warning || Double.isNaN(n.luck))
+		{
+			return new Text[]{skill};
+		}
+		return new Text[]{skill, Text.small(DOT, SidePanelStyle.SECONDARY), Text.small("luck " + luckTime(n.luck),
+			SidePanelStyle.LUCK)};
+	}
+
+	/** T-199: the sign rule, said on the hovers of every signed time. */
+	static final String SIGN_RULE = "+ is time gained, \u2212 time lost.";
 
 	/** T-188: a source's short name in a summary: {@code tentacle} for "Abyssal tentacle (or)", {@code thrall}. */
 	static String shortName(String name)
@@ -2479,8 +2587,10 @@ final class SidePanelModel
 	}
 
 	/** T-095: a trip's Luck and Execution with its runs left out: its boss kills' (T-089: what isn't a monster). */
+	/** T-199: the one word for the player's own share, everywhere the player reads it (the plugin's name: Luck vs Skill). */
+	static final String SKILL = "Skill";
 	static final String LUCK_NO_RUNS = "Boss luck";
-	static final String EXECUTION_NO_RUNS = "Boss execution";
+	static final String EXECUTION_NO_RUNS = "Boss skill";
 
 	private static Tile relabel(Tile t, String label)
 	{
@@ -2574,7 +2684,7 @@ final class SidePanelModel
 		final Text lostText = anyLost
 			? Text.small(SidePanelStyle.ticks(lost) + " lost", costing ? SidePanelStyle.COST : SidePanelStyle.SECONDARY)
 			: Text.small(Double.isNaN(execution) ? "" : "no time lost", SidePanelStyle.MUTED);
-		tiles.add(new Tile(Text.small("Execution", SidePanelStyle.SECONDARY), Text.title(Double.isNaN(execution)
+		tiles.add(new Tile(Text.small(SKILL, SidePanelStyle.SECONDARY), Text.title(Double.isNaN(execution)
 			? LedgerRows.UNKNOWN : LedgerRows.partPercent(execution), SidePanelStyle.VALUE), lostText,
 			anyLost ? SidePanelStyle.ticksShort(lost) + " lost" : null, SidePanelStyle.TRACK));
 		return tiles;
@@ -3001,33 +3111,34 @@ final class SidePanelModel
 					Text.small(plain ? "\u2212" + LedgerRows.number(damage) + " dmg" : damageLost(damage), colour),
 					setupTip(labels[i], LedgerRows.ticks(costs[i]), damage)).withValueShort("-" + LedgerRows.number(damage)));
 			}
-			// T-118 (Eric, 2026-10-30): the time parts in ticks, "+25 ticks", once it rounds to a tick.
+			// T-118 (Eric, 2026-10-30): the time parts in ticks once it rounds to a tick; T-199: "−25 ticks", time lost, as
+			// the one sign rule has it (+ gained, − lost).
 			else if (LedgerRows.ticks(costs[i]) >= 1)
 			{
 				rows.add(new BudgetRow(fill, Text.small(plain && i == 0 ? "idle" : labels[i], SidePanelStyle.BODY), null,
-					Text.small("+" + (plain ? secs(costs[i]) : SidePanelStyle.ticks(costs[i])), colour)));
+					Text.small("\u2212" + (plain ? secs(costs[i]) : SidePanelStyle.ticks(costs[i])), colour)));
 			}
 			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
 			if (i == 0 && LedgerRows.ticks(ca) >= 1)
 			{
 				rows.add(new BudgetRow(caCosting ? Fill.COST : Fill.MINOR_COST, Text.small("avoidable eating",
-					SidePanelStyle.BODY), null, Text.small("+" + (plain ? secs(ca) : SidePanelStyle.ticks(ca)), caCosting
+					SidePanelStyle.BODY), null, Text.small("\u2212" + (plain ? secs(ca) : SidePanelStyle.ticks(ca)), caCosting
 					? SidePanelStyle.COST : SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(e - ca) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
-					Text.small("+" + (plain ? secs(e - ca) : SidePanelStyle.ticks(e - ca)), SidePanelStyle.BODY)));
+					Text.small("\u2212" + (plain ? secs(e - ca) : SidePanelStyle.ticks(e - ca)), SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(m - stall) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(MECHANICS, SidePanelStyle.BODY), null,
-					Text.small("+" + (plain ? secs(m - stall) : SidePanelStyle.ticks(m - stall)), SidePanelStyle.BODY)));
+					Text.small("\u2212" + (plain ? secs(m - stall) : SidePanelStyle.ticks(m - stall)), SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(stall) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(plain ? "stall" : STALL, SidePanelStyle.BODY), null,
-					Text.small("+" + (plain ? secs(stall) : SidePanelStyle.ticks(stall)), SidePanelStyle.BODY)));
+					Text.small("\u2212" + (plain ? secs(stall) : SidePanelStyle.ticks(stall)), SidePanelStyle.BODY)));
 			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
@@ -3043,7 +3154,7 @@ final class SidePanelModel
 		if (u > 0)
 		{
 			rows.add(new BudgetRow(Fill.UNSCORED, Text.small(plain ? "adds" : "adds, not scored", SidePanelStyle.BODY),
-				null, Text.small("+" + (plain ? secs(u) : SidePanelStyle.ticks(u)), SidePanelStyle.BODY)));
+				null, Text.small("\u2212" + (plain ? secs(u) : SidePanelStyle.ticks(u)), SidePanelStyle.BODY)));
 		}
 
 		// Against your average: after a kill only, outside a raid, never under the warning (spec 3.1).
@@ -3704,11 +3815,11 @@ final class SidePanelModel
 		{
 			rows.add(new ListRow(Text.body(r.name, SidePanelStyle.VALUE), null,
 				Text.title(LedgerRows.clock(r.combatTicks), SidePanelStyle.VALUE),
-				Text.small("execution " + (Double.isNaN(roomExecution(r)) ? LedgerRows.UNKNOWN
+				Text.small("skill " + (Double.isNaN(roomExecution(r)) ? LedgerRows.UNKNOWN
 					: LedgerRows.partPercent(roomExecution(r))), SidePanelStyle.SECONDARY),
 				chip(r.numbers, r.warning), chipFill(r.numbers, r.warning)).tip(r.warning ? null : luckWords(r.numbers)));
 		}
-		return new PanelSnapshot.ListRows(Text.small("time · luck · execution", SidePanelStyle.SECONDARY), rows);
+		return new PanelSnapshot.ListRows(Text.small("time · luck · skill", SidePanelStyle.SECONDARY), rows);
 	}
 
 	/** A raid room's Execution: with avoidable eating once the room has ended (T-044), without it while it runs. */
@@ -3737,7 +3848,7 @@ final class SidePanelModel
 		}
 		if (!Double.isNaN(l.numbers.execution))
 		{
-			sub.add("execution " + LedgerRows.partPercent(l.numbers.execution));
+			sub.add("skill " + LedgerRows.partPercent(l.numbers.execution));
 		}
 		return new ListRow(Text.title(l.name, SidePanelStyle.VALUE),
 			l.killed ? Text.title(" (dead)", SidePanelStyle.DEAD) : notAKill(l.died),

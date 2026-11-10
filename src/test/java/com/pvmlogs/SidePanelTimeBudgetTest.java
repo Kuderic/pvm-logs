@@ -173,9 +173,9 @@ public class SidePanelTimeBudgetTest
 		assertEquals("best play", rows.get(0).label.text);
 		assertEquals("1:26", rows.get(0).value.text);
 		// T-118: idle time in ticks: 1.8 s, 2.4 s and 1 s.
-		assertEquals("+3 ticks", rows.get(1).value.text);
+		assertEquals("−3 ticks", rows.get(1).value.text);
 		assertEquals("eating", rows.get(2).label.text);
-		assertEquals("+4 ticks", rows.get(2).value.text);
+		assertEquals("−4 ticks", rows.get(2).value.text);
 		assertEquals("stat boost", rows.get(3).label.text);
 		// T-123: a setup part reads the damage it cost, its 2 ticks on hover.
 		assertEquals("-8 dmg", rows.get(3).value.text);

@@ -1118,11 +1118,19 @@ final class PanelSnapshot
 	{
 		final Text hint;
 		final List<Source> rows;
+		/** T-199: the header's hover (what's against expected, and the thrall and other damage outside it); null for none. */
+		final String tooltip;
 
 		Sources(Text hint, List<Source> rows)
 		{
+			this(hint, rows, null);
+		}
+
+		Sources(Text hint, List<Source> rows, String tooltip)
+		{
 			this.hint = hint;
 			this.rows = list(rows);
+			this.tooltip = tooltip;
 		}
 
 	}
@@ -1554,6 +1562,12 @@ final class PanelSnapshot
 		/** SHARES (T-198): Damage's share bar in small, each source's share and colour, biggest first. */
 		final double[] shares;
 		final Color[] colours;
+		/**
+		 * T-199 (Eric: "why are there two numbers, one plus and one minus, with no labels?"): the summary's words in
+		 * coloured runs, painted in place of its one-colour line ({@code skill −1.1 s} orange, {@code luck +10 s} violet);
+		 * empty for the plain line.
+		 */
+		final Text[] runs;
 
 		private Mark(Kind kind, int roll, double kept, double lost, double luck, boolean luckSaved, String grade, Color colour)
 		{
@@ -1563,6 +1577,13 @@ final class PanelSnapshot
 		private Mark(Kind kind, int roll, double kept, double lost, double luck, boolean luckSaved, String grade, Color colour,
 			double[] shares, Color[] colours)
 		{
+			this(kind, roll, kept, lost, luck, luckSaved, grade, colour, shares, colours, new Text[0]);
+		}
+
+		private Mark(Kind kind, int roll, double kept, double lost, double luck, boolean luckSaved, String grade, Color colour,
+			double[] shares, Color[] colours, Text[] runs)
+		{
+			this.runs = runs;
 			this.shares = shares;
 			this.colours = colours;
 			this.kind = kind;
@@ -1573,6 +1594,12 @@ final class PanelSnapshot
 			this.luckSaved = luckSaved;
 			this.grade = grade;
 			this.colour = colour;
+		}
+
+		/** T-199: this picture with its summary in coloured runs. */
+		Mark withRuns(Text... runs)
+		{
+			return new Mark(kind, roll, kept, lost, luck, luckSaved, grade, colour, shares, colours, runs.clone());
 		}
 
 		static Mark luck(int roll)
@@ -1664,6 +1691,16 @@ final class PanelSnapshot
 		/** Live: the fight so far in buckets, oldest first: {@link #STRIP_IDLE}, {@link #STRIP_EATING} or 0. */
 		byte[] strip;
 
+		// ---- T-199: DPS ----
+		/**
+		 * T-199 (Eric: "Why did we remove expected dps?"): the old DPS tile as a line, live and after the kill: your DPS
+		 * ({@code 5.9}, all your damage over the scored clock) and the expected ({@code 5.3}); each null when unknown or
+		 * hidden. The parts on hover.
+		 */
+		String dps;
+		String expDps;
+		String dpsTip;
+
 		// ---- Luck ----
 		/** After: rolled 1 to 100; -1 live and when unknown. */
 		int rolled = -1;
@@ -1671,6 +1708,11 @@ final class PanelSnapshot
 		String luckTime;
 		/** Live: one word, its strength so far ({@code average}) in violet; or a muted note ({@code no spread}). */
 		Text luckWord = Text.NONE;
+		/**
+		 * T-199 (Eric: "Luck bar should be drawn as well during the live fight"): live, where luck so far sits on the 1 to
+		 * 100 track, marked with no number (the roll is the kill's); 0 for none.
+		 */
+		int luckAt;
 		String luckTip;
 		/** T-194: the roll's words; null for none. */
 		String luckWords;

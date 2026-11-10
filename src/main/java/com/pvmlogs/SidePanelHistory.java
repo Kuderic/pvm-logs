@@ -732,7 +732,7 @@ final class SidePanelHistory
 		if (u == null)
 		{
 			final String sub = "from " + LedgerRows.AVERAGE_FROM_KILLS + " kills (" + kills + " so far)";
-			for (String label : new String[]{"your average", "luck removed", "execution", "damage taken"})
+			for (String label : new String[]{"your average", "luck removed", "skill", "damage taken"})
 			{
 				tiles.add(tile(label, LedgerRows.UNKNOWN, sub, label.equals("luck removed") ? LUCK_REMOVED
 					: SidePanelStyle.TRACK));
@@ -743,9 +743,9 @@ final class SidePanelHistory
 		tiles.add(tile("luck removed", LedgerRows.duration(u.star.median), middleHalf(u.star), LUCK_REMOVED));
 		// T-044: over ruled kills only once the boss has any, with the same under-5 rule as the others.
 		tiles.add(u.executionKills < LedgerRows.AVERAGE_FROM_KILLS
-			? tile("execution", LedgerRows.UNKNOWN, "from " + LedgerRows.AVERAGE_FROM_KILLS + " kills ("
+			? tile("skill", LedgerRows.UNKNOWN, "from " + LedgerRows.AVERAGE_FROM_KILLS + " kills ("
 				+ u.executionKills + " so far)", SidePanelStyle.TRACK)
-			: tile("execution", Double.isNaN(u.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(u.execution),
+			: tile("skill", Double.isNaN(u.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(u.execution),
 				"median", SidePanelStyle.TRACK));
 		tiles.add(tile("damage taken", LedgerRows.number(Math.round(u.damageTaken)), "median", SidePanelStyle.TRACK));
 		return tiles;
@@ -956,7 +956,7 @@ final class SidePanelHistory
 		}
 		if (!Double.isNaN(v.execution.value))
 		{
-			bests.add(new Row(Text.body("execution", SidePanelStyle.SECONDARY), Text.NONE,
+			bests.add(new Row(Text.body("skill", SidePanelStyle.SECONDARY), Text.NONE,
 				Text.title(LedgerRows.partPercent(v.execution.value), SidePanelStyle.VALUE)));
 		}
 		// The trend: the newest half of the last kills against the older half, medians.

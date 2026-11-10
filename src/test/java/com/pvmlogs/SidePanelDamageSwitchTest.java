@@ -52,7 +52,7 @@ public class SidePanelDamageSwitchTest
 			fail("a paragraph in the Damage card: " + p);
 		}
 		final String tip = only(view).getToolTipText();
-		assertEquals("1,504 on the boss over 2:40. Luck and Execution cover the whole kill.", tip);
+		assertEquals("1,504 on the boss over 2:40. Luck and skill cover the whole kill.", tip);
 		for (SidePanelText w : only(view).words())
 		{
 			assertEquals(tip, w.getToolTipText());
