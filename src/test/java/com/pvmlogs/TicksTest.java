@@ -111,7 +111,7 @@ public class TicksTest
 		// Clocks.
 		assertEquals("2:16", rows.get(0).right);
 		// Execution's own figure stays a share; its ticks are in its parts.
-		assertEquals("87%", row(rows, "Execution").right);
+		assertEquals("87%", row(rows, "Skill").right);
 	}
 
 	@Test

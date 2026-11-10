@@ -51,7 +51,7 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "showOverlay",
 		name = "Show fight overlay",
-		description = "The box with Luck, Damage/expected and Execution for the fight you're in, and its Summary once "
+		description = "The box with Luck, Damage/expected and Skill for the fight you're in, and its Summary once "
 			+ "it ends",
 		position = 1,
 		section = OVERLAYS_SECTION
@@ -173,10 +173,10 @@ public interface PvmPerformanceConfig extends Config
 
 	@ConfigItem(
 		keyName = "overlayParts",
-		name = "Under Execution",
-		description = "The rows under Execution: uptime, prayer, gear and stat boost with the seconds each cost, then "
+		name = "Under Skill",
+		description = "The rows under Skill: uptime, prayer, gear and stat boost with the seconds each cost, then "
 			+ "damage taken and eating. Costing only lists the parts that cost real time. All lists every part. Off leaves "
-			+ "Execution alone",
+			+ "Skill alone",
 		position = 3,
 		section = FIGHT_OVERLAY_SECTION
 	)
@@ -242,7 +242,7 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "panelCelebrations",
 		name = "Celebrations",
-		description = "The Fight tab opens on a kill card: your time against your PB, a grade from your execution, luck "
+		description = "The Fight tab opens on a kill card: your time against your PB, a grade from your skill, luck "
 			+ "rolled out of 100, with the details folded below. Off: the title and four tiles, as before",
 		position = 3,
 		section = SIDE_PANEL_SECTION
@@ -288,7 +288,7 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "shareWithParty",
 		name = "Share with my RuneLite party",
-		description = "While you're in a RuneLite party, send your own damage, expected damage, Luck, Execution and attacks "
+		description = "While you're in a RuneLite party, send your own damage, expected damage, Luck, Skill and attacks "
 			+ "to the party, so members with this plugin can compare. Only through RuneLite's party, never anywhere else, "
 			+ "and never your name, gear, location or history. Off: nothing is sent; others' numbers are still shown",
 		position = 6,

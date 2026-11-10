@@ -28,8 +28,8 @@ public class SidePanelTicksTest
 	{
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(SidePanelExamples.dead());
 		assertEquals("14 s slower", tile(t, "Luck").sub.text);
-		assertEquals("29 ticks lost", tile(t, "Execution").sub.text);
-		assertEquals("29t lost", tile(t, "Execution").subShort);
+		assertEquals("29 ticks lost", tile(t, "Skill").sub.text);
+		assertEquals("29t lost", tile(t, "Skill").subShort);
 	}
 
 	@Test
@@ -43,12 +43,12 @@ public class SidePanelTicksTest
 			final boolean luck = r.label.text.startsWith("luck");
 			final boolean setup = SETUP.contains(r.label.text);
 			assertTrue(r.label.text + " " + r.value.text, r.value.text.matches(luck
-				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "\\+\\d+ ticks?"));
+				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "-\\d+ ticks?"));
 		}
 		// "your average 1:54 … 23 s slower", "luck removed 2:02 … 5 s slower than 1:57": clocks, and seconds.
 		for (PanelSnapshot.Row r : b.average)
 		{
-			assertTrue(r.left.text, r.left.text.matches("(your average|luck removed) \\d+:\\d\\d"));
+			assertTrue(r.left.text, r.left.text.matches("(your average|avg luck) \\d+:\\d\\d"));
 			assertTrue(r.right.text, r.right.text.matches("(\\d+ s (faster|slower)|even)( (than|with) \\d+:\\d\\d)?"));
 		}
 	}
@@ -262,7 +262,7 @@ public class SidePanelTicksTest
 				final SidePanelText t = (SidePanelText) c;
 				final String text = t.getText();
 				final String shown = t.lastShown();
-				if (text != null && shown != null && (text.matches("(your average|luck removed) \\d+:\\d\\d")
+				if (text != null && shown != null && (text.matches("(your average|avg luck) \\d+:\\d\\d")
 					|| text.equals(SidePanelModel.WORTH) || text.equals(SidePanelModel.SPEC_LUCK)
 					|| text.equals("expected dmg added") || text.equals("your specials' luck") || SETUP.contains(text)))
 				{

@@ -65,7 +65,7 @@ public class SidePanelWardensTest
 		assertFalse(passed.sub.text.contains("luck"));
 		assertEquals("not counted", passed.chip.text);
 		assertEquals(SidePanelModel.PASSED_ON_TIP, passed.tip);
-		assertTrue(passed.tip.contains("no luck, execution or total counts it"));
+		assertTrue(passed.tip.contains("no luck, skill or total counts it"));
 
 		// The room's totals: the fights' own figures, which never hold the passed-on.
 		long fights = 0;

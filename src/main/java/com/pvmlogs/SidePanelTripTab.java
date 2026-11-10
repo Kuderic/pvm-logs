@@ -194,7 +194,7 @@ final class SidePanelTripTab extends JPanel implements Scrollable
 		}
 		// T-095: over the boss kills alone when the trip has runs, as its tile says.
 		final SidePanelSection section = new SidePanelSection("tripExecution", tab.bossesOnly()
-			? SidePanelModel.EXECUTION_NO_RUNS : "Execution", tab.execution.hint, card, folds);
+			? SidePanelModel.EXECUTION_NO_RUNS : SidePanelModel.SKILL, tab.execution.hint, card, folds);
 		add(section);
 		updaters.add(t ->
 		{

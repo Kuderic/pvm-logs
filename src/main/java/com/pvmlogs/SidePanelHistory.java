@@ -732,20 +732,20 @@ final class SidePanelHistory
 		if (u == null)
 		{
 			final String sub = "from " + LedgerRows.AVERAGE_FROM_KILLS + " kills (" + kills + " so far)";
-			for (String label : new String[]{"your average", "luck removed", "execution", "damage taken"})
+			for (String label : new String[]{"your average", WITH_AVERAGE_LUCK_TILE, "skill", "damage taken"})
 			{
-				tiles.add(tile(label, LedgerRows.UNKNOWN, sub, label.equals("luck removed") ? LUCK_REMOVED
+				tiles.add(tile(label, LedgerRows.UNKNOWN, sub, label.equals(WITH_AVERAGE_LUCK_TILE) ? LUCK_REMOVED
 					: SidePanelStyle.TRACK));
 			}
 			return tiles;
 		}
 		tiles.add(tile("your average", LedgerRows.duration(u.clock.median), middleHalf(u.clock), SidePanelStyle.TRACK));
-		tiles.add(tile("luck removed", LedgerRows.duration(u.star.median), middleHalf(u.star), LUCK_REMOVED));
+		tiles.add(tile(WITH_AVERAGE_LUCK_TILE, LedgerRows.duration(u.star.median), middleHalf(u.star), LUCK_REMOVED));
 		// T-044: over ruled kills only once the boss has any, with the same under-5 rule as the others.
 		tiles.add(u.executionKills < LedgerRows.AVERAGE_FROM_KILLS
-			? tile("execution", LedgerRows.UNKNOWN, "from " + LedgerRows.AVERAGE_FROM_KILLS + " kills ("
+			? tile("skill", LedgerRows.UNKNOWN, "from " + LedgerRows.AVERAGE_FROM_KILLS + " kills ("
 				+ u.executionKills + " so far)", SidePanelStyle.TRACK)
-			: tile("execution", Double.isNaN(u.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(u.execution),
+			: tile("skill", Double.isNaN(u.execution) ? LedgerRows.UNKNOWN : LedgerRows.partPercent(u.execution),
 				"median", SidePanelStyle.TRACK));
 		tiles.add(tile("damage taken", LedgerRows.number(Math.round(u.damageTaken)), "median", SidePanelStyle.TRACK));
 		return tiles;
@@ -867,22 +867,27 @@ final class SidePanelHistory
 		/** Under ten kills the grade reads fixed bands; the note says so. */
 		final String note;
 		final List<Row> bests;
-		/** {@code Luck removed, last 16}, and how its newest half compares with its older half ({@code 8 s faster}). */
+		/** {@code With average luck, last 16}, and how its newest half compares with its older half ({@code 8 s faster}). */
 		final String trendTitle;
 		final Text trend;
+		/** T-199: the two medians, the older half's then the newest's: {@code 1:02 → 1:08}; and what they are, on hover. */
+		final Text trendMedians;
+		final String trendTip;
 		/** S, A, B, C counts. */
 		final int[] grades;
 		final String streak;
 		final List<PanelSnapshot.Badge> badges;
 
-		Progress(int kills, String note, List<Row> bests, String trendTitle, Text trend, int[] grades, String streak,
-			List<PanelSnapshot.Badge> badges)
+		Progress(int kills, String note, List<Row> bests, String trendTitle, Text trend, Text trendMedians, String trendTip,
+			int[] grades, String streak, List<PanelSnapshot.Badge> badges)
 		{
 			this.kills = kills;
 			this.note = note;
 			this.bests = Collections.unmodifiableList(bests);
 			this.trendTitle = trendTitle;
 			this.trend = trend;
+			this.trendMedians = trendMedians;
+			this.trendTip = trendTip;
 			this.grades = grades.clone();
 			this.streak = streak;
 			this.badges = Collections.unmodifiableList(badges);
@@ -932,32 +937,55 @@ final class SidePanelHistory
 		return out;
 	}
 
-	/** T-190: the progress for a record's view, or null with no kill recorded. */
+	/** T-190: the progress for a record's view, or null with no kill recorded; dates as of now, here. */
 	static Progress progress(BossRecords.View v)
+	{
+		return progress(v, System.currentTimeMillis(), ZoneId.systemDefault());
+	}
+
+	/**
+	 * T-190: the progress for a record's view, or null with no kill recorded. T-199 (Eric, 01:10: "what are these numbers
+	 * referring to, is it the fastest run or something else?"): each best's label says what it measures, its value alone
+	 * on the right, nothing between them; the fastest kill's roll on a small line under it; the gold star on the fastest
+	 * with average luck, with no words; the kill's date and what the number is on each row's hover. The trend is a block
+	 * of its own with both medians.
+	 */
+	static Progress progress(BossRecords.View v, long now, ZoneId zone)
 	{
 		if (v == null || v.kills <= 0)
 		{
 			return null;
 		}
-		final List<Row> bests = new ArrayList<>(3);
+		final List<Row> bests = new ArrayList<>(4);
 		if (!Double.isNaN(v.fastest.value) && v.fastest.value > 0)
 		{
-			bests.add(new Row(Text.body("fastest", SidePanelStyle.SECONDARY), Double.isNaN(v.fastest.luckPercentile)
-				? Text.NONE : Text.small(" " + SidePanelModel.rolled(v.fastest.luckPercentile),
-				SidePanelModel.luckInk(v.fastest.luckPercentile)),
-				Text.title(SidePanelModel.clockOf(v.fastest.value), SidePanelStyle.VALUE)));
+			final boolean rolled = !Double.isNaN(v.fastest.luckPercentile);
+			final String tip = SidePanelModel.tipLines("Your fastest kill: " + SidePanelModel.clockOf(v.fastest.value)
+				+ when(v.fastest, now, zone) + ".", rolled ? "Its luck: " + SidePanelModel.rollWords(v.fastest.luckPercentile)
+				+ "." : null);
+			bests.add(new Row(Text.body(FASTEST_KILL, SidePanelStyle.SECONDARY), Text.NONE,
+				Text.title(SidePanelModel.clockOf(v.fastest.value), SidePanelStyle.VALUE), tip));
+			if (rolled)
+			{
+				bests.add(new Row(Text.small(SidePanelModel.rolled(v.fastest.luckPercentile),
+					SidePanelModel.luckInk(v.fastest.luckPercentile)), Text.NONE, Text.NONE, tip, false, true));
+			}
 		}
 		if (!Double.isNaN(v.luckRemoved.value))
 		{
-			// The gold star: the luck-removed best is the skill's PB.
-			bests.add(new Row(Text.body("luck removed", SidePanelStyle.SECONDARY), Text.small(" " + SKILL_PB,
-				SidePanelStyle.GOLD),
-				Text.title(SidePanelStyle.roundedDuration(v.luckRemoved.value), SidePanelStyle.VALUE)));
+			// The gold star, no words: the PB luck can't give you.
+			bests.add(new Row(Text.body(FASTEST_AVERAGE_LUCK, SidePanelStyle.SECONDARY), Text.small(" " + STAR,
+				SidePanelStyle.GOLD), Text.title(SidePanelStyle.roundedDuration(v.luckRemoved.value), SidePanelStyle.VALUE),
+				SidePanelModel.tipLines("Your fastest kill with average rolls: "
+					+ SidePanelStyle.roundedDuration(v.luckRemoved.value) + when(v.luckRemoved, now, zone) + ".",
+					"The PB luck can't give you: only skill moves it, so it carries the gold star.")));
 		}
 		if (!Double.isNaN(v.execution.value))
 		{
-			bests.add(new Row(Text.body("execution", SidePanelStyle.SECONDARY), Text.NONE,
-				Text.title(LedgerRows.partPercent(v.execution.value), SidePanelStyle.VALUE)));
+			bests.add(new Row(Text.body(BEST_SKILL, SidePanelStyle.SECONDARY), Text.NONE,
+				Text.title(LedgerRows.partPercent(v.execution.value), SidePanelStyle.VALUE),
+				SidePanelModel.tipLines("Your best Skill: " + LedgerRows.partPercent(v.execution.value)
+					+ " of a perfect fight" + when(v.execution, now, zone) + ".")));
 		}
 		// The trend: the newest half of the last kills against the older half, medians.
 		final double[][] t = v.luckRemovedTrend;
@@ -971,24 +999,45 @@ final class SidePanelHistory
 		}
 		String trendTitle = null;
 		Text trend = Text.NONE;
+		Text medians = Text.NONE;
+		String trendTip = null;
 		if (recent.size() >= 4)
 		{
 			final int half = recent.size() / 2;
 			final double older = median(recent.subList(0, half));
 			final double newer = median(recent.subList(recent.size() - half, recent.size()));
-			trendTitle = "Luck removed, last " + recent.size();
+			trendTitle = WITH_AVERAGE_LUCK + ", last " + recent.size();
 			final double saved = older - newer;
 			trend = Text.small(LedgerRows.fasterOrSlower(saved), LedgerRows.roundHalfAway(saved) > 0 ? SidePanelStyle.GRADE_A
 				: LedgerRows.roundHalfAway(saved) < 0 ? SidePanelStyle.COST : SidePanelStyle.SECONDARY);
+			medians = Text.body(SidePanelStyle.roundedDuration(older) + " \u2192 " + SidePanelStyle.roundedDuration(newer),
+				SidePanelStyle.VALUE);
+			trendTip = "Your kill times with average rolls, medians: the newest " + half + " kills "
+				+ SidePanelStyle.roundedDuration(newer) + " against the " + half + " before "
+				+ SidePanelStyle.roundedDuration(older) + ". Lower is faster.";
 		}
 		final String note = v.kills < 10 ? "Grades by fixed bands until 10 kills (" + v.kills + " so far)" : null;
 		final String streak = v.streak + " now · best " + v.longestStreak;
 		final List<PanelSnapshot.Badge> badges = badges(v);
-		return new Progress(v.kills, note, bests, trendTitle, trend, v.grades, streak, badges);
+		return new Progress(v.kills, note, bests, trendTitle, trend, medians, trendTip, v.grades, streak, badges);
 	}
 
-	/** T-190: the luck-removed best's label: the only gold. */
-	static final String SKILL_PB = "skill PB";
+	/** T-199: a best's date for its tooltip, {@code , 26 Oct 9:40 pm}; empty without one. */
+	private static String when(BossRecords.Best b, long now, ZoneId zone)
+	{
+		return b.millis <= 0 ? "" : ", " + SidePanelModel.date(b.millis, now, zone);
+	}
+
+	/** T-199: the bests' labels, each naming what it measures. */
+	static final String FASTEST_KILL = "Fastest kill";
+	static final String FASTEST_AVERAGE_LUCK = "Fastest with average luck";
+	static final String BEST_SKILL = "Best Skill";
+	/** T-199: the one term for the luck-free time (was "luck removed"), as the kill card's Luck tooltip has it. */
+	static final String WITH_AVERAGE_LUCK = "With average luck";
+	/** T-199: the usual's tile for it (was "luck removed"): the short form, as the full words are cut at a half tile. */
+	static final String WITH_AVERAGE_LUCK_TILE = "with avg luck";
+	/** T-190, T-199: the gold star on the fastest with average luck: the only gold, and no words. */
+	static final String STAR = "\u2605";
 
 	private static double median(List<Double> values)
 	{

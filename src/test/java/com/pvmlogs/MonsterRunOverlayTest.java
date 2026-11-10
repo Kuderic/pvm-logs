@@ -91,7 +91,7 @@ public class MonsterRunOverlayTest
 	{
 		for (String left : lefts(rows))
 		{
-			assertFalse(left, left.equals("Luck") || left.equals("Execution") || left.equals(LedgerRows.SUMMARY)
+			assertFalse(left, left.equals("Luck") || left.equals("Skill") || left.equals(LedgerRows.SUMMARY)
 				|| left.startsWith("Damage") || left.startsWith(" defence") || left.startsWith(" uptime")
 				|| left.startsWith(" damage taken") || left.startsWith(" eating"));
 		}
@@ -283,7 +283,7 @@ public class MonsterRunOverlayTest
 		assertEquals(before.ended, state.ended);
 		final List<String> rows = lefts(rows(run, false, run.now));
 		assertTrue(rows.contains("Luck"));
-		assertTrue(rows.contains("Execution"));
+		assertTrue(rows.contains("Skill"));
 		assertTrue(rows.contains("Damage/expected"));
 		assertEquals(VORKATH, rows.get(0));
 		// The run it ended is over.

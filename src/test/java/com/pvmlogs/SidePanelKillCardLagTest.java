@@ -99,6 +99,40 @@ public class SidePanelKillCardLagTest
 		assertTrue("card " + layouts[1] + " against today's " + layouts[0], layouts[1] <= layouts[0]);
 	}
 
+	/**
+	 * T-199 (Eric: "Luck bar should be drawn as well during the live fight, unless it's too laggy"): the live card
+	 * painted with the luck track and without it, 500 times each, warmed. Printed; no timing asserts. The track adds no
+	 * height, so the card's layout never changes for it.
+	 */
+	@Test
+	public void theLiveLuckBarCostsNothingVisible()
+	{
+		final PanelSnapshot.KillCard with = SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card;
+		final PanelSnapshot.KillCard without = SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card;
+		without.luckAt = 0;
+		assertTrue(with.luckAt > 0);
+		final SidePanelKillCard a = new SidePanelKillCard(with, null);
+		final SidePanelKillCard b = new SidePanelKillCard(without, null);
+		assertEquals("no height for the track", a.getPreferredSize().height, b.getPreferredSize().height);
+		final int h = a.getPreferredSize().height;
+		a.setSize(242, h);
+		b.setSize(242, h);
+		final List<List<Long>> paint = lists();
+		for (int k = 0; k < 700; k++)
+		{
+			final long pa = paint(a);
+			final long pb = paint(b);
+			if (k >= 200)
+			{
+				paint.get(0).add(pa);
+				paint.get(1).add(pb);
+			}
+		}
+		System.out.println(String.format("T-199, the live card's paint (500, warmed): with the luck track p50 %.3f p99 %.3f"
+				+ " ms; without p50 %.3f p99 %.3f ms", ms(paint.get(0), .5), ms(paint.get(0), .99), ms(paint.get(1), .5),
+			ms(paint.get(1), .99)));
+	}
+
 	private static PanelSnapshot snapshot(SidePanelModel.Input in, boolean celebrations)
 	{
 		in.celebrations = celebrations;

@@ -1943,7 +1943,7 @@ final class LedgerRows
 		// the boss's attacks is shown live (Jagex's rule). A room still running may hold an ended fight's figure; it waits.
 		final boolean avoidable = state.ended && !Double.isNaN(n.avoidableEatingCost);
 		final double execution = avoidable ? n.execution : n.executionLive;
-		rows.add(main("Execution", Double.isNaN(execution) ? UNKNOWN : partPercent(execution)));
+		rows.add(main("Skill", Double.isNaN(execution) ? UNKNOWN : partPercent(execution)));
 		if (settings.parts != ExecutionParts.OFF)
 		{
 			parts(rows, n, settings.parts == ExecutionParts.COSTING, avoidable);

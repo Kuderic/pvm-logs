@@ -103,7 +103,8 @@ final class SidePanelParty
 
 		String word()
 		{
-			return name().toLowerCase(Locale.ENGLISH);
+			// T-199: "skill", the plugin's one word for it (the enum's name is code).
+			return this == EXEC ? "skill" : name().toLowerCase(Locale.ENGLISH);
 		}
 	}
 
@@ -417,7 +418,7 @@ final class SidePanelParty
 		}
 		if (f.x >= 0)
 		{
-			rows.add(row(after ? "execution" : "execution so far", LedgerRows.partPercent(f.x), SidePanelStyle.VALUE, false));
+			rows.add(row(after ? "skill" : "skill so far", LedgerRows.partPercent(f.x), SidePanelStyle.VALUE, false));
 			if (f.u >= 0)
 			{
 				rows.add(row("uptime", LedgerRows.withTicks(LedgerRows.partPercent(f.u), f.il * LedgerRows.SECONDS_PER_TICK),

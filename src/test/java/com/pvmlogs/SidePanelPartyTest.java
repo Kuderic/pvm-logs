@@ -150,7 +150,7 @@ public class SidePanelPartyTest
 		{
 			summary.add((r.indent ? "  " : "") + r.left.text + " | " + r.right.text);
 		}
-		assertEquals(Arrays.asList("luck | rolled 50 (1 s slower)", "execution | 91%", "  uptime | 97% (-6 ticks)",
+		assertEquals(Arrays.asList("luck | rolled 50 (1 s slower)", "skill | 91%", "  uptime | 97% (-6 ticks)",
 			"  prayer | 100%", "  gear | 98% (-23 dmg)", "  stat boost | 97% (-35 dmg)", "damage taken | 71 (7 hits)"),
 			summary);
 		// The rows a sender summed the rest into, and a spell.

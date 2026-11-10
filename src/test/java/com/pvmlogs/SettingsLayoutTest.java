@@ -139,7 +139,7 @@ public class SettingsLayoutTest
 		assertEquals("Keep last fight up (s)", names.get("overlayHoldSeconds"));
 		assertEquals("Covers", names.get("overlayCovers"));
 		assertEquals("Luck", names.get("overlayLuck"));
-		assertEquals("Under Execution", names.get("overlayParts"));
+		assertEquals("Under Skill", names.get("overlayParts"));
 		assertEquals("Summary after the fight", names.get("overlayDetails"));
 		assertEquals("Update during fights", names.get("panelLive"));
 		assertEquals("Charts", names.get("panelCharts"));

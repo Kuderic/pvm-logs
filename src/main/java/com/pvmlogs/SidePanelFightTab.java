@@ -754,6 +754,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		add(section);
 		if (clearPass)
 		{
+			// T-199: what the folded line's two numbers are, and the one sign rule.
+			section.setTooltip(BUDGET_TIP);
 			updaters.add(t -> section.setHint(t.card == null ? Text.NONE : Text.title(t.card.clock, SidePanelStyle.VALUE)));
 		}
 		body(section, t ->
@@ -797,7 +799,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				// T-194: with the roll's words first.
 				v.setToolTipText(t.tooltip != null ? t.tooltip : SidePanelModel.TICK_NOTE);
 			}
-			else if ("Execution".equals(t.label.text))
+			else if (SidePanelModel.SKILL.equals(t.label.text))
 			{
 				v.setToolTipText(tab.execution.tooltip);
 			}
@@ -816,7 +818,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			{
 				views.get(i).set(t.tiles.get(i));
 				// T-126: the Execution tile's sum moves with its figures; text only, set when it changes.
-				final String tip = t.tiles.get(i).label.text.equals("Execution") ? t.execution.tooltip
+				final String tip = t.tiles.get(i).label.text.equals(SidePanelModel.SKILL) ? t.execution.tooltip
 					: t.tiles.get(i).tooltip;
 				if (tip != null && !tip.equals(views.get(i).getToolTipText()))
 				{
@@ -1005,7 +1007,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			rhythm = null;
 		}
-		final SidePanelSection section = new SidePanelSection("execution", clearPass ? YOUR_PLAY : "Execution",
+		final SidePanelSection section = new SidePanelSection("execution", SidePanelModel.SKILL,
 			tab.execution.hint, card, folds);
 		section.setTooltip(tab.execution.tooltip);
 		add(section);
@@ -1028,9 +1030,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
-	/** T-196: Execution's name under the card, and its strip's (T-198: one word). */
-	static final String YOUR_PLAY = "Your play";
+	/** T-199 (Eric: "Too many different terms: Skill, execution, Your play"): one word, {@link SidePanelModel#SKILL}. */
 	static final String ATTACK_RHYTHM = "Rhythm";
+	/** T-199: Where the time went's hover: what skill's and luck's numbers are, and the sign rule. */
+	static final String BUDGET_TIP = SidePanelStyle.wrapTip("Skill: the time lost against a perfect fight (idle, gear, prayers, boosts). Luck:"
+		+ " the time your rolls gained or lost against average rolls. " + SidePanelModel.SIGN_RULE);
 
 	/** Damage over time (T-036): the chart in a card, its two ends' times under it, and a legend. */
 	private void chart(FightTab tab)
@@ -1156,17 +1160,17 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		if (plain)
 		{
 			// T-198: the unit's words on hover, not on the panel.
-			strip.setToolTipText(SidePanelStyle.wrapTip("One mark per game tick (0.6 s), 60 to a row (36 s): attacking,"
-				+ " special, idle (off cooldown with no attack) and eating."));
+			strip.setToolTipText(SidePanelStyle.wrapTip("One mark per game tick (0.6 s), 60 to a row (36 s): attack,"
+				+ " spec, idle (off cooldown with no attack) and eating."));
 		}
 		final int[] rows = {SidePanelTickStrip.rows(chartData.length())};
 		return new Piece(card, t ->
 		{
 			final List<SidePanelParts.Legend.Item> items = new ArrayList<>(4);
-			items.add(new SidePanelParts.Legend.Item(t.chart.attackColour, false, plain ? "attacking" : "attack",
+			items.add(new SidePanelParts.Legend.Item(t.chart.attackColour, false, "attack",
 				SidePanelStyle.SECONDARY));
 			items.add(new SidePanelParts.Legend.Item(SidePanelStyle.towardWhite(t.chart.attackColour, 0.7), false,
-				plain ? "special" : "spec", SidePanelStyle.SECONDARY));
+				"spec", SidePanelStyle.SECONDARY));
 			if (t.chart.lost >= 0)
 			{
 				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.COST, false, plain ? "idle" : "lost " + t.chart.lost,
@@ -1281,6 +1285,11 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			section.setHintComponent(words);
 		}
 		add(section);
+		if (words == null && tab.damage != null && tab.damage.tooltip != null)
+		{
+			// T-199: what's against expected, and the thrall's damage outside it.
+			section.setTooltip(tab.damage.tooltip);
+		}
 		updaters.add(t ->
 		{
 			if (words != null)
@@ -1290,6 +1299,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			else
 			{
 				section.setHint(t.damage.hint);
+				if (t.damage.tooltip != null)
+				{
+					section.setTooltip(t.damage.tooltip);
+				}
 			}
 		});
 		body(section, t ->

@@ -39,7 +39,7 @@ public class SidePanelTimeBudgetTest
 		assertEquals(b.clock / (b.clock + b.luckSaved) * W, SidePanelTimeBudgetBar.tickX(b, W), 1e-9);
 		assertEquals(178, SidePanelTimeBudgetBar.tickX(b, W), 0.5);
 		assertEquals("1:16", b.clockLabel);
-		assertEquals("1:31 at average luck", b.endLabel);
+		assertEquals("1:31 with average luck", b.endLabel);
 	}
 
 	@Test
@@ -91,11 +91,11 @@ public class SidePanelTimeBudgetTest
 				assertTrue(at, SidePanelTimeBudgetBar.labelBaseline() < SidePanelTimeBudgetBar.tickTop());
 			}
 		}
-		// 2 s: too close to share the row apart, so one label: "1:16 · 1:18 at average luck".
+		// 2 s: too close to share the row apart, so one label: "1:16 · 1:18 with average luck".
 		final SidePanelTimeBudgetBar.Labels close = SidePanelTimeBudgetBar.labels(budget(SidePanelExamples.luckSaved(2)),
 			W, metrics(1));
 		assertTrue(close.joined);
-		assertEquals("1:16 · 1:18 at average luck", close.end);
+		assertEquals("1:16 · 1:18 with average luck", close.end);
 	}
 
 	@Test
@@ -173,9 +173,9 @@ public class SidePanelTimeBudgetTest
 		assertEquals("best play", rows.get(0).label.text);
 		assertEquals("1:26", rows.get(0).value.text);
 		// T-118: idle time in ticks: 1.8 s, 2.4 s and 1 s.
-		assertEquals("+3 ticks", rows.get(1).value.text);
+		assertEquals("-3 ticks", rows.get(1).value.text);
 		assertEquals("eating", rows.get(2).label.text);
-		assertEquals("+4 ticks", rows.get(2).value.text);
+		assertEquals("-4 ticks", rows.get(2).value.text);
 		assertEquals("stat boost", rows.get(3).label.text);
 		// T-123: a setup part reads the damage it cost, its 2 ticks on hover.
 		assertEquals("-8 dmg", rows.get(3).value.text);

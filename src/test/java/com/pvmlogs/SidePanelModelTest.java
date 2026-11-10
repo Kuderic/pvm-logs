@@ -102,8 +102,8 @@ public class SidePanelModelTest
 		// T-073: the overlay has no DPS row any more; the tile reads the same Numbers the overlay's rows do.
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
 		assertEquals(Double.isNaN(n.dps) ? LedgerRows.UNKNOWN : LedgerRows.oneDecimal(n.dps), tile(t, "DPS").value.text);
-		assertEquals(row(rows, "Execution").right, tile(t, "Execution").value.text);
-		assertEquals(row(rows, "Execution").right, t.execution.hint.text);
+		assertEquals(row(rows, "Skill").right, tile(t, "Skill").value.text);
+		assertEquals(row(rows, "Skill").right, t.execution.hint.text);
 
 		for (String part : Arrays.asList("uptime", "prayer", "gear", "stat boost"))
 		{
@@ -165,9 +165,9 @@ public class SidePanelModelTest
 		// Uptime's 15 idle seconds and stat boost 2.4 s: 17.4 s, rounded, and costing because uptime is. Eating's 4.2 s
 		// isn't one of Execution's parts (T-038).
 		// T-118: in ticks, 17.4 s / 0.6.
-		assertEquals("29 ticks lost", tile(t, "Execution").sub.text);
-		assertEquals("29t lost", tile(t, "Execution").subShort);
-		assertEquals(SidePanelStyle.COST, tile(t, "Execution").sub.colour);
+		assertEquals("29 ticks lost", tile(t, "Skill").sub.text);
+		assertEquals("29t lost", tile(t, "Skill").subShort);
+		assertEquals(SidePanelStyle.COST, tile(t, "Skill").sub.colour);
 		// Luck's tile edge takes its colour: rolled 20, luck's dim violet (T-194).
 		assertEquals(SidePanelStyle.LUCK_DIM, tile(t, "Luck").edge);
 		assertEquals(SidePanelStyle.LUCK_DIM, tile(t, "Luck").value.colour);
@@ -255,7 +255,7 @@ public class SidePanelModelTest
 		assertEquals(n.clock - n.scoredClock, adds.seconds, 1e-9);
 		final PanelSnapshot.BudgetRow last = b.rows.get(b.rows.size() - 1);
 		assertEquals("adds, not scored", last.label.text);
-		assertEquals("+52 ticks", last.value.text);
+		assertEquals("-52 ticks", last.value.text);
 		assertEquals("best play on the Abyssal Sire", b.rows.get(0).label.text);
 	}
 
@@ -268,7 +268,7 @@ public class SidePanelModelTest
 		// 136.8 s against 114: 23 s slower. Never coloured (Orchestrator, T-034): the raw clock carries luck.
 		assertEquals("23 s slower", dead.average.get(0).right.text);
 		assertEquals(SidePanelStyle.BODY, dead.average.get(0).right.colour);
-		assertEquals("luck removed 2:02", dead.average.get(1).left.text);
+		assertEquals("avg luck 2:02", dead.average.get(1).left.text);
 		// 122.5 s against 117, above the upper quartile 120: luck removed is the one that's coloured.
 		assertEquals("5 s slower than 1:57", dead.average.get(1).right.text);
 		assertEquals(SidePanelStyle.COST, dead.average.get(1).right.colour);
@@ -491,11 +491,11 @@ public class SidePanelModelTest
 		// Best play stays 1:41: 136.8 - 14.3 - (15.0 + 4.2 + 2.4) = 100.9 s.
 		assertEquals("1:41", b.rows.get(0).value.text);
 		assertEquals("uptime", b.rows.get(1).label.text);
-		assertEquals("+25 ticks", b.rows.get(1).value.text);
+		assertEquals("-25 ticks", b.rows.get(1).value.text);
 		final PanelSnapshot.BudgetRow eating = b.rows.get(2);
 		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
 		assertEquals("eating", eating.label.text);
-		assertEquals("+7 ticks", eating.value.text);
+		assertEquals("-7 ticks", eating.value.text);
 		assertEquals(SidePanelStyle.BODY, eating.value.colour);
 		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
 		// T-112 (Eric's pick): the details no longer repeat it.
@@ -538,7 +538,7 @@ public class SidePanelModelTest
 		final PanelSnapshot.BudgetRow eating = b.rows.get(1);
 		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
 		assertEquals("eating", eating.label.text);
-		assertEquals("+7 ticks", eating.value.text);
+		assertEquals("-7 ticks", eating.value.text);
 		assertEquals(0, b.segments.get(1).seconds, 0);
 		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
 		assertEquals(new LedgerRows.Numbers(s).clock, b.sum(), 1e-9);

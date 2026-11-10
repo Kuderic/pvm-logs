@@ -303,8 +303,27 @@ final class SidePanelSection extends JPanel
 			{
 				x = paintMark(g, mark, w, getHeight() - line, line);
 			}
+			final int base = getHeight() - fm.getDescent();
+			if (mark != null && mark.runs.length > 0)
+			{
+				// T-199: each label with its number in its colour; the last that doesn't fit is cut with "…".
+				for (PanelSnapshot.Text run : mark.runs)
+				{
+					final int room = w - x;
+					final String shown = LedgerRows.cut(run.text, fm::stringWidth, room);
+					g.setColor(run.colour);
+					g.drawString(shown, x, base);
+					x += fm.stringWidth(shown);
+					if (!shown.equals(run.text) || x >= w)
+					{
+						break;
+					}
+				}
+				g.dispose();
+				return;
+			}
 			g.setColor(colour);
-			g.drawString(LedgerRows.cut(text, fm::stringWidth, w - x), x, getHeight() - fm.getDescent());
+			g.drawString(LedgerRows.cut(text, fm::stringWidth, w - x), x, base);
 			g.dispose();
 		}
 

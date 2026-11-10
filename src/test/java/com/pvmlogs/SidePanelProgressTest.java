@@ -25,15 +25,20 @@ public class SidePanelProgressTest
 		assertNotNull(p);
 		// 13 counted kills in history (the 26 Oct one too), and three it no longer holds.
 		assertEquals(16, p.kills);
-		// The fastest is an older kill's, 1:43, which history doesn't have.
-		assertEquals("fastest", p.bests.get(0).left.text);
+		// The fastest is an older kill's, 1:43, which history doesn't have. T-199: its roll on a small line under it,
+		// never between the label and the value.
+		assertEquals(SidePanelHistory.FASTEST_KILL, p.bests.get(0).left.text);
 		assertEquals("1:43", p.bests.get(0).right.text);
-		assertTrue(p.bests.get(0).hint.text, p.bests.get(0).hint.text.matches(" rolled \\d+"));
-		assertEquals(SidePanelStyle.LUCK, p.bests.get(0).hint.colour);
-		// The luck-removed best carries the only gold; no DPS best.
-		assertEquals(" " + SidePanelHistory.SKILL_PB, p.bests.get(1).hint.text);
-		assertEquals(SidePanelStyle.GOLD, p.bests.get(1).hint.colour);
-		assertEquals(3, p.bests.size());
+		assertTrue(p.bests.get(0).hint.isEmpty());
+		assertTrue(p.bests.get(1).left.text, p.bests.get(1).left.text.matches("rolled \\d+"));
+		assertEquals(SidePanelStyle.LUCK, p.bests.get(1).left.colour);
+		assertTrue(p.bests.get(1).indent);
+		// The fastest with average luck carries the only gold, a star with no words; no DPS best.
+		assertEquals(SidePanelHistory.FASTEST_AVERAGE_LUCK, p.bests.get(2).left.text);
+		assertEquals(" " + SidePanelHistory.STAR, p.bests.get(2).hint.text);
+		assertEquals(SidePanelStyle.GOLD, p.bests.get(2).hint.colour);
+		assertEquals(SidePanelHistory.BEST_SKILL, p.bests.get(3).left.text);
+		assertEquals(4, p.bests.size());
 		for (PanelSnapshot.Row r : p.bests)
 		{
 			assertTrue(r.left.text, !r.left.text.toLowerCase().contains("dps"));
@@ -62,7 +67,7 @@ public class SidePanelProgressTest
 	{
 		final SidePanelHistory.Progress p = SidePanelHistory.progress(SidePanelProgressExamples.araxxor().view(
 			new LedgerHistory.Like("Araxxor", 1020, true)));
-		assertEquals("Luck removed, last " + SidePanelHistory.TREND_OF, p.trendTitle);
+		assertEquals("With average luck, last " + SidePanelHistory.TREND_OF, p.trendTitle);
 		assertTrue(p.trend.text, p.trend.text.matches("\\d+ s (faster|slower)|even"));
 		assertEquals(209, p.kills);
 		// T-193: a farmed boss's badges with their counts: the 400th and 500th kills, the clean runs, the runs of A's

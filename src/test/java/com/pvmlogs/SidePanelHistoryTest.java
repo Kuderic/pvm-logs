@@ -405,7 +405,7 @@ public class SidePanelHistoryTest
 			LedgerRows.State.trip(6, false, false), new LedgerRows.Settings());
 		for (LedgerRows.Row r : overlay)
 		{
-			if (r.left.equals("Execution"))
+			if (r.left.equals("Skill"))
 			{
 				assertEquals(r.right, t.execution.hint.text);
 				assertEquals(r.right, t.tiles.get(3).value.text);

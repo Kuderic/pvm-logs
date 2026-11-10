@@ -56,7 +56,7 @@ public class SidePanelMonsterRunTest
 		assertNull(t.defence);
 		for (PanelSnapshot.Tile tile : t.tiles)
 		{
-			assertFalse(tile.label.text, tile.label.text.contains("Luck") || tile.label.text.contains("Execution"));
+			assertFalse(tile.label.text, tile.label.text.contains("Luck") || tile.label.text.contains("Skill"));
 		}
 		for (PanelSnapshot.Row r : t.details == null ? new ArrayList<PanelSnapshot.Row>() : t.details.rows)
 		{

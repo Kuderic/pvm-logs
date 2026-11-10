@@ -61,8 +61,12 @@ final class SidePanelKillCard extends JComponent
 	private final Rectangle speedBox = new Rectangle();
 	private final Rectangle playBox = new Rectangle();
 	private final Rectangle luckBox = new Rectangle();
+	/** T-199: the DPS line's box. */
+	private final Rectangle dpsBox = new Rectangle();
 	/** T-198: the grade chip's box as painted, for its picture test. */
 	final Rectangle gradeBox = new Rectangle();
+	/** T-199: the luck track's marker as painted last, for its test; -1 for none. */
+	int markerX = -1;
 	/** The height last measured, and for which card and text mode: measuring lays the card out without painting it. */
 	private KillCard measured;
 	private int measuredFor = Integer.MIN_VALUE;
@@ -256,6 +260,10 @@ final class SidePanelKillCard extends JComponent
 		{
 			return SidePanelStyle.wrapTip(c.luckTip);
 		}
+		if (dpsBox.contains(e.getPoint()))
+		{
+			return SidePanelStyle.wrapTip(c.dpsTip);
+		}
 		return null;
 	}
 
@@ -268,6 +276,7 @@ final class SidePanelKillCard extends JComponent
 		SidePanelStyle.textHints(g);
 		try
 		{
+			markerX = -1;
 			paintCard(g);
 		}
 		finally
@@ -583,6 +592,35 @@ final class SidePanelKillCard extends JComponent
 			skillTile(skill);
 			luckTile(luck);
 			y += h;
+			dpsLine();
+		}
+
+		/**
+		 * T-199: the old DPS tile as one line under the tiles, {@code DPS 5.9 · exp 5.3}: labels muted, numbers bright;
+		 * always there, so the card's height never changes as the figures arrive.
+		 */
+		private void dpsLine()
+		{
+			y += 4;
+			final int top = y;
+			if (labels != null)
+			{
+				labels.add("DPS");
+			}
+			int x = left + TILE_PAD;
+			final int end = right;
+			x += text(Text.small("DPS ", SidePanelStyle.SECONDARY), x, y, end - x);
+			x += text(Text.small(c.dps == null ? LedgerRows.UNKNOWN : c.dps, SidePanelStyle.VALUE), x, y, end - x);
+			if (c.expDps != null)
+			{
+				x += text(Text.small(" \u00b7 exp ", SidePanelStyle.SECONDARY), x, y, end - x);
+				text(Text.small(c.expDps, SidePanelStyle.BODY), x, y, end - x);
+			}
+			y += small();
+			if (owner != null)
+			{
+				owner.dpsBox.setBounds(0, top - 2, w, y - top + 4);
+			}
 		}
 
 		/** Time: the clock, large; your usual beside it; the gold PB chip above that on a new best. */
@@ -632,7 +670,7 @@ final class SidePanelKillCard extends JComponent
 			return r.y + TILE_PAD_TOP + small() + 2;
 		}
 
-		/** Skill: the grade chip and the share of a perfect fight (live: attacking); the time lost under it, orange. */
+		/** Skill: the grade chip and the share of a perfect fight (live: the uptime, "97% uptime"); the time lost under it, orange. */
 		private void skillTile(Rectangle r)
 		{
 			final int top = tile(r, "Skill");
@@ -655,7 +693,14 @@ final class SidePanelKillCard extends JComponent
 			}
 			if (c.skill != null)
 			{
-				text(Text.title(c.skill, SidePanelStyle.VALUE), x, top + (valueLine() - title()) / 2, x0 + room - x);
+				final int vw = text(Text.title(c.skill, SidePanelStyle.VALUE), x, top + (valueLine() - title()) / 2,
+					x0 + room - x);
+				if (c.live)
+				{
+					// T-199: live it's the uptime so far, and says so: "97% uptime".
+					text(Text.small(" " + LIVE_SKILL_WORD, SidePanelStyle.SECONDARY), x + vw, top + (valueLine() - title())
+						/ 2 + title() - small(), x0 + room - x - vw);
+				}
 			}
 			final Text bottom = c.lost != null ? Text.small(c.lost, SidePanelStyle.COST)
 				: c.skill != null ? Text.small("±0 s", SidePanelStyle.MUTED) : Text.NONE;
@@ -677,6 +722,11 @@ final class SidePanelKillCard extends JComponent
 				// Live: the die still rolling, and its word so far.
 				final Text word = c.luckWord.text.isEmpty() ? Text.small("rolling", SidePanelStyle.SECONDARY) : c.luckWord;
 				text(word, x, top + (valueLine() - lineHeight(word.type)) / 2, room);
+				// T-199: the track under it, marked where luck so far sits, in its strength; no number.
+				if (c.live && c.luckAt > 0)
+				{
+					track(x, top + valueLine() + 2, room, c.luckAt, SidePanelModel.ink(SidePanelModel.strength(c.luckAt)));
+				}
 				return;
 			}
 			final int roll = rolling() ? ROLLS[Math.max(0, frame) % ROLLS.length] : c.rolled;
@@ -690,7 +740,13 @@ final class SidePanelKillCard extends JComponent
 					room - nw - 3);
 			}
 			// The scale: a thin 1 to 100 track in its three strengths, "1" and "100" at its ends, the roll marked.
-			final int ly = top + valueLine() + 2;
+			track(x, top + valueLine() + 2, room, roll, SidePanelStyle.VALUE);
+		}
+
+		/** The 1 to 100 track in its three strengths, "1" and "100" at its ends, {@code at} marked in {@code marker}. */
+		private void track(int x, int ly, int room, int at, Color marker)
+		{
+			final int roll = at;
 			final int w1 = text(Text.small("1", SidePanelStyle.SECONDARY), x, ly, room);
 			final int w100 = textRight(Text.small("100", SidePanelStyle.SECONDARY), x + room, ly, room);
 			final int tx = x + w1 + 3;
@@ -706,9 +762,13 @@ final class SidePanelKillCard extends JComponent
 				g.fillRect(a, ty, b - a, 4);
 				g.setColor(SidePanelStyle.LUCK_TRACK_BRIGHT);
 				g.fillRect(b, ty, tx + tw - b, 4);
-				final int at = tx + (int) Math.round((Math.max(1, Math.min(100, roll)) - 1) / 99.0 * (tw - 2));
-				g.setColor(SidePanelStyle.VALUE);
-				g.fillRect(at, ty - 2, 2, 8);
+				final int mx = tx + (int) Math.round((Math.max(1, Math.min(100, roll)) - 1) / 99.0 * (tw - 2));
+				g.setColor(marker);
+				g.fillRect(mx, ty - 2, 2, 8);
+				if (owner != null)
+				{
+					owner.markerX = mx;
+				}
 			}
 		}
 
@@ -727,6 +787,8 @@ final class SidePanelKillCard extends JComponent
 		}
 
 		static final int GRADE_PAD = 4;
+		/** T-199: the live Skill tile's word after its share. */
+		static final String LIVE_SKILL_WORD = "uptime";
 
 		/** The grade chip: edged in its colour, its letter centred on its own drawn shape; it waits for the die. */
 		static void paintGradeChip(Graphics2D g, KillCard c, int x, int y, int w, int h, boolean rolling, boolean flash)

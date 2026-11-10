@@ -141,6 +141,28 @@ class PvmPerformancePanel extends PluginPanel
 		MERGED = java.util.Collections.unmodifiableMap(m);
 	}
 
+	/**
+	 * T-199: the key that says Damage has been opened once on this build. T-188 to T-193 kept Damage under the card
+	 * with its own {@code damage.opened} key and never read {@code panelFold.damage}; T-194 went back to that shared key,
+	 * so a fold saved there by an earlier build (before T-188, or with Celebrations off) folded Damage again.
+	 */
+	static final String DAMAGE_REOPENED = "damage.reopened";
+
+	/**
+	 * T-199 (Eric: "Damage tab should be open by default"): Damage opens once on this build, even where an earlier one
+	 * saved it folded; after that, its fold is remembered as usual. Returns whether it opened it now.
+	 */
+	static boolean reopenDamageOnce(SidePanelSection.Folds stored)
+	{
+		if (stored.isFolded(DAMAGE_REOPENED))
+		{
+			return false;
+		}
+		stored.setFolded("damage", false);
+		stored.setFolded(DAMAGE_REOPENED, true);
+		return true;
+	}
+
 	/** T-188: Celebrations for tests and renders, which have no config; null reads the setting. */
 	private Boolean celebrations;
 
@@ -201,6 +223,7 @@ class PvmPerformancePanel extends PluginPanel
 
 		final SidePanelSection.Folds stored = configManager == null ? new SidePanelSection.MemoryFolds()
 			: new ConfigFolds(configManager);
+		reopenDamageOnce(stored);
 		// A fold updates at once (T-046): an unfolded section shows this tick's figures, not those of up to 3 s ago.
 		final SidePanelSection.Folds folds = new SidePanelSection.Folds()
 		{
