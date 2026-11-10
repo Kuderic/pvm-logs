@@ -48,7 +48,7 @@ public class SidePanelTicksTest
 		// "your average 1:54 … 23 s slower", "luck removed 2:02 … 5 s slower than 1:57": clocks, and seconds.
 		for (PanelSnapshot.Row r : b.average)
 		{
-			assertTrue(r.left.text, r.left.text.matches("(your average|with average luck) \\d+:\\d\\d"));
+			assertTrue(r.left.text, r.left.text.matches("(your average|avg luck) \\d+:\\d\\d"));
 			assertTrue(r.right.text, r.right.text.matches("(\\d+ s (faster|slower)|even)( (than|with) \\d+:\\d\\d)?"));
 		}
 	}
@@ -262,7 +262,7 @@ public class SidePanelTicksTest
 				final SidePanelText t = (SidePanelText) c;
 				final String text = t.getText();
 				final String shown = t.lastShown();
-				if (text != null && shown != null && (text.matches("(your average|with average luck) \\d+:\\d\\d")
+				if (text != null && shown != null && (text.matches("(your average|avg luck) \\d+:\\d\\d")
 					|| text.equals(SidePanelModel.WORTH) || text.equals(SidePanelModel.SPEC_LUCK)
 					|| text.equals("expected dmg added") || text.equals("your specials' luck") || SETUP.contains(text)))
 				{

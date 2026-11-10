@@ -3204,7 +3204,8 @@ final class SidePanelModel
 				{
 					final LedgerHistory.Spread r = in.luckRemoved;
 					// T-118: "25 s faster" alone where "… than 1:46" would cut the clock on the left (in the tooltip whole).
-					average.add(new Row(Text.small("with average luck " + LedgerRows.duration(n.expectedDuration), SidePanelStyle.BODY),
+					// T-199: "avg luck", the short form: the full words cut the clock at Larger beside its comparison.
+					average.add(new Row(Text.small("avg luck " + LedgerRows.duration(n.expectedDuration), SidePanelStyle.BODY),
 						Text.small(against(n.expectedDuration, r.median) + (LedgerRows.roundHalfAway(n.expectedDuration - r.median)
 							== 0 ? " with " : " than ") + LedgerRows.duration(r.median), SidePanelStyle.of(usual(n.expectedDuration,
 							r)))).withRightShort(against(n.expectedDuration, r.median)));
