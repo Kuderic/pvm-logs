@@ -161,6 +161,8 @@ class GearBonusCalc
 			total = total.combine(blackMask).combine(dragonHunter).combine(demonbane);
 		}
 
+		// T-203: golembane's accuracy here; its damage is floored after the rest (CombatCalc.golembaneMax), as the game does.
+		total = total.combine(golembaneAccuracy(type, npc, gear));
 		total = total.combine(voidBonus(type, gear));
 		total = total.combine(crystalBonus(gear));
 		total = total.combine(inquisitorsBonus(type, gear));
@@ -449,6 +451,42 @@ class GearBonusCalc
 			return GearBonus.of(1.75, 1.40);
 		}
 		return GearBonus.NONE;
+	}
+
+	/**
+	 * T-203: golembane, as {numerator, denominator}, or null: the granite hammer's 30% and the barronite mace's 15% against
+	 * a monster with the data's {@code golem} attribute, for melee.
+	 * <ul>
+	 * <li>OSRS Wiki, read 2026-11-10: Granite hammer, "a 30% Golembane effect, dealing 30% extra damage and accuracy
+	 * against all golem-type creatures", which "stacks multiplicatively with the slayer helmet's bonuses"; Barronite mace,
+	 * "15% damage and accuracy bonus against golems", "the golembane effect stacks with the black mask or slayer helmet
+	 * effect".</li>
+	 * <li>The DPS calc (PlayerVsNPCCalc at c446f2e, facts only): the hammer's attack roll ×13/10 and both maxima (×13/10,
+	 * ×23/20) after the slayer helmet's, each rounded down. It gives the mace no accuracy; the wiki does, and is followed
+	 * here.</li>
+	 * </ul>
+	 */
+	static int[] golembane(AttackType type, MonsterStatsProvider.MonsterStats npc, int weapon)
+	{
+		if (type == null || !type.isMelee() || npc == null || !npc.hasAttribute("golem"))
+		{
+			return null;
+		}
+		if (weapon == ItemID.GRANITE_HAMMER)
+		{
+			return new int[]{13, 10};
+		}
+		if (weapon == ItemID.BARRONITE_MACE || weapon == ItemID.BARRONITE_MACE_TROUVER)
+		{
+			return new int[]{23, 20};
+		}
+		return null;
+	}
+
+	private static GearBonus golembaneAccuracy(AttackType type, MonsterStatsProvider.MonsterStats npc, Loadout gear)
+	{
+		final int[] bane = golembane(type, npc, gear.id(EquipmentInventorySlot.WEAPON));
+		return bane == null ? GearBonus.NONE : GearBonus.of((double) bane[0] / bane[1], 1.0);
 	}
 
 	// The Deadman copy is the same bow (T-056).

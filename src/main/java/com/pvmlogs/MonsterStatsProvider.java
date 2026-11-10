@@ -849,6 +849,7 @@ class MonsterStatsProvider
 				.withDrainFacts(m.skills.attack, m.skills.strength, m.skills.ranged,
 					boss != null && boss.defenceDrain != null && boss.defenceDrain.magicUsesDefence);
 			stats.combatLevel = m.level;
+			stats.flatArmour = m.defensive.flatArmour;
 			versions.computeIfAbsent(m.id, k -> new ArrayList<>()).add(stats);
 			names.computeIfAbsent(normalise(stats.getName()), k -> new ArrayList<>()).add(stats);
 		}
@@ -904,6 +905,11 @@ class MonsterStatsProvider
 		private boolean magicUsesDefence;
 		/** The data's combat level (T-157), 0 where it gives none. */
 		private int combatLevel;
+		/**
+		 * T-203: the data's flat armour (OSRS Wiki, Flat armour: "subtracting the flat armour value from the attack's final
+		 * damage roll", each hitsplat, the player's melee and ranged only); negative adds damage. 0 where it gives none.
+		 */
+		private int flatArmour;
 		/**
 		 * T-157: another version this one can't be told from (same hitpoints, other defences), or null; and the note
 		 * saying so, which shows as a warning only once the expected figures say the difference matters.
@@ -961,6 +967,7 @@ class MonsterStatsProvider
 			copy.rangedLevel = ranged;
 			copy.magicUsesDefence = magicUsesDefence;
 			copy.combatLevel = combatLevel;
+			copy.flatArmour = flatArmour;
 			copy.alternative = alternative;
 			copy.versionNote = versionNote;
 			return copy;
@@ -973,8 +980,19 @@ class MonsterStatsProvider
 			copy.rangedLevel = rangedLevel;
 			copy.magicUsesDefence = magicUsesDefence;
 			copy.combatLevel = combatLevel;
+			copy.flatArmour = flatArmour;
 			copy.alternative = alternative;
 			copy.versionNote = versionNote;
+			return copy;
+		}
+
+		/** T-203: this entry with this flat armour, for tests and for monsters built by hand. */
+		MonsterStats withFlatArmour(int armour)
+		{
+			final MonsterStats copy = carry(new MonsterStats(name, size, hitpoints, defenceLevel, magicLevel,
+				offensiveMagic, defStab, defSlash, defCrush, defMagic, defRanged, weaknessElement, weaknessSeverity,
+				attributes, xpMultiplier, version, drainImmune, warning));
+			copy.flatArmour = armour;
 			return copy;
 		}
 
@@ -1148,6 +1166,9 @@ class MonsterStatsProvider
 			int crush;
 			int magic;
 			int standard;
+			/** T-203: the data's flat armour; 0 where it gives none. */
+			@SerializedName("flat_armour")
+			int flatArmour;
 		}
 	}
 }

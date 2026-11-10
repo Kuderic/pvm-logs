@@ -67,20 +67,22 @@ public class SpecialAttackTableTest
 	}
 
 	/**
-	 * Hammer Blow rolls "up to max roll -5, plus 5", which is a floor of five
-	 * hitpoints rather than a share of the max - the one case minFraction cannot
-	 * express.
+	 * T-203: Hammer Blow adds 5 to the hit, a miss included (OSRS Wiki, Granite hammer: "guaranteeing 5 additional damage",
+	 * "Even if the special attack misses, the target will still take a minimum of 5 damage"), where it was a floor of five
+	 * under the max. No special has a flat floor now; the floor's arithmetic is kept for one whose page gives it.
 	 */
 	@Test
-	public void theGraniteHammerHasAFlatFloorRatherThanAShare()
+	public void theGraniteHammerAddsFiveRatherThanAFloor()
 	{
-		assertEquals(5, SpecialAttack.GRANITE_HAMMER.flatMinimum());
+		assertEquals(5, SpecialAttack.GRANITE_HAMMER.flatAddition());
+		assertEquals(0, SpecialAttack.GRANITE_HAMMER.flatMinimum());
 		assertEquals(0.0, SpecialAttack.GRANITE_HAMMER.minFraction(), EPSILON);
 		for (SpecialAttack spec : SpecialAttack.values())
 		{
-			assertTrue(spec.name(), spec.flatMinimum() >= 0);
+			assertEquals(spec.name(), 0, spec.flatMinimum());
+			assertEquals(spec.name(), spec == SpecialAttack.GRANITE_HAMMER ? 5 : 0, spec.flatAddition());
 		}
-		// A max of 40 with a floor of 5 averages 22.5, not 20.
+		// A max of 40 with a floor of 5 averages 22.5, not 20: the floor's arithmetic, kept.
 		final double expected = CombatCalc.specAverage(new int[]{40}, 1.0, 0.0, 5, Integer.MAX_VALUE);
 		assertEquals(22.5, expected, EPSILON);
 	}

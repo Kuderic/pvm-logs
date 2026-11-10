@@ -90,6 +90,46 @@ final class DamageMoments
 		return new DamageMoments(roll.mean + zero, roll.second + zero);
 	}
 
+	/**
+	 * T-203: one landed hitsplat's roll from {@code min} to {@code trueMax}, every whole value alike: its 0 pushed up to 1
+	 * where {@code push} (T-156), then the target's flat armour as {@code shift} (its negative: −2 armour adds 2), never
+	 * below 0, then held to the cap. The DPS calc's order (PlayerVsNPCCalc at c446f2e, facts only): the push in the
+	 * player's roll, flat armour among the target's transforms, on accurate hitsplats alone; the hp left is the last word.
+	 * A shift of 0 is {@link #successful(int, int, int)} or {@link #capped(int, int, int)}.
+	 */
+	static DamageMoments shot(int min, int trueMax, int cap, boolean push, int shift)
+	{
+		if (shift == 0)
+		{
+			return push ? successful(min, trueMax, cap) : capped(min, trueMax, cap);
+		}
+		if (trueMax <= 0 || trueMax < min)
+		{
+			return ZERO;
+		}
+		final int lo = Math.max(0, min);
+		double sum = 0;
+		double squares = 0;
+		for (int r = lo; r <= trueMax; r++)
+		{
+			final int rolled = push && r == 0 ? 1 : r;
+			final double dealt = Math.min(cap, Math.max(0, rolled + shift));
+			sum += dealt;
+			squares += dealt * dealt;
+		}
+		final int n = trueMax - lo + 1;
+		return new DamageMoments(sum / n, squares / n);
+	}
+
+	/**
+	 * T-203: this landed roll with {@code shift} more on every value, as flat armour below 0 gives: exact while nothing
+	 * falls below 0 or meets a cap, so for a raise ({@code shift} &gt; 0) on an uncapped roll.
+	 */
+	DamageMoments raised(double shift)
+	{
+		return new DamageMoments(mean + shift, second + 2 * shift * mean + shift * shift);
+	}
+
 	/** {@link CombatCalc#cappedAverage(int, int)}'s roll: 0 to trueMax, everything above the cap landing on it. */
 	static DamageMoments capped(int trueMax, int cap)
 	{

@@ -1282,7 +1282,7 @@ class CombatCalc
 			}
 			final int[] maxima = weaponStyle() == Style.MAGIC ? new int[]{first}
 				: shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId));
-			return ModifierTracker.moments(mods, maxima, accuracy, hitCap(npcId), push);
+			return ModifierTracker.moments(mods, maxima, accuracy, hitCap(npcId), push, flatArmourShift(npcId));
 		}
 		if (weaponStyle() == Style.MAGIC)
 		{
@@ -1299,17 +1299,20 @@ class CombatCalc
 		}
 		// Averages, not best cases: a keris crit or an ahrim's proc raises the max hit but only lifts sustained damage by a
 		// few percent.
-		final double averageMax = (baseMaxHit() * gearBonus(npcId).getExpectedDamage()
+		final double averageMax = (golembaneAverage(npcId, baseMaxHit() * gearBonus(npcId).getExpectedDamage())
 			+ colossalBladeBonus(npcId) + elementalWeaknessBonus(npcId)) * mitigation(npcId);
 		if (accuracy < 0 || averageMax <= 0)
 		{
 			return null;
 		}
 		final int cap = hitCap(npcId);
+		// T-203: the target's flat armour on each landed hitsplat, melee and ranged.
+		final int shift = flatArmourShift(npcId);
 		// A scythe swing is several hits, each rolling its own accuracy and damage, so one attack is expected to deal their
 		// sum. Each max is half the one before ROUNDED DOWN, which is why this walks them rather than multiplying by 1.75: a
 		// 51 max is 51, 25, 12, which is 88 and not 89.25.
-		final DamageMoments ordinary = shapeMoments(ordinaryShape(), averageMax, accuracy, hitsPerAttack(npcId), cap, push);
+		final DamageMoments ordinary = shapeMoments(ordinaryShape(), averageMax, accuracy, hitsPerAttack(npcId), cap, push,
+			shift);
 
 		final EnchantedBolt bolt = loadedBolt(npcId);
 		if (bolt == null)
@@ -1326,7 +1329,7 @@ class CombatCalc
 			case DIAMOND:
 				// Also ignores accuracy, but rolls damage normally against a raised max, so a proc always lands. T-156: the DPS
 				// calc pushes its 0 too (an accurate roll from 0).
-				return (push ? DamageMoments.successful(1.15 * averageMax) : DamageMoments.uniform(1.15 * averageMax))
+				return roll(1.15 * averageMax, Integer.MAX_VALUE, push, shift)
 					.weighted(procChance)
 					.or(ordinary.weighted(1.0 - procChance));
 			case DRAGONSTONE:
@@ -1430,35 +1433,48 @@ class CombatCalc
 	static DamageMoments shapeMoments(OrdinaryShape shape, double averageMax, double accuracy, int scytheHits, int cap,
 		boolean push)
 	{
+		return shapeMoments(shape, averageMax, accuracy, scytheHits, cap, push, 0);
+	}
+
+	/**
+	 * As above, with the target's flat armour as {@code shift} on every hitsplat that lands (T-203; OSRS Wiki, Flat armour:
+	 * "applied to each hitsplat separately"): each of a scythe's three, both halves of a split, both of the dual
+	 * macuahuitl's, each arrow and throw.
+	 */
+	static DamageMoments shapeMoments(OrdinaryShape shape, double averageMax, double accuracy, int scytheHits, int cap,
+		boolean push, int shift)
+	{
 		switch (shape)
 		{
 			case SCYTHE:
-				return ordinaryMoments(averageMax, accuracy, scytheHits, cap, push);
+				return ordinaryMoments(averageMax, accuracy, scytheHits, cap, push, shift);
 			case SPLIT:
 			{
 				final double first = Math.floor(averageMax / 2.0);
-				return roll(first, cap, push).landing(accuracy).plus(roll(averageMax - first, cap, push).landing(accuracy));
+				return roll(first, cap, push, shift).landing(accuracy)
+					.plus(roll(averageMax - first, cap, push, shift).landing(accuracy));
 			}
 			case MACUAHUITL:
 			{
 				// The second lands only if the first did and its own roll passes: B1 (Y1 + B2 Y2).
 				final double first = Math.floor(averageMax / 2.0);
-				return roll(first, cap, push).plus(roll(averageMax - first, cap, push).landing(accuracy)).landing(accuracy);
+				return roll(first, cap, push, shift).plus(roll(averageMax - first, cap, push, shift).landing(accuracy))
+					.landing(accuracy);
 			}
 			case TWO_FULL:
 			{
-				final DamageMoments arrow = roll(averageMax, cap, push).landing(accuracy);
+				final DamageMoments arrow = roll(averageMax, cap, push, shift).landing(accuracy);
 				return arrow.plus(arrow);
 			}
 			case TWO_THREE_QUARTERS:
 			{
-				final DamageMoments thrown = roll(averageMax * 0.75, cap, push).landing(accuracy);
+				final DamageMoments thrown = roll(averageMax * 0.75, cap, push, shift).landing(accuracy);
 				return thrown.plus(thrown);
 			}
 			case THREE_QUARTERS:
-				return roll(averageMax * 0.75, cap, push).landing(accuracy);
+				return roll(averageMax * 0.75, cap, push, shift).landing(accuracy);
 			default:
-				return ordinaryMoments(averageMax, accuracy, 1, cap, push);
+				return ordinaryMoments(averageMax, accuracy, 1, cap, push, shift);
 		}
 	}
 
@@ -1468,11 +1484,28 @@ class CombatCalc
 	 */
 	private static DamageMoments roll(double max, int cap, boolean push)
 	{
-		if (cap == Integer.MAX_VALUE)
+		return roll(max, cap, push, 0);
+	}
+
+	/**
+	 * As above, with the target's flat armour as {@code shift} (T-203): a raise on an uncapped roll keeps the max's fraction;
+	 * anything that can meet 0 or a cap is walked whole, value by value.
+	 */
+	private static DamageMoments roll(double max, int cap, boolean push, int shift)
+	{
+		if (shift == 0)
 		{
-			return push ? DamageMoments.successful(max) : DamageMoments.uniform(max);
+			if (cap == Integer.MAX_VALUE)
+			{
+				return push ? DamageMoments.successful(max) : DamageMoments.uniform(max);
+			}
+			return push ? DamageMoments.successful(0, (int) max, cap) : DamageMoments.capped((int) max, cap);
 		}
-		return push ? DamageMoments.successful(0, (int) max, cap) : DamageMoments.capped((int) max, cap);
+		if (cap == Integer.MAX_VALUE && shift > 0 && max > 0)
+		{
+			return (push ? DamageMoments.successful(max) : DamageMoments.uniform(max)).raised(shift);
+		}
+		return DamageMoments.shot(0, (int) max, cap, push, shift);
 	}
 
 	/**
@@ -1553,11 +1586,17 @@ class CombatCalc
 	/** As above, each hit's successful 0 pushed up to 1 where {@code push} (T-156). */
 	static DamageMoments ordinaryMoments(double averageMax, double accuracy, int hits, int cap, boolean push)
 	{
+		return ordinaryMoments(averageMax, accuracy, hits, cap, push, 0);
+	}
+
+	/** As above, the target's flat armour as {@code shift} on each hit that lands (T-203). */
+	static DamageMoments ordinaryMoments(double averageMax, double accuracy, int hits, int cap, boolean push, int shift)
+	{
 		DamageMoments total = DamageMoments.ZERO;
 		double max = averageMax;
 		for (int hit = 0; hit < hits; hit++)
 		{
-			total = total.plus(roll(max, cap, push).landing(accuracy));
+			total = total.plus(roll(max, cap, push, shift).landing(accuracy));
 			max = Math.floor(max / 2.0);
 		}
 		return total;
@@ -2786,9 +2825,12 @@ class CombatCalc
 		// A boss's modifiers (T-057): the cap while stunned, the halving, the doubling for magic into the wound.
 		final List<BossRules.ModifierRule> mods = bossModifiers(npcId);
 		final int[] maxima = shapeMaxima(ordinaryShape(), first, hitsPerAttack(npcId));
+		// T-203: the target's flat armour on each hitsplat, after the boss's own modifiers and before the cap.
+		final int shift = flatArmourShift(npcId);
 		for (int hit = 0; hit < maxima.length; hit++)
 		{
-			total += Math.min(cap, mods.isEmpty() ? maxima[hit] : ModifierTracker.max(mods, maxima[hit], hit));
+			final int max = mods.isEmpty() ? maxima[hit] : ModifierTracker.max(mods, maxima[hit], hit);
+			total += Math.min(cap, max > 0 ? Math.max(0, max + shift) : max);
 		}
 		if (weaponStyle() == Style.MAGIC)
 		{
@@ -3059,7 +3101,7 @@ class CombatCalc
 		{
 			return magicModel(npcId).maxHit();
 		}
-		final int hit = (int) (baseMaxHit() * gearBonus(npcId).getDamage())
+		final int hit = golembaneMax(npcId, (int) (baseMaxHit() * gearBonus(npcId).getDamage()))
 			+ colossalBladeBonus(npcId) + elementalWeaknessBonus(npcId);
 		final EnchantedBolt bolt = loadedBolt(npcId);
 		if (bolt == null)
@@ -3094,6 +3136,72 @@ class CombatCalc
 		return npc == null ? 0 : 2 * Math.min(npc.getSize(), 5);
 	}
 
+	/**
+	 * T-203: golembane on a max hit already through the other gear multipliers: ×13/10 (granite hammer) or ×23/20 (barronite
+	 * mace), rounded down, against a golem; the max unchanged otherwise. Rounded on its own as the game does: Eric's granite
+	 * hammer on a gargoyle on task reads 47, and the game's max-hit splat is 63 = ⌊47 × 1.3⌋ + 2 (his log of 2026-11-10).
+	 */
+	int golembaneMax(int npcId, int max)
+	{
+		final int[] bane = golembane(npcId);
+		return bane == null ? max : golembaneMax(max, bane);
+	}
+
+	static int golembaneMax(int max, int[] bane)
+	{
+		return bane == null ? max : max * bane[0] / bane[1];
+	}
+
+	/** {@link #golembaneMax} for the average's max, which may carry a fraction: rounded down first, as the max is. */
+	private double golembaneAverage(int npcId, double max)
+	{
+		final int[] bane = golembane(npcId);
+		return bane == null ? max : golembaneMax((int) Math.floor(max), bane);
+	}
+
+	/** The golembane on this target for the weapon in hand ({@link GearBonusCalc#golembane}), or null. */
+	int[] golembane(int npcId)
+	{
+		return GearBonusCalc.golembane(attackStyle().getAttackType(), monsters.get(npcId), weaponItemId());
+	}
+
+	/**
+	 * T-203: what the target's flat armour does to each landed hitsplat: its negative (−2 armour adds 2), for melee and
+	 * ranged; 0 for magic, which "intentionally ignore[s] both positive and negative flat armour" (OSRS Wiki, Flat armour,
+	 * read 2026-11-10), powered staves and the Voidwaker's special included. The DPS calc (c446f2e) applies it to every
+	 * style but magic, on accurate hitsplats only, never below 0.
+	 */
+	int flatArmourShift(int npcId)
+	{
+		return flatArmourShift(weaponStyle() == Style.MAGIC, monsters.get(npcId));
+	}
+
+	static int flatArmourShift(boolean magic, MonsterStatsProvider.MonsterStats npc)
+	{
+		return magic || npc == null ? 0 : -npc.getFlatArmour();
+	}
+
+	/** T-203: golembane and flat armour as they apply now, for the expected-figures log line; "" when neither does. */
+	String targetEffectsNote(int npcId)
+	{
+		final StringBuilder b = new StringBuilder();
+		final int[] bane = golembane(npcId);
+		if (bane != null)
+		{
+			b.append(", golembane +").append(Math.round(100.0 * (bane[0] - bane[1]) / bane[1])).append('%');
+		}
+		final MonsterStatsProvider.MonsterStats npc = monsters.get(npcId);
+		if (npc != null && npc.getFlatArmour() != 0)
+		{
+			b.append(", flat armour ").append(npc.getFlatArmour() > 0 ? "+" : "-").append(Math.abs(npc.getFlatArmour()));
+			if (weaponStyle() == Style.MAGIC)
+			{
+				b.append(" (not on magic)");
+			}
+		}
+		return b.toString();
+	}
+
 	/** The equipped weapon's special attack, or null if it has none that hits. */
 	SpecialAttack specialAttack()
 	{
@@ -3110,16 +3218,19 @@ class CombatCalc
 		// T-152: a modifier that applies to specials (the Wardens' core, x5) changes each hitsplat's max.
 		final List<BossRules.ModifierRule> mods = specialModifiers(npcId);
 		final SpecialAttack spec = specialAttack();
+		// T-203: Hammer Blow's 5 and the target's flat armour on each hitsplat.
+		final int shift = spec == null ? 0 : specialFlatArmourShift(npcId, spec);
+		final int extra = spec == null ? 0 : spec.flatAddition();
 		if (mods.isEmpty() || spec == null || max <= 0)
 		{
-			return max;
+			return max <= 0 ? max : Math.max(0, max + extra + shift * (spec == null ? 1 : spec.hits()));
 		}
 		final int[] maxima = spec.hitMaxima((int) ((spec.hasDamageMultipliers() ? unmitigatedMaxHit(npcId)
 			: unmitigatedSpecialAttackMaxHit(npcId)) * mitigation(npcId)));
 		int total = 0;
 		for (int hit = 0; hit < maxima.length; hit++)
 		{
-			total += ModifierTracker.max(mods, maxima[hit], hit);
+			total += Math.max(0, ModifierTracker.max(mods, maxima[hit], hit) + shift);
 		}
 		return total;
 	}
@@ -3372,13 +3483,15 @@ class CombatCalc
 		// T-156: a successful 0 is pushed up to 1 (OSRS Wiki, Successful hit) on every special but the claws': the DPS calc
 		// leaves the dragon claws' and the burning claws' outcomes as their pages give them, four misses' 0 or 2 included.
 		final boolean push = pushesZero(npcId) && !spec.cascadingAccuracy();
+		// T-203: the target's flat armour on each landed hitsplat; none for the Voidwaker's, a magic hit.
+		final int shift = specialFlatArmourShift(npcId, spec);
 		final List<BossRules.ModifierRule> specMods = specialModifiers(npcId);
 		if (!specMods.isEmpty() && !spec.hasFixedDamage())
 		{
 			final int[] maxima = spec.hitMaxima((int) ((spec.hasDamageMultipliers() ? unmitigatedMaxHit(npcId)
 				: unmitigatedSpecialAttackMaxHit(npcId)) * mitigation(npcId)));
 			return ModifierTracker.moments(specMods, maxima, ModifierTracker.accuracy(specMods, accuracy),
-				hitCap(npcId), push);
+				hitCap(npcId), push, shift);
 		}
 		// Pulsate alone: fixed damage that no gear, prayer or mitigation touches, and the only hit Verzik's first phase lets
 		// past its cap. Its floor is half its max, so it has no 0 to push.
@@ -3402,8 +3515,8 @@ class CombatCalc
 		{
 			final int normalMax = (int) (unmitigatedMaxHit(npcId) * scale);
 			return spec == SpecialAttack.BURNING_CLAWS
-				? burningClawsMoments(normalMax, accuracy, cap)
-				: clawsMoments(normalMax, accuracy, cap);
+				? burningClawsMoments(normalMax, accuracy, cap, shift)
+				: clawsMoments(normalMax, accuracy, cap, shift);
 		}
 		if (spec.binomialAccuracy())
 		{
@@ -3421,9 +3534,14 @@ class CombatCalc
 			return darkBowSpecMoments((int) (base * scale), accuracy, dragon, cap);
 		}
 		final int[] maxima = spec.hitMaxima((int) (base * scale));
+		if (spec.flatAddition() > 0)
+		{
+			return hammerBlowMoments(maxima[0], accuracy, spec.flatAddition(), cap, push, shift);
+		}
 		if (spec.splitsMaxInTwo())
 		{
-			return specMoments(new int[]{maxima[0] / 2, maxima[0] - maxima[0] / 2}, accuracy, 0, 0, cap, false, push);
+			return specMoments(new int[]{maxima[0] / 2, maxima[0] - maxima[0] / 2}, accuracy, 0, 0, cap, false, push,
+				shift);
 		}
 		if (spec.splitsAcrossSuccesses())
 		{
@@ -3435,14 +3553,31 @@ class CombatCalc
 		}
 		if (spec == SpecialAttack.ANCIENT_GODSWORD || spec == SpecialAttack.SARADOMIN_SWORD)
 		{
-			return withExtraSplat(maxima[0], accuracy, cap, spec, push);
+			return withExtraSplat(maxima[0], accuracy, cap, spec, push, shift);
 		}
 		if (spec == SpecialAttack.DINHS_BULWARK && inMulticombat())
 		{
-			return specMoments(new int[]{maxima[0], maxima[0]}, accuracy, 0, 0, cap, false, push);
+			return specMoments(new int[]{maxima[0], maxima[0]}, accuracy, 0, 0, cap, false, push, shift);
 		}
 		return specMoments(maxima, accuracy, spec.minFraction(), spec.flatMinimum(), cap, spec.sharedAccuracyRoll(),
-			push);
+			push, shift);
+	}
+
+	/** T-203: {@link #flatArmourShift} for a special: none for the Voidwaker's, which the wiki and the DPS calc treat as magic. */
+	private int specialFlatArmourShift(int npcId, SpecialAttack spec)
+	{
+		return spec == SpecialAttack.VOIDWAKER ? 0 : flatArmourShift(npcId);
+	}
+
+	/**
+	 * T-203: Hammer Blow: a landed hit rolls 0 to the max (its 0 pushed to 1), then {@code addition} (5), then the target's
+	 * flat armour, then the cap; a miss deals the 5 alone, which flat armour doesn't touch. The DPS calc's order (c446f2e,
+	 * facts only) and the wiki's miss ("a minimum of 5 damage").
+	 */
+	static DamageMoments hammerBlowMoments(int max, double accuracy, int addition, int cap, boolean push, int shift)
+	{
+		final DamageMoments hit = DamageMoments.shot(0, max, cap, push, addition + shift);
+		return hit.weighted(accuracy).or(DamageMoments.fixed(Math.min(cap, addition)).weighted(1.0 - accuracy));
 	}
 
 	/** Saradomin's Lightning's extra Magic damage, "1-16" (wiki, Saradomin sword, read 2026-10-27; T-037). */
@@ -3471,10 +3606,17 @@ class CombatCalc
 	/** As above, the melee hit's successful 0 pushed up to 1 where {@code push} (T-156); the extra splat has none. */
 	static DamageMoments withExtraSplat(int meleeMax, double accuracy, int cap, SpecialAttack spec, boolean push)
 	{
+		return withExtraSplat(meleeMax, accuracy, cap, spec, push, 0);
+	}
+
+	/** As above, the target's flat armour on the melee hit (T-203); the extra splat isn't the weapon's hit. */
+	static DamageMoments withExtraSplat(int meleeMax, double accuracy, int cap, SpecialAttack spec, boolean push,
+		int shift)
+	{
 		final DamageMoments extra = spec == SpecialAttack.ANCIENT_GODSWORD
 			? DamageMoments.fixed(Math.min(cap, AttackSplats.BLOOD_SACRIFICE_DAMAGE))
 			: DamageMoments.capped(LIGHTNING_MIN, LIGHTNING_MAX, cap);
-		final DamageMoments melee = push ? DamageMoments.successful(0, meleeMax, cap) : DamageMoments.capped(0, meleeMax, cap);
+		final DamageMoments melee = DamageMoments.shot(0, meleeMax, cap, push, shift);
 		return melee.plus(extra).landing(accuracy);
 	}
 
@@ -3559,14 +3701,20 @@ class CombatCalc
 	static DamageMoments specMoments(int[] hitMaxima, double accuracy, double minFraction,
 		int flatMinimum, int cap, boolean sharedRoll, boolean push)
 	{
+		return specMoments(hitMaxima, accuracy, minFraction, flatMinimum, cap, sharedRoll, push, 0);
+	}
+
+	/** As above, the target's flat armour as {@code shift} on each hitsplat that lands (T-203). */
+	static DamageMoments specMoments(int[] hitMaxima, double accuracy, double minFraction,
+		int flatMinimum, int cap, boolean sharedRoll, boolean push, int shift)
+	{
 		double total = 0;
 		DamageMoments independent = DamageMoments.ZERO;
 		DamageMoments rolls = DamageMoments.ZERO;
 		for (int max : hitMaxima)
 		{
 			final int floor = Math.min(Math.max(flatMinimum, (int) (max * minFraction)), max);
-			final DamageMoments roll = push ? DamageMoments.successful(floor, max, cap)
-				: DamageMoments.capped(floor, max, cap);
+			final DamageMoments roll = DamageMoments.shot(floor, max, cap, push, shift);
 			total += accuracy * roll.mean;
 			independent = independent.plus(roll.landing(accuracy));
 			rolls = rolls.plus(roll);
@@ -3652,6 +3800,15 @@ class CombatCalc
 	 */
 	static DamageMoments clawsMoments(int normalMaxHit, double accuracy, int cap)
 	{
+		return clawsMoments(normalMaxHit, accuracy, cap, 0);
+	}
+
+	/**
+	 * As above, the target's flat armour as {@code shift} on each hitsplat of the outcome that connected (T-203): the DPS
+	 * calc marks those accurate and the cascade's missed rolls, and the four-miss outcome's 1s, not (c446f2e).
+	 */
+	static DamageMoments clawsMoments(int normalMaxHit, double accuracy, int cap, int shift)
+	{
 		final DamageMoments[] byOutcome = new DamageMoments[CLAW_SHAPE.length];
 		for (int failed = 0; failed < byOutcome.length; failed++)
 		{
@@ -3661,7 +3818,7 @@ class CombatCalc
 			final DamageMoments[] splats = new DamageMoments[shape.length];
 			for (int i = 0; i < shape.length; i++)
 			{
-				splats[i] = DamageMoments.capped(0, (int) (normalMaxHit * shape[i]), cap);
+				splats[i] = DamageMoments.shot(0, (int) (normalMaxHit * shape[i]), cap, false, shift);
 			}
 			byOutcome[failed] = DamageMoments.together(splats);
 		}
@@ -3755,6 +3912,12 @@ class CombatCalc
 	/** {@link #burningClawsAverage} as moments; an outcome's hitsplats split one roll, so they move together. */
 	static DamageMoments burningClawsMoments(int normalMaxHit, double accuracy, int cap)
 	{
+		return burningClawsMoments(normalMaxHit, accuracy, cap, 0);
+	}
+
+	/** As above, the flat armour on each of the connecting outcome's damaging hitsplats (T-203), as the claws'. */
+	static DamageMoments burningClawsMoments(int normalMaxHit, double accuracy, int cap, int shift)
+	{
 		final DamageMoments[] byOutcome = new DamageMoments[BURNING_CLAW_SHAPES.length];
 		for (int failed = 0; failed < byOutcome.length; failed++)
 		{
@@ -3764,10 +3927,10 @@ class CombatCalc
 			final DamageMoments[] splats = new DamageMoments[shape.length];
 			for (int i = 0; i < shape.length; i++)
 			{
-				splats[i] = DamageMoments.capped(
+				splats[i] = DamageMoments.shot(
 					(int) (normalMaxHit * floor * shape[i]),
 					(int) (normalMaxHit * ceiling * shape[i]),
-					cap);
+					cap, false, shape[i] > 0 ? shift : 0);
 			}
 			byOutcome[failed] = DamageMoments.together(splats);
 		}

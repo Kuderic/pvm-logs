@@ -96,8 +96,10 @@ enum SpecialAttack
 	// CombatCalc.withExtraSplat adds it to the expected damage (T-037).
 	SARADOMIN_SWORD(ItemID.SARADOMIN_SWORD, "Saradomin's Lightning", 1, 1, 1.10),
 	THE_DOGSWORD(ItemID.ECHO_GODSWORD, "Echo slash", 2, 1, 1.375),
-	// "Roll (up to max roll -5) + 5", so the max is unchanged and the floor is a flat five rather than a share - see
-	// flatMinimum.
+	// T-203: Hammer Blow, +50% accuracy and 5 more damage on every activation, a miss included (OSRS Wiki, Granite hammer,
+	// read 2026-11-10: "guaranteeing 5 additional damage to that attack", "Even if the special attack misses, the target will
+	// still take a minimum of 5 damage from it"; the DPS calc at c446f2e adds 5 to every hitsplat, missed ones too, after
+	// the roll to the max). See flatAddition. It was "roll (up to max roll -5) + 5", an older reading of the page.
 	GRANITE_HAMMER(ItemID.GRANITE_HAMMER, "Hammer Blow", 3, 2, 1.0),
 	// Quick Smash modifies neither roll; it is an instant attack. Here so that a spec still books as a spec rather than
 	// falling through to the ordinary hit.
@@ -326,11 +328,19 @@ enum SpecialAttack
 	/**
 	 * A floor on the damage roll in hitpoints rather than as a share of the max.
 	 *
-	 * <p>Only the granite hammer, whose Hammer Blow rolls "up to max roll -5,
-	 * plus 5" - a flat five whatever the max hit is, which {@link #minFraction}
-	 * cannot express.
+	 * <p>None at present: Hammer Blow's five, which was one, is added rather than a floor (T-203; {@link #flatAddition}).
+	 * Kept for a special whose page gives one.
 	 */
 	int flatMinimum()
+	{
+		return 0;
+	}
+
+	/**
+	 * T-203: damage added to the special's hitsplat whether it lands or not: Hammer Blow's 5. On a landed hit it comes
+	 * before the target's flat armour; a miss deals it alone (the DPS calc's order, c446f2e).
+	 */
+	int flatAddition()
 	{
 		return this == GRANITE_HAMMER ? 5 : 0;
 	}
