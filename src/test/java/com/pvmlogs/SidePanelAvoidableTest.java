@@ -54,9 +54,9 @@ public class SidePanelAvoidableTest
 		assertEquals(PanelSnapshot.Fill.EATING, s.get(3).fill);
 		assertEquals(16.2 - 10.8, s.get(3).seconds, 1e-9);
 		final List<String> rows = rowLabels(b);
-		assertTrue(rows.toString(), rows.contains("avoidable eating −18 ticks"));
-		assertTrue(rows.toString(), rows.contains("eating −9 ticks"));
-		assertTrue(rows.indexOf("avoidable eating −18 ticks") < rows.indexOf("eating −9 ticks"));
+		assertTrue(rows.toString(), rows.contains("avoidable eating -18 ticks"));
+		assertTrue(rows.toString(), rows.contains("eating -9 ticks"));
+		assertTrue(rows.indexOf("avoidable eating -18 ticks") < rows.indexOf("eating -9 ticks"));
 		// The row is in Cost when it's costing, as the other parts are.
 		for (PanelSnapshot.BudgetRow r : b.rows)
 		{
@@ -197,7 +197,7 @@ public class SidePanelAvoidableTest
 		final PanelSnapshot.FightTab t = tab(SidePanelExamples.unruledKill());
 		assertEquals(4, t.execution.parts.size());
 		final List<String> rows = rowLabels(t.budget);
-		assertTrue(rows.toString(), rows.contains("eating −27 ticks"));
+		assertTrue(rows.toString(), rows.contains("eating -27 ticks"));
 		for (String r : rows)
 		{
 			assertFalse(r, r.startsWith("avoidable"));

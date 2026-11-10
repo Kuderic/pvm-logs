@@ -3124,34 +3124,35 @@ final class SidePanelModel
 					Text.small(plain ? "\u2212" + LedgerRows.number(damage) + " dmg" : damageLost(damage), colour),
 					setupTip(labels[i], LedgerRows.ticks(costs[i]), damage)).withValueShort("-" + LedgerRows.number(damage)));
 			}
-			// T-118 (Eric, 2026-10-30): the time parts in ticks once it rounds to a tick; T-199: "−25 ticks", time lost, as
+			// T-118 (Eric, 2026-10-30): the time parts in ticks once it rounds to a tick; T-199: "-25 ticks" (the hyphen,
+			// as this view's "-16 dmg" and the overlay have it), time lost, as
 			// the one sign rule has it (+ gained, − lost).
 			else if (LedgerRows.ticks(costs[i]) >= 1)
 			{
 				rows.add(new BudgetRow(fill, Text.small(plain && i == 0 ? "idle" : labels[i], SidePanelStyle.BODY), null,
-					Text.small("\u2212" + (plain ? secs(costs[i]) : SidePanelStyle.ticks(costs[i])), colour)));
+					Text.small((plain ? "\u2212" + secs(costs[i]) : "-" + SidePanelStyle.ticks(costs[i])), colour)));
 			}
 			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
 			if (i == 0 && LedgerRows.ticks(ca) >= 1)
 			{
 				rows.add(new BudgetRow(caCosting ? Fill.COST : Fill.MINOR_COST, Text.small("avoidable eating",
-					SidePanelStyle.BODY), null, Text.small("\u2212" + (plain ? secs(ca) : SidePanelStyle.ticks(ca)), caCosting
+					SidePanelStyle.BODY), null, Text.small((plain ? "\u2212" + secs(ca) : "-" + SidePanelStyle.ticks(ca)), caCosting
 					? SidePanelStyle.COST : SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(e - ca) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
-					Text.small("\u2212" + (plain ? secs(e - ca) : SidePanelStyle.ticks(e - ca)), SidePanelStyle.BODY)));
+					Text.small((plain ? "\u2212" + secs(e - ca) : "-" + SidePanelStyle.ticks(e - ca)), SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(m - stall) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(MECHANICS, SidePanelStyle.BODY), null,
-					Text.small("\u2212" + (plain ? secs(m - stall) : SidePanelStyle.ticks(m - stall)), SidePanelStyle.BODY)));
+					Text.small((plain ? "\u2212" + secs(m - stall) : "-" + SidePanelStyle.ticks(m - stall)), SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(stall) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(plain ? "stall" : STALL, SidePanelStyle.BODY), null,
-					Text.small("\u2212" + (plain ? secs(stall) : SidePanelStyle.ticks(stall)), SidePanelStyle.BODY)));
+					Text.small((plain ? "\u2212" + secs(stall) : "-" + SidePanelStyle.ticks(stall)), SidePanelStyle.BODY)));
 			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
@@ -3167,7 +3168,7 @@ final class SidePanelModel
 		if (u > 0)
 		{
 			rows.add(new BudgetRow(Fill.UNSCORED, Text.small(plain ? "adds" : "adds, not scored", SidePanelStyle.BODY),
-				null, Text.small("\u2212" + (plain ? secs(u) : SidePanelStyle.ticks(u)), SidePanelStyle.BODY)));
+				null, Text.small((plain ? "\u2212" + secs(u) : "-" + SidePanelStyle.ticks(u)), SidePanelStyle.BODY)));
 		}
 
 		// Against your average: after a kill only, outside a raid, never under the warning (spec 3.1).

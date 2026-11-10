@@ -43,7 +43,7 @@ public class SidePanelTicksTest
 			final boolean luck = r.label.text.startsWith("luck");
 			final boolean setup = SETUP.contains(r.label.text);
 			assertTrue(r.label.text + " " + r.value.text, r.value.text.matches(luck
-				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "\u2212\\d+ ticks?"));
+				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "-\\d+ ticks?"));
 		}
 		// "your average 1:54 … 23 s slower", "luck removed 2:02 … 5 s slower than 1:57": clocks, and seconds.
 		for (PanelSnapshot.Row r : b.average)
