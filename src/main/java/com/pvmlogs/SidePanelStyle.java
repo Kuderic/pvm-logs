@@ -100,6 +100,22 @@ final class SidePanelStyle
 	static final Color LUCK_CHIP_FILL = new Color(0x363636);
 	static final Color LUCK_CHIP_BRIGHT_FILL = new Color(0x8456E8);
 	static final Color LUCK_CHIP_BRIGHT_INK = Color.WHITE;
+	/** T-196: the card's 1 to 100 track, its three stretches in luck's three strengths, lighter at each step. */
+	static final Color LUCK_TRACK_DIM = new Color(0x3D3550);
+	static final Color LUCK_TRACK_NORMAL = new Color(0x6C58A0);
+	static final Color LUCK_TRACK_BRIGHT = LUCK;
+	/**
+	 * T-196: the grade's zones on the card, C to S over your last 50 (10/60/25/5%), each with its letter in white: C
+	 * grey, B steel, A green, S gold, dark enough for the letter (white on each at 4.5 or more).
+	 */
+	static final Color ZONE_C = new Color(0x4A4A4A);
+	/** T-196: the speed track's stretch from your best to this kill. */
+	static final Color SPEED_FILL = new Color(0x6A6A6A);
+	/** T-196: the card's rule between its blocks, on the card's ground. */
+	static final Color DIVIDER_ON_CARD = new Color(0x3C3C3C);
+	static final Color ZONE_B = new Color(0x3E5C7A);
+	static final Color ZONE_A = new Color(0x3B6A38);
+	static final Color ZONE_S = new Color(0x806618);
 	/** T-188: an S grade, and the luck-removed PB's star: the only gold. */
 	static final Color GOLD = new Color(0xFFD75E);
 	/** T-188: an A grade. */

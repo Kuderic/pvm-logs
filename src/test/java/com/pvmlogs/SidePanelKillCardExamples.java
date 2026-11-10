@@ -43,6 +43,8 @@ final class SidePanelKillCardExamples
 		st.next = "B";
 		st.previousBestLuckRemoved = 107;
 		in.standing = st;
+		// T-196 (illustrative): the speed track's slow end, 9 in 10 of the example's kills faster than 2:10.
+		in.slowEnd = 130;
 		return in;
 	}
 
@@ -169,6 +171,8 @@ final class SidePanelKillCardExamples
 		in.killed = true;
 		in.average = new LedgerHistory.Average(new LedgerHistory.Spread(94.2, 88.8, 106.2), 20);
 		in.luckRemoved = new LedgerHistory.Spread(92.3, 89.9, 102.5);
+		// T-196: the speed track's slow end, the 90th percentile of the same kills (shaped on T-186's spread).
+		in.slowEnd = 120.6;
 		return in;
 	}
 

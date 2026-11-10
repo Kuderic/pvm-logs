@@ -62,9 +62,16 @@ final class SidePanelKillCard extends JComponent
 	java.util.function.BooleanSupplier showing = this::isShowing;
 	private BufferedImage weaponImage;
 	private int weaponAsked = Integer.MIN_VALUE;
-	/** Where the skill and luck tiles were drawn, for their tooltips. */
-	private final Rectangle skillTile = new Rectangle();
-	private final Rectangle luckTile = new Rectangle();
+	/** T-196: where the blocks and the speed track were drawn, for their tooltips. */
+	private final Rectangle speedBox = new Rectangle();
+	private final Rectangle playBox = new Rectangle();
+	private final Rectangle luckBox = new Rectangle();
+	private final Rectangle fixBox = new Rectangle();
+	private final Rectangle speedTrackBox = new Rectangle();
+	/** The height last measured, and for which card and text mode: measuring lays the card out without painting it. */
+	private KillCard measured;
+	private int measuredFor = Integer.MIN_VALUE;
+	private int measuredHeight;
 	private final List<Rectangle> badgeBoxes = new ArrayList<>(4);
 	private int paints;
 
@@ -83,9 +90,9 @@ final class SidePanelKillCard extends JComponent
 	 */
 	void set(KillCard c)
 	{
-		final int before = card == null ? -1 : height(card);
+		final int before = card == null ? -1 : height();
 		card = c;
-		if (before >= 0 && before != height(c))
+		if (before >= 0 && before != height())
 		{
 			revalidate();
 		}
@@ -158,43 +165,33 @@ final class SidePanelKillCard extends JComponent
 		return Math.max(ICON, title() + 2 + small());
 	}
 
-	/** The clock and the three lines beside it. */
-	static int clockHeight(boolean live)
-	{
-		final int side = live ? body() + 3 + small() : small() + 3 + body() + 3 + small();
-		return Math.max(big(), side);
-	}
-
-	static int tileHeight(boolean live)
-	{
-		return TILE_PAD_TOP + body() + 4 + big() + 4 + small() + (live ? 0 : 3 + small()) + TILE_PAD_BOTTOM;
-	}
-
+	/** T-196: the card's height: its layout run without painting, at the panel's content width. */
 	static int height(KillCard c)
 	{
-		int h = EDGE + PAD_TOP + headerHeight() + GAP + clockHeight(c.live) + GAP + tileHeight(c.live);
-		if (c.live)
+		final Graphics2D g = (Graphics2D) MEASURE.create();
+		try
 		{
-			h += GAP + SPRITE_H;
+			// Nothing drawn: an empty clip.
+			g.setClip(0, 0, 0, 0);
+			return new SidePanelKillCard.Layout(g, c, SidePanelStyle.CONTENT_WIDTH, false, -1, null).run();
 		}
-		else
+		finally
 		{
-			if (c.luckRemoved != null)
-			{
-				h += 7 + body();
-			}
-			if (c.tip != null)
-			{
-				final int lines = tipLines(c.tip, SidePanelStyle.CONTENT_WIDTH - 2 * PAD_X - TIP_ICON - 6);
-				h += 7 + 1 + 6 + Math.max(TIP_ICON, lines * small() + (lines - 1) * 2);
-			}
-			if (!c.badges.isEmpty())
-			{
-				final int rows = badgeRows(c.badges, SidePanelStyle.CONTENT_WIDTH - 2 * PAD_X);
-				h += 7 + rows * badgeHeight() + (rows - 1) * 4;
-			}
+			g.dispose();
 		}
-		return h + PAD_BOTTOM;
+	}
+
+	/** This card's height, measured once per card and text mode. */
+	private int height()
+	{
+		final int mode = SidePanelStyle.Type.SMALL.lineHeight() * 1000 + SidePanelStyle.Type.CLOCK.lineHeight();
+		if (measured != card || measuredFor != mode)
+		{
+			measured = card;
+			measuredFor = mode;
+			measuredHeight = height(card);
+		}
+		return measuredHeight;
 	}
 
 	static int badgeHeight()
@@ -226,28 +223,22 @@ final class SidePanelKillCard extends JComponent
 		return rows;
 	}
 
-	/** The tip's lines at this width, one or two, as {@link #wrap} breaks it. */
-	static int tipLines(String tip, int room)
-	{
-		return SidePanelStyle.metrics(MEASURE, SidePanelStyle.Type.SMALL.font()).stringWidth(tip) <= room ? 1 : 2;
-	}
-
 	@Override
 	public Dimension getPreferredSize()
 	{
-		return new Dimension(SidePanelStyle.CONTENT_WIDTH, height(card));
+		return new Dimension(SidePanelStyle.CONTENT_WIDTH, height());
 	}
 
 	@Override
 	public Dimension getMinimumSize()
 	{
-		return new Dimension(0, height(card));
+		return new Dimension(0, height());
 	}
 
 	@Override
 	public Dimension getMaximumSize()
 	{
-		return new Dimension(Integer.MAX_VALUE, height(card));
+		return new Dimension(Integer.MAX_VALUE, height());
 	}
 
 	// ---- tooltips ----
@@ -255,32 +246,36 @@ final class SidePanelKillCard extends JComponent
 	@Override
 	public String getToolTipText(MouseEvent e)
 	{
-		if (skillTile.contains(e.getPoint()))
-		{
-			if (card.live)
-			{
-				return "Ticks lost so far: off cooldown with no attack. Execution so far, without avoidable eating,"
-					+ " which counts once the fight ends.";
-			}
-			return card.gradeTip != null ? "<html>Your grade, from Execution only, against your own kills of this boss: "
-				+ card.gradeTip + ".</html>" : "Your grade, from Execution only, against your own kills of this boss.";
-		}
+		final KillCard c = card;
 		for (int i = 0; i < badgeBoxes.size(); i++)
 		{
-			if (badgeBoxes.get(i).contains(e.getPoint()) && i < card.badges.size())
+			if (badgeBoxes.get(i).contains(e.getPoint()) && i < c.badges.size())
 			{
-				return card.badges.get(i).tip;
+				return c.badges.get(i).tip;
 			}
 		}
-		if (luckTile.contains(e.getPoint()))
+		if (speedTrackBox.contains(e.getPoint()))
 		{
-			return card.live ? "Luck rolls with every hit; its number comes when the fight ends."
-				: card.luckWords != null ? "<html>" + card.luckWords + "<br>How your damage rolls went against the odds, 1 to"
-				+ " 100: luck, not skill. " + SidePanelModel.TICK_NOTE + "</html>"
-				: "How your damage rolls went against the odds, 1 to 100: luck, not skill. " + SidePanelModel.TICK_NOTE;
+			return SPEED_TRACK_TIP;
+		}
+		if (playBox.contains(e.getPoint()))
+		{
+			return c.live ? "Time off cooldown with no attack so far. Avoidable eating counts once the fight ends."
+				: "Your grade, from your play only (never luck), against your own last kills of this boss. "
+				+ SidePanelModel.TICK_NOTE;
+		}
+		if (luckBox.contains(e.getPoint()))
+		{
+			return c.live ? "Luck rolls with every hit; its number comes when the fight ends."
+				: c.luckWords != null ? "<html>" + c.luckWords + "<br>How your damage rolls went against the odds, 1 to"
+				+ " 100: luck, not skill.</html>" : "How your damage rolls went against the odds, 1 to 100: luck, not skill.";
 		}
 		return null;
 	}
+
+	/** T-196: what the speed track's ends are. */
+	static final String SPEED_TRACK_TIP = "<html>From your best to your slow end: 9 in 10 of your recent kills were faster"
+		+ " than the slow end,<br>so one bad kill doesn't squash the track. The short mark is your usual (the median).</html>";
 
 	// ---- painting ----
 
@@ -302,159 +297,8 @@ final class SidePanelKillCard extends JComponent
 
 	private void paintCard(Graphics2D g)
 	{
-		final KillCard c = card;
-		final int w = getWidth();
-		final int h = height(c);
-		g.setColor(SidePanelStyle.CARD);
-		g.fillRect(0, 0, w, h);
-		g.setColor(c.tint);
-		g.fillRect(0, 0, w, EDGE);
-		final int left = PAD_X;
-		final int right = w - PAD_X;
-		int y = EDGE + PAD_TOP;
-
-		// The boss: its icon, its name in its colour, the line under it; the kill count or "live" on the right.
-		final int nameX = left + ICON + 6;
-		if (c.icon != SidePanelBossIcons.NONE)
-		{
-			SidePanelBossIcons.draw(g, c.icon, left, y + (headerHeight() - ICON) / 2, ICON);
-		}
-		int cornerW = 0;
-		if (c.live)
-		{
-			final int tw = width(g, SidePanelStyle.Type.SMALL, c.corner);
-			drawRight(g, Text.small(c.corner, SidePanelStyle.SECONDARY), right, y, w);
-			g.setColor(SidePanelStyle.DEAD);
-			g.fillRect(right - tw - 9, y + small() / 2 - 2, 5, 5);
-			cornerW = tw + 10;
-		}
-		else if (!c.corner.isEmpty())
-		{
-			cornerW = width(g, SidePanelStyle.Type.SMALL, c.corner) + 6;
-			drawRight(g, Text.small(c.corner, SidePanelStyle.SECONDARY), right, y, w);
-		}
-		draw(g, Text.title(c.boss, c.tint), nameX, y, right - cornerW - nameX);
-		draw(g, Text.small(fitted(g, c.sub, c.subShort, right - nameX), SidePanelStyle.SECONDARY), nameX,
-			y + title() + 2, right - nameX);
-		y += headerHeight() + GAP;
-
-		// The clock, big; beside it damage against expected live, your PB, the time against it and the rank after.
-		final int clockH = clockHeight(c.live);
-		draw(g, new Text(c.clock, SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK), left - 1,
-			y + (clockH - big()) / 2 - 2, right - left);
-		int sy = y + (clockH - (c.live ? body() + 3 + small() : small() + 3 + body() + 3 + small())) / 2;
-		final List<Text> side = new ArrayList<>(3);
-		side.add(c.side1);
-		side.add(c.side2);
-		if (!c.live)
-		{
-			side.add(c.side3);
-		}
-		for (int i = 0; i < side.size(); i++)
-		{
-			final Text t = side.get(i);
-			final int lh = t.type == SidePanelStyle.Type.SMALL ? small() : body();
-			if (i == 0 && c.newPb)
-			{
-				// NEW PB: in the boss's colour, in a box edged with it.
-				final int tw = width(g, t.type, t.text);
-				g.setColor(flashing() ? c.tint : SidePanelStyle.PANEL);
-				g.fillRect(right - tw - 10, sy - 2, tw + 10, lh + 3);
-				g.setColor(c.tint);
-				g.drawRect(right - tw - 10, sy - 2, tw + 9, lh + 2);
-				drawRight(g, flashing() ? new Text(t.text, SidePanelStyle.CARD, t.type) : t, right - 5, sy, w);
-			}
-			else
-			{
-				drawRight(g, t, right, sy, w);
-			}
-			sy += lh + 3;
-		}
-		y += clockH + GAP;
-
-		// Skill and luck, side by side and apart.
-		final int tileW = (right - left - TILE_GAP) / 2;
-		final int tileH = tileHeight(c.live);
-		skillTile.setBounds(left, y, tileW, tileH);
-		luckTile.setBounds(left + tileW + TILE_GAP, y, right - left - tileW - TILE_GAP, tileH);
-		paintSkill(g, c, skillTile);
-		paintLuck(g, c, luckTile);
-		y += tileH;
-
-		if (c.live)
-		{
-			// The weapon in hand: its sprite, its name, its DPS against expected.
-			y += GAP;
-			paintWeapon(g, c, left, y, right);
-			return;
-		}
-		if (c.luckRemoved != null)
-		{
-			y += 7;
-			final int x = left + draw(g, Text.body("luck removed", SidePanelStyle.SECONDARY), left, y, right - left) + 6;
-			draw(g, Text.title(c.luckRemoved, SidePanelStyle.VALUE), x, y, right - x);
-			if (c.luckRemovedPb != null)
-			{
-				if (c.newLuckRemovedPb)
-				{
-					// The gold PB, the only one: the luck-removed time is the skill's PB.
-					final int ww = drawRight(g, Text.small(c.luckRemovedPb, SidePanelStyle.SECONDARY), right,
-						y + (body() - small()), w);
-					final int chipW = 7 + 3 + width(g, SidePanelStyle.Type.SMALL, "PB") + 8;
-					final int cx = right - ww - 4 - chipW;
-					g.setColor(flashing() ? SidePanelStyle.GOLD : SidePanelStyle.PANEL);
-					g.fillRect(cx, y + 1, chipW, body() - 1);
-					g.setColor(SidePanelStyle.GOLD);
-					g.drawRect(cx, y + 1, chipW - 1, body() - 2);
-					star(g, cx + 4, y + (body() - 7) / 2 + 1, flashing() ? SidePanelStyle.CARD : SidePanelStyle.GOLD);
-					draw(g, Text.small("PB", flashing() ? SidePanelStyle.CARD : SidePanelStyle.GOLD), cx + 4 + 7 + 3,
-						y + (body() - small()), chipW);
-				}
-				else
-				{
-					drawRight(g, Text.small(c.luckRemovedPb, SidePanelStyle.SECONDARY), right, y + (body() - small()), w);
-				}
-			}
-			y += body();
-		}
-		if (c.tip != null)
-		{
-			y += 7;
-			g.setColor(SidePanelStyle.TRACK);
-			g.fillRect(left, y, right - left, 1);
-			y += 1 + 6;
-			// An orange mark, then the tip on up to two lines.
-			g.setColor(SidePanelStyle.COST);
-			g.fillRect(left, y, TIP_ICON, TIP_ICON);
-			g.setColor(SidePanelStyle.CARD);
-			g.fillRect(left + 5, y + 2, 2, 5);
-			g.fillRect(left + 5, y + 8, 2, 2);
-			final int tx = left + TIP_ICON + 6;
-			final List<String> lines = wrap(g, c.tip, right - tx, 2);
-			for (int i = 0; i < lines.size(); i++)
-			{
-				draw(g, Text.small(lines.get(i), SidePanelStyle.BODY), tx, y + i * (small() + 2), right - tx);
-			}
-			y += Math.max(TIP_ICON, lines.size() * small() + (lines.size() - 1) * 2);
-		}
 		badgeBoxes.clear();
-		if (!c.badges.isEmpty())
-		{
-			y += 7;
-			int x = left;
-			for (PanelSnapshot.Badge b : c.badges)
-			{
-				final int bw = badgeWidth(b);
-				if (x > left && x + bw > right)
-				{
-					x = left;
-					y += badgeHeight() + 4;
-				}
-				paintBadge(g, b, x, y, bw);
-				badgeBoxes.add(new Rectangle(x, y, bw, badgeHeight()));
-				x += bw + 4;
-			}
-		}
+		new Layout(g, card, getWidth(), true, frame, this).run();
 	}
 
 	/** T-189: a badge: a gold mark and its name, on the panel's ground with a quiet edge. */
@@ -589,211 +433,649 @@ final class SidePanelKillCard extends JComponent
 		return frame >= SETTLE;
 	}
 
-	private void paintSkill(Graphics2D g, KillCard c, Rectangle r)
-	{
-		g.setColor(SidePanelStyle.PANEL);
-		g.fillRect(r.x, r.y, r.width, r.height);
-		final int x = r.x + TILE_PAD_X;
-		final int right = r.x + r.width - TILE_PAD_X;
-		final int room = right - x;
-		int y = r.y + TILE_PAD_TOP;
-		draw(g, Text.body("Skill", SidePanelStyle.SECONDARY), x, y, room);
-		if (!c.live)
-		{
-			drawRight(g, Text.small(c.grade != null ? "grade" : "execution", SidePanelStyle.MUTED), right,
-				y + (body() - small()) / 2, room);
-		}
-		y += body() + 4;
-		Text bigText;
-		if (c.grade != null && rolling())
-		{
-			// T-189: the grade waits for the die.
-			bigText = new Text("\u00b7", SidePanelStyle.MUTED, SidePanelStyle.Type.CLOCK);
-		}
-		else
-		{
-			bigText = c.big;
-		}
-		if (c.grade != null && flashing())
-		{
-			final int gw = width(g, SidePanelStyle.Type.CLOCK, c.big.text) + 4;
-			g.setColor(c.gradeColour);
-			g.fillRect(x - 2, y - 1, gw, big() + 2);
-			bigText = new Text(c.big.text, SidePanelStyle.CARD, SidePanelStyle.Type.CLOCK);
-		}
-		final int bigW = draw(g, bigText, x, y - 2, room);
-		paintCaption(g, c.bigCaption, x + bigW + 6, y, right - x - bigW - 6);
-		y += big() + 4;
-		draw(g, fit(g, c.skill1, room), x, y, room);
-		if (!c.live)
-		{
-			draw(g, fit(g, c.skill2, room), x, y + small() + 3, room);
-		}
-	}
-
-	private void paintLuck(Graphics2D g, KillCard c, Rectangle r)
-	{
-		g.setColor(SidePanelStyle.PANEL);
-		g.fillRect(r.x, r.y, r.width, r.height);
-		final int x = r.x + TILE_PAD_X;
-		final int right = r.x + r.width - TILE_PAD_X;
-		final int room = right - x;
-		int y = r.y + TILE_PAD_TOP;
-		draw(g, Text.body("Luck", SidePanelStyle.SECONDARY), x, y, room);
-		if (!c.live)
-		{
-			die(g, right - 10, y + (body() - 12) / 2, 10, 12, SidePanelStyle.LUCK);
-		}
-		y += body() + 4;
-		if (c.live)
-		{
-			// Rolling: no number until the fight ends.
-			die(g, x, y + (big() - 16) / 2, 14, 16, SidePanelStyle.SECONDARY);
-			draw(g, Text.title("rolling", SidePanelStyle.SECONDARY), x + 19, y + (big() - title()) / 2, room - 19);
-		}
-		else if (c.rolled > 0)
-		{
-			// T-189: at the kill the die rolls before it settles on its number.
-			final int roll = rolling() ? ROLLS[frame % ROLLS.length] : c.rolled;
-			// T-194 (Eric, 21:32: "what is this out of?"): one phrase, "rolled 81 of 100", the number in its strength of
-			// luck's violet; under it a 1 to 100 track with a marker at the roll; then its effect in words. The tile's
-			// edge stays violet.
-			final Color ink = SidePanelModel.ink(SidePanelModel.strength(c.rolled));
-			final Color shown = rolling() ? SidePanelStyle.alpha(ink, 0.6) : ink;
-			// The phrase and the track share the big figure's line; the words take the two lines under it.
-			paintRolled(g, roll, shown, x, y, room);
-			paintTrack(g, roll, shown, x, y + big() - 5, room);
-			y += big() + 4;
-			paintWords(g, c.luckLine, x, y, room);
-			return;
-		}
-		else
-		{
-			draw(g, Text.title("no roll", SidePanelStyle.MUTED), x, y + (big() - title()) / 2, room);
-		}
-		y += big() + 4;
-		draw(g, fit(g, c.luckLine, room), x, y, room);
-	}
+	// ---- T-196: the blocks, laid out once to measure and again to paint ----
 
 	/**
-	 * T-194: {@code rolled 81 of 100} on one line, the number at the title's size in its strength, the words around it at
-	 * the title's size where they fit, else small, else (Larger's narrow tile) {@code 81 of 100}, still out of 100.
+	 * T-196: the card top to bottom. Run without painting (an empty clip, no owner) it measures the height; run on the
+	 * card it paints and notes where the blocks are for their tooltips. One routine, so the two can't disagree.
 	 */
-	private static void paintRolled(Graphics2D g, int roll, Color ink, int x, int y, int room)
+	static final class Layout
 	{
-		final String n = String.valueOf(roll);
-		final SidePanelStyle.Type title = SidePanelStyle.Type.TITLE;
-		SidePanelStyle.Type words = title;
-		boolean says = true;
-		if (phrase(g, title, n) > room)
+		static final int RULE_ABOVE = 7;
+		static final int RULE_BELOW = 6;
+		static final int LINE = 3;
+		static final int TRACK_H = 4;
+		static final int LUCK_TRACK_H = 8;
+		static final int STRIP_H = 8;
+		static final int CHIP_PAD = 4;
+
+		private final Graphics2D g;
+		private final KillCard c;
+		private final int w;
+		private final boolean paint;
+		private final int frame;
+		private final SidePanelKillCard owner;
+		private final int left;
+		private final int right;
+		private int y;
+
+		Layout(Graphics2D g, KillCard c, int w, boolean paint, int frame, SidePanelKillCard owner)
 		{
-			words = SidePanelStyle.Type.SMALL;
-			if (phrase(g, words, n) > room)
+			this.g = g;
+			this.c = c;
+			this.w = w;
+			this.paint = paint;
+			this.frame = frame;
+			this.owner = owner;
+			left = PAD_X;
+			right = w - PAD_X;
+		}
+
+		private boolean rolling()
+		{
+			return frame >= 0 && frame < SETTLE;
+		}
+
+		private boolean flashing()
+		{
+			return frame >= SETTLE;
+		}
+
+		private int room()
+		{
+			return right - left;
+		}
+
+		int run()
+		{
+			y = EDGE + PAD_TOP;
+			if (paint)
 			{
-				words = title;
-				says = false;
+				g.setColor(SidePanelStyle.CARD);
+				g.fillRect(0, 0, w, 10_000);
+				g.setColor(c.tint);
+				g.fillRect(0, 0, w, EDGE);
+			}
+			header();
+			if (c.live)
+			{
+				rule();
+				liveClock();
+				rule();
+				box(owner == null ? null : owner.playBox, this::livePlay);
+				rule();
+				box(owner == null ? null : owner.luckBox, this::liveLuck);
+				if (c.weapon != null)
+				{
+					rule();
+					weapon();
+				}
+			}
+			else
+			{
+				rule();
+				box(owner == null ? null : owner.speedBox, this::speed);
+				rule();
+				box(owner == null ? null : owner.playBox, this::play);
+				rule();
+				box(owner == null ? null : owner.luckBox, this::luck);
+				if (c.fix != null)
+				{
+					rule();
+					box(owner == null ? null : owner.fixBox, this::fix);
+				}
+				badges();
+			}
+			return y + PAD_BOTTOM;
+		}
+
+		/** A block, its box noted for its tooltip. */
+		private void box(Rectangle r, Runnable block)
+		{
+			final int top = y;
+			block.run();
+			if (r != null)
+			{
+				r.setBounds(0, top, w, y - top);
 			}
 		}
-		final FontMetrics fm = g.getFontMetrics(title.font());
-		final int baseline = y + lineHeight(title) - fm.getDescent();
-		final int gap = PHRASE_GAP;
-		int at = x;
-		if (says)
-		{
-			at += drawAt(g, new Text("rolled", SidePanelStyle.SECONDARY, words), at, baseline) + gap;
-		}
-		at += drawAt(g, new Text(n, ink, title), at, baseline) + gap;
-		drawAt(g, new Text("of 100", SidePanelStyle.SECONDARY, words), at, baseline);
-	}
 
-	/** {@code rolled N of 100}'s width, its words at {@code words}' size and the number at the title's. */
-	private static int phrase(Graphics2D g, SidePanelStyle.Type words, String n)
-	{
-		return width(g, words, "rolled") + width(g, SidePanelStyle.Type.TITLE, n) + width(g, words, "of 100")
-			+ 2 * PHRASE_GAP;
-	}
+		private void rule()
+		{
+			y += RULE_ABOVE;
+			if (paint)
+			{
+				g.setColor(SidePanelStyle.DIVIDER_ON_CARD);
+				g.fillRect(left, y, room(), 1);
+			}
+			y += 1 + RULE_BELOW;
+		}
 
-	/** T-194: the phrase's word gap. */
-	private static final int PHRASE_GAP = 3;
+		/** A block's name, {@code Speed}, in the body's size and grey; a die beside Luck's. */
+		private void label(String name, boolean die)
+		{
+			text(Text.body(name, SidePanelStyle.SECONDARY), left, y, room());
+			if (die && paint)
+			{
+				die(g, right - 10, y + (body() - 12) / 2, 10, 12, SidePanelStyle.LUCK);
+			}
+			y += body() + LINE;
+		}
 
-	/** T-194: the roll's effect, {@code lucky · 10 s faster}, on one line, or its two parts on two. */
-	private static void paintWords(Graphics2D g, Text t, int x, int y, int room)
-	{
-		final int dot = t.text.indexOf(" · ");
-		if (dot < 0 || width(g, t.type, t.text) <= room)
+		private int text(Text t, int x, int top, int room)
 		{
-			draw(g, t, x, y, room);
-			return;
+			return paint ? draw(g, t, x, top, room) : Math.min(room, width(g, t.type, t.text));
 		}
-		draw(g, new Text(t.text.substring(0, dot), t.colour, t.type), x, y, room);
-		draw(g, new Text(t.text.substring(dot + 3), t.colour, t.type), x, y + small() + 3, room);
-	}
 
-	/** T-194: a thin 1 to 100 track centred on {@code mid}, with a marker at the roll in its strength. */
-	static void paintTrack(Graphics2D g, int roll, Color ink, int x, int mid, int room)
-	{
-		final int h = 3;
-		g.setColor(SidePanelStyle.TRACK);
-		g.fillRect(x, mid - h / 2, room, h);
-		final int w = 3;
-		final int at = x + (int) Math.round((Math.max(1, Math.min(100, roll)) - 1) / 99.0 * (room - w));
-		g.setColor(ink);
-		g.fillRect(at, mid - 3, w, 7);
-	}
+		private int textRight(Text t, int r, int top, int room)
+		{
+			final int tw = Math.min(room, width(g, t.type, t.text));
+			text(t, r - tw, top, tw);
+			return tw;
+		}
 
-	/** Draws a text on {@code baseline}; returns its width. */
-	private static int drawAt(Graphics2D g, Text t, int x, int baseline)
-	{
-		g.setFont(t.type.font());
-		g.setColor(t.colour);
-		g.drawString(t.text, x, baseline);
-		return g.getFontMetrics(t.type.font()).stringWidth(t.text);
-	}
+		/** Words wrapped to {@code room}, at most {@code max} lines, small; returns the lines drawn. */
+		private int words(String s, Color colour, int x, int room, int max)
+		{
+			final List<String> lines = wrap(g, s, room, max);
+			for (int i = 0; i < lines.size(); i++)
+			{
+				text(Text.small(lines.get(i), colour), x, y, room);
+				y += small() + (i < lines.size() - 1 ? 2 : 0);
+			}
+			return lines.size();
+		}
 
-	/** One or two short lines beside a big figure, its baseline at the figure's foot. */
-	private void paintCaption(Graphics2D g, List<Text> lines, int x, int y, int room)
-	{
-		if (lines.isEmpty() || room <= 0)
-		{
-			return;
-		}
-		int total = 0;
-		for (Text t : lines)
-		{
-			total += lineHeight(t.type);
-		}
-		total += lines.size() - 1;
-		int ly = y + big() - total;
-		for (Text t : lines)
-		{
-			draw(g, t, x, ly, room);
-			ly += lineHeight(t.type) + 1;
-		}
-	}
+		// ---- the header ----
 
-	private void paintWeapon(Graphics2D g, KillCard c, int left, int y, int right)
-	{
-		if (c.weapon == null)
+		private void header()
 		{
-			return;
+			final int nameX = left + ICON + 6;
+			if (paint && c.icon != SidePanelBossIcons.NONE)
+			{
+				SidePanelBossIcons.draw(g, c.icon, left, y + (headerHeight() - ICON) / 2, ICON);
+			}
+			int cornerW = 0;
+			if (c.live)
+			{
+				final int tw = width(g, SidePanelStyle.Type.SMALL, c.corner);
+				textRight(Text.small(c.corner, SidePanelStyle.SECONDARY), right, y, w);
+				if (paint)
+				{
+					g.setColor(SidePanelStyle.DEAD);
+					g.fillRect(right - tw - 9, y + small() / 2 - 2, 5, 5);
+				}
+				cornerW = tw + 10;
+			}
+			else if (!c.corner.isEmpty())
+			{
+				cornerW = width(g, SidePanelStyle.Type.SMALL, c.corner) + 6;
+				textRight(Text.small(c.corner, SidePanelStyle.SECONDARY), right, y, w);
+			}
+			text(Text.title(c.boss, c.tint), nameX, y, right - cornerW - nameX);
+			text(Text.small(fitted(g, c.sub, c.subShort, right - nameX), SidePanelStyle.SECONDARY), nameX, y + title() + 2,
+				right - nameX);
+			y += headerHeight();
 		}
-		if (weaponImage != null)
+
+		// ---- after the kill ----
+
+		/** Speed: how fast was I? The clock, against your best, the track from best to slow end, the rank. */
+		private void speed()
 		{
-			final int iw = Math.min(SPRITE_W, weaponImage.getWidth());
-			final int ih = Math.min(SPRITE_H, weaponImage.getHeight());
-			g.drawImage(weaponImage, left + (SPRITE_W - iw) / 2, y + (SPRITE_H - ih) / 2, iw, ih, null);
+			label("Speed", false);
+			final int clockW = text(new Text(c.clock, SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK), left - 1, y - 2,
+				room());
+			final int sideH = body() + 2 + small();
+			final int rowH = Math.max(big(), sideH);
+			final int sy = y + (rowH - sideH) / 2;
+			final int sideRoom = right - left - clockW - 8;
+			if (!c.versus.text.isEmpty())
+			{
+				if (c.newPb)
+				{
+					// NEW PB: in the boss's colour, in a box edged with it.
+					final int tw = Math.min(sideRoom - 10, width(g, c.versus.type, c.versus.text));
+					if (paint)
+					{
+						g.setColor(flashing() ? c.tint : SidePanelStyle.PANEL);
+						g.fillRect(right - tw - 10, sy - 2, tw + 10, body() + 3);
+						g.setColor(c.tint);
+						g.drawRect(right - tw - 10, sy - 2, tw + 9, body() + 2);
+					}
+					textRight(flashing() ? new Text(c.versus.text, SidePanelStyle.CARD, c.versus.type) : c.versus,
+						right - 5, sy, sideRoom);
+				}
+				else
+				{
+					textRight(c.versus, right, sy, sideRoom);
+				}
+				if (c.versusWhat != null)
+				{
+					textRight(Text.small(c.versusWhat, SidePanelStyle.SECONDARY), right, sy + body() + 2, sideRoom);
+				}
+			}
+			y += rowH + 5;
+			if (c.speedTrack())
+			{
+				speedTrack();
+			}
+			if (c.rank != null)
+			{
+				text(Text.small(c.rank, SidePanelStyle.BODY), left, y, room());
+				y += small();
+			}
 		}
-		else
+
+		/** From your best to your slow end, your usual ticked, this kill marked; the ends and the tick named under it. */
+		private void speedTrack()
 		{
-			g.setColor(SidePanelStyle.PANEL);
-			g.fillRect(left, y, SPRITE_W, SPRITE_H);
+			final double from = c.trackBest;
+			final double to = c.trackSlow;
+			final int top = y + 2;
+			final int span = room() - 2;
+			if (paint)
+			{
+				g.setColor(SidePanelStyle.TRACK);
+				g.fillRect(left, top, room(), TRACK_H);
+				final int at = left + pos(c.trackClock, from, to, span);
+				g.setColor(SidePanelStyle.SPEED_FILL);
+				g.fillRect(left, top, Math.max(1, at - left), TRACK_H);
+				if (!Double.isNaN(c.trackUsual))
+				{
+					g.setColor(SidePanelStyle.SECONDARY);
+					g.fillRect(left + pos(c.trackUsual, from, to, span), top - 2, 1, TRACK_H + 4);
+				}
+				g.setColor(SidePanelStyle.VALUE);
+				g.fillRect(at, top - 3, 2, TRACK_H + 6);
+			}
+			if (owner != null)
+			{
+				owner.speedTrackBox.setBounds(left, y, room(), TRACK_H + 4 + small() + 2);
+			}
+			y += TRACK_H + 6;
+			final String best = "best " + SidePanelModel.clockOf(from);
+			final String slow = "slow " + SidePanelModel.clockOf(to);
+			final int bw = text(Text.small(best, SidePanelStyle.SECONDARY), left, y, room());
+			final int sw = textRight(Text.small(slow, SidePanelStyle.SECONDARY), right, y, room());
+			if (!Double.isNaN(c.trackUsual))
+			{
+				// The usual's name under its tick, where it clears both ends.
+				final String usual = "usual " + SidePanelModel.clockOf(c.trackUsual);
+				final int uw = width(g, SidePanelStyle.Type.SMALL, usual);
+				final int ux = Math.max(left + bw + 6, Math.min(right - sw - 6 - uw,
+					left + pos(c.trackUsual, from, to, span) - uw / 2));
+				if (ux >= left + bw + 6 && ux + uw <= right - sw - 6)
+				{
+					text(Text.small(usual, SidePanelStyle.SECONDARY), ux, y, uw);
+				}
+			}
+			y += small() + 4;
 		}
-		final int x = left + SPRITE_W + 7;
-		final int top = y + (SPRITE_H - body() - 3 - small()) / 2;
-		draw(g, Text.body(c.weapon, SidePanelStyle.VALUE), x, top, right - x);
-		if (c.weaponDps != null)
+
+		private int pos(double v, double from, double to, int span)
 		{
-			draw(g, Text.small(c.weaponDps, SidePanelStyle.SECONDARY), x, top + body() + 3, right - x);
+			final double f = Math.max(0, Math.min(1, (v - from) / (to - from)));
+			return (int) Math.round(f * span);
+		}
+
+		/** Your play: how well did I play? The grade, the share of a perfect fight, the loss, the zones. */
+		private void play()
+		{
+			label("Your play", false);
+			int textX = left;
+			final int top = y;
+			if (c.grade != null)
+			{
+				// The grade as the hero chip, edged in its colour; it waits for the die at the kill.
+				final int gw = width(g, SidePanelStyle.Type.CLOCK, "S") + 8;
+				final int gh = big() + 4;
+				if (paint)
+				{
+					final boolean flash = flashing();
+					g.setColor(flash ? c.gradeColour : SidePanelStyle.PANEL);
+					g.fillRect(left, top, gw, gh);
+					g.setColor(c.gradeColour);
+					g.drawRect(left, top, gw - 1, gh - 1);
+					final String shown = rolling() ? "·" : c.grade;
+					final int tw = width(g, SidePanelStyle.Type.CLOCK, shown);
+					draw(g, new Text(shown, flash ? SidePanelStyle.CARD : rolling() ? SidePanelStyle.MUTED : c.gradeColour,
+						SidePanelStyle.Type.CLOCK), left + (gw - tw) / 2, top, gw);
+				}
+				textX = left + gw + 6;
+			}
+			final int textRoom = right - textX;
+			int ty = top;
+			if (c.play != null)
+			{
+				text(Text.body(c.play, SidePanelStyle.VALUE), textX, ty, textRoom);
+				ty += body() + 1;
+				final int saved = y;
+				y = ty;
+				words(SidePanelModel.PERFECT, SidePanelStyle.SECONDARY, textX, textRoom, 3);
+				ty = y;
+				y = saved;
+			}
+			y = Math.max(ty, c.grade != null ? top + big() + 4 : ty) + 4;
+			if (c.lost != null)
+			{
+				if (paint)
+				{
+					g.setColor(SidePanelStyle.COST);
+					g.fillRect(left, y + (small() - 7) / 2, 7, 7);
+				}
+				final int lx = left + 7 + 4;
+				final int lw = text(Text.small(c.lost, SidePanelStyle.COST), lx, y, right - lx);
+				if (c.lostWhy != null)
+				{
+					final int wx = lx + lw + 4;
+					if (width(g, SidePanelStyle.Type.SMALL, c.lostWhy) <= right - wx)
+					{
+						text(Text.small(c.lostWhy, SidePanelStyle.SECONDARY), wx, y, right - wx);
+					}
+					else
+					{
+						y += small() + 2;
+						words(c.lostWhy, SidePanelStyle.SECONDARY, lx, right - lx, 2);
+						y -= small();
+					}
+				}
+				y += small() + 5;
+			}
+			else if (c.play != null)
+			{
+				text(Text.small("no time lost", SidePanelStyle.MUTED), left, y, room());
+				y += small() + 5;
+			}
+			if (!Double.isNaN(c.share))
+			{
+				zones();
+			}
+			if (c.better != null)
+			{
+				words(c.better, SidePanelStyle.BODY, left, room(), 2);
+				y += 2;
+			}
+			if (c.next != null)
+			{
+				words(c.next, SidePanelStyle.SECONDARY, left, room(), 2);
+			}
+		}
+
+		/** Your last 50 kills in C, B, A and S (10/60/25/5%), your marker where this one sits. */
+		private void zones()
+		{
+			final int h = small() + 2;
+			final double[] widths = {0.10, 0.60, 0.25, 0.05};
+			final String[] letters = {"C", "B", "A", "S"};
+			final Color[] fills = {SidePanelStyle.ZONE_C, SidePanelStyle.ZONE_B, SidePanelStyle.ZONE_A, SidePanelStyle.ZONE_S};
+			if (paint)
+			{
+				int x = left;
+				double acc = 0;
+				for (int i = 0; i < 4; i++)
+				{
+					acc += widths[i];
+					final int end = i == 3 ? right : left + (int) Math.round(acc * room());
+					g.setColor(fills[i]);
+					g.fillRect(x, y, end - x, h);
+					final int tw = width(g, SidePanelStyle.Type.SMALL, letters[i]);
+					if (end - x >= tw + 2)
+					{
+						draw(g, Text.small(letters[i], SidePanelStyle.VALUE), x + (end - x - tw) / 2, y + 1, end - x);
+					}
+					x = end;
+				}
+				final int at = left + (int) Math.round(Math.max(0, Math.min(1, c.share)) * (room() - 2));
+				g.setColor(SidePanelStyle.CARD);
+				g.fillRect(at - 1, y - 3, 4, h + 6);
+				g.setColor(SidePanelStyle.VALUE);
+				g.fillRect(at, y - 3, 2, h + 6);
+			}
+			y += h + 4;
+			text(Text.small("your worst", SidePanelStyle.SECONDARY), left, y, room());
+			textRight(Text.small("your best", SidePanelStyle.SECONDARY), right, y, room());
+			y += small() + 4;
+		}
+
+		/** Luck: how lucky was I? The roll with its strength, its 1 to 100 track, what it did in words. */
+		private void luck()
+		{
+			label("Luck", true);
+			if (c.rolled > 0)
+			{
+				final int roll = rolling() ? ROLLS[Math.max(0, frame) % ROLLS.length] : c.rolled;
+				final SidePanelModel.LuckStrength strength = SidePanelModel.strength(c.rolled);
+				final Color ink = SidePanelModel.ink(strength);
+				final Color shown = rolling() ? SidePanelStyle.alpha(ink, 0.6) : ink;
+				final int pw = text(Text.title("rolled " + roll + " of 100", shown), left, y, room());
+				// The strength as a chip, in T-194's: dim, normal or bright.
+				final String word = SidePanelModel.strengthWord(strength);
+				final int cw = width(g, SidePanelStyle.Type.SMALL, word) + 2 * CHIP_PAD;
+				final int cx = left + pw + 6;
+				if (cx + cw <= right && !rolling())
+				{
+					final double p = c.rolled / 100.0;
+					if (paint)
+					{
+						g.setColor(SidePanelModel.luckChipFill(p));
+						g.fillRect(cx, y + (title() - small() - 2) / 2, cw, small() + 2);
+					}
+					text(Text.small(word, SidePanelModel.luckChipInk(p)), cx + CHIP_PAD, y + (title() - small()) / 2, cw);
+				}
+				y += title() + 5;
+				luckTrack(roll, shown);
+			}
+			else if (c.luckNote != null)
+			{
+				text(Text.small(c.luckNote, SidePanelStyle.MUTED), left, y, room());
+				y += small() + 4;
+			}
+			if (c.luckSentence != null)
+			{
+				words(c.luckSentence, SidePanelStyle.BODY, left, room(), 3);
+				y += 2;
+			}
+			if (c.averageLuck != null)
+			{
+				words(c.averageLuck, SidePanelStyle.SECONDARY, left, room(), 2);
+			}
+			if (c.newBestAverageLuck)
+			{
+				// The gold star, only on a kill that beats your best with average luck.
+				y += 3;
+				if (paint)
+				{
+					star(g, left, y + (small() - 7) / 2, SidePanelStyle.GOLD);
+				}
+				final String s = "new best with average luck" + (c.averageLuckWas == null ? "" : " · " + c.averageLuckWas);
+				text(Text.small(s, SidePanelStyle.GOLD), left + 7 + 4, y, right - left - 11);
+				y += small();
+			}
+		}
+
+		/** The 1 to 100 track in its three strengths, the roll marked; its ends and middle named under it. */
+		private void luckTrack(int roll, Color ink)
+		{
+			if (paint)
+			{
+				final int a = left + (int) Math.round(0.25 * room());
+				final int b = left + (int) Math.round(0.75 * room());
+				g.setColor(SidePanelStyle.LUCK_TRACK_DIM);
+				g.fillRect(left, y, a - left, LUCK_TRACK_H);
+				g.setColor(SidePanelStyle.LUCK_TRACK_NORMAL);
+				g.fillRect(a, y, b - a, LUCK_TRACK_H);
+				g.setColor(SidePanelStyle.LUCK_TRACK_BRIGHT);
+				g.fillRect(b, y, right - b, LUCK_TRACK_H);
+				final int at = left + (int) Math.round((Math.max(1, Math.min(100, roll)) - 1) / 99.0 * (room() - 2));
+				g.setColor(SidePanelStyle.CARD);
+				g.fillRect(at - 1, y - 3, 4, LUCK_TRACK_H + 6);
+				g.setColor(SidePanelStyle.VALUE);
+				g.fillRect(at, y - 3, 2, LUCK_TRACK_H + 6);
+			}
+			y += LUCK_TRACK_H + 5;
+			final int lw = text(Text.small("1 unlucky", SidePanelStyle.SECONDARY), left, y, room());
+			final int rw = textRight(Text.small("lucky 100", SidePanelStyle.SECONDARY), right, y, room());
+			final int mw = width(g, SidePanelStyle.Type.SMALL, "average");
+			final int mx = left + (room() - mw) / 2;
+			if (mx >= left + lw + 4 && mx + mw <= right - rw - 4)
+			{
+				text(Text.small("average", SidePanelStyle.SECONDARY), mx, y, mw);
+			}
+			y += small() + 5;
+		}
+
+		/** Fix next: what should I fix? One sentence from the biggest loss. */
+		private void fix()
+		{
+			label("Fix next", false);
+			if (paint)
+			{
+				g.setColor(SidePanelStyle.COST);
+				g.fillRect(left, y, TIP_ICON, TIP_ICON);
+				g.setColor(SidePanelStyle.CARD);
+				g.fillRect(left + 5, y + 2, 2, 5);
+				g.fillRect(left + 5, y + 8, 2, 2);
+			}
+			final int tx = left + TIP_ICON + 6;
+			final int top = y;
+			words(c.fix, SidePanelStyle.BODY, tx, right - tx, 3);
+			y = Math.max(y, top + TIP_ICON);
+		}
+
+		private void badges()
+		{
+			if (c.badges.isEmpty())
+			{
+				return;
+			}
+			y += 9;
+			int x = left;
+			for (PanelSnapshot.Badge b : c.badges)
+			{
+				final int bw = badgeWidth(b);
+				if (x > left && x + bw > right)
+				{
+					x = left;
+					y += badgeHeight() + 4;
+				}
+				if (paint)
+				{
+					paintBadge(g, b, x, y, bw);
+				}
+				if (owner != null)
+				{
+					owner.badgeBoxes.add(new Rectangle(x, y, bw, badgeHeight()));
+				}
+				x += bw + 4;
+			}
+			y += badgeHeight();
+		}
+
+		// ---- live ----
+
+		private void liveClock()
+		{
+			text(new Text(c.clock, SidePanelStyle.VALUE, SidePanelStyle.Type.CLOCK), left - 1, y - 2, room());
+			textRight(Text.small("fight time", SidePanelStyle.SECONDARY), right, y + (big() - small()) / 2, room());
+			y += big();
+		}
+
+		/** Your play so far: idle time against the clock, the share attacking, the fight so far with its idle moments. */
+		private void livePlay()
+		{
+			label("Your play so far", false);
+			final int baseline = y + body() - g.getFontMetrics(SidePanelStyle.Type.TITLE.font()).getDescent();
+			int x = left;
+			x += drawOn(Text.small("idle", SidePanelStyle.SECONDARY), x, baseline) + 4;
+			final boolean anyIdle = c.idle != null && !c.idle.equals("0 s");
+			x += drawOn(Text.title(c.idle == null ? "0 s" : c.idle, anyIdle ? SidePanelStyle.COST : SidePanelStyle.VALUE),
+				x, baseline) + 4;
+			drawOn(Text.small(c.idleOf == null ? "" : c.idleOf, SidePanelStyle.SECONDARY), x, baseline);
+			if (c.play != null)
+			{
+				textRight(Text.small(c.play, SidePanelStyle.BODY), right, y + body() - small(), room());
+			}
+			y += body() + 4;
+			if (c.strip != null && c.strip.length > 0)
+			{
+				if (paint)
+				{
+					g.setColor(SidePanelStyle.KEPT);
+					g.fillRect(left, y, room(), STRIP_H);
+					final int n = c.strip.length;
+					for (int i = 0; i < n; i++)
+					{
+						if (c.strip[i] == 0)
+						{
+							continue;
+						}
+						final int x0 = left + (int) ((long) i * room() / n);
+						final int x1 = Math.max(x0 + 2, left + (int) ((long) (i + 1) * room() / n));
+						g.setColor(c.strip[i] == KillCard.STRIP_IDLE ? SidePanelStyle.COST : SidePanelStyle.EATING);
+						g.fillRect(x0, y, Math.min(x1, right) - x0, STRIP_H);
+					}
+				}
+				y += STRIP_H + 3;
+				text(Text.small("0:00", SidePanelStyle.SECONDARY), left, y, room());
+				textRight(Text.small("now", SidePanelStyle.SECONDARY), right, y, room());
+				y += small();
+			}
+		}
+
+		/** Text on a baseline, for a line of mixed sizes; returns its width. */
+		private int drawOn(Text t, int x, int baseline)
+		{
+			if (paint)
+			{
+				g.setFont(t.type.font());
+				g.setColor(t.colour);
+				g.drawString(t.text, x, baseline);
+			}
+			return width(g, t.type, t.text);
+		}
+
+		/** Luck so far: its strength in words, no number; the damage against average rolls. */
+		private void liveLuck()
+		{
+			label("Luck so far", true);
+			final int lw = text(c.luckSoFar, left, y, room());
+			textRight(Text.small("roll at the kill", SidePanelStyle.SECONDARY), right,
+				y + lineHeight(c.luckSoFar.type) - small(), right - left - lw - 6);
+			y += lineHeight(c.luckSoFar.type) + 3;
+			if (c.dealt != null)
+			{
+				words(c.dealt, SidePanelStyle.BODY, left, room(), 2);
+			}
+		}
+
+		/** The weapon in hand: its sprite, its name, its damage a second. */
+		private void weapon()
+		{
+			label("Weapon", false);
+			if (paint)
+			{
+				final BufferedImage img = owner == null ? null : owner.weaponImage;
+				if (img != null)
+				{
+					final int iw = Math.min(SPRITE_W, img.getWidth());
+					final int ih = Math.min(SPRITE_H, img.getHeight());
+					g.drawImage(img, left + (SPRITE_W - iw) / 2, y + (SPRITE_H - ih) / 2, iw, ih, null);
+				}
+				else
+				{
+					g.setColor(SidePanelStyle.PANEL);
+					g.fillRect(left, y, SPRITE_W, SPRITE_H);
+				}
+			}
+			final int x = left + SPRITE_W + 7;
+			final int top = y + (SPRITE_H - body() - 3 - small()) / 2;
+			text(Text.body(c.weapon, SidePanelStyle.VALUE), x, top, right - x);
+			if (c.weaponRate != null)
+			{
+				text(Text.small(c.weaponRate, SidePanelStyle.SECONDARY), x, top + body() + 3, right - x);
+			}
+			y += SPRITE_H;
 		}
 	}
 
