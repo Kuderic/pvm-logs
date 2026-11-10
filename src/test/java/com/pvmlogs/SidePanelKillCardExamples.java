@@ -19,6 +19,21 @@ final class SidePanelKillCardExamples
 		return in;
 	}
 
+	/**
+	 * T-193: the standing's badges as the record would have them: T-192's shared rules ({@link Badges#earned}) on the
+	 * kill's figures, the game's count and the streak. Call again after changing any of them.
+	 */
+	static SidePanelModel.Input recorded(SidePanelModel.Input in)
+	{
+		final SidePanelModel.Standing st = in.standing;
+		if (st != null)
+		{
+			st.kc = in.kc;
+			st.badges = Badges.earned(new LedgerRows.Numbers(in.scope), in.scope.damageTakenAvoidable(), in.kc, st.streak);
+		}
+		return in;
+	}
+
 	/** The Vardorvis example at 1:13. */
 	static SidePanelModel.Input vardorvisLive()
 	{
@@ -43,6 +58,7 @@ final class SidePanelKillCardExamples
 		st.next = "B";
 		st.previousBestLuckRemoved = 107;
 		in.standing = st;
+		recorded(in);
 		return in;
 	}
 
@@ -61,7 +77,7 @@ final class SidePanelKillCardExamples
 		final SidePanelModel.Input in = on(araxxorKillInput());
 		in.kc = 555;
 		in.standing = araxxorStanding();
-		return in;
+		return recorded(in);
 	}
 
 	static SidePanelModel.Standing araxxorStanding()
@@ -95,7 +111,7 @@ final class SidePanelKillCardExamples
 		st.basis = "top 12% of last 16";
 		st.previousBestLuckRemoved = 97.4;
 		st.newBestLuckRemoved = true;
-		return in;
+		return recorded(in);
 	}
 
 	/**
@@ -116,7 +132,7 @@ final class SidePanelKillCardExamples
 		s.boostCostShare = 0.0003;
 		s.switchCostShare = 0;
 		in.standing.streak = 3;
-		return in;
+		return recorded(in);
 	}
 
 	/** The Araxxor kill before the record has it: your usual beside the clock, no grade or rank yet. */

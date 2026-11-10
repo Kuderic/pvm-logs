@@ -575,6 +575,9 @@ class PvmPerformancePanel extends PluginPanel
 		s.next = r.next == null ? null : r.next.name();
 		s.streak = r.streak;
 		s.flawlessStreak = r.flawlessStreak;
+		// T-193: what this kill earned, by T-192's shared rules, and the game's count it read them at.
+		s.badges = r.badges;
+		s.kc = r.kc;
 		return s;
 	}
 

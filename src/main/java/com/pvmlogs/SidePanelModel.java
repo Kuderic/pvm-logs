@@ -1508,6 +1508,10 @@ final class SidePanelModel
 		int streak;
 		/** No avoidable damage in a row, this one included; -1 at a boss without attack rules (T-189). */
 		int flawlessStreak = -1;
+		/** T-193: the badges this kill earned, by the record's shared rules (T-192); empty for none. */
+		java.util.Set<Badges.Badge> badges = java.util.Collections.emptySet();
+		/** T-193: the game's kill count the record read the badges at; 0 unknown. */
+		int kc;
 	}
 
 	/** T-188: the grade's colour: an S gold, an A green, a B white, a C muted grey. Never red. */
@@ -1719,42 +1723,41 @@ final class SidePanelModel
 			weaponDps);
 		// T-194: the roll's words on its tile.
 		card.luckWords = rolled > 0 ? luckWords(n) : null;
-		return live || warning ? card : card.withBadges(badges(in, n, avoidable));
+		return live || warning ? card : card.withBadges(badges(in));
 	}
 
-	/** T-189: the streak that earns its badge: three kills of A or better in a row. */
-	static final int STREAK_BADGE = 3;
-
 	/**
-	 * T-189 (T-186's findings): the badges a kill earned, only when earned, each from skill or a count, never luck.
-	 * <ul>
-	 * <li>every 100th kill, by the game's count ({@code FightContext.kc});</li>
-	 * <li>Flawless: no avoidable damage taken, only where the boss has attack rules to tell it (Vardorvis today);</li>
-	 * <li>Clean run: no idle tick, and the setup at 99.95% or better (4 of Eric's 274 kills);</li>
-	 * <li>A or better three or more kills in a row (T-187's streak).</li>
-	 * </ul>
-	 * Perfect switches (90 to 100% of kills) and Full drain (never, and luck) are left out.
+	 * T-189, T-193: the badges a kill earned, from the record (T-192's shared rules, {@link Badges}): what {@link
+	 * Standing#badges} says this kill earned, in the card's order, named for this kill ("600th kill"). The A-or-better
+	 * run is named on every kill of it from the third ("5 A's in a row"), from {@link Standing#streak}, as agreed in
+	 * {@code claude/specs/t192-t193-badge-counts.md}; the rules themselves live only in {@link Badges}. No record yet,
+	 * no badges.
 	 */
-	static List<PanelSnapshot.Badge> badges(Input in, LedgerRows.Numbers n, boolean avoidable)
+	static List<PanelSnapshot.Badge> badges(Input in)
 	{
+		final Standing st = in.standing;
 		final List<PanelSnapshot.Badge> out = new ArrayList<>(4);
-		if (in.kc > 0 && in.kc % 100 == 0)
+		if (st == null)
 		{
-			out.add(new PanelSnapshot.Badge(SidePanelParty.ordinal(in.kc) + " kill", "Your " + SidePanelParty.ordinal(in.kc)
+			return out;
+		}
+		if (st.badges.contains(Badges.Badge.HUNDREDTH_KILL))
+		{
+			final int kc = st.kc > 0 ? st.kc : in.kc;
+			out.add(new PanelSnapshot.Badge(SidePanelParty.ordinal(kc) + " kill", "Your " + SidePanelParty.ordinal(kc)
 				+ " " + in.name + " kill, by the game's kill count.", PanelSnapshot.Badge.Mark.KILLS));
 		}
-		if (avoidable && in.scope.damageTakenAvoidable() == 0)
+		if (st.badges.contains(Badges.Badge.FLAWLESS))
 		{
-			out.add(new PanelSnapshot.Badge("Flawless", "No avoidable damage taken: by " + in.name
+			out.add(new PanelSnapshot.Badge(Badges.Badge.FLAWLESS.title, "No avoidable damage taken: by " + in.name
 				+ "'s attack rules, every hit you took was one you couldn't avoid.", PanelSnapshot.Badge.Mark.FLAWLESS));
 		}
-		if (!Double.isNaN(n.uptime) && n.uptime >= 1 && n.efficiency >= 0.9995)
+		if (st.badges.contains(Badges.Badge.CLEAN_RUN))
 		{
-			out.add(new PanelSnapshot.Badge("Clean run", "No idle tick, and your prayer, gear and boost the best you had on"
-				+ " hand all fight.", PanelSnapshot.Badge.Mark.CLEAN));
+			out.add(new PanelSnapshot.Badge(Badges.Badge.CLEAN_RUN.title, "No idle tick, and your prayer, gear and boost the"
+				+ " best you had on hand all fight.", PanelSnapshot.Badge.Mark.CLEAN));
 		}
-		final Standing st = in.standing;
-		if (st != null && st.streak >= STREAK_BADGE)
+		if (st.streak >= Badges.STREAK)
 		{
 			out.add(new PanelSnapshot.Badge(st.streak + " A's in a row", "Grade A or better on your last " + st.streak + " "
 				+ in.name + " kills.", PanelSnapshot.Badge.Mark.STREAK));
