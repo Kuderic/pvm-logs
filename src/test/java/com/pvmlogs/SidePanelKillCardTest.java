@@ -313,13 +313,12 @@ public class SidePanelKillCardTest
 		// The roll stays only as the marker's place on the track: never 0, 100 at the very top.
 		assertEquals(1, SidePanelModel.roll(0.001));
 		assertEquals(100, SidePanelModel.roll(0.999));
-		// Celebrations off: the Luck section's header is the band. On: its strength in words, the band its line.
-		assertEquals("top 19%", SidePanelModel.fight(SidePanelKillCardExamples.off()).curve.headerValue.text);
+		// The Luck section's header is its strength in words, the band its line; T-202: Celebrations off the same.
+		assertEquals("lucky", SidePanelModel.fight(SidePanelKillCardExamples.off()).curve.headerValue.text);
 		final PanelSnapshot.FightTab on = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill());
 		assertEquals("lucky", on.curve.headerValue.text);
 		assertEquals("top 19%", on.summaries.get("curve").text);
 		// T-198: the curve's words are its tooltip, not a caption on the panel; T-201: the band explained once.
-		assertEquals("", on.curve.caption);
 		assertTrue(on.curve.tooltip, on.curve.tooltip.startsWith("Top 19%: of 100 fights with these attacks, 81"
 			+ " dealt less damage."));
 		assertFalse(on.curve.tooltip, on.curve.tooltip.contains("would have dealt"));
@@ -339,33 +338,54 @@ public class SidePanelKillCardTest
 	// ---- the tab ----
 
 	@Test
-	public void celebrationsOffIsTodaysTab()
+	public void celebrationsOffIsTheSameTabWithoutTheMoment()
 	{
+		// T-202 (Eric: "Why does the celebrations setting move damage over time out from damage?"): the same card, sections
+		// and folds; only the die roll and flash are off.
 		final PvmPerformancePanel off = panel(SidePanelKillCardExamples.off());
-		assertTrue(all(off.fightTab(), SidePanelKillCard.class).isEmpty());
-		assertTrue(hasTiles(off.fightTab()));
-		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelKillCardExamples.off());
-		assertNull(tab.card);
-		assertNull(tab.clear);
-		assertTrue(tab.summaries.isEmpty());
-		// Today's sections, open and named as before: Execution, Damage over time, Ticks and Details are all there.
-		final List<String> titles = new ArrayList<>();
+		final PvmPerformancePanel on = panel(SidePanelKillCardExamples.araxxorKill());
+		for (PvmPerformancePanel p : Arrays.asList(off, on))
+		{
+			assertEquals(1, all(p.fightTab(), SidePanelKillCard.class).size());
+			assertFalse(hasTiles(p.fightTab()));
+			// The card is first: no title above it.
+			assertTrue(p.fightTab().getComponent(0) instanceof SidePanelKillCard);
+		}
+		assertEquals(titles(on), titles(off));
+		assertEquals(Arrays.asList("Damage", "Luck", "Where the time went", "Skill", "Damage taken"), titles(off));
 		for (SidePanelSection s : all(off.fightTab(), SidePanelSection.class))
 		{
-			assertFalse(s.id(), s.isFolded());
-			assertEquals(s.id(), "", s.summary());
-			titles.add(s.title());
+			assertEquals(s.id(), sectionOf(on, s.id()).isFolded(), s.isFolded());
+			assertEquals(s.id(), sectionOf(on, s.id()).summary(), s.summary());
 		}
-		assertTrue(titles.toString(), titles.containsAll(Arrays.asList("Damage", "Luck", "Where the time went",
-			"Skill", "Damage over time", "Ticks", "Details", "Damage taken")));
-		assertTrue(all(off.fightTab(), SidePanelShareBar.class).isEmpty());
-		// Your line in the chart keeps luck's band colour there, as it was.
-		assertEquals(SidePanelStyle.BETTER, tab.chart.actual);
-		final PvmPerformancePanel on = panel(SidePanelKillCardExamples.araxxorKill());
-		assertEquals(1, all(on.fightTab(), SidePanelKillCard.class).size());
-		assertFalse(hasTiles(on.fightTab()));
-		// The card is first: no title above it.
-		assertTrue(on.fightTab().getComponent(0) instanceof SidePanelKillCard);
+		final PanelSnapshot.FightTab tabOff = SidePanelModel.fight(SidePanelKillCardExamples.off());
+		final PanelSnapshot.FightTab tabOn = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill());
+		assertEquals(tabOn.structure(), tabOff.structure());
+		assertEquals(tabOn.card.structure(), tabOff.card.structure());
+		assertEquals(tabOn.summaries, tabOff.summaries);
+		assertFalse(tabOff.card.moment);
+		assertTrue(tabOn.card.moment);
+		// Your line in the chart is white either way: luck only ever in its violet.
+		assertEquals(tabOn.chart.actual, tabOff.chart.actual);
+		assertEquals(SidePanelStyle.VALUE, tabOff.chart.actual);
+		// The Timeline is inside Damage.
+		assertFalse(all(off.fightTab(), SidePanelShareBar.class).isEmpty());
+		assertNotNull(SidePanelPictures.sectionOf(off.fightTab(), "damage"));
+	}
+
+	private static List<String> titles(PvmPerformancePanel p)
+	{
+		final List<String> out = new ArrayList<>();
+		for (SidePanelSection s : all(p.fightTab(), SidePanelSection.class))
+		{
+			out.add(s.title());
+		}
+		return out;
+	}
+
+	private static SidePanelSection sectionOf(PvmPerformancePanel p, String id)
+	{
+		return SidePanelPictures.sectionOf(p.fightTab(), id);
 	}
 
 	@Test
@@ -487,29 +507,36 @@ public class SidePanelKillCardTest
 	@Test
 	public void theMergedSectionsOldFoldKeysStillOpenThem()
 	{
+		for (boolean celebrations : new boolean[]{true, false})
+		{
+			mergedKeys(celebrations);
+		}
+	}
+
+	/** T-202: the same with Celebrations on or off. */
+	private static void mergedKeys(boolean celebrations)
+	{
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
-		p.setCelebrations(true);
+		p.setCelebrations(celebrations);
 		final SidePanelSection.Folds folds = p.fightFolds();
 		assertTrue(folds.isFolded("execution"));
 		assertTrue(folds.isFolded("curve"));
-		// Ticks and Details left open (T-188's keys, "ticks.opened" and "details.opened") open the sections they're in.
-		folds.setFolded("ticks", false);
-		folds.setFolded("details", false);
+		// Ticks and Details left open (T-188's keys, "ticks.opened" and "details.opened", saved before T-202 took those
+		// sections out) open the sections they're in. Neither is a section of its own now, so the key is set as stored.
+		folds.setFolded("ticks" + PvmPerformancePanel.OPENED, true);
+		folds.setFolded("details" + PvmPerformancePanel.OPENED, true);
 		assertFalse(folds.isFolded("execution"));
 		assertFalse(folds.isFolded("curve"));
 		// Folding Your play writes the old key too, so it stays folded.
 		folds.setFolded("execution", true);
 		assertTrue(folds.isFolded("execution"));
-		assertTrue(folds.isFolded("ticks"));
+		assertFalse(folds.isFolded("ticks" + PvmPerformancePanel.OPENED));
 		// Damage over time left open opens Damage, which opens by default anyway; folding Damage folds it.
-		folds.setFolded("chart", false);
+		folds.setFolded("chart" + PvmPerformancePanel.OPENED, true);
 		assertFalse(folds.isFolded("damage"));
 		folds.setFolded("damage", true);
 		assertTrue(folds.isFolded("damage"));
-		// Celebrations off reads only its own keys.
-		p.setCelebrations(false);
-		folds.setFolded("details", false);
-		assertFalse(folds.isFolded("execution"));
+		assertFalse(folds.isFolded("chart" + PvmPerformancePanel.OPENED));
 	}
 
 	@Test

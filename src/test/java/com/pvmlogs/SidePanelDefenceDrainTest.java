@@ -47,8 +47,8 @@ public class SidePanelDefenceDrainTest
 		assertNull(d.specLuck);
 		assertTrue(d.rows.get(0).tooltip, d.rows.get(0).tooltip.contains("3 s slower"));
 		assertTrue(d.rows.get(0).tooltip, d.rows.get(0).tooltip.contains("-41"));
-		// Luck's card says the specials' share is in it.
-		assertTrue(tab.curve.caption, tab.curve.caption.endsWith(". Your specials' share: 3 s slower"));
+		// Luck's hover says the specials' share is in it (T-198: no caption on the panel).
+		assertTrue(tab.curve.tooltip, tab.curve.tooltip.contains("Your specials' share: 3 s slower."));
 	}
 
 	@Test
@@ -83,7 +83,7 @@ public class SidePanelDefenceDrainTest
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.immune());
 		assertNull(tab.defence);
 		assertFalse(tab.structure(), tab.structure().contains("|df"));
-		assertFalse(tab.curve.caption.contains("specials"));
+		assertFalse(tab.curve.tooltip.contains("specials"));
 		// A drain adds the card and nothing else: without one, the tab is what it was before T-052.
 		final SidePanelModel.Input with = SidePanelExamples.drainKill("Vardorvis",
 			SidePanelExamples.twoHammersOneLanded().drain);
@@ -245,27 +245,36 @@ public class SidePanelDefenceDrainTest
 	@Test
 	public void theHeadersLiveLineAppearsOnceThenUpdatesInPlace()
 	{
-		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
-		final SidePanelModel.Input before = SidePanelExamples.liveDrained();
+		// T-202: a room's header is its kill card, which has no live Defence line (as with Celebrations on since T-188);
+		// the title header's line is a run of monsters'. The model still gives it, and the title header updates it in place.
+		final SidePanelModel.Input before = runWith(SidePanelExamples.liveDrained());
 		before.liveDefence = null;
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(before)));
 		assertTrue(SidePanelModel.fight(before).header.defence.isEmpty());
 		final SidePanelFightTab tab = panel.fightTab();
 		final int builds = tab.builds();
 		// The first drain lands: the line comes, one rebuild.
-		panel.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.liveDrained())));
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(runWith(SidePanelExamples.liveDrained()))));
 		assertEquals(builds + 1, tab.builds());
 		assertTrue(texts(tab).contains("defence 175 / 250"));
 		// A second hammer: the same line, set in place.
-		final SidePanelModel.Input later = SidePanelExamples.liveDrained();
+		final SidePanelModel.Input later = runWith(SidePanelExamples.liveDrained());
 		later.liveDefence.defence = 123;
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(later)));
 		assertEquals(builds + 1, tab.builds());
 		assertTrue(texts(tab).contains("defence 123 / 250"));
-		// The fight over: the line goes, the card has it.
+		// The fight over: the line goes, the Defence section has it.
 		final SidePanelModel.Input ended = SidePanelExamples.liveDrained();
 		ended.ended = true;
 		assertTrue(SidePanelModel.fight(ended).header.defence.isEmpty());
+	}
+
+	/** The same fight in a run of monsters (T-095): the title header. */
+	private static SidePanelModel.Input runWith(SidePanelModel.Input in)
+	{
+		in.run = true;
+		return in;
 	}
 
 	// ---- trip ----

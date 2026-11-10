@@ -37,9 +37,23 @@ public class SidePanelMemberFightTest
 	private static List<String> texts(PanelSnapshot.FightTab t)
 	{
 		final List<String> out = new ArrayList<>();
-		for (PanelSnapshot.Tile x : t.tiles)
+		// T-202: the card in the tiles' place; every section's folded line.
+		if (t.tiles != null)
 		{
-			out.add("tile " + x.label.text + " | " + x.value.text + " | " + x.sub.text);
+			for (PanelSnapshot.Tile x : t.tiles)
+			{
+				out.add("tile " + x.label.text + " | " + x.value.text + " | " + x.sub.text);
+			}
+		}
+		if (t.card != null)
+		{
+			final PanelSnapshot.KillCard c = t.card;
+			out.add("card " + c.clock + " | dps " + c.dps + " | exp " + c.expDps + " | skill " + c.skill + " | lost " + c.lost
+				+ " | luck " + c.luckWord.text + " " + c.luckTime + " | " + c.luckWords);
+		}
+		for (java.util.Map.Entry<String, PanelSnapshot.Text> e : t.summaries.entrySet())
+		{
+			out.add("line " + e.getKey() + " | " + e.getValue().text);
 		}
 		if (t.budget != null)
 		{
@@ -53,12 +67,12 @@ public class SidePanelMemberFightTest
 			out.add("execution " + t.execution.hint.text);
 			for (PanelSnapshot.Part p : t.execution.parts)
 			{
-				out.add("part " + p.label.text + " | " + p.value.text);
+				out.add("part " + p.label.text + " | " + p.value.text + " | " + (p.note == null ? "" : p.note.text));
 			}
 		}
 		if (t.curve != null)
 		{
-			out.add("curve " + t.curve.headerValue.text + " | " + t.curve.caption);
+			out.add("curve " + t.curve.headerValue.text + " | " + t.curve.tooltip);
 		}
 		if (t.damage != null)
 		{
@@ -68,7 +82,7 @@ public class SidePanelMemberFightTest
 				out.add("source " + s.name + " | " + s.sub + " | " + s.damage + " | " + s.share);
 			}
 		}
-		for (PanelSnapshot.Rows card : Arrays.asList(t.details, t.taken))
+		for (PanelSnapshot.Rows card : java.util.Collections.singletonList(t.taken))
 		{
 			if (card != null)
 			{
@@ -95,7 +109,7 @@ public class SidePanelMemberFightTest
 		final PanelSnapshot.FightTab sender = SidePanelModel.fight(theirs);
 		final LuckVsSkillRoom sent = roundTrip(SidePanelMemberFight.message(b.room, b.view(), 0, null));
 		final PanelSnapshot.FightTab receiver = SidePanelModel.fight(SidePanelMemberFight.decode(sent.f));
-		// Every tile, Where the time went, Execution, Luck, Damage, Details and Damage taken, word for word.
+		// The card, Where the time went, Skill, Luck, Damage and Damage taken, word for word.
 		assertEquals(String.join("\n", texts(sender)), String.join("\n", texts(receiver)));
 		assertEquals(sender.structure(), receiver.structure());
 		// The tick strip exactly; the chart's series within the 5-tick sampling's interpolation.
@@ -165,13 +179,13 @@ public class SidePanelMemberFightTest
 		final SidePanelModel.Input in = SidePanelMemberFight.live(u, SidePanelPartyExamples::itemName);
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
 		assertEquals(PanelSnapshot.State.LIVE, t.state);
-		assertNotNull(t.tiles);
+		assertNotNull(t.card);
+		assertTrue(t.card.live);
 		assertNotNull(t.execution);
 		assertNotNull(t.damage);
 		// No chart or strip in it (the party chart under it has their line), nor the after-room cards.
 		assertNull(t.chart);
 		assertNull(t.budget);
-		assertNull(t.details);
 		// Uptime, Execution and its parts are the sender's own, from what the update sends.
 		final LedgerRows.Numbers sender = new LedgerRows.Numbers(LedgerRows.of(b.room));
 		final LedgerRows.Numbers member = new LedgerRows.Numbers(in.scope);

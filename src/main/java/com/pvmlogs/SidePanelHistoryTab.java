@@ -114,12 +114,6 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			return SidePanelIcons.NONE;
 		}
 
-		/** T-190: Celebrations (T-188): History opens on progress, its kill rows graded. Off in tests unless set. */
-		default boolean celebrations()
-		{
-			return false;
-		}
-
 		/** T-190: one version's record (T-187), an immutable copy; null with none. */
 		default BossRecords.View record(LedgerHistory.Like like)
 		{
@@ -486,9 +480,10 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 			return;
 		}
 		final JPanel box = SidePanelParts.card(6);
-		// T-190: with Celebrations on, the selected version's progress from the record, kills history dropped included.
+		// T-190: the selected version's progress from the record, kills history dropped included (T-202: whatever
+		// Celebrations is).
 		final LedgerHistory.Like like = card.versions.isEmpty() ? null : card.versions.get(card.selected).like;
-		final SidePanelHistory.Progress progress = !source.celebrations() || like == null || card.runs > 0 ? null
+		final SidePanelHistory.Progress progress = like == null || card.runs > 0 ? null
 			: SidePanelHistory.progress(source.record(like), source.now(), source.zone());
 		// T-095: a kind fought in runs, "5 runs · 312 kills".
 		final String count = progress != null ? LedgerRows.number(progress.kills) + " kills tracked"
@@ -585,9 +580,9 @@ final class SidePanelHistoryTab extends JPanel implements Scrollable
 
 	private void kills(List<Fight> history)
 	{
-		// T-190: with Celebrations on, each kill's grade from its version's record, and luck as a roll.
+		// T-190: each kill's grade from its version's record, and its luck (T-202: whatever Celebrations is).
 		final List<SidePanelHistory.KillRow> rows = SidePanelHistory.kills(history, boss, source.now(), source.zone(),
-			source.celebrations() ? source::record : null);
+			source::record);
 		final boolean graded = rows.stream().anyMatch(r -> r.grade != null);
 		if (rows.isEmpty())
 		{

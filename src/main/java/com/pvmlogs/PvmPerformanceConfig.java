@@ -242,8 +242,8 @@ public interface PvmPerformanceConfig extends Config
 	@ConfigItem(
 		keyName = "panelCelebrations",
 		name = "Celebrations",
-		description = "The Fight tab opens on a kill card: your time against your PB, a grade from your skill, your luck "
-			+ "as top or bottom N%, with the details folded below. Off: the title and four tiles, as before",
+		description = "The die roll and flash on the kill card when a kill ends. Off, the card shows settled; the Fight tab "
+			+ "is the same either way",
 		position = 3,
 		section = SIDE_PANEL_SECTION
 	)

@@ -166,12 +166,6 @@ final class SidePanelProgressExamples
 			}
 
 			@Override
-			public boolean celebrations()
-			{
-				return true;
-			}
-
-			@Override
 			public BossRecords.View record(LedgerHistory.Like like)
 			{
 				return records.view(like);

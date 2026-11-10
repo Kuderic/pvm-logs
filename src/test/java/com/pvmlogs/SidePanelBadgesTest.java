@@ -198,18 +198,26 @@ public class SidePanelBadgesTest
 	@Test
 	public void nothingAnimatesWithCelebrationsOff()
 	{
+		// T-202: Celebrations off is the same card at the kill, settled: no die roll, no flash.
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.setCelebrations(false);
 		final SidePanelModel.Input live = SidePanelKillCardExamples.araxxorLive();
 		live.celebrations = false;
 		final SidePanelModel.Input kill = SidePanelKillCardExamples.off();
 		apply(p, live);
+		assertFalse(card(p).celebrating());
 		apply(p, kill);
-		assertNull(SidePanelModel.fight(kill).card);
-		for (java.awt.Component c : p.fightTab().getComponents())
-		{
-			assertFalse(c instanceof SidePanelKillCard);
-		}
+		assertFalse(SidePanelModel.fight(kill).card.moment);
+		assertFalse(card(p).celebrating());
+		assertFalse(card(p).timerRunning());
+		// The record is the same either way: the badges, the grade and the rank.
+		final PanelSnapshot.KillCard on = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card;
+		final PanelSnapshot.KillCard off = SidePanelModel.fight(kill).card;
+		assertEquals(badges(SidePanelKillCardExamples.araxxorKill()), badges(kill));
+		assertEquals(on.grade, off.grade);
+		assertEquals(on.rank, off.rank);
+		assertEquals(on.best, off.best);
+		assertTrue(on.moment);
 	}
 
 	/** The moment's frames: each a repaint of the card's box through the tab's buffer. Printed; no timing assert. */

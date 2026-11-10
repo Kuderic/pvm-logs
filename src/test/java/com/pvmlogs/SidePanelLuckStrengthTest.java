@@ -154,24 +154,16 @@ public class SidePanelLuckStrengthTest
 	@Test
 	public void theFightTabsRollsAndWords()
 	{
-		// The Vardorvis example's kill rolled 20: dim, on the tile, its edge, the curve's header and the budget's row.
+		// The Vardorvis example's kill, bottom 20%: dim, on Luck's line and header, with the card's words (T-202: no
+		// tiles).
 		final SidePanelModel.Input in = SidePanelExamples.dead();
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
-		PanelSnapshot.Tile luck = null;
-		for (PanelSnapshot.Tile tile : t.tiles)
-		{
-			if (tile.label.text.equals("Luck"))
-			{
-				luck = tile;
-			}
-		}
-		assertNotNull(luck);
-		assertEquals("bottom 20%", luck.value.text);
-		assertEquals(SidePanelStyle.LUCK_DIM, luck.value.colour);
-		assertEquals(SidePanelStyle.LUCK_DIM, luck.edge);
-		assertTrue(luck.tooltip, luck.tooltip.startsWith("Bottom 20%: of 100 fights with these attacks, 20 dealt less"
-			+ " damage.<br>Dealt 88% of expected, 14 s slower."));
-		assertTrue(luck.tooltip, luck.tooltip.contains("14 s slower.<br>" + SidePanelModel.TICK_NOTE));
+		assertNull(t.tiles);
+		final PanelSnapshot.Text luck = t.summaries.get("curve");
+		assertEquals("bottom 20%", luck.text);
+		assertEquals(SidePanelStyle.LUCK_DIM, luck.colour);
+		assertTrue(t.card.luckWords, t.card.luckWords.startsWith("Bottom 20%: of 100 fights with these attacks, 20"
+			+ " dealt less damage.<br>Dealt 88% of expected, 14 s slower."));
 		assertEquals(SidePanelStyle.LUCK_DIM, t.curve.headerValue.colour);
 	}
 
@@ -193,20 +185,16 @@ public class SidePanelLuckStrengthTest
 	}
 
 	@Test
-	public void withCelebrationsOffTheTilesUseTheSameStrengths()
+	public void withCelebrationsOffTheCardAndLineAreTheSame()
 	{
+		// T-202: Celebrations off is the same card and sections, only without the moment.
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(SidePanelKillCardExamples.off());
-		assertNull(t.card);
-		for (PanelSnapshot.Tile tile : t.tiles)
-		{
-			if (tile.label.text.equals("Luck"))
-			{
-				assertEquals("top 19%", tile.value.text);
-				assertEquals(SidePanelStyle.LUCK_BRIGHT, tile.value.colour);
-				return;
-			}
-		}
-		throw new AssertionError("no Luck tile");
+		assertNull(t.tiles);
+		assertNotNull(t.card);
+		assertFalse(t.card.moment);
+		assertEquals("top 19%", t.summaries.get("curve").text);
+		assertEquals(SidePanelStyle.LUCK_BRIGHT, t.summaries.get("curve").colour);
+		assertEquals(SidePanelModel.LuckStrength.BRIGHT, SidePanelModel.strength(t.card.luckP));
 	}
 
 	@Test

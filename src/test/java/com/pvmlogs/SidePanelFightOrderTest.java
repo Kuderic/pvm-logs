@@ -14,22 +14,22 @@ import java.util.List;
 import org.junit.Test;
 
 /**
- * T-112: the Fight tab's order (tiles, Damage, Luck, Where the time went, Execution, then the rest), the luck curve's
- * shaded tail and tooltip, and one hover line on Damage over time and Ticks (Eric, 2026-10-30 00:45).
+ * T-112: the Fight tab's order (T-202: the card, Damage, Luck, Where the time went, Skill, then the rest), the luck
+ * curve's shaded tail and tooltip, and one hover line on the Timeline and the attack rhythm (Eric, 2026-10-30 00:45).
  */
 public class SidePanelFightOrderTest
 {
 	// ---- the order ----
 
 	@Test
-	public void afterAKillTheTabReadsTilesDamageLuckTimeExecutionThenTheRest()
+	public void afterAKillTheTabReadsTheCardDamageLuckTimeSkillThenTheRest()
 	{
-		// The 2:17 Vardorvis kill, with damage taken.
+		// The 2:17 Vardorvis kill, with damage taken. T-202: no Damage over time, Ticks or Details sections.
 		final List<String> order = order(SidePanelExamples.dead());
-		assertEquals("[tiles, damage, curve, budget, execution, chart, ticks, details, taken]", order.toString());
+		assertEquals("[card, damage, curve, budget, execution, taken]", order.toString());
 	}
 
-	/** Eric's pick (07:45): at the top 1% the caption reads 99%, never 100%; a share is 1% to 99%. */
+	/** Eric's pick (07:45): at the top 1% the hover reads 99, never 100; a share is 1% to 99%. */
 	@Test
 	public void theCaptionsSharesAreOneTo99Percent()
 	{
@@ -41,18 +41,17 @@ public class SidePanelFightOrderTest
 		for (int z : new int[]{15, -15, 7, -7})
 		{
 			final PanelSnapshot.Curve c = SidePanelModel.fight(SidePanelExamples.luckSaved(z)).curve;
-			assertFalse(c.caption, c.caption.startsWith("100%") || c.caption.startsWith("0%"));
-			assertFalse(c.tooltip, c.tooltip.contains(" 100%") || c.tooltip.contains(" 0%"));
+			assertFalse(c.tooltip, c.tooltip.matches(".*, (100|0) dealt.*") || c.tooltip.matches(".*\\b(Top|Bottom) (100|0)%.*"));
 		}
-		assertTrue(SidePanelModel.fight(SidePanelExamples.luckSaved(15)).curve.caption.startsWith("99% "));
+		assertTrue(SidePanelModel.fight(SidePanelExamples.luckSaved(15)).curve.tooltip.contains(" 99 dealt less"));
 	}
 
 	@Test
 	public void liveTheAfterFightSectionsAreJustNotThere()
 	{
-		// Execution runs live (executionLive); Luck's curve, the time budget and Details wait for the end.
+		// Skill runs live (executionLive); Luck's curve and the time budget wait for the end.
 		final List<String> order = order(SidePanelExamples.live());
-		assertEquals("[tiles, damage, execution, chart, ticks, taken]", order.toString());
+		assertEquals("[card, damage, execution, taken]", order.toString());
 	}
 
 	@Test
@@ -66,7 +65,8 @@ public class SidePanelFightOrderTest
 	@Test
 	public void aMonsterRunKeepsItsLightViewInTheSameOrder()
 	{
-		assertEquals("[tiles, damage, chart, ticks, taken]", order(SidePanelRunExamples.saved()).toString());
+		// T-202: its tiles (kills, kills an hour, DPS, damage) and the Timeline inside Damage.
+		assertEquals("[tiles, damage, taken]", order(SidePanelRunExamples.saved()).toString());
 	}
 
 	@Test
@@ -78,7 +78,7 @@ public class SidePanelFightOrderTest
 		final SidePanelModel.Input in = SidePanelHistory.savedKill(history, SidePanelHistory.allRooms(history).get(0), -1,
 			SidePanelHistoryExamples.NOW, SidePanelExamples.ZONE, null, kill.view());
 		final List<String> order = order(in);
-		assertEquals(order.indexOf("tiles") + 1, order.indexOf("damage"));
+		assertEquals(order.indexOf("card") + 1, order.indexOf("damage"));
 		assertEquals(order.indexOf("damage") + 1, order.indexOf("curve"));
 		assertEquals(order.indexOf("curve") + 1, order.indexOf("budget"));
 		assertEquals(order.indexOf("budget") + 1, order.indexOf("execution"));
@@ -102,19 +102,15 @@ public class SidePanelFightOrderTest
 	@Test
 	public void theCurveExplainsItsTail()
 	{
-		final String top = SidePanelModel.curveTip(2.33, 0.99);
-		assertTrue(top, top.startsWith("Top 1%: 1% of fights with these attacks would have dealt more, the shaded right"));
-		assertTrue(top, top.contains("thin sliver"));
-		final String bottom = SidePanelModel.curveTip(-1.28, 0.10);
-		assertTrue(bottom, bottom.startsWith("Bottom 10%: 10% of fights with these attacks would have dealt less, the"
-			+ " shaded left"));
-		final String middle = SidePanelModel.curveTip(0.2, 0.58);
-		assertTrue(middle, middle.startsWith("Average: 42% of fights with these attacks would have dealt more"));
+		// T-201: the band explained once, then what the curve's width is.
+		final String bottom = SidePanelModel.fight(SidePanelExamples.dead()).curve.tooltip;
+		assertTrue(bottom, bottom.contains("Bottom 20%: of 100 fights with these attacks, 20 dealt"));
+		assertTrue(bottom, bottom.contains(SidePanelModel.CURVE_SPREAD.substring(0, 20)));
 		// On the tab: the curve carries it.
 		final SidePanelFightTab view = view(SidePanelExamples.dead());
 		final SidePanelLuckCurve curve = all(view, SidePanelLuckCurve.class).get(0);
 		assertNotNull(curve.getToolTipText());
-		assertTrue(curve.getToolTipText(), curve.getToolTipText().contains("% of fights with these attacks"));
+		assertTrue(curve.getToolTipText(), curve.getToolTipText().contains("of 100 fights with these attacks"));
 	}
 
 	// ---- the hover line ----
@@ -205,7 +201,7 @@ public class SidePanelFightOrderTest
 		SidePanelPictures.layout(view);
 	}
 
-	/** The tab's sections in order, with the tiles' grid as "tiles". */
+	/** The tab's sections in order, with the kill card as "card" and a run's tiles' grid as "tiles". */
 	private static List<String> order(SidePanelModel.Input in)
 	{
 		final List<String> out = new ArrayList<>();
@@ -214,6 +210,10 @@ public class SidePanelFightOrderTest
 			if (k instanceof SidePanelSection)
 			{
 				out.add(((SidePanelSection) k).id());
+			}
+			else if (k instanceof SidePanelKillCard)
+			{
+				out.add("card");
 			}
 			else if (k instanceof Container && !all((Container) k, SidePanelStatTile.class).isEmpty())
 			{

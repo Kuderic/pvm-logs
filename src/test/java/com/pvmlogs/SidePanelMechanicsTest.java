@@ -54,14 +54,6 @@ public class SidePanelMechanicsTest
 		return null;
 	}
 
-	@Test
-	public void theLeviathanKillsDetailsLeaveMechanicsToTheTimeBudget()
-	{
-		// T-112 (Eric's pick, 07:45): Where the time went has the mechanics (below), so Details doesn't repeat them.
-		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.leviathanKill());
-		final List<String> details = rows(tab.details);
-		assertFalse(details.toString(), details.stream().anyMatch(r -> r.startsWith("mechanics") || r.startsWith("eating")));
-	}
 
 	@Test
 	public void theTimeBudgetGivesItANeutralStretchOfItsOwn()
@@ -72,7 +64,8 @@ public class SidePanelMechanicsTest
 		final PanelSnapshot.BudgetRow row = budgetRow(b, PanelSnapshot.Fill.MECHANICS);
 		assertNotNull(row);
 		assertEquals("mechanics", row.label.text);
-		assertEquals("-29 ticks", row.value.text);
+		// T-196: in seconds, as the card writes time.
+		assertEquals("-" + SidePanelModel.secs(FORCED * LedgerRows.SECONDS_PER_TICK), row.value.text);
 		assertEquals(SidePanelStyle.BODY, row.value.colour);
 		// Right after eating's row.
 		assertEquals(PanelSnapshot.Fill.EATING, b.rows.get(b.rows.indexOf(row) - 1).swatch);
@@ -113,7 +106,8 @@ public class SidePanelMechanicsTest
 		final java.awt.Color c = SidePanelTickStrip.colour(FightTimeline.MECHANIC, (byte) 0);
 		assertEquals(SidePanelStyle.MECHANICS, c);
 		assertFalse(c.equals(SidePanelStyle.EATING) || c.equals(SidePanelStyle.COST) || c.equals(SidePanelStyle.TRACK));
-		assertTrue(legend(SidePanelExamples.leviathanKill()).contains("mechanics " + FORCED));
+		// T-196's plain words: the count is the budget's.
+		assertTrue(legend(SidePanelExamples.leviathanKill()).contains(SidePanelModel.MECHANICS));
 	}
 
 	@Test
@@ -121,7 +115,6 @@ public class SidePanelMechanicsTest
 	{
 		final SidePanelModel.Input in = SidePanelExamples.dead();
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
-		assertFalse(rows(tab.details).toString(), rows(tab.details).stream().anyMatch(r -> r.startsWith("mechanics")));
 		assertEquals(null, budgetRow(tab.budget, PanelSnapshot.Fill.MECHANICS));
 		assertFalse(tab.budget.segments.stream().anyMatch(seg -> seg.fill == PanelSnapshot.Fill.MECHANICS));
 		assertEquals(0, tab.chart.mechanics);
@@ -167,6 +160,8 @@ public class SidePanelMechanicsTest
 	{
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		// T-202: the attack rhythm is in Skill, folded under the card until opened.
+		SidePanelPictures.openAll(panel.fightTab());
 		final List<String> out = new ArrayList<>();
 		for (SidePanelParts.Legend l : all(panel.fightTab(), SidePanelParts.Legend.class))
 		{

@@ -51,7 +51,7 @@ final class LedgerRows
 	static final String SPEC = "Spec";
 	static final String EXPECTED = " expected";
 	static final String DMG = " dmg";
-	private static final String ARROW = " \u2192 ";
+	private static final String ARROW = " to ";
 	/** Execution's fifth part after a ruled fight (T-043). */
 	static final String AVOIDABLE_EATING = " avoidable eating";
 
@@ -1576,7 +1576,7 @@ final class LedgerRows
 			final String points = points(loss.points);
 			if (points != null)
 			{
-				sum.append(" \u2212 ").append(loss.label).append(' ').append(points);
+				sum.append(" - ").append(loss.label).append(' ').append(points);
 			}
 		}
 		return sum.append(" = ").append(partPercent(execution)).toString();

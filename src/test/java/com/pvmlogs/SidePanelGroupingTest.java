@@ -78,14 +78,17 @@ public class SidePanelGroupingTest
 			Collections.emptyList()).isEmpty());
 	}
 
-	/** Every fact from before, but eating and mechanics, which moved to Where the time went (Eric's pick). */
+	/**
+	 * Damage taken keeps its facts; eating and mechanics are Where the time went's (Eric's pick). T-202: no Details
+	 * section; the thrall is a row of Damage.
+	 */
 	@Test
 	public void nothingIsLostButEatingAndMechanicsWhichTheTimeBudgetHas()
 	{
 		final SidePanelModel.Input in = SidePanelExamples.ruledKill(true);
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
 		final StringBuilder all = new StringBuilder();
-		for (PanelSnapshot.Rows card : Arrays.asList(tab.details, tab.taken))
+		for (PanelSnapshot.Rows card : Collections.singletonList(tab.taken))
 		{
 			assertNotNull(card);
 			for (PanelSnapshot.Row r : card.rows)
@@ -94,12 +97,14 @@ public class SidePanelGroupingTest
 				assertFalse(r.toString(), r.left.text.equals("eating") || r.left.text.equals("mechanics"));
 			}
 		}
-		// The facts the cards had before T-112 (this kill's hits/expected, thrall, damage taken).
-		for (String fact : new String[]{"hits/expected", "thrall dmg", "melee", "spike", "avoidable", "times hit",
+		// The facts Damage taken had before T-112.
+		for (String fact : new String[]{"melee", "spike", "avoidable", "times hit",
 			"largest hit taken", "off-prayer damage"})
 		{
 			assertTrue(fact + " in\n" + all, all.toString().contains(fact + " "));
 		}
+		assertNotNull(tab.damage);
+		assertTrue(tab.damage.rows.stream().anyMatch(s -> s.name.toLowerCase().contains("thrall")));
 		// Damage taken has its groups: by attack and the total.
 		assertTrue(strings(tab.taken.rows).toString(), strings(tab.taken.rows).contains("# " + SidePanelModel.BY_ATTACK));
 		assertTrue(strings(tab.taken.rows).toString(), strings(tab.taken.rows).contains("# " + SidePanelModel.TOTAL));

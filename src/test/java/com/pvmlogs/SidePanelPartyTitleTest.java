@@ -142,7 +142,7 @@ public class SidePanelPartyTitleTest
 	// ---- 3. The title on top ----
 
 	@Test
-	public void theRoomsTitleIsOnTopAndAMembersPanelsStartAtTheTiles()
+	public void theRoomsTitleIsOnTopAndAMembersPanelsStartAtTheirSections()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toaYouAndBrindle());
 		final SidePanelPartySection tab = p.partySection();
@@ -152,28 +152,28 @@ public class SidePanelPartyTitleTest
 		assertNotNull(title);
 		assertTrue(SidePanelPartyMemberViewTest.place(fight, title) < SidePanelPartyMemberViewTest.place(fight,
 			tab.top()));
-		assertTrue(texts((Container) title).toString(), texts((Container) title).stream().anyMatch(x -> x.startsWith(
-			"Zebak")));
-		// Hers on a click: no title of her own, the tiles first.
+		assertTrue(title instanceof SidePanelKillCard);
+		// Hers on a click: no title or card of her own; T-202: her sections first, the same as yours.
 		tab.select(22L);
 		final SidePanelFightTab panels = tab.memberFight();
 		assertFalse(texts(panels).stream().anyMatch(x -> x.startsWith("Zebak")));
 		assertFalse(texts(panels).stream().anyMatch(x -> x.contains("900 HP")));
 		assertTrue(texts(panels).contains("Luck"));
-		assertTrue(texts(panels).contains("Damage/expected"));
-		assertNotNull(SidePanelPictures.sectionOf(panels, "damage"));
+		assertTrue(panels.getComponent(0) instanceof SidePanelSection);
+		assertEquals("damage", ((SidePanelSection) panels.getComponent(0)).id());
 		// The title stays the Fight tab's, still above.
 		assertSame(title.getClass(), titleOf(fight).getClass());
 		// The meter's header: the party's DPS, the room's name and clock left to the title.
 		assertTrue(texts(SidePanelPictures.sectionOf(tab.top(), "party")).contains("party 79.1 dps"));
 	}
 
-	/** The Fight tab's first child that holds the room's name: its title block. */
+	/** The Fight tab's first child that holds the room's name: its title block, a room's kill card (T-202). */
 	private static Component titleOf(SidePanelFightTab fight)
 	{
 		for (Component c : fight.getComponents())
 		{
-			if (c instanceof Container && texts((Container) c).stream().anyMatch(x -> x.startsWith("Zebak")))
+			if (c instanceof SidePanelKillCard && ((SidePanelKillCard) c).card().boss.startsWith("Zebak")
+				|| c instanceof Container && texts((Container) c).stream().anyMatch(x -> x.startsWith("Zebak")))
 			{
 				return c;
 			}
@@ -317,16 +317,11 @@ public class SidePanelPartyTitleTest
 			k.maxHp = 1_020;
 			k.inParty = party;
 			k.endMillis = SidePanelExamples.at(14, 6);
-			final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
-			p.apply(new PanelSnapshot(SidePanelModel.fight(k)));
-			SidePanelPictures.draw(p.tabs(), p.fightTab(), 1);
+			// T-202: a room's header is its kill card, which draws the line itself.
 			String shown = null;
-			for (Component c : all(p.fightTab()))
+			for (String x : SidePanelKillCard.drawnTexts(SidePanelModel.fight(k).card))
 			{
-				if (c instanceof SidePanelText && ((SidePanelText) c).getText().startsWith("1,020 HP"))
-				{
-					shown = ((SidePanelText) c).lastShown();
-				}
+				shown = x.startsWith("1,020 HP") ? x : shown;
 			}
 			assertNotNull(shown);
 			assertTrue(shown, shown.contains(party ? "party" : "solo"));

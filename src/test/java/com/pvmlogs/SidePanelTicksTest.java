@@ -24,32 +24,33 @@ public class SidePanelTicksTest
 	private static int clocks;
 
 	@Test
-	public void theExecutionTileIsTicksAndLuckIsSeconds()
+	public void theCardIsSeconds()
 	{
+		// T-196: the card writes time in seconds, never ticks, with T-199's sign (T-202: no tiles any more).
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(SidePanelExamples.dead());
-		assertEquals("14 s slower", tile(t, "Luck").sub.text);
-		assertEquals("29 ticks lost", tile(t, "Skill").sub.text);
-		assertEquals("29t lost", tile(t, "Skill").subShort);
+		assertEquals("-14 s", t.card.luckTime);
+		assertEquals("-17 s", t.card.lost);
 	}
 
 	@Test
 	public void whereTheTimeWentIsTicksForIdleTimeAndSecondsForLuck()
 	{
 		final PanelSnapshot.TimeBudget b = SidePanelModel.fight(SidePanelExamples.dead()).budget;
-		// The best play is a clock; the idle parts are ticks; the setup parts damage (T-123); luck is seconds.
+		// Perfect is a clock; the idle parts are seconds lost (T-196); the setup parts damage (T-123); luck is signed
+		// seconds (T-199's sign rule).
 		assertTrue(b.rows.get(0).value.text, b.rows.get(0).value.text.matches("\\d+:\\d\\d"));
 		for (PanelSnapshot.BudgetRow r : b.rows.subList(1, b.rows.size()))
 		{
 			final boolean luck = r.label.text.startsWith("luck");
 			final boolean setup = SETUP.contains(r.label.text);
 			assertTrue(r.label.text + " " + r.value.text, r.value.text.matches(luck
-				? "(\\d+ s (faster|slower)|even|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "-\\d+ ticks?"));
+				? "([+-]\\d+(\\.\\d)? s|\u00b10 s|" + LedgerRows.UNKNOWN + ")" : setup ? "-\\d+ dmg" : "-\\d+(\\.\\d)? s"));
 		}
-		// "your average 1:54 … 23 s slower", "luck removed 2:02 … 5 s slower than 1:57": clocks, and seconds.
+		// "usual 1:54", "with average luck 2:02": clocks.
 		for (PanelSnapshot.Row r : b.average)
 		{
-			assertTrue(r.left.text, r.left.text.matches("(your average|avg luck) \\d+:\\d\\d"));
-			assertTrue(r.right.text, r.right.text.matches("(\\d+ s (faster|slower)|even)( (than|with) \\d+:\\d\\d)?"));
+			assertTrue(r.left.text, r.left.text.matches("usual|with average luck"));
+			assertTrue(r.right.text, r.right.text.matches("\\d+:\\d\\d"));
 		}
 	}
 
@@ -59,27 +60,32 @@ public class SidePanelTicksTest
 		final SidePanelModel.Input in = SidePanelExamples.dead();
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
 		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
+		// T-198/T-199: each bar its share, what it cost under it: idle seconds for Uptime, damage for the setup parts.
 		for (PanelSnapshot.Part p : t.execution.parts)
 		{
 			final String label = p.label.text;
-			if (label.equals("uptime"))
+			if (label.equals("Uptime"))
 			{
-				assertTrue(p.value.text, p.value.text.matches("\\d+% \\(-\\d+ ticks?\\)"));
+				assertEquals(LedgerRows.partPercent(n.uptime), p.value.text);
+				assertTrue(p.note.text, p.note.text.matches("-\\d+(\\.\\d)? s idle"));
 			}
 			else
 			{
 				// The same figures as the overlay's rows (T-117).
-				final double dmg = SidePanelModel.setupDamage(n, label);
-				assertEquals(label, LedgerRows.withDamage(LedgerRows.partPercent(label.equals(SidePanelModel.PRAYER)
-					? n.prayerShare : label.equals(SidePanelModel.GEAR) ? n.gearShare : n.boostShare), dmg), p.value.text);
+				final String part = label.equals("Offensive prayers") ? SidePanelModel.PRAYER : label.equals("Gear")
+					? SidePanelModel.GEAR : SidePanelModel.BOOST;
+				final double dmg = SidePanelModel.setupDamage(n, part);
+				assertEquals(label, LedgerRows.partPercent(part.equals(SidePanelModel.PRAYER) ? n.prayerShare
+					: part.equals(SidePanelModel.GEAR) ? n.gearShare : n.boostShare), p.value.text);
+				assertEquals(label, dmg < 0.5 ? "" : "-" + LedgerRows.number(Math.round(dmg)) + " dmg", p.note.text);
 			}
 		}
 		final List<String> rows = new ArrayList<>();
 		for (PanelSnapshot.Part p : t.execution.parts)
 		{
-			rows.add(p.label.text + " " + p.value.text);
+			rows.add(p.label.text + " " + p.note.text);
 		}
-		assertTrue(rows.toString(), rows.stream().anyMatch(r -> r.startsWith("stat boost ") && r.endsWith(" dmg)")));
+		assertTrue(rows.toString(), rows.stream().anyMatch(r -> r.startsWith("Boosts ") && r.endsWith(" dmg")));
 	}
 
 	private static final List<String> SETUP = Arrays.asList(SidePanelModel.BOOST, SidePanelModel.PRAYER,
@@ -102,8 +108,7 @@ public class SidePanelTicksTest
 				final long dmg = LedgerRows.roundHalfAway(n.boostDamage);
 				assertEquals("-" + dmg + " dmg", r.value.text);
 				assertEquals(Arrays.asList("-" + dmg), r.valueShort);
-				assertTrue(execution(t, SidePanelModel.BOOST), execution(t, SidePanelModel.BOOST).endsWith("(-" + dmg
-					+ " dmg)"));
+				assertEquals("-" + dmg + " dmg", execution(t, "Boosts"));
 				// "stat boost: 16 expected damage lost to a lower boost, about 4 ticks of the kill."
 				assertEquals("stat boost: " + dmg + " expected damage lost to a lower boost, about "
 					+ LedgerRows.ticksWord(LedgerRows.ticks(n.boostCost)) + " of the kill.", r.tooltip);
@@ -111,7 +116,7 @@ public class SidePanelTicksTest
 				assertEquals(LedgerRows.isCosting(n.boostCost, n.clock) ? SidePanelStyle.COST : SidePanelStyle.BODY,
 					r.value.colour);
 			}
-			if (r.label.text.equals("uptime") || r.label.text.equals("eating") || r.label.text.startsWith("luck"))
+			if (r.label.text.equals("idle") || r.label.text.equals("eating") || r.label.text.startsWith("luck"))
 			{
 				assertEquals(r.label.text, null, r.tooltip);
 			}
@@ -125,7 +130,7 @@ public class SidePanelTicksTest
 		{
 			if (p.label.text.equals(label))
 			{
-				return p.value.text;
+				return p.note.text;
 			}
 		}
 		throw new AssertionError(label);
@@ -154,7 +159,7 @@ public class SidePanelTicksTest
 		final PanelSnapshot.FightTab drained = SidePanelModel.fight(SidePanelExamples.drainKill("Vardorvis",
 			SidePanelExamples.twoHammersOneLanded().drain));
 		assertTrue(drained.defence.worth.tooltip, drained.defence.worth.tooltip.contains("14 s faster"));
-		assertTrue(drained.curve.caption, drained.curve.caption.endsWith("Your specials' share: 3 s slower"));
+		assertTrue(drained.curve.tooltip, drained.curve.tooltip.contains("Your specials' share: 3 s slower."));
 	}
 
 	@Test
@@ -173,9 +178,8 @@ public class SidePanelTicksTest
 				noted++;
 			}
 		}
-		// Where the time went's card, and the Luck and Execution tiles; T-126: the Execution card's header too, after its
-		// sum.
-		assertEquals(4, noted);
+		// Where the time went's card; T-126: Skill's header too, after its sum. T-202: no Luck or Skill tiles any more.
+		assertEquals(2, noted);
 	}
 
 	@Test
@@ -238,6 +242,8 @@ public class SidePanelTicksTest
 	{
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.apply(new PanelSnapshot(SidePanelModel.fight(in)));
+		// T-202: every view's sections fold under the card; open them so their texts are drawn.
+		SidePanelPictures.openAll(p.fightTab());
 		return p;
 	}
 
@@ -262,7 +268,7 @@ public class SidePanelTicksTest
 				final SidePanelText t = (SidePanelText) c;
 				final String text = t.getText();
 				final String shown = t.lastShown();
-				if (text != null && shown != null && (text.matches("(your average|avg luck) \\d+:\\d\\d")
+				if (text != null && shown != null && (text.matches("usual|with average luck|perfect|idle|eating")
 					|| text.equals(SidePanelModel.WORTH) || text.equals(SidePanelModel.SPEC_LUCK)
 					|| text.equals("expected dmg added") || text.equals("your specials' luck") || SETUP.contains(text)))
 				{
@@ -272,7 +278,8 @@ public class SidePanelTicksTest
 					clocks++;
 				}
 				if (text == null || shown == null || !(text.contains(" tick") || text.matches(".*\\d+t( .*)?")
-					|| text.endsWith(" dmg)") || text.matches("-\\d+ dmg") || text.matches(".*\\d+ s (faster|slower).*")))
+					|| text.endsWith(" dmg)") || text.matches(".*-\\d+ dmg.*") || text.matches(".*\\d+ s (faster|slower).*")
+					|| text.matches(".*[+-]\\d+(\\.\\d)? s\\b.*")))
 				{
 					continue;
 				}
@@ -289,18 +296,6 @@ public class SidePanelTicksTest
 		{
 			SidePanelStyle.setText(false, false);
 		}
-	}
-
-	private static PanelSnapshot.Tile tile(PanelSnapshot.FightTab t, String label)
-	{
-		for (PanelSnapshot.Tile x : t.tiles)
-		{
-			if (x.label.text.equals(label))
-			{
-				return x;
-			}
-		}
-		throw new AssertionError(label);
 	}
 
 	private static List<Component> all(Container c)

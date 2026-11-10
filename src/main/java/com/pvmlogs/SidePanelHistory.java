@@ -806,7 +806,7 @@ final class SidePanelHistory
 		 * -1 for a boss's room, or a fight saved before T-089.
 		 */
 		final int kills;
-		/** T-190: the kill's grade from T-187's record (S to C), or null; with Celebrations on, in Execution's place. */
+		/** T-190: the kill's grade from T-187's record (S to C), or null; in Execution's place. */
 		final String grade;
 		/** T-194: the luck chip's tooltip, its words ({@code top 4% · dealt 112% of expected · 9 s faster}); null for none. */
 		String chipTip;

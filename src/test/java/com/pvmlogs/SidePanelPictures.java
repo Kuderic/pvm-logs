@@ -152,6 +152,11 @@ public final class SidePanelPictures
 			clarity(out);
 			return;
 		}
+		if (args.length > 1 && "onetab".equals(args[1]))
+		{
+			oneTab(out);
+			return;
+		}
 		if (args.length > 1 && "luck".equals(args[1]))
 		{
 			luckStrengths(out);
@@ -1326,8 +1331,7 @@ public final class SidePanelPictures
 					});
 				in.roomDamageSources = SidePanelModel.roomDamageSources(java.util.Collections.singletonList(room), rules);
 				final PanelSnapshot.FightTab tab = SidePanelModel.fight(in);
-				final int n = (tab.details == null ? 0 : tab.details.rows.size()) + (tab.taken == null ? 0
-					: tab.taken.rows.size());
+				final int n = tab.taken == null ? 0 : tab.taken.rows.size();
 				if (n > most)
 				{
 					most = n;
@@ -2200,6 +2204,57 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-202: one Fight tab. Araxxor's kill with Celebrations on and off (the same tab), folded and opened; a whole ToA raid
+	 * and a run of monsters with the Timeline inside Damage; a party member's fight. Normal and Larger, 1x and 2x.
+	 */
+	private static void oneTab(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-room-celebrations-on", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "b-room-celebrations-off", scale, fightTab(SidePanelKillCardExamples.off(), scale));
+				write(dir, "c-room-celebrations-off-opened", scale, openedAs(SidePanelKillCardExamples.off(), scale));
+				write(dir, "d-toa-raid", scale, fightTab(SidePanelOneTabTest.toaRaid(true), scale));
+				write(dir, "e-toa-raid-opened", scale, openedAs(SidePanelOneTabTest.toaRaid(true), scale));
+				write(dir, "f-run-of-monsters", scale, openedAs(SidePanelRunExamples.saved(), scale));
+				write(dir, "g-party-member", scale, member(SidePanelPartyExamples.toaYouAndBrindle(), 22L, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-202: the Fight tab on {@code in} with its Celebrations, every section opened. */
+	private static BufferedImage openedAs(SidePanelModel.Input in, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.setCelebrations(in.celebrations);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
+		openAll(panel.fightTab());
+		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/** T-202: a party member's fight selected on the meter, their sections opened. */
+	private static BufferedImage member(SidePanelParty.Input in, long id, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
+		panel.partySection().select(id);
+		openAll(panel.partySection().memberFight());
+		return draw(panel.tabs(), panel.fightTab(), scale);
 	}
 
 	/** T-194: History with every kill shown: its Show more pressed until it's gone. */

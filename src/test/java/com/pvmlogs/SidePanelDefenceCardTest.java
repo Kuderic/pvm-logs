@@ -140,8 +140,8 @@ public class SidePanelDefenceCardTest
 			.filter(r -> r.name.startsWith("Not matched")).findFirst().orElse(null);
 		assertNotNull(row);
 		assertEquals("0", row.damage);
-		// T-112 item 6: in brackets, as the DPS rows have it.
-		assertEquals("weapon damage (expected 30)", row.sub);
+		// T-112 item 6: in brackets, as the DPS rows have it; T-196's plain word.
+		assertEquals("weapon damage (average 30)", row.sub);
 	}
 
 	@Test
@@ -158,7 +158,7 @@ public class SidePanelDefenceCardTest
 	public void theChartSaysItsExpectationIsAsThrownAndTheDifferenceIsTheSpecialsLuck()
 	{
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.sireEmberlight());
-		assertEquals("446/576", tab.tiles.get(1).value.text);
+		assertEquals("446 · exp 576", tab.damage.hint.text);
 		assertEquals("expected 588 as thrown", tab.chart.expectedLegend);
 		// The Damage rows' expectations add up to the chart's (T-085: in each row's details).
 		int held = 0;
@@ -177,8 +177,8 @@ public class SidePanelDefenceCardTest
 	public void withoutSpecialsLuckTheChartAndTileShowOneFigure()
 	{
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.dead());
-		final String tile = tab.tiles.get(1).value.text;
-		assertEquals("expected " + tile.substring(tile.indexOf('/') + 1), tab.chart.expectedLegend);
+		final String hint = tab.damage.hint.text;
+		assertEquals("expected " + hint.substring(hint.indexOf("exp ") + 4), tab.chart.expectedLegend);
 	}
 
 	// ---- hits that did damage ----
@@ -251,7 +251,7 @@ public class SidePanelDefenceCardTest
 	{
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.sireShortAverage());
 		assertNotNull(tab.budget);
-		assertEquals("[your average 0:35 | 49 s slower]", tab.budget.average.toString());
+		assertEquals("[usual | 0:35, with average luck | 1:07]", tab.budget.average.toString());
 		assertEquals(35, tab.budget.marker, 1e-9);
 	}
 

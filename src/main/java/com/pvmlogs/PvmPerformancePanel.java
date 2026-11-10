@@ -116,19 +116,20 @@ class PvmPerformancePanel extends PluginPanel
 		SidePanelPartySection.PARTY_CHART);
 	static final String OPENED = ".opened";
 	/**
-	 * T-188: with Celebrations on, the Fight tab's sections fold below the kill card until opened, each kept open under
-	 * its own {@link #OPENED} key; the keys they had stay as they were, for Celebrations off and the other tabs. T-194
-	 * (Eric, 21:32: "I like having them open, at least for damage"): Damage isn't one, so it opens by default and keeps
-	 * its own key, folded or open as you leave it.
+	 * T-188: the Fight tab's sections fold below the kill card until opened, each kept open under its own
+	 * {@link #OPENED} key; the keys they had stay as they were, for the other tabs. T-194 (Eric, 21:32: "I like having
+	 * them open, at least for damage"): Damage isn't one, so it opens by default and keeps its own key, folded or open as
+	 * you leave it. T-202: in every view, whatever Celebrations is; Damage over time, Ticks and Details aren't sections
+	 * any more, so their keys are read only through {@link #MERGED}.
 	 */
 	static final java.util.Set<String> FOLDED_UNDER_CARD = java.util.Collections.unmodifiableSet(
 		new java.util.HashSet<>(java.util.Arrays.asList("curve", "budget", "execution", "targets", "defence", "later",
-			"chart", "ticks", "details", "taken", SidePanelPartySection.PARTY)));
+			"taken", SidePanelPartySection.PARTY)));
 	/**
 	 * T-196: the sections merged under the card, by the section that holds them now: Damage over time ({@code chart}) in
 	 * Damage, Ticks in Your play ({@code execution}), Details' hits in Luck ({@code curve}). Each kept its fold key
 	 * ({@code <id>.opened}, T-188): one left open opens the section it's in, and folding or opening that section writes
-	 * the old key too, so the old one never overrules it again. Celebrations off reads nothing of this.
+	 * the old key too, so the old one never overrules it again.
 	 */
 	static final java.util.Map<String, java.util.List<String>> MERGED;
 
@@ -248,7 +249,7 @@ class PvmPerformancePanel extends PluginPanel
 				requestUpdate();
 			}
 		};
-		// T-188: the Fight tab's own: with Celebrations on, its sections fold under the card until they're opened.
+		// T-188: the Fight tab's own: its sections fold under the card until they're opened (T-202: Celebrations or not).
 		final SidePanelSection.Folds fightFolds = new SidePanelSection.Folds()
 		{
 			@Override
@@ -267,12 +268,9 @@ class PvmPerformancePanel extends PluginPanel
 			public void setFolded(String id, boolean folded)
 			{
 				// T-196: folding or opening it settles the merged sections' keys too, so the old ones never overrule it.
-				if (celebrations())
+				for (String old : MERGED.getOrDefault(id, java.util.Collections.emptyList()))
 				{
-					for (String old : MERGED.getOrDefault(id, java.util.Collections.emptyList()))
-					{
-						stored.setFolded(old + OPENED, !folded);
-					}
+					stored.setFolded(old + OPENED, !folded);
 				}
 				if (underCard(id))
 				{
@@ -287,10 +285,6 @@ class PvmPerformancePanel extends PluginPanel
 
 			private boolean mergedOpened(String id)
 			{
-				if (!celebrations())
-				{
-					return false;
-				}
 				for (String old : MERGED.getOrDefault(id, java.util.Collections.emptyList()))
 				{
 					if (stored.isFolded(old + OPENED))
@@ -660,7 +654,11 @@ class PvmPerformancePanel extends PluginPanel
 		return s;
 	}
 
-	/** T-188: whether Celebrations is on: the setting, else what a test set. */
+	/**
+	 * T-188: whether Celebrations is on: the setting, else what a test set. T-202 (Eric: "Why does the celebrations
+	 * setting move damage over time out from damage?"): it's the kill-end moment and nothing else, the die roll and the
+	 * flash ({@code KillCard.moment}); the tab, its folds and the record are the same either way.
+	 */
 	boolean celebrations()
 	{
 		return celebrations != null ? celebrations : config != null && config.panelCelebrations();
@@ -672,10 +670,10 @@ class PvmPerformancePanel extends PluginPanel
 		celebrations = on;
 	}
 
-	/** T-188: a Fight tab section folded under the kill card by default, with Celebrations on. */
-	private boolean underCard(String id)
+	/** T-188: a Fight tab section folded under the kill card by default (T-202: whatever Celebrations is). */
+	private static boolean underCard(String id)
 	{
-		return celebrations() && FOLDED_UNDER_CARD.contains(id);
+		return FOLDED_UNDER_CARD.contains(id);
 	}
 
 	/** The plugin's state as the model's input; client thread only. */
@@ -776,7 +774,7 @@ class PvmPerformancePanel extends PluginPanel
 				in.kc = Math.max(in.kc, f.getContext() == null ? 0 : f.getContext().kc);
 			}
 			// T-188: the kill's place in its boss's record (T-187): a lookup, null until the kill's history save has run.
-			final BossRecords records = plugin == null || !in.celebrations ? null : plugin.getRecords();
+			final BossRecords records = plugin == null ? null : plugin.getRecords();
 			in.standing = standing(records == null ? null : records.standing(room));
 		}
 		// T-095: a run has no "your average": comparing runs' clocks says nothing.
@@ -1571,12 +1569,6 @@ class PvmPerformancePanel extends PluginPanel
 		public void exportNpc(String name)
 		{
 			plugin.exportNpc(name);
-		}
-
-		@Override
-		public boolean celebrations()
-		{
-			return PvmPerformancePanel.this.celebrations();
 		}
 
 		@Override

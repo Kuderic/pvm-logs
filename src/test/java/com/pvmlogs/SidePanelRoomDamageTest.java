@@ -71,51 +71,9 @@ public class SidePanelRoomDamageTest
 		return in;
 	}
 
-	@Test
-	public void afterAKillDetailsShowsTheRoomsDamageWithItsSources()
-	{
-		final PanelSnapshot.FightTab t = SidePanelModel.fight(input(araxxor(160, SidePanelExamples.at(15, 0)), true));
-		final PanelSnapshot.Row row = row(t.details, SidePanelModel.ROOM_DMG);
-		assertNotNull(row);
-		assertEquals("160", row.right.text);
-		assertEquals("Damage Araxxor took from the room: a Ruptura araxyte's explosion and his own cleave. Not yours, "
-			+ "and not part of your luck.", row.tooltip);
-		// Beside the other things that aren't your attacks: after boss healed's place, before eating.
-		final List<String> labels = labels(t.details);
-		assertTrue(labels.toString(), labels.indexOf(SidePanelModel.ROOM_DMG) >= 0);
-	}
 
-	@Test
-	public void neverWhileTheFightRuns()
-	{
-		final PanelSnapshot.FightTab t = SidePanelModel.fight(input(araxxor(160, SidePanelExamples.at(15, 0)), false));
-		assertNull(row(t.details, SidePanelModel.ROOM_DMG));
-	}
 
-	@Test
-	public void killsWithoutRoomDamageAreUnchanged()
-	{
-		final SidePanelModel.Input in = input(araxxor(0, SidePanelExamples.at(15, 0)), true);
-		final PanelSnapshot.FightTab t = SidePanelModel.fight(in);
-		assertNull(row(t.details, SidePanelModel.ROOM_DMG));
-		// The same rows as before T-109.
-		final PanelSnapshot.Rows before = SidePanelModel.details(in.scope, false, false);
-		assertEquals(labels(before), labels(t.details));
-		// A boss whose room deals nothing: the Sire's kill as ever.
-		assertNull(row(SidePanelModel.fight(SidePanelExamples.sireEmberlight()).details, SidePanelModel.ROOM_DMG));
-	}
 
-	@Test
-	public void anOldKillHasNone()
-	{
-		// Saved before T-106: no roomDamage in the file.
-		final Fight old = new Gson().fromJson("{\"targetName\":\"Araxxor\",\"targetId\":13668,\"targetIndex\":1,"
-			+ "\"maxHp\":1020,\"attempts\":10,\"ended\":true,\"targetDied\":true,\"closedRoom\":true}", Fight.class);
-		assertEquals(0, old.getRoomDamage());
-		final Encounter room = new Encounter("Araxxor", null, 0L);
-		room.add(old);
-		assertNull(row(SidePanelModel.fight(input(room, true)).details, SidePanelModel.ROOM_DMG));
-	}
 
 	@Test
 	public void withoutTheRulesTheTooltipIsGeneric()
@@ -125,25 +83,7 @@ public class SidePanelRoomDamageTest
 		assertTrue(SidePanelModel.roomDamageSources(Collections.singletonList(araxxor(160, 0L)), null).isEmpty());
 	}
 
-	@Test
-	public void notForARun()
-	{
-		final PanelSnapshot.Rows d = SidePanelModel.details(SidePanelExamples.killScope(), false, true, 160, "Araxxor",
-			Collections.emptyList());
-		assertNull(row(d, SidePanelModel.ROOM_DMG));
-	}
 
-	@Test
-	public void historysPickedKillShowsIt()
-	{
-		final Encounter room = araxxor(160, SidePanelExamples.at(15, 0));
-		final List<Fight> history = new ArrayList<>(room.getFights());
-		final Encounter rebuilt = SidePanelHistory.allRooms(history).get(0);
-		final SidePanelModel.Input in = SidePanelHistory.savedKill(history, rebuilt, -1, SidePanelHistoryExamples.NOW,
-			SidePanelExamples.ZONE, null, null);
-		assertEquals(160, in.roomDamage);
-		assertNotNull(row(SidePanelModel.fight(in).details, SidePanelModel.ROOM_DMG));
-	}
 
 	@Test
 	public void theTripSumsItsKillsOnceNoFightRuns()
@@ -161,16 +101,6 @@ public class SidePanelRoomDamageTest
 		assertNull(row(SidePanelModel.trip(in).other, SidePanelModel.ROOM_DMG));
 	}
 
-	@Test
-	public void theTooltipIsOnTheRowsLine()
-	{
-		final PanelSnapshot.Row row = row(SidePanelModel.fight(input(araxxor(160, SidePanelExamples.at(15, 0)), true))
-			.details, SidePanelModel.ROOM_DMG);
-		final SidePanelParts.Line line = new SidePanelParts.Line(row);
-		assertEquals(row.tooltip, Tips.plain(line.getToolTipText()));
-		assertEquals(row.tooltip, Tips.plain(line.left.getToolTipText()));
-		assertEquals(row.tooltip, Tips.plain(line.right.getToolTipText()));
-	}
 
 	private static PanelSnapshot.Row row(PanelSnapshot.Rows rows, String label)
 	{

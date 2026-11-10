@@ -65,10 +65,6 @@ final class SidePanelModel
 	static final String TICK_NOTE = "Luck and comparisons with your average are in seconds; time spent not attacking is in"
 		+ " ticks (1 tick is 0.6 s); setup costs are in damage.";
 	static final String RAID_NO_AVERAGE = "no average yet: raid level isn't recorded";
-	/** T-042: the time budget bar's end when luck saved time, after its clock. */
-	static final String AT_AVERAGE_LUCK = " with average luck";
-	/** T-042: luck's row's hint when luck saved time, before your clock: the stretch past it. */
-	static final String PAST = "past ";
 	/** The luck curve's marker stays inside the drawing. */
 	static final double CURVE_Z_LIMIT = 2.9;
 
@@ -406,8 +402,8 @@ final class SidePanelModel
 		/** The luck-removed clock's median and quartiles over the same like kills; null for none. */
 		LedgerHistory.Spread luckRemoved;
 		/**
-		 * T-188: Celebrations (on by default): the kill card in place of the title and tiles, and the sections' one-line
-		 * summaries. Off, the tab is as it was.
+		 * T-188: Celebrations (on by default). T-202: only the kill-end moment, the die roll and flash
+		 * ({@code KillCard.moment}); the card, sections and record are the same either way.
 		 */
 		boolean celebrations;
 		/** T-188: the game's kill count after this kill ({@code FightContext.kc}), 0 unknown or live. */
@@ -1256,20 +1252,16 @@ final class SidePanelModel
 		{
 			b.budget = budget(n, in, luckColour, warning);
 		}
-		b.tiles = run ? runTiles(n, in, warning) : tiles(n, s, in, luckColour, warning);
+		// T-202: only a run of monsters has tiles (kills, kills an hour, DPS, damage); every other view has the card or
+		// its title over the same sections.
+		b.tiles = run ? runTiles(n, in, warning) : null;
 		final boolean avoidable = avoidableShown(n, in);
 		if (after && !warning && !run)
 		{
 			if (!Double.isNaN(n.percentile))
 			{
-				b.curve = curve(n, s, luckColour);
-				final String specs = specsShareOfLuck(in.drain);
-				if (specs != null)
-				{
-					// T-199: with its tooltip, which this used to drop ("<br>null" on the Luck section's hover).
-					b.curve = new PanelSnapshot.Curve(b.curve.z, b.curve.headerValue, b.curve.caption + ". " + specs,
-						b.curve.tooltip);
-				}
+				// T-202: clarity() gives it its header and tooltip (the specials' share of luck too).
+				b.curve = curve(n, s);
 			}
 			else if (!Double.isNaN(n.luck))
 			{
@@ -1294,9 +1286,8 @@ final class SidePanelModel
 			b.damage = damage(n, in, warning);
 			if (in.charts)
 			{
-				// T-196: under the card your line is white, as the canvas draws it: luck only ever in its violet.
-				b.chart = chart(in, s, in.celebrations && !run && in.kind == Kind.ROOM ? LedgerRows.Colour.NEUTRAL
-					: luckColour, warning);
+				// T-196: your line is white, as the canvas draws it: luck only ever in its violet (T-202: in every view).
+				b.chart = chart(in, s, LedgerRows.Colour.NEUTRAL, warning);
 			}
 			if (split)
 			{
@@ -1305,8 +1296,6 @@ final class SidePanelModel
 		}
 		if (after)
 		{
-			b.details = details(s, avoidable, run, in.kind == Kind.ROOM ? in.roomDamage : 0, in.name,
-				in.roomDamageSources, in.roomDamageSplit);
 			if (!raid && !run && in.drain != null)
 			{
 				// T-119: with what each drain special was expected to do, from the room's timeline where it has one.
@@ -1316,13 +1305,16 @@ final class SidePanelModel
 			}
 		}
 		b.taken = taken(s, in, avoidable);
-		// T-188: the kill card and the folded sections' lines. A run keeps its light view; a whole raid its title.
-		if (in.celebrations && !run && in.kind == Kind.ROOM)
+		// T-188: the kill card where there's a kill (a room); T-202 (Eric: "Why does the celebrations setting move damage
+		// over time out from damage? and timeline is missing"): every view's sections the same, T-196's, with their
+		// folded lines: a room, a whole raid, a run, a party member's fight and a saved kill. Celebrations is only the
+		// kill-end moment (the card's {@code moment}).
+		if (!run && in.kind == Kind.ROOM)
 		{
 			b.card = card(in, n, b, avoidable, warning);
-			clarity(in, n, b, avoidable, warning);
-			b.summaries = summaries(in, n, b, avoidable, warning);
 		}
+		clarity(in, n, b, avoidable, warning);
+		b.summaries = summaries(in, n, b, avoidable, warning);
 	}
 
 	// ---- T-196: the clarity pass's sections under the card ----
@@ -1361,7 +1353,7 @@ final class SidePanelModel
 				+ LedgerRows.oneDecimal(s.expectedHits()) + (s.hits() > 0 && n.expected > 0 ? "; per hit "
 				+ LedgerRows.number(Math.round(n.damage / s.hits())) + DOT + "average "
 				+ LedgerRows.number(Math.round(n.expected / s.expectedHits())) : "") + ".";
-			b.curve = new PanelSnapshot.Curve(b.curve.z, Text.title(strengthWord(strength(p)), luckInk(p)), "",
+			b.curve = new PanelSnapshot.Curve(b.curve.z, Text.title(strengthWord(strength(p)), luckInk(p)),
 				tipLines(luckSentence(p) + (specs == null ? "" : " " + specs + "."), hitLine, CURVE_SPREAD));
 		}
 		if (b.execution != null)
@@ -1543,9 +1535,6 @@ final class SidePanelModel
 		return (int) Math.max(1, Math.min(100, Math.round(percentile * 100)));
 	}
 
-	/** T-188: the Luck curve's legend, its ends; T-201: in the bands. */
-	static final String CURVE_LOW = "bottom 25%";
-	static final String CURVE_HIGH = "top 25%";
 
 	/**
 	 * T-201 (Eric's pick, 2026-11-10: "Top x% everywhere"): luck's one scale on the panel, the card, the Luck section,
@@ -1749,6 +1738,8 @@ final class SidePanelModel
 		final String corner = live ? "live" : in.kc > 0 ? "kill " + LedgerRows.number(in.kc) : "";
 		final PanelSnapshot.KillCard c = new PanelSnapshot.KillCard(live, in.name, tint, h.icon, h.sub.text, h.subShort,
 			corner, h.clock.text);
+		// T-202: Celebrations is the kill-end moment alone.
+		c.moment = in.celebrations;
 		rates(c, in, n, warning);
 		if (live)
 		{
@@ -3030,11 +3021,6 @@ final class SidePanelModel
 		return Double.isNaN(damage) ? 0 : LedgerRows.roundHalfAway(damage);
 	}
 
-	/** T-123: Where the time went's value for a setup part: {@code -16 dmg}, the figure in the Execution card's bracket. */
-	static String damageLost(long damage)
-	{
-		return "-" + LedgerRows.number(damage) + LedgerRows.DMG;
-	}
 
 	/**
 	 * T-123: a setup part's tooltip in Where the time went, its time now it reads damage: {@code stat boost: 16 expected
@@ -3131,14 +3117,11 @@ final class SidePanelModel
 		// labelled. Not when the two would read as the same clock (luck saved under a second).
 		final String clockLabel = LedgerRows.duration(t);
 		// T-198 (Eric: "too wordy"): under the card, a word or two and seconds; the explanations stay in tooltips.
-		final boolean plain = in.celebrations && in.kind == Kind.ROOM && !in.run;
 		final String endLabel = luckSaved > 0 && !LedgerRows.duration(total).equals(clockLabel)
-			? LedgerRows.duration(total) + (plain ? " avg luck" : AT_AVERAGE_LUCK) : null;
+			? LedgerRows.duration(total) + " avg luck" : null;
 
 		final List<BudgetRow> rows = new ArrayList<>();
-		final String bestLabel = in.unscored && in.kind == Kind.ROOM ? "best play on the " + in.scoredName : "best play";
-		rows.add(new BudgetRow(Fill.KEPT, Text.small(plain ? "perfect" : bestLabel, SidePanelStyle.BODY),
-			in.unscored || plain ? null : Text.small("no losses, average luck", SidePanelStyle.MUTED),
+		rows.add(new BudgetRow(Fill.KEPT, Text.small("perfect", SidePanelStyle.BODY), null,
 			Text.small(bestKnown ? SidePanelStyle.roundedDuration(best) : LedgerRows.UNKNOWN, SidePanelStyle.VALUE)));
 		for (int i = 0; i < costs.length; i++)
 		{
@@ -3152,7 +3135,7 @@ final class SidePanelModel
 			if (damage >= 1)
 			{
 				rows.add(new BudgetRow(fill, Text.small(labels[i], SidePanelStyle.BODY), null,
-					Text.small(plain ? "-" + LedgerRows.number(damage) + " dmg" : damageLost(damage), colour),
+					Text.small("-" + LedgerRows.number(damage) + " dmg", colour),
 					setupTip(labels[i], LedgerRows.ticks(costs[i]), damage)).withValueShort("-" + LedgerRows.number(damage)));
 			}
 			// T-118 (Eric, 2026-10-30): the time parts in ticks once it rounds to a tick; T-199: "-25 ticks" (the hyphen,
@@ -3160,30 +3143,30 @@ final class SidePanelModel
 			// the one sign rule has it (+ gained, − lost).
 			else if (LedgerRows.ticks(costs[i]) >= 1)
 			{
-				rows.add(new BudgetRow(fill, Text.small(plain && i == 0 ? "idle" : labels[i], SidePanelStyle.BODY), null,
-					Text.small("-" + (plain ? secs(costs[i]) : SidePanelStyle.ticks(costs[i])), colour)));
+				rows.add(new BudgetRow(fill, Text.small(i == 0 ? "idle" : labels[i], SidePanelStyle.BODY), null,
+					Text.small("-" + secs(costs[i]), colour)));
 			}
 			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
 			if (i == 0 && LedgerRows.ticks(ca) >= 1)
 			{
 				rows.add(new BudgetRow(caCosting ? Fill.COST : Fill.MINOR_COST, Text.small("avoidable eating",
-					SidePanelStyle.BODY), null, Text.small("-" + (plain ? secs(ca) : SidePanelStyle.ticks(ca)), caCosting
+					SidePanelStyle.BODY), null, Text.small("-" + secs(ca), caCosting
 					? SidePanelStyle.COST : SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(e - ca) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
-					Text.small("-" + (plain ? secs(e - ca) : SidePanelStyle.ticks(e - ca)), SidePanelStyle.BODY)));
+					Text.small("-" + secs(e - ca), SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(m - stall) >= 1)
 			{
 				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(MECHANICS, SidePanelStyle.BODY), null,
-					Text.small("-" + (plain ? secs(m - stall) : SidePanelStyle.ticks(m - stall)), SidePanelStyle.BODY)));
+					Text.small("-" + secs(m - stall), SidePanelStyle.BODY)));
 			}
 			if (i == 0 && LedgerRows.ticks(stall) >= 1)
 			{
-				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(plain ? "stall" : STALL, SidePanelStyle.BODY), null,
-					Text.small("-" + (plain ? secs(stall) : SidePanelStyle.ticks(stall)), SidePanelStyle.BODY)));
+				rows.add(new BudgetRow(Fill.MECHANICS, Text.small("stall", SidePanelStyle.BODY), null,
+					Text.small("-" + secs(stall), SidePanelStyle.BODY)));
 			}
 		}
 		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
@@ -3191,15 +3174,13 @@ final class SidePanelModel
 		// T-042: time luck saved is the striped stretch past your clock, in the middle half too (grey stripes there), and
 		// the row says it's the part past your time.
 		final Fill luckSwatch = luckSaved > 0 ? Fill.LUCK_FASTER : averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER;
-		final boolean middleHalf = luckKnown && averageBand && !Double.isNaN(n.percentile);
-		rows.add(new BudgetRow(luckSwatch, Text.small(middleHalf && !plain ? "luck average" : "luck", SidePanelStyle.BODY),
-			endLabel == null || plain ? null : Text.small(PAST + clockLabel, SidePanelStyle.MUTED),
-			Text.small(luckKnown ? plain ? luckTime(l) : LedgerRows.fasterOrSlower(l) : LedgerRows.UNKNOWN,
+		rows.add(new BudgetRow(luckSwatch, Text.small("luck", SidePanelStyle.BODY), null,
+			Text.small(luckKnown ? luckTime(l) : LedgerRows.UNKNOWN,
 				luckKnown ? luckInk(n) : SidePanelStyle.VALUE)));
 		if (u > 0)
 		{
-			rows.add(new BudgetRow(Fill.UNSCORED, Text.small(plain ? "adds" : "adds, not scored", SidePanelStyle.BODY),
-				null, Text.small("-" + (plain ? secs(u) : SidePanelStyle.ticks(u)), SidePanelStyle.BODY)));
+			rows.add(new BudgetRow(Fill.UNSCORED, Text.small("adds", SidePanelStyle.BODY),
+				null, Text.small("-" + secs(u), SidePanelStyle.BODY)));
 		}
 
 		// Against your average: after a kill only, outside a raid, never under the warning (spec 3.1).
@@ -3218,30 +3199,11 @@ final class SidePanelModel
 		{
 			final LedgerHistory.Spread a = in.average.actual;
 			marker = a.median;
-			if (plain)
-			{
-				// T-198: the two times, a word each; how they compare is the bar's.
-				average.add(new Row(Text.small("usual", SidePanelStyle.BODY), Text.small(LedgerRows.duration(a.median),
-					SidePanelStyle.BODY)));
-				average.add(new Row(Text.small("with average luck", SidePanelStyle.BODY), Text.small(LedgerRows.duration(
-					n.expectedDuration), SidePanelStyle.BODY)));
-			}
-			else
-			{
-				average.add(new Row(Text.small("your average " + LedgerRows.duration(a.median), SidePanelStyle.BODY),
-					// Never coloured (Orchestrator, T-034): the raw clock carries luck, which the Luck tile already shows.
-					Text.small(against(t, a.median), SidePanelStyle.BODY)));
-				if (in.luckRemoved != null)
-				{
-					final LedgerHistory.Spread r = in.luckRemoved;
-					// T-118: "25 s faster" alone where "… than 1:46" would cut the clock on the left (in the tooltip whole).
-					// T-199: "avg luck", the short form: the full words cut the clock at Larger beside its comparison.
-					average.add(new Row(Text.small("avg luck " + LedgerRows.duration(n.expectedDuration), SidePanelStyle.BODY),
-						Text.small(against(n.expectedDuration, r.median) + (LedgerRows.roundHalfAway(n.expectedDuration - r.median)
-							== 0 ? " with " : " than ") + LedgerRows.duration(r.median), SidePanelStyle.of(usual(n.expectedDuration,
-							r)))).withRightShort(against(n.expectedDuration, r.median)));
-				}
-			}
+			// T-198: the two times, a word each; how they compare is the bar's.
+			average.add(new Row(Text.small("usual", SidePanelStyle.BODY), Text.small(LedgerRows.duration(a.median),
+				SidePanelStyle.BODY)));
+			average.add(new Row(Text.small("with average luck", SidePanelStyle.BODY), Text.small(LedgerRows.duration(
+				n.expectedDuration), SidePanelStyle.BODY)));
 		}
 		return new PanelSnapshot.TimeBudget(segments, total, t, luckSaved,
 			averageBand ? SidePanelStyle.AVERAGE_STRIPE : SidePanelStyle.BETTER, clockLabel, endLabel, marker, rows, average,
@@ -3724,7 +3686,11 @@ final class SidePanelModel
 
 	// ---- the luck curve ----
 
-	static PanelSnapshot.Curve curve(LedgerRows.Numbers n, LedgerRows.Scope s, LedgerRows.Colour luckColour)
+	/**
+	 * The luck curve's marker, (A - E) / sqrt(V) clamped. T-202: its header and hover are clarity()'s (the old caption
+	 * and tail tooltip went with the tab from before T-188).
+	 */
+	static PanelSnapshot.Curve curve(LedgerRows.Numbers n, LedgerRows.Scope s)
 	{
 		double z = DamageMoments.z(n.damage, n.expected, s.damageVariance());
 		if (Double.isNaN(z))
@@ -3733,41 +3699,16 @@ final class SidePanelModel
 		}
 		z = Math.max(-CURVE_Z_LIMIT, Math.min(CURVE_Z_LIMIT, z));
 		final double p = n.percentile;
-		final String caption;
-		if (p < 0.5)
-		{
-			caption = curveShare(1 - p) + "% of fights with these attacks dealt more";
-		}
-		else
-		{
-			caption = curveShare(p) + "% of fights with these attacks dealt less";
-		}
-		return new PanelSnapshot.Curve(z, Text.title(luckText(p), luckInk(p)), caption,
-			curveTip(z, p));
+		return new PanelSnapshot.Curve(z, Text.title(luckText(p), luckInk(p)), null);
 	}
 
 	/**
-	 * T-112 (Eric's pick, 07:45): a share of fights in whole percent, 1 to 99: at the top 1% the caption reads "99% ...
-	 * dealt less", never 100% (which would say no fight could do better), and a tail is never 0%.
+	 * T-112 (Eric's pick, 07:45): a share of fights in whole percent, 1 to 99: at the top 1% it reads "99 dealt less",
+	 * never 100 (which would say no fight could do better), and a tail is never 0.
 	 */
 	static long curveShare(double fraction)
 	{
 		return Math.max(1, Math.min(99, Math.round(100 * fraction)));
-	}
-
-	/**
-	 * T-112: the curve's tooltip, for the tail it shades (Eric, 2026-10-30: "top 1% is not at the 1% of the graph"):
-	 * the curve runs over z, so a top 1% sits most of the way across, with a thin sliver of area past it.
-	 */
-	static String curveTip(double z, double p)
-	{
-		final boolean right = z >= 0;
-		final long share = curveShare(right ? 1 - p : p);
-		final String band = luckText(p);
-		final String head = Character.toUpperCase(band.charAt(0)) + band.substring(1) + ": " + share
-			+ "% of fights with these attacks would have dealt " + (right ? "more" : "less") + ", the shaded "
-			+ (right ? "right" : "left") + " side.";
-		return tipLines(head, CURVE_SPREAD);
 	}
 
 	/** T-201: what the curve's width is, on its hover. */
@@ -4360,79 +4301,8 @@ final class SidePanelModel
 
 	static final String AS_THROWN = " as thrown";
 
-	/** After the fight: the overlay's Summary rows that the tiles and Damage taken don't already show. */
-	static PanelSnapshot.Rows details(LedgerRows.Scope s)
-	{
-		return details(s, false);
-	}
-
-	/**
-	 * {@code avoidable} (T-044) once set the eating row, which T-112 moved out of Details (Where the time went has it);
-	 * kept for the callers.
-	 */
-	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable)
-	{
-		return details(s, avoidable, false);
-	}
-
-	/**
-	 * With {@code run} (T-095), a run of monsters: no hits against expected, which is luck's; the other damage stays.
-	 */
-	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run)
-	{
-		return details(s, avoidable, run, 0, null, Collections.emptyList());
-	}
-
-	/**
-	 * T-109: with the room's damage on {@code boss} ({@code roomDamage}, its {@code sources} by name): a {@code room dmg}
-	 * row after {@code boss healed}, with a tooltip saying what it is. Only above 0 and never for a run.
-	 */
-	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run, int roomDamage, String boss,
-		List<String> sources)
-	{
-		return details(s, avoidable, run, roomDamage, boss, sources, null);
-	}
-
-	/** T-131: with the room damage {@code split} by source, a row each in place of {@code room dmg}; null for the total. */
-	static PanelSnapshot.Rows details(LedgerRows.Scope s, boolean avoidable, boolean run, int roomDamage, String boss,
-		List<String> sources, List<RoomDamage.Source> split)
-	{
-		// T-112: in two groups, your damage and the boss's own; see grouped().
-		final List<Row> yours = new ArrayList<>();
-		final List<Row> theBoss = new ArrayList<>();
-		if (s.expectedHits() > 0 && !run)
-		{
-			yours.add(row("hits/expected", s.hits() + "/" + LedgerRows.oneDecimal(s.expectedHits())));
-		}
-		if (s.thrallDamage() > 0)
-		{
-			yours.add(row("thrall dmg", LedgerRows.number(s.thrallDamage())));
-		}
-		if (s.reflectDamage() > 0)
-		{
-			yours.add(row("recoil/veng dmg", LedgerRows.number(s.reflectDamage())));
-		}
-		// T-063: a line a kind, then "DoT dmg" for what has no kind, as the overlay has them (T-062).
-		dotRows(yours, s.dotDamageByKind(), s.dotDamage(), " dmg");
-		// The boss's doing rather than the player's, so after the fight only (own-output guardrail).
-		if (s.healed() > 0)
-		{
-			theBoss.add(row("boss healed", LedgerRows.number(s.healed())));
-		}
-		// T-109: the boss's room's doing too (Araxxor's Ruptura explosions, his own cleave), so after the fight only.
-		if (roomDamage > 0 && !run)
-		{
-			addRoomDamageRows(theBoss, roomDamage, boss, sources, split);
-		}
-		// T-112 (Eric's pick, 07:45): no eating or mechanics here: Where the time went has them.
-		final List<Row> rows = grouped(new String[]{YOUR_DAMAGE, THE_BOSS}, yours, theBoss);
-		return rows.isEmpty() ? null : new PanelSnapshot.Rows(null, rows);
-	}
-
 	// ---- T-112: Details and Damage taken in groups ----
 
-	static final String YOUR_DAMAGE = "Your damage";
-	static final String THE_BOSS = "The boss";
 	static final String TOTAL = "Total";
 	static final String BY_ATTACK = "By attack";
 	static final String OVER_TIME = "Over time";

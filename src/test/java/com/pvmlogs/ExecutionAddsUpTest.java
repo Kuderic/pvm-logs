@@ -93,9 +93,11 @@ public class ExecutionAddsUpTest
 			false), new LedgerRows.Settings());
 		for (PanelSnapshot.Part p : tab.execution.parts)
 		{
-			if (p.label.text.equals("stat boost"))
+			// T-199's word for it; the cost under its bar (T-198).
+			if (p.label.text.equals("Boosts"))
 			{
-				assertEquals(row(rows, " stat boost").right, p.value.text);
+				assertEquals(row(rows, " stat boost").right, p.value.text + (p.note.text.isEmpty() ? "" : " ("
+					+ p.note.text + ")"));
 				return;
 			}
 		}
@@ -112,7 +114,7 @@ public class ExecutionAddsUpTest
 		assertEquals("[uptime, prayer, gear, stat boost]", labels(losses));
 		assertEquals(1 - n.executionLive, sum(losses), 1e-12);
 		assertEquals("95%", LedgerRows.partPercent(n.executionLive));
-		assertEquals("100% − uptime 0.9% − prayer 0.3% − gear 2.8% − stat boost 0.8% = 95%",
+		assertEquals("100% - uptime 0.9% - prayer 0.3% - gear 2.8% - stat boost 0.8% = 95%",
 			LedgerRows.executionSum(n, false));
 	}
 
@@ -190,7 +192,7 @@ public class ExecutionAddsUpTest
 	{
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerExamples.kill());
 		final String sum = LedgerRows.executionSum(n, false);
-		assertTrue(sum, sum.startsWith("100% − uptime "));
+		assertTrue(sum, sum.startsWith("100% - uptime "));
 		assertTrue(sum, sum.endsWith(" = " + LedgerRows.partPercent(n.executionLive)));
 		// Parts that cost nothing (here prayer and gear) are left out.
 		assertTrue(sum, !sum.contains("prayer") && !sum.contains("gear"));
