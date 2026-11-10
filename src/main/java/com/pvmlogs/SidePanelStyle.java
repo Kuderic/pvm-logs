@@ -44,6 +44,9 @@ final class SidePanelStyle
 	static final Color PANEL = ColorScheme.DARK_GRAY_COLOR;
 	static final Color CARD = ColorScheme.DARKER_GRAY_COLOR;
 	static final Color SELECTED = ColorScheme.DARKER_GRAY_HOVER_COLOR;
+	/** T-198: a folded section's card under the mouse, and an open header's ground under it: a step lighter. */
+	static final Color CARD_HOVER = new Color(0x323232);
+	static final Color HEADER_HOVER = new Color(0x363636);
 	static final Color TRACK = new Color(0x3A3A3A);
 	static final Color DIVIDER = new Color(0x2E2E2E);
 	static final Color KEPT = new Color(0x7FA0B8);
@@ -491,5 +494,53 @@ final class SidePanelStyle
 	{
 		final long r = LedgerRows.roundHalfAway(seconds);
 		return (r == 0 ? 0 : r) + " s";
+	}
+
+	/** T-198: a tooltip's line length, in characters, before it breaks. */
+	static final int TIP_LINE = 56;
+
+	/**
+	 * T-198 (Eric: "Your play tooltip needs a linebreak"): a tooltip broken into lines of at most {@link #TIP_LINE}
+	 * characters, at spaces, as HTML; its own breaks ({@code <br>}) kept. Swing draws a tooltip on one line otherwise,
+	 * wider than the panel at every text size.
+	 */
+	static String wrapTip(String tip)
+	{
+		if (tip == null)
+		{
+			return null;
+		}
+		final String body = tip.startsWith("<html>") ? tip.substring(6).replace("</html>", "") : tip;
+		final StringBuilder out = new StringBuilder("<html>");
+		final String[] paragraphs = body.split("<br>", -1);
+		for (int p = 0; p < paragraphs.length; p++)
+		{
+			if (p > 0)
+			{
+				out.append("<br>");
+			}
+			int line = 0;
+			for (String word : paragraphs[p].split(" "))
+			{
+				if (word.isEmpty())
+				{
+					continue;
+				}
+				final int len = word.replaceAll("<[^>]*>", "").length();
+				if (line > 0 && line + 1 + len > TIP_LINE)
+				{
+					out.append("<br>");
+					line = 0;
+				}
+				else if (line > 0)
+				{
+					out.append(' ');
+					line++;
+				}
+				out.append(word);
+				line += len;
+			}
+		}
+		return out.append("</html>").toString();
 	}
 }

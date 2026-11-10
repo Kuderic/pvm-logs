@@ -48,15 +48,24 @@ final class SidePanelSection extends JPanel
 		}
 	}
 
-	/** Shown after the hint while folded, so a folded section reads as one that opens. */
-	static final String FOLDED_MARK = "+";
+	/**
+	 * T-198 (Eric, 23:34: "make it more clear that the cards are clickable and expandable"): the header's tooltip, folded
+	 * and open, after any of its own. A chevron at its left (folded pointing right, open pointing down), a lighter ground
+	 * on hover and the hand cursor say it too; the faint "+" after the hint is gone.
+	 */
+	static final String OPEN_TIP = "Click to open";
+	static final String FOLD_TIP = "Click to fold";
 
 	private final String id;
 	/** T-102: its title, for tests. */
 	private final String title;
-	/** The header's own tooltip. */
-	static final String FOLD_TIP = "Click to fold or open";
 	private final Folds folds;
+	/** T-198: the expand mark at the header's left. */
+	private final Chevron chevron = new Chevron();
+	/** T-126: the header's own tooltip before the fold's; null for none. */
+	private String ownTip;
+	/** T-198: whether the mouse is over the header (and the folded line under it). */
+	private boolean hover;
 	private final SidePanelParts.Line header;
 	private final JComponent body;
 	private PanelSnapshot.Text hint = PanelSnapshot.Text.NONE;
@@ -77,8 +86,7 @@ final class SidePanelSection extends JPanel
 		this.body = body;
 		setOpaque(false);
 		header = new SidePanelParts.Line(PanelSnapshot.Text.title(title, SidePanelStyle.VALUE), hint);
-		header.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		header.setToolTipText(FOLD_TIP);
+		head = new JPanel(new SidePanelStack(3));
 		final MouseAdapter click = new MouseAdapter()
 		{
 			@Override
@@ -86,13 +94,37 @@ final class SidePanelSection extends JPanel
 			{
 				toggle();
 			}
+
+			@Override
+			public void mouseEntered(MouseEvent e)
+			{
+				setHover(true);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				// Moving between the header's parts isn't leaving it.
+				final java.awt.Point p = javax.swing.SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), head);
+				setHover(head.contains(p));
+			}
 		};
-		header.addMouseListener(click);
-		head = new JPanel(new SidePanelStack(3));
-		head.add(header);
+		// The chevron, then the title and its hint: the whole row is the click target.
+		final JPanel top = new JPanel(new java.awt.BorderLayout(4, 0));
+		top.setOpaque(false);
+		top.add(chevron, java.awt.BorderLayout.WEST);
+		top.add(header, java.awt.BorderLayout.CENTER);
+		// The parts with their own listener take the mouse; the header's texts and the chevron pass it to theirs.
+		for (JComponent c : new JComponent[]{head, top, header, summary})
+		{
+			c.addMouseListener(click);
+		}
+		for (JComponent c : new JComponent[]{head, top, chevron, header, header.left, header.right, summary})
+		{
+			c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		}
+		head.add(top);
 		summary.setVisible(false);
-		summary.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		summary.addMouseListener(click);
 		head.add(summary);
 		add(head);
 		add(body);
@@ -108,10 +140,83 @@ final class SidePanelSection extends JPanel
 	private void restyleHead()
 	{
 		final boolean card = isFolded() && !summary.text.isEmpty();
-		head.setOpaque(card);
-		head.setBackground(SidePanelStyle.CARD);
 		head.setBorder(card ? new EmptyBorder(5, 7, 6, 7) : new EmptyBorder(4, 0, 0, 0));
 		summary.setVisible(card);
+		chevron.folded = isFolded();
+		paintHead();
+		setTooltip(ownTip);
+	}
+
+	/** T-198: the header's ground: the card's, lighter on hover; none for an open header at rest. A repaint, no layout. */
+	private void paintHead()
+	{
+		final boolean card = isFolded() && !summary.text.isEmpty();
+		head.setOpaque(card || hover);
+		head.setBackground(hover ? (card ? SidePanelStyle.CARD_HOVER : SidePanelStyle.HEADER_HOVER) : SidePanelStyle.CARD);
+		head.repaint();
+		chevron.repaint();
+	}
+
+	private void setHover(boolean h)
+	{
+		if (hover != h)
+		{
+			hover = h;
+			paintHead();
+		}
+	}
+
+	/** T-198: whether the header shows its hover, for tests. */
+	boolean hovered()
+	{
+		return hover;
+	}
+
+	/** T-198: whether the chevron points down (open), for tests. */
+	boolean chevronOpen()
+	{
+		return !chevron.folded;
+	}
+
+	/** T-198: the header's tooltip, for tests. */
+	String headerTip()
+	{
+		return header.getToolTipText();
+	}
+
+	/** T-198: the expand mark, 7 px: a triangle pointing right while folded, down while open, centred on the title. */
+	private static final class Chevron extends JComponent
+	{
+		boolean folded;
+
+		@Override
+		public java.awt.Dimension getPreferredSize()
+		{
+			return new java.awt.Dimension(7, SidePanelStyle.Type.TITLE.lineHeight());
+		}
+
+		@Override
+		protected void paintComponent(java.awt.Graphics g)
+		{
+			g.setColor(SidePanelStyle.SECONDARY);
+			final int top = Math.min(getHeight(), SidePanelStyle.Type.TITLE.lineHeight()) / 2 - 3;
+			if (folded)
+			{
+				// ▸
+				for (int i = 0; i < 4; i++)
+				{
+					g.fillRect(1 + i, top + i, 1, 7 - 2 * i);
+				}
+			}
+			else
+			{
+				// ▾
+				for (int i = 0; i < 4; i++)
+				{
+					g.fillRect(i, top + 1 + i, 7 - 2 * i, 1);
+				}
+			}
+		}
 	}
 
 	/**
@@ -163,6 +268,7 @@ final class SidePanelSection extends JPanel
 	{
 		static final int TIME_BAR = 6;
 		static final int LUCK_TRACK_W = 44;
+		static final int SHARE_W = 80;
 		String text = "";
 		java.awt.Color colour = SidePanelStyle.SECONDARY;
 		PanelSnapshot.Mark mark;
@@ -226,6 +332,29 @@ final class SidePanelSection extends JPanel
 						g.fillRect(x, 0, Math.min(2, to - x), TIME_BAR);
 					}
 					return 0;
+				}
+				case SHARES:
+				{
+					// T-198: Damage's share bar in small.
+					final int h = 6;
+					final int y = lineTop + (line - h) / 2;
+					double total = 0;
+					for (double f : m.shares)
+					{
+						total += f;
+					}
+					int x = 0;
+					double acc = 0;
+					for (int i = 0; i < m.shares.length; i++)
+					{
+						acc += m.shares[i];
+						final int end = i == m.shares.length - 1 ? SHARE_W : (int) Math.round(acc / Math.max(1e-9, total)
+							* SHARE_W);
+						g.setColor(m.colours[i]);
+						g.fillRect(x, y, Math.max(0, end - x), h);
+						x = end;
+					}
+					return SHARE_W + 6;
 				}
 				case LUCK:
 				{
@@ -298,8 +427,10 @@ final class SidePanelSection extends JPanel
 	 */
 	void setTooltip(String tooltip)
 	{
-		final String text = tooltip == null ? FOLD_TIP : tooltip.startsWith("<html>")
-			? tooltip.replace("</html>", "<br>" + FOLD_TIP + "</html>") : "<html>" + tooltip + "<br>" + FOLD_TIP + "</html>";
+		ownTip = tooltip;
+		final String fold = isFolded() ? OPEN_TIP : FOLD_TIP;
+		final String text = tooltip == null ? fold : tooltip.startsWith("<html>")
+			? tooltip.replace("</html>", "<br>" + fold + "</html>") : "<html>" + tooltip + "<br>" + fold + "</html>";
 		if (!text.equals(header.getToolTipText()))
 		{
 			header.setToolTipText(text);
@@ -311,16 +442,12 @@ final class SidePanelSection extends JPanel
 		hint = h == null ? PanelSnapshot.Text.NONE : h;
 		if (hintComponent != null)
 		{
-			// T-105: the control hides while folded, and the mark alone says it opens.
+			// T-105: the control hides while folded; the chevron says it opens.
 			hintComponent.setVisible(!isFolded());
-			header.right.set(isFolded() ? PanelSnapshot.Text.small(FOLDED_MARK, SidePanelStyle.SECONDARY)
-				: PanelSnapshot.Text.NONE);
+			header.right.set(PanelSnapshot.Text.NONE);
 			return;
 		}
-		final PanelSnapshot.Text shown = !isFolded() ? hint : hint.isEmpty()
-			? PanelSnapshot.Text.small(FOLDED_MARK, SidePanelStyle.SECONDARY)
-			: new PanelSnapshot.Text(hint.text + " " + FOLDED_MARK, hint.colour, hint.type);
-		header.right.set(shown);
+		header.right.set(hint);
 	}
 
 	/**

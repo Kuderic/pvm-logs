@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -64,8 +65,50 @@ public class SidePanelProgressTest
 		assertEquals("Luck removed, last " + SidePanelHistory.TREND_OF, p.trendTitle);
 		assertTrue(p.trend.text, p.trend.text.matches("\\d+ s (faster|slower)|even"));
 		assertEquals(209, p.kills);
-		// A farmed boss's badges: the longest streak and the kills tracked, by hundreds.
-		assertTrue(p.badges.toString(), p.badges.toString().contains("200 kills tracked"));
+		// T-193: a farmed boss's badges with their counts: the 400th and 500th kills, the clean runs, the runs of A's
+		// with the longest. No Flawless at a boss without attack rules.
+		final List<String> names = new java.util.ArrayList<>();
+		for (PanelSnapshot.Badge b : p.badges)
+		{
+			names.add(b.name);
+		}
+		final BossRecords.View v = SidePanelProgressExamples.araxxor().view(new LedgerHistory.Like("Araxxor", 1020, true));
+		assertEquals(names.toString(), Arrays.asList("100th kill ×2", "Clean run ×" + v.badgeCount(Badges.Badge.CLEAN_RUN),
+			"3 A's in a row ×" + v.badgeCount(Badges.Badge.THREE_IN_A_ROW) + " · best " + v.longestStreak), names);
+		assertFalse(v.badgeCounts.containsKey(Badges.Badge.FLAWLESS));
+	}
+
+	@Test
+	public void historyShowsEachBadgeWithItsCountFromTheRecord()
+	{
+		// Vardorvis has attack rules: its Flawless kills are counted; each badge's count is the View's.
+		final BossRecords.View v = SidePanelProgressExamples.vardorvis().view(new LedgerHistory.Like("Vardorvis", 700,
+			true));
+		final List<PanelSnapshot.Badge> badges = SidePanelHistory.badges(v);
+		assertTrue(v.badgeCounts.toString(), v.badgeCount(Badges.Badge.FLAWLESS) > 0);
+		assertEquals("Flawless ×" + v.badgeCount(Badges.Badge.FLAWLESS), badges.get(0).name);
+		assertEquals(PanelSnapshot.Badge.Mark.FLAWLESS, badges.get(0).mark);
+		// One badge per count the record has, in the card's order; a badge never earned isn't there.
+		assertEquals(v.badgeCounts.size(), badges.size());
+		assertFalse(badges.toString(), badges.toString().contains("100th kill"));
+	}
+
+	@Test
+	public void aBadgeWithNoCountIsntShown()
+	{
+		final BossRecords records = SidePanelProgressExamples.records(SidePanelHistoryExamples.history(), "Vardorvis", 700,
+			0, new double[]{120}, new double[]{0.9});
+		final BossRecords.View v = records.view(new LedgerHistory.Like("Vardorvis", 700, true));
+		for (PanelSnapshot.Badge b : SidePanelHistory.badges(v))
+		{
+			final String title = b.name.substring(0, b.name.indexOf(" ×"));
+			boolean counted = false;
+			for (Badges.Badge k : v.badgeCounts.keySet())
+			{
+				counted |= k.title.equals(title);
+			}
+			assertTrue(b.name, counted);
+		}
 	}
 
 	@Test

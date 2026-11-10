@@ -26,6 +26,17 @@ final class SidePanelProgressExamples
 	static BossRecords records(List<Fight> history, String boss, int maxHp, int older, double[] olderClock,
 		double[] olderExecution)
 	{
+		return records(history, boss, maxHp, older, olderClock, olderExecution, 0, false);
+	}
+
+	/**
+	 * T-193: as above, with the badges' figures: the older kills numbered by the game's count from {@code firstKc} (0
+	 * unknown), Flawless on every other one where the boss has attack rules ({@code ruled}), a Clean run every fiftieth
+	 * (Eric had 4 in 274, T-189); the history's kills by T-192's own reading of each room ({@code KillFigures.of}).
+	 */
+	static BossRecords records(List<Fight> history, String boss, int maxHp, int older, double[] olderClock,
+		double[] olderExecution, int firstKc, boolean ruled)
+	{
 		final BossRecords records;
 		try
 		{
@@ -41,7 +52,7 @@ final class SidePanelProgressExamples
 			final double clock = olderClock[i % olderClock.length];
 			records.record(new BossRecords.KillFigures(like, 1_000_000L + i * 1000L, clock,
 				olderExecution[i % olderExecution.length], clock + 3 - (i % 7), 0.2 + 0.6 * ((i * 37) % 100) / 100.0,
-				null));
+				ruled ? (Boolean) (i % 2 == 0) : null, firstKc > 0 ? firstKc + i : 0, i % 50 == 7));
 		}
 		final Set<Fight> none = Collections.newSetFromMap(new IdentityHashMap<>());
 		for (Encounter room : LedgerHistory.rooms(history, boss))
@@ -50,9 +61,7 @@ final class SidePanelProgressExamples
 			{
 				continue;
 			}
-			final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(room));
-			records.record(new BossRecords.KillFigures(LedgerHistory.Like.of(room), room.getStartMillis(), n.clock,
-				n.execution, n.expectedDuration, n.percentile, null));
+			records.record(BossRecords.KillFigures.of(room));
 		}
 		return records;
 	}
@@ -61,7 +70,7 @@ final class SidePanelProgressExamples
 	static BossRecords vardorvis()
 	{
 		return records(SidePanelHistoryExamples.history(), "Vardorvis", 700, 3, new double[]{126, 103, 119},
-			new double[]{0.95, 0.97, 0.93});
+			new double[]{0.95, 0.97, 0.93}, 0, true);
 	}
 
 	/** Twenty Araxxor kills today, shaped on the Vardorvis example's, at Araxxor's 1,020 HP. */
@@ -118,7 +127,7 @@ final class SidePanelProgressExamples
 	{
 		return records(araxxorHistory(), "Araxxor", 1020, 189,
 			new double[]{65.4, 78.6, 81.0, 88.8, 94.8, 106.2, 114.6, 120.6, 147.0, 92.4, 99.0, 85.2},
-			new double[]{0.824, 0.886, 0.903, 0.939, 0.966, 0.981, 0.991, 0.995, 0.999, 0.958, 0.972, 0.947});
+			new double[]{0.824, 0.886, 0.903, 0.939, 0.966, 0.981, 0.991, 0.995, 0.999, 0.958, 0.972, 0.947}, 347, false);
 	}
 
 	/** History's source on {@code history}, with Celebrations on and this record. */

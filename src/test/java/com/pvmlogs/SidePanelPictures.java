@@ -127,6 +127,11 @@ public final class SidePanelPictures
 			historyProgress(out);
 			return;
 		}
+		if (args.length > 1 && "fixes".equals(args[1]))
+		{
+			cardFixes(out);
+			return;
+		}
 		if (args.length > 1 && "clarity".equals(args[1]))
 		{
 			clarity(out);
@@ -1961,6 +1966,62 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-198: the card after Eric played it: the Araxxor KC 555 kill after and live; the card with each grade chip; the
+	 * folded Luck header at rest and under the mouse. Normal, Smooth and Larger, 1x and 2x.
+	 */
+	private static void cardFixes(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "smooth", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = m == 1;
+			larger = m == 2;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-araxxor-kill", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "b-araxxor-live", scale, fightTab(SidePanelKillCardExamples.araxxorLive(), scale));
+				write(dir, "c-pb-kill", scale, fightTab(SidePanelKillCardExamples.pbKill(), scale));
+				for (String grade : new String[]{"S", "A", "B", "C"})
+				{
+					final SidePanelModel.Input in = SidePanelKillCardExamples.araxxorKill();
+					in.standing.grade = grade;
+					write(dir, "d-grade-" + grade, scale, fightTab(in, scale));
+				}
+				write(dir, "e-folded-header", scale, hovered(SidePanelKillCardExamples.araxxorKill(), false, scale));
+				write(dir, "f-folded-header-hovered", scale, hovered(SidePanelKillCardExamples.araxxorKill(), true,
+					scale));
+				write(dir, "g-celebrations-off-hovered", scale, hovered(SidePanelKillCardExamples.off(), true, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-198: the Fight tab with its Luck section folded, the mouse over its header or not. */
+	private static BufferedImage hovered(SidePanelModel.Input in, boolean over, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.setCelebrations(in.celebrations);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
+		final SidePanelSection luck = sectionOf(panel.fightTab(), "curve");
+		if (!luck.isFolded())
+		{
+			luck.toggle();
+		}
+		if (over)
+		{
+			final java.awt.Component head = luck.getComponent(0);
+			head.dispatchEvent(new java.awt.event.MouseEvent(head, java.awt.event.MouseEvent.MOUSE_ENTERED, 0, 0, 5, 5, 0,
+				false));
+		}
+		return draw(panel.tabs(), panel.fightTab(), scale);
 	}
 
 	/**

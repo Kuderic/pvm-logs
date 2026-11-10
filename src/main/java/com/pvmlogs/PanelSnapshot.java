@@ -1538,7 +1538,7 @@ final class PanelSnapshot
 	{
 		enum Kind
 		{
-			LUCK, TIME, GRADE
+			LUCK, TIME, GRADE, SHARES
 		}
 
 		final Kind kind;
@@ -1551,9 +1551,20 @@ final class PanelSnapshot
 		/** GRADE: the letter and its colour. */
 		final String grade;
 		final Color colour;
+		/** SHARES (T-198): Damage's share bar in small, each source's share and colour, biggest first. */
+		final double[] shares;
+		final Color[] colours;
 
 		private Mark(Kind kind, int roll, double kept, double lost, double luck, boolean luckSaved, String grade, Color colour)
 		{
+			this(kind, roll, kept, lost, luck, luckSaved, grade, colour, new double[0], new Color[0]);
+		}
+
+		private Mark(Kind kind, int roll, double kept, double lost, double luck, boolean luckSaved, String grade, Color colour,
+			double[] shares, Color[] colours)
+		{
+			this.shares = shares;
+			this.colours = colours;
 			this.kind = kind;
 			this.roll = roll;
 			this.kept = kept;
@@ -1578,14 +1589,36 @@ final class PanelSnapshot
 		{
 			return new Mark(Kind.GRADE, -1, 0, 0, 0, false, grade, colour);
 		}
+
+		/** T-198: Damage's sources, biggest first. */
+		static Mark shares(List<Source> rows)
+		{
+			final List<Source> shown = new ArrayList<>();
+			for (Source r : rows)
+			{
+				if (r.shareFraction > 0)
+				{
+					shown.add(r);
+				}
+			}
+			shown.sort((a, b) -> Double.compare(b.shareFraction, a.shareFraction));
+			final double[] f = new double[shown.size()];
+			final Color[] c = new Color[shown.size()];
+			for (int i = 0; i < f.length; i++)
+			{
+				f[i] = shown.get(i).shareFraction;
+				c[i] = shown.get(i).colour;
+			}
+			return new Mark(Kind.SHARES, -1, 0, 0, 0, false, null, null, f, c);
+		}
 	}
 
 	/**
 	 * T-188 (Eric, 2026-11-09: "let's choose A for all of them"), redrawn by T-196's clarity pass (Eric approved,
-	 * 21:5x): the kill card, in place of the Fight tab's title and four tiles. After the kill, four blocks, each
-	 * answering one question with its scale: Speed (how fast), Your play (how well), Luck (how lucky), Fix next (what to
-	 * fix). Live: the clock, your play so far with its idle moments, luck so far, the weapon in hand. Ticks are written as
-	 * seconds throughout. Painted at the height its blocks need ({@code SidePanelKillCard}); which blocks it has is
+	 * 21:5x) and T-198 (after Eric played it: "too wordy"): the kill card, in place of the Fight tab's title and four
+	 * tiles. Glance first, words on hover: three tiles, Time, Skill and Luck, each a number with its scale and one short
+	 * line, every explanation in its tooltip; the badges as icon chips. Live: the clock, skill so far with the fight's
+	 * idle strip, luck's word so far. Ticks are written as seconds throughout. Painted at the height its blocks need ({@code SidePanelKillCard}); which blocks it has is
 	 * {@link #structure()}.
 	 *
 	 * <p>The header is fixed at construction; the blocks are set once by {@code SidePanelModel.card} on the client
@@ -1606,70 +1639,41 @@ final class PanelSnapshot
 		final String corner;
 		final String clock;
 
-		// ---- Speed, after the kill ----
-		/** {@code 21 s slower}, or NEW PB in the boss's colour; NONE without a best or a usual. */
-		Text versus = Text.NONE;
-		/** Under it: {@code than your best, 1:05}, {@code your best was 1:28}, {@code than your usual, 1:34}. */
-		String versusWhat;
-		boolean newPb;
-		/** The track, seconds: your best (before this kill), your usual, the slow end (your 90th percentile), this kill. */
-		double trackBest = Double.NaN;
-		double trackUsual = Double.NaN;
-		double trackSlow = Double.NaN;
-		double trackClock = Double.NaN;
-		/** {@code 42nd fastest of your 199 kills}; null with no rank. */
-		String rank;
+		// T-198 (Eric, 23:53: "too wordy"): glance first, words on hover. Three tiles, Time, Skill and Luck, each a number
+		// and a short second line; every explanation is its tile's tooltip.
 
-		// ---- Your play ----
+		// ---- Time ----
+		/** After: your usual ({@code 1:34}), the median of your last like kills; null without. */
+		String usual;
+		/** A new fastest kill: the gold PB chip on the Time tile. */
+		boolean newPb;
+		/** Your best before this kill ({@code 1:05}) and the rank ({@code 42nd fastest of 199}), for the tooltip. */
+		String best;
+		String rank;
+		String timeTip;
+
+		// ---- Skill ----
 		/** S to C after the kill; null live and before the record has it. */
 		String grade;
 		Color gradeColour = SidePanelStyle.VALUE;
-		/** After: {@code 99% of a perfect fight}; live: {@code 99% attacking}. */
-		String play;
-		/** After: {@code 1.2 s lost} (orange) and why, {@code (0.6 s idle, a boost wore off)}; null when nothing was lost. */
+		/** {@code 99%}: after the kill of a perfect fight, live the share attacking; null when unknown. */
+		String skill;
+		/** {@code −1.1 s} in orange; null when nothing was lost. */
 		String lost;
-		String lostWhy;
-		/** Where the kill sits in your last N, 0 to 1, for the zones' marker; NaN on fixed bands or unknown. */
-		double share = Double.NaN;
-		/** {@code better than 90% of your last 50 kills}, or the fixed bands' words. */
-		String better;
-		/** {@code 0.6 s more attacking would make it an S}; null for an S or none. */
-		String next;
-		/** Live: {@code 1 s} idle {@code of 42 s}. */
-		String idle;
-		String idleOf;
+		String skillTip;
 		/** Live: the fight so far in buckets, oldest first: {@link #STRIP_IDLE}, {@link #STRIP_EATING} or 0. */
 		byte[] strip;
 
 		// ---- Luck ----
 		/** After: rolled 1 to 100; -1 live and when unknown. */
 		int rolled = -1;
-		/** Live: {@code average so far} in luck's violet by strength, or a muted note. */
-		Text luckSoFar = Text.NONE;
-		/** Live: {@code You've dealt 461. Average rolls: 452.} */
-		String dealt;
-		/** After: {@code Your hits did 12% more damage than average rolls: 10 s faster.} */
-		String luckSentence;
-		/** After: {@code With average luck this kill takes 1:36.} */
-		String averageLuck;
-		/** A new best with average luck: the gold star, with the old one ({@code was 1:37}). */
-		boolean newBestAverageLuck;
-		String averageLuckWas;
-		/** No roll: why ({@code boss data unsure}, {@code no monster data yet}); null with one. */
-		String luckNote;
-		/** T-194: the roll's words for its tooltip; null for none. */
+		/** After: luck's time, {@code +10 s} or {@code −9 s}, in violet; null without. */
+		String luckTime;
+		/** Live: one word, its strength so far ({@code average}) in violet; or a muted note ({@code no spread}). */
+		Text luckWord = Text.NONE;
+		String luckTip;
+		/** T-194: the roll's words; null for none. */
 		String luckWords;
-
-		// ---- Fix next, after the kill ----
-		/** {@code Nearly perfect. Your biggest loss: 0.6 s standing still, not attacking.}; null for none. */
-		String fix;
-
-		// ---- the weapon in hand, live ----
-		String weapon;
-		int weaponItem = -1;
-		int weaponSprite = -1;
-		/** {@code 10.9 damage a second}; null with none. */
-		String weaponRate;
 
 		/** T-189: the badges earned, only after a kill and only when earned; empty for none. */
 		List<Badge> badges = Collections.emptyList();
@@ -1697,26 +1701,10 @@ final class PanelSnapshot
 			return this;
 		}
 
-		boolean speedTrack()
-		{
-			return !Double.isNaN(trackBest) && !Double.isNaN(trackSlow) && trackSlow > trackBest;
-		}
-
-		/** Live or after, and the blocks and lines that take room. */
+		/** Live or after, and what takes room: the strip live, the badges after. Every other line is always there. */
 		String structure()
 		{
-			final StringBuilder s = new StringBuilder(live ? "l" : "k");
-			if (live)
-			{
-				s.append(strip == null ? "" : "s").append(dealt == null ? "" : "d").append(weapon == null ? "" : "w");
-				return s.toString();
-			}
-			s.append(versus.text.isEmpty() ? "" : "v").append(speedTrack() ? "t" : "").append(rank == null ? "" : "r")
-				.append(grade == null ? "" : "g").append(lost == null ? "" : "o").append(Double.isNaN(share) ? "" : "z")
-				.append(better == null ? "" : "b").append(next == null ? "" : "n").append(rolled > 0 ? "R" : "")
-				.append(averageLuck == null ? "" : "a").append(newBestAverageLuck ? "*" : "").append(fix == null ? "" : "f")
-				.append(badges.isEmpty() ? "" : "B" + badges.size());
-			return s.toString();
+			return live ? "l" + (strip == null ? "" : "s") : "k" + (badges.isEmpty() ? "" : "B" + badges.size());
 		}
 	}
 

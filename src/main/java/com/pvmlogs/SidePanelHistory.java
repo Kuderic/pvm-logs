@@ -889,6 +889,49 @@ final class SidePanelHistory
 		}
 	}
 
+	/**
+	 * T-193: each badge earned on this boss with its count, from the record's {@code View} (T-192), in the card's order:
+	 * {@code 100th kill ×6}, {@code Flawless ×5}, {@code Clean run ×2}, {@code 3 A's in a row ×3 · best 7}. A badge never
+	 * earned isn't there; Flawless never is at a boss without attack rules (the record leaves it out). The hundredths are
+	 * counted as the card names them ("100th kill"), not as the hundreds reached: one name for one badge.
+	 */
+	static List<PanelSnapshot.Badge> badges(BossRecords.View v)
+	{
+		final List<PanelSnapshot.Badge> out = new ArrayList<>(4);
+		for (Map.Entry<Badges.Badge, Integer> e : v.badgeCounts.entrySet())
+		{
+			final int count = e.getValue() == null ? 0 : e.getValue();
+			if (count <= 0)
+			{
+				continue;
+			}
+			final String times = " ×" + LedgerRows.number(count);
+			switch (e.getKey())
+			{
+				case HUNDREDTH_KILL:
+					out.add(new PanelSnapshot.Badge(e.getKey().title + times, "Every 100th kill by the game's count: "
+						+ LedgerRows.number(count) + (count == 1 ? " so far." : " of them so far."),
+						PanelSnapshot.Badge.Mark.KILLS));
+					break;
+				case FLAWLESS:
+					out.add(new PanelSnapshot.Badge(e.getKey().title + times, "Kills with no avoidable damage taken, by the"
+						+ " boss's attack rules: " + LedgerRows.number(count) + ".", PanelSnapshot.Badge.Mark.FLAWLESS));
+					break;
+				case CLEAN_RUN:
+					out.add(new PanelSnapshot.Badge(e.getKey().title + times, "Kills with no idle tick and your prayer, gear"
+						+ " and boost the best you had on hand: " + LedgerRows.number(count) + ".",
+						PanelSnapshot.Badge.Mark.CLEAN));
+					break;
+				default:
+					out.add(new PanelSnapshot.Badge(e.getKey().title + times + " · best " + v.longestStreak, "Runs of three or"
+						+ " more kills graded A or better: " + LedgerRows.number(count) + ". Your longest: " + v.longestStreak
+						+ " kills.", PanelSnapshot.Badge.Mark.STREAK));
+					break;
+			}
+		}
+		return out;
+	}
+
 	/** T-190: the progress for a record's view, or null with no kill recorded. */
 	static Progress progress(BossRecords.View v)
 	{
@@ -940,24 +983,7 @@ final class SidePanelHistory
 		}
 		final String note = v.kills < 10 ? "Grades by fixed bands until 10 kills (" + v.kills + " so far)" : null;
 		final String streak = v.streak + " now · best " + v.longestStreak;
-		final List<PanelSnapshot.Badge> badges = new ArrayList<>(3);
-		if (v.longestStreak >= SidePanelModel.STREAK_BADGE)
-		{
-			badges.add(new PanelSnapshot.Badge("best " + v.longestStreak + " A's in a row", "Your longest run of A or better"
-				+ " on this boss: " + v.longestStreak + " kills.", PanelSnapshot.Badge.Mark.STREAK));
-		}
-		if (v.flawlessStreak > 0)
-		{
-			badges.add(new PanelSnapshot.Badge("Flawless " + v.flawlessStreak + " in a row", "No avoidable damage on your"
-				+ " last " + v.flawlessStreak + " kills, by the boss's attack rules.", PanelSnapshot.Badge.Mark.FLAWLESS));
-		}
-		if (v.kills >= 100)
-		{
-			final int hundreds = v.kills / 100 * 100;
-			badges.add(new PanelSnapshot.Badge(LedgerRows.number(hundreds) + " kills tracked", "The kills the plugin has"
-				+ " tracked of this boss, history's dropped ones included: " + LedgerRows.number(v.kills) + ".",
-				PanelSnapshot.Badge.Mark.KILLS));
-		}
+		final List<PanelSnapshot.Badge> badges = badges(v);
 		return new Progress(v.kills, note, bests, trendTitle, trend, v.grades, streak, badges);
 	}
 
@@ -1118,7 +1144,6 @@ final class SidePanelHistory
 		{
 			in.average = LedgerHistory.of(history, room);
 			in.luckRemoved = in.average == null ? null : SidePanelModel.luckRemoved(history, room);
-			in.slowEnd = in.average == null ? Double.NaN : SidePanelModel.slowEnd(history, room);
 		}
 		if (!fromThisSession(room, sessionStart))
 		{

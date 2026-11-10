@@ -40,55 +40,45 @@ public class SidePanelBadgesTest
 	}
 
 	@Test
-	public void everyHundredthKillByTheGamesCount()
+	public void theCardShowsWhatTheRecordSaysThisKillEarned()
 	{
+		// T-193: the card reads Standing's badges (T-192's rules), named for this kill.
 		final SidePanelModel.Input in = SidePanelKillCardExamples.araxxorKill();
-		in.kc = 600;
-		assertEquals(Collections.singletonList("600th kill"), badges(in));
-		in.kc = 601;
+		in.standing.kc = 600;
+		in.standing.badges = java.util.EnumSet.of(Badges.Badge.HUNDREDTH_KILL, Badges.Badge.CLEAN_RUN);
+		assertEquals(java.util.Arrays.asList("600th kill", "Clean run"), badges(in));
+		// The record's own kill count first; the fight's when the record has none.
+		in.standing.kc = 0;
+		in.kc = 700;
+		assertEquals("700th kill", badges(in).get(0));
+		// Nothing earned, nothing shown; no record yet, no badges.
+		in.standing.badges = java.util.EnumSet.noneOf(Badges.Badge.class);
 		assertTrue(badges(in).isEmpty());
-		// Unknown (0) is never a badge.
-		in.kc = 0;
+		in.standing = null;
 		assertTrue(badges(in).isEmpty());
 	}
 
 	@Test
-	public void flawlessOnlyWhereAttackRulesCanTellIt()
+	public void theCardsBadgesMatchTheRecordsRules()
 	{
-		// Araxxor has no attack rules: no avoidable figure, so no Flawless however little was taken.
-		final SidePanelModel.Input unruled = SidePanelKillCardExamples.araxxorKill();
+		// Every badge the shared rule gives this kill, in the card's order, and only those.
+		final SidePanelModel.Input in = SidePanelKillCardExamples.allBadges();
+		final java.util.Set<Badges.Badge> earned = Badges.earned(new LedgerRows.Numbers(in.scope),
+			in.scope.damageTakenAvoidable(), in.kc, in.standing.streak);
+		assertEquals(java.util.EnumSet.allOf(Badges.Badge.class), earned);
+		assertEquals(java.util.Arrays.asList("600th kill", "Flawless", "Clean run", "3 A's in a row"), badges(in));
+		// Flawless only where attack rules tell it: Araxxor has none, so the rule gives none.
+		final SidePanelModel.Input unruled = SidePanelKillCardExamples.recorded(SidePanelKillCardExamples.araxxorKill());
 		scope(unruled).damageTakenAvoidable = 0;
+		SidePanelKillCardExamples.recorded(unruled);
 		assertFalse(badges(unruled).contains("Flawless"));
-		// With rules and nothing avoidable taken: Flawless.
-		final SidePanelModel.Input ruled = SidePanelKillCardExamples.araxxorKill();
-		scope(ruled).avoidableEatingTicks = 0;
-		scope(ruled).damageTakenAvoidable = 0;
-		assertTrue(badges(ruled).contains("Flawless"));
-		// With rules and an avoidable hit: none.
-		scope(ruled).damageTakenAvoidable = 12;
-		assertFalse(badges(ruled).contains("Flawless"));
 	}
 
 	@Test
-	public void cleanRunIsNoIdleTickAndAPerfectSetup()
+	public void theRunIsNamedOnEveryKillOfItFromTheThird()
 	{
-		final SidePanelModel.Input in = SidePanelKillCardExamples.araxxorKill();
-		// The kill had one idle tick: no Clean run.
-		assertFalse(badges(in).contains("Clean run"));
-		// Eating isn't idling: two ticks of it and no idle tick, with the setup at 99.96%.
-		scope(in).ticksLost = 2;
-		scope(in).ticksLostEating = 2;
-		scope(in).efficiency = 0.9996;
-		scope(in).boostCostShare = 0.0003;
-		scope(in).switchCostShare = 0;
-		assertTrue(badges(in).contains("Clean run"));
-		scope(in).efficiency = 0.9990;
-		assertFalse(badges(in).contains("Clean run"));
-	}
-
-	@Test
-	public void threeAsInARowFromTheRecordsStreak()
-	{
+		// As agreed (claude/specs/t192-t193-badge-counts.md): the record marks the run's third kill; the card names the
+		// run on every kill of it from the third, from the streak.
 		final SidePanelModel.Input in = SidePanelKillCardExamples.araxxorKill();
 		in.standing.streak = 2;
 		assertTrue(badges(in).isEmpty());
@@ -96,24 +86,31 @@ public class SidePanelBadgesTest
 		assertEquals(Collections.singletonList("3 A's in a row"), badges(in));
 		in.standing.streak = 5;
 		assertEquals(Collections.singletonList("5 A's in a row"), badges(in));
-		// No record yet: no streak to read.
-		in.standing = null;
-		assertTrue(badges(in).isEmpty());
 	}
 
 	@Test
 	public void eachBadgeSaysWhatItReads()
 	{
-		final SidePanelModel.Input in = SidePanelKillCardExamples.araxxorKill();
-		in.kc = 600;
-		scope(in).avoidableEatingTicks = 0;
-		scope(in).damageTakenAvoidable = 0;
-		in.standing.streak = 3;
-		final List<PanelSnapshot.Badge> all = SidePanelModel.fight(in).card.badges;
-		assertEquals(3, all.size());
+		final List<PanelSnapshot.Badge> all = SidePanelModel.fight(SidePanelKillCardExamples.allBadges()).card.badges;
+		assertEquals(4, all.size());
 		assertTrue(all.get(0).tip, all.get(0).tip.contains("game's kill count"));
 		assertTrue(all.get(1).tip, all.get(1).tip.contains("attack rules"));
-		assertTrue(all.get(2).tip, all.get(2).tip.contains("A or better"));
+		assertTrue(all.get(3).tip, all.get(3).tip.contains("A or better"));
+	}
+
+	@Test
+	public void noBadgeRuleIsLeftInTheSidePanel() throws java.io.IOException
+	{
+		// T-193: the rules live only in Badges (T-192); the side panel reads what the record says.
+		for (String file : new String[]{"SidePanelModel.java", "SidePanelHistory.java", "SidePanelKillCard.java"})
+		{
+			final String src = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("src/main/java/com/pvmlogs",
+				file)), java.nio.charset.StandardCharsets.UTF_8);
+			assertFalse(file, src.contains("% 100 == 0"));
+			assertFalse(file, src.contains("0.9995"));
+			assertFalse(file, src.contains("damageTakenAvoidable() == 0"));
+			assertFalse(file, src.contains("STREAK_BADGE"));
+		}
 	}
 
 	@Test

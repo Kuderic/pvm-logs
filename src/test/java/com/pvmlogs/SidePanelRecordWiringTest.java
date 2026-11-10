@@ -53,15 +53,15 @@ public class SidePanelRecordWiringTest
 		in.standing = st;
 		final PanelSnapshot.KillCard c = SidePanelModel.fight(in).card;
 		assertTrue(c.newPb);
-		// T-196: the Speed block: NEW PB, against the best it beat, the rank in words.
-		assertEquals("NEW PB", c.versus.text);
-		assertEquals("your best was 1:30", c.versusWhat);
-		assertEquals("your fastest of 13 kills", c.rank);
+		// T-198: Speed's statistics: a NEW PB, the best it beat, the rank.
+		assertTrue(c.newPb);
+		assertEquals("1:30", c.best);
+		assertEquals("fastest of 13", c.rank);
 		assertEquals(r.grade.name(), c.grade);
-		// The basis read as words, and no gold star: this kill didn't beat 1:35 with average luck.
+		// The basis read as words on hover, and no new best with average luck: this kill didn't beat 1:35.
 		final SidePanelModel.Basis basis = SidePanelModel.Basis.of(r.basis);
-		assertEquals(basis == null ? "graded on " + r.basis : basis.words(), c.better);
-		assertFalse(c.newBestAverageLuck);
+		assertTrue(c.skillTip, c.skillTip.contains(basis == null ? r.basis : basis.words()));
+		assertFalse(c.luckTip, c.luckTip.contains("a new best"));
 	}
 
 	@Test
