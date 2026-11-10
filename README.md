@@ -1,8 +1,8 @@
 # Luck vs Skill
 
-A RuneLite plugin for bossing. After every kill it tells you how much of your time was luck and how much was you, for any boss, and grades your play against your own kills. There's no account to make, and nothing about you is uploaded; in a RuneLite party, only your own numbers go to its members (see [What it sends](#what-it-sends)).
+A RuneLite plugin for bossing. After every kill it tells you how much of your time was luck and how much was you, for any boss, and grades your skill against your own kills. There's no account to make, and nothing about you is uploaded; in a RuneLite party, only your own numbers go to its members (see [What it sends](#what-it-sends)).
 
-It works out what each of your attacks should have done, from your gear, levels, boosts and prayers against the boss's defence, and compares that with what you actually hit. The gap between your kill and a perfect one splits into two parts: **Luck** (the dice) and **Skill**, or Execution (the time you weren't attacking, or were attacking without the right setup).
+It works out what each of your attacks should have done, from your gear, levels, boosts and prayers against the boss's defence, and compares that with what you actually hit. The gap between your kill and a perfect one splits into two parts: **Luck** (the dice) and **Skill** (the time you weren't attacking, or were attacking without the right setup).
 
 ## What it shows
 
@@ -20,7 +20,7 @@ The side panel's Fight tab opens on a card with three numbers: your **Time**, yo
 - **Time:** the kill's clock, and your usual time at this boss (the median of your last kills like this one). A new best gets a gold **PB**.
 - **Skill:** how close you came to a perfect fight (always attacking, with your best gear on hand, the right prayer and your boosts), and the seconds the rest cost you. The letter is your **grade**:
   - it's against your own last 50 kills at this boss, scored the same way: **S** is your top 5%, **A** the next 25%, **B** the middle 60%, **C** your bottom 10%. Until you have 10 kills it uses fixed bands (S from 99.5%, A from 97.5%, B from 90%);
-  - it comes from your play only, never from luck. Hover it to see what the next grade would have taken.
+  - it comes from skill only, never from luck. Hover it to see what the next grade would have taken.
 - **Luck:** "rolled 46 of 100": where your damage falls among all the ways the same attacks could have rolled, from 1 (the unluckiest) to 100, and the seconds it saved or cost. It's coloured in three strengths of violet, never in Skill's colours: luck isn't skill.
 - **Badges** show on the card when a kill earns one:
   - **100th kill** (and every hundredth, by the game's kill count);
@@ -34,10 +34,10 @@ During the fight the card shows the clock, the share of the fight you've spent a
 
 ### Below the card
 - **Damage:** your damage by weapon, spell and special, each with its DPS against expected; your thrall, burn and the rest apart; at a boss with adds, the boss, its adds or both. A timeline of your damage against average rolls.
-- **Luck, Where the time went, Your play:** the luck curve; the kill's time split into best play, the ticks you lost and what luck saved or cost; uptime, prayer, gear and stat boost.
+- **Luck, Where the time went, Skill:** the luck curve; the kill's time split into best play, the ticks you lost and what luck saved or cost; uptime, prayer, gear and stat boost.
 - **Defence:** when your special attacks (or your party's) lower the boss's Defence, the Defence left, each special against its chance, and what the drain was worth. A missed special counts as bad luck.
-- **Damage taken,** after the fight by kind. At a boss with attack rules (Vardorvis so far), the food you ate because of damage you could have avoided counts against your play, and damage taken says how much was avoidable.
-- **Your party:** in a RuneLite party, the members' damage, DPS and share at the top of the Fight tab, and after a room their luck and play, from members who run Luck vs Skill too; click one to see their Fight tab. Members who don't run it are listed by name and picture; with just one of them, their damage is shown as about what the boss took that you didn't deal. Discord pictures show when RuneLite's Discord plugin provides them.
+- **Damage taken,** after the fight by kind. At a boss with attack rules (Vardorvis so far), the food you ate because of damage you could have avoided counts against your skill, and damage taken says how much was avoidable.
+- **Your party:** in a RuneLite party, the members' damage, DPS and share at the top of the Fight tab, and after a room their Luck and Skill, from members who run Luck vs Skill too; click one to see their Fight tab. Members who don't run it are listed by name and picture; with just one of them, their damage is shown as about what the boss took that you didn't deal. Discord pictures show when RuneLite's Discord plugin provides them.
 
 ### History and Trip
 **History** shows your progress at each boss: your personal bests (fastest, fastest with luck taken out, best play), how your grades spread, your streaks and badges, and your kill time against your time with luck taken out, kill by kill. Then every saved kill with its time, roll and grade, your bosses and your monster runs, and Tools (CSV export, a new trip, saving a debug log). **Trip** sums the session's kills.
@@ -55,7 +55,7 @@ The Fight tab through a kill, updating every 5 ticks, then the card once the bos
 <img src="docs/images/panel-fight-live.gif" alt="The Fight tab updating through a General Graardor kill, then the kill card" width="242">
 
 ### The fight overlay
-Live during the fight, the breakdown after the kill: damage against expected, Luck, Execution (uptime, prayer, gear and stat boost), and your usual time.
+Live during the fight, the breakdown after the kill: damage against expected, Luck, Skill (uptime, prayer, gear and stat boost), and your usual time.
 
 <table>
 <tr>
@@ -68,7 +68,7 @@ Live during the fight, the breakdown after the kill: damage against expected, Lu
 </tr>
 </table>
 
-After a kill at a boss with attack rules, Execution gains an **avoidable eating** line and damage taken says how much was avoidable:
+After a kill at a boss with attack rules, Skill gains an **avoidable eating** line and damage taken says how much was avoidable:
 
 <img src="docs/images/overlay-ruled-kill.png" alt="The fight overlay after a Vardorvis kill, with avoidable eating and avoidable damage taken">
 
@@ -93,7 +93,7 @@ All the pictures here are drawn by the plugin's own code (see Developing) from m
 One download, your own numbers to your RuneLite party if you're in one, and nothing uploaded anywhere else.
 - **Monster stats:** when the plugin starts and its copy is missing or more than 7 days old, it downloads `monsters.json`, the monster data of the [OSRS Wiki's DPS calculator](https://github.com/weirdgloop/osrs-dps-calc), from GitHub (`raw.githubusercontent.com`). It uses RuneLite's own web client and identifies itself only as `RuneLite plugin luck-vs-skill`. Like any download, GitHub sees your IP address; nothing about your account goes with it. The copy is kept in your data folder; if the download fails, the plugin uses the copy it has.
 - **Your RuneLite party** (on by default): only while you're in a party, and only through RuneLite's own party service to that party's members. Turn off **Share with my RuneLite party** (Side panel settings) and nothing is sent; others' numbers still show.
-  - **During a boss fight,** at most every 5 ticks, and once as the room ends: the room's name and start, the raid's name if you're in one; your weapon damage and its expected damage, other damage of yours (thrall, burn and the like), attacks, combat ticks and the clock; Luck (the roll and its seconds), Execution, uptime and idle ticks, what your stat boost, gear and prayer cost; the damage and hits you took; and up to 8 attack rows, each a weapon or spell by its game id with its attacks, landings, damage and expected damage.
+  - **During a boss fight,** at most every 5 ticks, and once as the room ends: the room's name and start, the raid's name if you're in one; your weapon damage and its expected damage, other damage of yours (thrall, burn and the like), attacks, combat ticks and the clock; Luck (the roll and its seconds), Skill, uptime and idle ticks, what your stat boost, gear and prayer cost; the damage and hits you took; and up to 8 attack rows, each a weapon or spell by its game id with its attacks, landings, damage and expected damage.
   - **As a room ends,** your Fight tab for it, so members can click into your fight: the same figures as the card and sections show them, the damage by source and the timeline.
   - Never your name (members see it from RuneLite's party, as in any party plugin), your armour, location, stats, account or history.
 - **Everything else stays on your computer,** in `~/.runelite/plugin-data/luck-vs-skill/`:
