@@ -7,6 +7,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,7 +24,7 @@ import net.runelite.client.util.Filepath;
 import org.junit.Before;
 import org.junit.Test;
 
-/** T-187: the per-boss record (records.json) that outlives history's budget, and the grade it holds. */
+/** T-187: the per-boss record (records.json) that outlives history's budget, and the grade it holds; T-192: its badge counts. */
 public class BossRecordsTest
 {
 	private static final Gson GSON = new Gson();
@@ -368,5 +372,148 @@ public class BossRecordsTest
 		assertEquals(0, BossRecords.roll(Double.NaN));
 		assertEquals("12th", BossRecords.ordinal(12));
 		assertEquals("21st", BossRecords.ordinal(21));
+	}
+
+	// ---- T-192: badge counts ----
+
+	private static BossRecords.KillFigures figures(long start, double execution, Boolean flawless, int kc, boolean clean)
+	{
+		return new BossRecords.KillFigures(LIKE, start, 100, execution, 98, 0.5, flawless, kc, clean);
+	}
+
+	private static int count(BossRecords.View v, Badges.Badge b)
+	{
+		return v.badgeCount(b);
+	}
+
+	@Test
+	public void aRunOfSevenAsCountsOneThreeInARow()
+	{
+		final BossRecords records = new BossRecords(dir, GSON);
+		long t = 1000;
+		// Seven at 99.6% under the fixed bands: one run of 7.
+		for (int i = 0; i < 7; i++)
+		{
+			records.record(figures(t += 1000, 0.996, null, 0, false));
+		}
+		BossRecords.View v = records.view(LIKE);
+		assertEquals(1, count(v, Badges.Badge.THREE_IN_A_ROW));
+		assertEquals(7, v.longestStreak);
+		// Only the run's third kill earned it; the 7th's card names the run from its streak.
+		assertFalse(v.last.badges.contains(Badges.Badge.THREE_IN_A_ROW));
+		assertEquals(7, v.last.streak);
+		assertTrue(records.standing(room(kill(4000, 100, 0, 0))).badges.contains(Badges.Badge.THREE_IN_A_ROW));
+		// A B breaks it; three more A's are a second run.
+		records.record(figures(t += 1000, 0.95, null, 0, false));
+		assertFalse(records.view(LIKE).last.badges.contains(Badges.Badge.THREE_IN_A_ROW));
+		for (int i = 0; i < 2; i++)
+		{
+			records.record(figures(t += 1000, 0.996, null, 0, false));
+		}
+		assertEquals(1, count(records.view(LIKE), Badges.Badge.THREE_IN_A_ROW));
+		records.record(figures(t += 1000, 0.999, null, 0, false));
+		v = records.view(LIKE);
+		assertEquals(2, count(v, Badges.Badge.THREE_IN_A_ROW));
+		assertEquals(7, v.longestStreak);
+		assertEquals(3, v.streak);
+	}
+
+	@Test
+	public void flawlessIsNeverCountedWithoutAttackRules()
+	{
+		final BossRecords records = new BossRecords(dir, GSON);
+		// No rules (null): never Flawless, and absent from the counts.
+		records.record(figures(1000, 0.99, null, 0, false));
+		assertFalse(records.view(LIKE).badgeCounts.containsKey(Badges.Badge.FLAWLESS));
+		assertFalse(records.view(LIKE).last.badges.contains(Badges.Badge.FLAWLESS));
+		// With rules: counted when earned.
+		records.record(figures(2000, 0.99, false, 0, false));
+		assertFalse(records.view(LIKE).badgeCounts.containsKey(Badges.Badge.FLAWLESS));
+		records.record(figures(3000, 0.99, true, 0, false));
+		records.record(figures(4000, 0.99, true, 0, false));
+		final BossRecords.View v = records.view(LIKE);
+		assertEquals(2, count(v, Badges.Badge.FLAWLESS));
+		assertEquals(2, v.flawlessStreak);
+		assertTrue(v.last.badges.contains(Badges.Badge.FLAWLESS));
+	}
+
+	@Test
+	public void aNewKillAddsToTheCountsOnce()
+	{
+		final List<Fight> oldest = sixtyOldestFirst();
+		final BossRecords records = new BossRecords(dir, GSON);
+		records.noteHistory(newestFirst(oldest), 0);
+		records.recordedLines();
+		final BossRecords.View before = records.view(LIKE);
+		// The fixture's clean runs: no idle tick (i = 0, 11, 22, 33, 44, 55) and a whole setup.
+		assertEquals(6, count(before, Badges.Badge.CLEAN_RUN));
+		assertEquals(0, count(before, Badges.Badge.HUNDREDTH_KILL));
+		// The 100th by the game's count, clean: one of each, once however often history is saved.
+		final Fight hundredth = kill(90_000_000L, 160, 0, 0);
+		hundredth.context().kc = 100;
+		oldest.add(hundredth);
+		for (int i = 0; i < 3; i++)
+		{
+			records.noteHistory(newestFirst(oldest), PvmPerformancePlugin.RECORDS_RECENT_FIGHTS);
+		}
+		final BossRecords.View v = records.view(LIKE);
+		assertEquals(1, count(v, Badges.Badge.HUNDREDTH_KILL));
+		assertEquals(7, count(v, Badges.Badge.CLEAN_RUN));
+		final BossRecords.Standing s = records.standing(room(hundredth));
+		assertEquals(100, s.kc);
+		assertTrue(s.badges.containsAll(java.util.EnumSet.of(Badges.Badge.HUNDREDTH_KILL, Badges.Badge.CLEAN_RUN)));
+		final List<String> lines = records.recordedLines();
+		assertEquals(1, lines.size());
+		assertTrue(lines.get(0), lines.get(0).contains(", badges 100th kill, Clean run"));
+	}
+
+	@Test
+	public void aVersionOneFileIsBackfilledFromHistoryAndTheBackupsKeepingTheRest() throws IOException
+	{
+		final List<Fight> oldest = sixtyOldestFirst();
+		oldest.get(9).context().kc = 100;
+		oldest.get(49).context().kc = 200;
+		// Seeded and saved as #213 saved it: version 1, no counts.
+		final BossRecords seeded = new BossRecords(dir, GSON);
+		seeded.noteHistory(newestFirst(oldest), 0);
+		final BossRecords.View expected = seeded.view(LIKE);
+		seeded.save();
+		final JsonObject file = new JsonParser().parse(new String(Files.readAllBytes(tmp.resolve(BossRecords.FILE)),
+			StandardCharsets.UTF_8)).getAsJsonObject();
+		file.addProperty("version", 1);
+		for (JsonElement r : file.getAsJsonArray("records"))
+		{
+			r.getAsJsonObject().remove("badges");
+			r.getAsJsonObject().getAsJsonObject("last").remove("badges");
+			r.getAsJsonObject().getAsJsonObject("last").remove("kc");
+		}
+		Files.write(tmp.resolve(BossRecords.FILE), file.toString().getBytes(StandardCharsets.UTF_8));
+		// History has dropped the oldest 20 since; a backup holds the oldest 30.
+		final List<Fight> history = newestFirst(oldest.subList(20, 60));
+		Files.write(tmp.resolve("history.json.bak-20261031-190624"),
+			GSON.toJson(newestFirst(oldest.subList(0, 30))).getBytes(StandardCharsets.UTF_8));
+		final BossRecords loaded = new BossRecords(dir, GSON);
+		final String line = loaded.load(history, NOW);
+		final BossRecords.View v = loaded.view(LIKE);
+		assertEquals(expected.badgeCounts, v.badgeCounts);
+		assertEquals(2, count(v, Badges.Badge.HUNDREDTH_KILL));
+		assertEquals(6, count(v, Badges.Badge.CLEAN_RUN));
+		assertEquals("RECORDS loaded 1 bosses from records.json; badges counted for 1 bosses from 60 kills (history and 1 "
+			+ "backups): 100th kill 2, Flawless 0, Clean run 6, 3 A's in a row " + count(expected, Badges.Badge.THREE_IN_A_ROW),
+			line);
+		// Nothing else moved: the bests, the streaks, the rank, the grades.
+		assertEquals(expected.kills, v.kills);
+		assertEquals(expected.fastest.value, v.fastest.value, 0);
+		assertEquals(expected.luckRemoved.value, v.luckRemoved.value, 0);
+		assertEquals(expected.execution.value, v.execution.value, 0);
+		assertEquals(expected.streak, v.streak);
+		assertEquals(expected.longestStreak, v.longestStreak);
+		assertArrayEquals(expected.grades, v.grades);
+		assertEquals(expected.rank(100), v.rank(100));
+		// The newest kill's badges came back with it.
+		assertEquals(expected.last.badges, loaded.standing(room(oldest.get(59))).badges);
+		// Saved as version 2: the next load counts nothing again.
+		loaded.save();
+		assertEquals("RECORDS loaded 1 bosses from records.json", new BossRecords(dir, GSON).load(history, NOW));
 	}
 }

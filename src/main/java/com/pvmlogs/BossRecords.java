@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -22,7 +24,7 @@ import net.runelite.client.util.Filepath;
 /**
  * T-187: a record per boss that outlives history's budget (2,000 boss fights, about four days of Eric's Araxxor): kills,
  * personal bests, every kill's clock for its rank, the last 50 executions for the grade, the grades' spread, a trend of
- * the luck-removed time, and the streaks. The fun pass reads it (API agreed with the Side panel chat in
+ * the luck-removed time, the streaks, and how often each badge was earned (T-192, by {@link Badges}' rules). The fun pass reads it (API agreed with the Side panel chat in
  * {@code claude/specs/t187-t188-record-api.md}):
  * <ul>
  * <li>{@link #standing(Encounter)}: one counted kill's place in its record, as it stood when it was recorded (T-188's
@@ -60,7 +62,8 @@ final class BossRecords
 	/** The standings kept in memory for {@link #standing}: this session's kills, and each key's newest from the file. */
 	static final int STANDINGS_KEPT = 500;
 	static final double SECONDS_PER_TICK = 0.6;
-	static final int VERSION = 1;
+	/** 2 (T-192): the badges counted. A file of version 1 has them counted once, from history and its backups. */
+	static final int VERSION = 2;
 
 	enum Grade
 	{
@@ -141,6 +144,13 @@ final class BossRecords
 		final int streak;
 		/** No avoidable damage in a row, this one included; -1 at a boss without attack rules. */
 		final int flawlessStreak;
+		/** The game's kill count after this kill, 0 unknown. */
+		final int kc;
+		/**
+		 * The badges this kill earned (T-192's {@link Badges} rules), in the card's order; "3 A's in a row" only on the kill
+		 * its run reached 3 on ({@link #streak} names the run on later kills). Unmodifiable.
+		 */
+		final Set<Badges.Badge> badges;
 
 		private Standing(Kill k)
 		{
@@ -161,6 +171,19 @@ final class BossRecords
 			ticksToNext = k.ticksToNext;
 			streak = k.streak;
 			flawlessStreak = k.flawlessStreak;
+			kc = k.kc;
+			final EnumSet<Badges.Badge> b = EnumSet.noneOf(Badges.Badge.class);
+			if (k.badges != null)
+			{
+				for (Badges.Badge badge : k.badges)
+				{
+					if (badge != null)
+					{
+						b.add(badge);
+					}
+				}
+			}
+			badges = Collections.unmodifiableSet(b);
 		}
 
 		/** "rolled N of 100": 1 to 100, or 0 when unknown. */
@@ -216,6 +239,12 @@ final class BossRecords
 		final double[][] luckRemovedTrend;
 		/** The newest kill's standing, or null. */
 		final Standing last;
+		/**
+		 * T-192: how many kills earned each badge ("3 A's in a row": the runs that reached 3; the best run is
+		 * {@link #longestStreak}). A badge never earned is absent, and Flawless always is at a boss without attack rules.
+		 * Unmodifiable, in the card's order.
+		 */
+		final Map<Badges.Badge, Integer> badgeCounts;
 		private final int[] clocks;
 		private final int[] counts;
 		private final double[] executions;
@@ -244,6 +273,15 @@ final class BossRecords
 				}
 			}
 			last = r.last == null ? null : new Standing(r.last);
+			final Map<Badges.Badge, Integer> earned = new EnumMap<>(Badges.Badge.class);
+			for (Badges.Badge b : Badges.Badge.values())
+			{
+				if (r.badges[b.ordinal()] > 0 && (b != Badges.Badge.FLAWLESS || r.flawlessStreak >= 0))
+				{
+					earned.put(b, r.badges[b.ordinal()]);
+				}
+			}
+			badgeCounts = Collections.unmodifiableMap(earned);
 			clocks = new int[r.clocks.size()];
 			counts = new int[clocks.length];
 			int i = 0;
@@ -271,6 +309,12 @@ final class BossRecords
 		Graded grade(double execution, double clockSeconds)
 		{
 			return BossRecords.grade(execution, clockSeconds, executions);
+		}
+
+		/** T-192: how many kills earned {@code badge}; 0 when never (or Flawless without attack rules). */
+		int badgeCount(Badges.Badge badge)
+		{
+			return badgeCounts.getOrDefault(badge, 0);
 		}
 
 		/** The grade a kill in the trend got when it was recorded (History's rows), or null. */
@@ -301,6 +345,8 @@ final class BossRecords
 		int ticksToNext;
 		int streak;
 		int flawlessStreak = -1;
+		int kc;
+		List<Badges.Badge> badges;
 	}
 
 	/** One kill in the luck-removed trend. */
@@ -342,6 +388,8 @@ final class BossRecords
 		int longestStreak;
 		/** Kills in a row with no avoidable damage, at bosses with attack rules; -1 where none are known. */
 		int flawlessStreak = -1;
+		/** T-192: kills that earned each badge, by {@link Badges.Badge#ordinal()} ("3 A's in a row" once per run). */
+		int[] badges = new int[Badges.Badge.values().length];
 		Kill last;
 	}
 
@@ -511,9 +559,19 @@ final class BossRecords
 		final double percentile;
 		/** Null where the boss has no attack rules; otherwise whether no avoidable damage was taken. */
 		final Boolean flawless;
+		/** The game's kill count after this kill, 0 unknown. */
+		final int kc;
+		/** {@link Badges#cleanRun}. */
+		final boolean cleanRun;
 
 		KillFigures(LedgerHistory.Like like, long startMillis, double clock, double execution, double luckRemoved,
 			double percentile, Boolean flawless)
+		{
+			this(like, startMillis, clock, execution, luckRemoved, percentile, flawless, 0, false);
+		}
+
+		KillFigures(LedgerHistory.Like like, long startMillis, double clock, double execution, double luckRemoved,
+			double percentile, Boolean flawless, int kc, boolean cleanRun)
 		{
 			this.like = like;
 			this.startMillis = startMillis;
@@ -522,24 +580,24 @@ final class BossRecords
 			this.luckRemoved = luckRemoved;
 			this.percentile = percentile;
 			this.flawless = flawless;
+			this.kc = kc;
+			this.cleanRun = cleanRun;
 		}
 
 		/** The after-kill execution (with avoidable eating, at bosses with attack rules), as the card shows it. */
 		static KillFigures of(Encounter room)
 		{
-			final LedgerRows.Numbers n = new LedgerRows.Numbers(LedgerRows.of(room));
-			Boolean flawless = null;
-			if (!Double.isNaN(n.avoidableEatingShare))
+			final LedgerRows.Scope scope = LedgerRows.of(room);
+			final LedgerRows.Numbers n = new LedgerRows.Numbers(scope);
+			// The rules the card reads (T-192): Flawless by the scope's avoidable damage, where attack rules tell it.
+			final Boolean flawless = Badges.ruled(n) ? Badges.flawless(n, scope.damageTakenAvoidable()) : null;
+			int kc = 0;
+			for (Fight fight : room.getFights())
 			{
-				boolean none = true;
-				for (Fight fight : room.getFights())
-				{
-					none &= fight.getDamageTakenAvoidable() <= 0;
-				}
-				flawless = none;
+				kc = Math.max(kc, fight.getContext() == null ? 0 : fight.getContext().kc);
 			}
 			return new KillFigures(LedgerHistory.Like.of(room), room.getStartMillis(), n.clock, n.execution,
-				n.expectedDuration, n.percentile, flawless);
+				n.expectedDuration, n.percentile, flawless, kc, Badges.cleanRun(n));
 		}
 	}
 
@@ -643,6 +701,12 @@ final class BossRecords
 		}
 		kill.streak = r.streak;
 		kill.flawlessStreak = r.flawlessStreak;
+		kill.kc = k.kc;
+		kill.badges = new ArrayList<>(Badges.earned(k.kc, Boolean.TRUE.equals(k.flawless), k.cleanRun, r.streak));
+		for (Badges.Badge b : kill.badges)
+		{
+			r.badges[b.ordinal()]++;
+		}
 		final Point p = new Point();
 		p.start = k.startMillis;
 		p.luckRemoved = k.luckRemoved;
@@ -660,7 +724,8 @@ final class BossRecords
 					+ "%d of 100%s%s", r.name, r.maxHp, r.solo ? "solo" : "party", r.kills, ordinal(kill.rank), r.kills,
 				ticks * SECONDS_PER_TICK, kill.newPb ? ", a new PB" : "", graded == null ? "unknown" : graded.toString(),
 				roll(k.percentile), kill.newBestLuckRemoved ? ", a new luck-removed best" : "",
-				r.streak >= 3 ? ", " + r.streak + " A's in a row" : ""));
+				r.streak >= 3 ? ", " + r.streak + " A's in a row" : "") + (kill.badges.isEmpty() ? ""
+				: ", badges " + kill.badges.stream().map(b -> b.title).collect(Collectors.joining(", "))));
 		}
 		return true;
 	}
@@ -681,6 +746,21 @@ final class BossRecords
 	 */
 	boolean noteHistory(List<Fight> history, int recentFights)
 	{
+		boolean any = false;
+		for (KillFigures k : figures(history, recentFights, newestByKey()))
+		{
+			any |= record(k);
+		}
+		return any;
+	}
+
+	/**
+	 * The counted kills in {@code history} (newest first) newer than {@code newest} has for their key, oldest first across
+	 * bosses so each record's streaks and windows run in order: for the bosses of the last {@code recentFights} fights,
+	 * or all when 0.
+	 */
+	private static List<KillFigures> figures(List<Fight> history, int recentFights, Map<String, Long> newest)
+	{
 		final Set<String> names = new HashSet<>();
 		final int upTo = recentFights <= 0 ? history.size() : Math.min(history.size(), recentFights);
 		for (int i = 0; i < upTo; i++)
@@ -691,7 +771,6 @@ final class BossRecords
 				names.add(f.encounterName());
 			}
 		}
-		final Map<String, Long> newest = newestByKey();
 		final Set<Fight> none = Collections.newSetFromMap(new IdentityHashMap<>());
 		final List<KillFigures> kills = new ArrayList<>();
 		for (String name : names)
@@ -706,14 +785,8 @@ final class BossRecords
 				}
 			}
 		}
-		// Oldest first across bosses, so each record's streaks and windows run in order.
-		kills.sort((a, b) -> Long.compare(a.startMillis, b.startMillis));
-		boolean any = false;
-		for (KillFigures k : kills)
-		{
-			any |= record(k);
-		}
-		return any;
+		kills.sort((x, y) -> Long.compare(x.startMillis, y.startMillis));
+		return kills;
 	}
 
 	private synchronized Map<String, Long> newestByKey()
@@ -765,18 +838,19 @@ final class BossRecords
 		String why;
 		if (file.exists())
 		{
-			final List<Record> read = read(file);
+			final Saved read = read(file);
 			if (read != null)
 			{
-				put(read);
+				put(read.records);
 				if (!byKey.isEmpty())
 				{
 					keepLastGood(file);
 				}
+				final String counted = read.version < 2 ? "; " + countBadges(history) : "";
 				// Anything since it was last saved (a crash before the save): caught up from history.
 				final boolean caught = noteHistory(history, 0);
-				return String.format("RECORDS loaded %d bosses from %s%s", byKey.size(), FILE,
-					caught ? ", caught up from history" : "");
+				return String.format("RECORDS loaded %d bosses from %s%s%s", byKey.size(), FILE,
+					caught ? ", caught up from history" : "", counted);
 			}
 			final String aside = UNREADABLE_PREFIX + HistoryStore.stamp(nowMillis) + ".json";
 			try
@@ -790,13 +864,14 @@ final class BossRecords
 				why = FILE + " didn't read and couldn't be moved aside (" + e.getMessage() + "): not saved this session";
 			}
 			final Filepath lastGood = dir.joinSegment(LAST_GOOD);
-			final List<Record> good = lastGood.exists() ? read(lastGood) : null;
+			final Saved good = lastGood.exists() ? read(lastGood) : null;
 			if (good != null)
 			{
-				put(good);
+				put(good.records);
+				final String counted = good.version < 2 ? "; " + countBadges(history) : "";
 				noteHistory(history, 0);
-				return String.format("RECORDS %s; loaded %d bosses from %s, caught up from history", why, byKey.size(),
-					LAST_GOOD);
+				return String.format("RECORDS %s; loaded %d bosses from %s, caught up from history%s", why, byKey.size(),
+					LAST_GOOD, counted);
 			}
 		}
 		else
@@ -810,6 +885,28 @@ final class BossRecords
 
 	/** Seeding: history and its backups, deduplicated by start time and target. {fights, backups, from backups}. */
 	private int[] seed(List<Fight> history)
+	{
+		final Merged merged = merge(history);
+		noteHistory(merged.fights, 0);
+		return new int[]{merged.fights.size(), merged.backups, merged.fromBackups};
+	}
+
+	/** History and its backups, deduplicated by start time and target, newest first as history is kept. */
+	private static final class Merged
+	{
+		final List<Fight> fights;
+		final int backups;
+		final int fromBackups;
+
+		Merged(List<Fight> fights, int backups, int fromBackups)
+		{
+			this.fights = fights;
+			this.backups = backups;
+			this.fromBackups = fromBackups;
+		}
+	}
+
+	private Merged merge(List<Fight> history)
 	{
 		final Map<String, Fight> byStart = new HashMap<>();
 		for (Fight f : history)
@@ -835,10 +932,53 @@ final class BossRecords
 			}
 		}
 		final List<Fight> all = new ArrayList<>(byStart.values());
-		// Newest first, as history is kept.
 		all.sort((a, b) -> Long.compare(b.getStartMillis(), a.getStartMillis()));
-		noteHistory(all, 0);
-		return new int[]{all.size(), backups, fromBackups};
+		return new Merged(all, backups, fromBackups);
+	}
+
+	/**
+	 * T-192, once, for a file of version 1: each record's badge counts, from the kills in history and the backups the
+	 * seeding read, up to the record's newest kill. They're replayed through a record of their own, so the "3 A's in a
+	 * row" runs follow the grades as they fell; only the counts (and the newest kill's badges and kill count) are taken
+	 * from it, and every other field is kept. Returns the debug log's words.
+	 */
+	private String countBadges(List<Fight> history)
+	{
+		final Merged merged = merge(history);
+		final BossRecords replay = new BossRecords(dir, gson);
+		int kills = 0;
+		for (KillFigures k : figures(merged.fights, 0, Collections.emptyMap()))
+		{
+			final Record r = k.like == null || k.like.name == null ? null : byKey.get(key(k.like));
+			if (r != null && k.startMillis <= r.lastStartMillis && replay.record(k))
+			{
+				kills++;
+			}
+		}
+		final int[] total = new int[Badges.Badge.values().length];
+		for (Map.Entry<String, Record> e : byKey.entrySet())
+		{
+			final Record r = e.getValue();
+			final Record counted = replay.byKey.get(e.getKey());
+			r.badges = counted == null ? new int[total.length] : counted.badges.clone();
+			for (int i = 0; i < total.length; i++)
+			{
+				total[i] += r.badges[i];
+			}
+			if (counted != null && counted.last != null && r.last != null && counted.last.startMillis == r.last.startMillis)
+			{
+				r.last.kc = counted.last.kc;
+				r.last.badges = counted.last.badges;
+				standings.put(r.last.startMillis, new Standing(r.last));
+			}
+		}
+		final StringBuilder line = new StringBuilder(String.format("badges counted for %d bosses from %d kills (history "
+			+ "and %d backups):", byKey.size(), kills, merged.backups));
+		for (Badges.Badge b : Badges.Badge.values())
+		{
+			line.append(b.ordinal() == 0 ? " " : ", ").append(b.title).append(' ').append(total[b.ordinal()]);
+		}
+		return line.toString();
 	}
 
 	/** The project's history backups in the data folder, read only: {@code history.json.bak-*}, {@code history-before-*.json.bak}. */
@@ -873,7 +1013,7 @@ final class BossRecords
 		}
 	}
 
-	private List<Record> read(Filepath file)
+	private Saved read(Filepath file)
 	{
 		try (InputStream in = file.openInputStream())
 		{
@@ -887,7 +1027,7 @@ final class BossRecords
 			{
 				return null;
 			}
-			return saved.records;
+			return saved;
 		}
 		catch (IOException | RuntimeException e)
 		{
@@ -920,6 +1060,10 @@ final class BossRecords
 			if (r.trend == null)
 			{
 				r.trend = new ArrayList<>();
+			}
+			if (r.badges == null || r.badges.length != Badges.Badge.values().length)
+			{
+				r.badges = Arrays.copyOf(r.badges == null ? new int[0] : r.badges, Badges.Badge.values().length);
 			}
 			byKey.put(key(r.name, r.maxHp, r.solo), r);
 			if (r.last != null)
