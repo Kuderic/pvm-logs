@@ -44,10 +44,12 @@ final class SidePanelWeaponRows
 			reset(scopeKey);
 		}
 		final int cutoff = view.startTick + view.states.length - 1 - SETTLE_TICKS;
-		while (settledCount < attacks.size() && attacks.get(settledCount).tick <= cutoff)
+		// T-200: never the latest landed attack or one after it: their ticks change as their cooldown runs.
+		final int landed = lastLanded(view);
+		while (settledCount < attacks.size() && settledCount < landed && attacks.get(settledCount).tick <= cutoff)
 		{
 			lastSettled = attacks.get(settledCount);
-			add(settled, lastSettled, ticks(view, settledCount));
+			add(settled, lastSettled, ticks(view, settledCount, landed));
 			settledCount++;
 			added++;
 		}
@@ -58,7 +60,7 @@ final class SidePanelWeaponRows
 		}
 		for (int i = settledCount; i < attacks.size(); i++)
 		{
-			add(rows, attacks.get(i), ticks(view, i));
+			add(rows, attacks.get(i), ticks(view, i, landed));
 			added++;
 		}
 		return new ArrayList<>(rows.values());
@@ -86,6 +88,89 @@ final class SidePanelWeaponRows
 	 * different lags moves a tick between them.
 	 */
 	static int ticks(FightTimeline.View view, int i)
+	{
+		return ticks(view, i, lastLanded(view));
+	}
+
+	/**
+	 * T-200 (Eric: "Exp dps in the side bar is too high on the first few hits of the fight"): {@link #ticks} with the
+	 * index of the latest landed attack ({@link #lastLanded}). Every landed attack counts its whole cooldown: the latest,
+	 * with no attack after it, its speed ({@link FightTimeline.Attack#speed}) even while its cooldown runs or after the
+	 * kill cut it short. An attack after it, thrown but not landed yet, counts none until it lands, as its damage and
+	 * expected aren't booked yet. So a rate reads its gear's from the first landed hit, with no sawtooth. An attack whose
+	 * speed isn't known (0), or one on an unscored tick, counts as before.
+	 */
+	static int ticks(FightTimeline.View view, int i, int landed)
+	{
+		if (i > landed)
+		{
+			return 0;
+		}
+		final int n = heldTicks(view, i);
+		final FightTimeline.Attack a = view.attacks.get(i);
+		if (i == view.attacks.size() - 1 && a.speed > 0 && scoredAttack(view, a))
+		{
+			return Math.max(n, a.speed);
+		}
+		return n;
+	}
+
+	/**
+	 * T-200: the panel's rate time's correction on {@code view}: what {@link #ticks} counts for the latest landed attack
+	 * and those after it, less what the timeline drew for them; once the fight has {@code ended}, every attack has landed. Added to the scored clock, it gives the time every landed
+	 * attack's whole cooldown takes, with the idle, eating and mechanic ticks where they are. 0 with no attack.
+	 */
+	static int rateTicks(FightTimeline.View view, boolean ended)
+	{
+		if (view == null || view.attacks.isEmpty())
+		{
+			return 0;
+		}
+		// After the fight, nothing is still in flight.
+		final int landed = ended ? view.attacks.size() - 1 : lastLanded(view);
+		int d = 0;
+		for (int i = Math.max(0, landed); i < view.attacks.size(); i++)
+		{
+			d += ticks(view, i, landed) - heldTicks(view, i);
+		}
+		return d;
+	}
+
+	/**
+	 * T-200: how long an attack can be thrown and not landed, in ticks: longer than any projectile's flight. An attack
+	 * older than this counts as landed even with nothing booked for it (a miss with no expectation, as at a monster with
+	 * no stats, or a party member's attacks, which carry none).
+	 */
+	static final int MAX_FLIGHT = 8;
+
+	/**
+	 * T-200: the index of the latest attack that has landed (its expected, a hit or damage booked, or thrown more than
+	 * {@link #MAX_FLIGHT} ticks before the view's last tick), or -1.
+	 */
+	static int lastLanded(FightTimeline.View view)
+	{
+		final int last = view.startTick + view.states.length - 1;
+		for (int i = view.attacks.size() - 1; i >= 0; i--)
+		{
+			final FightTimeline.Attack a = view.attacks.get(i);
+			if (a.mean >= 0 || a.hits > 0 || a.damage > 0 || last - a.tick > MAX_FLIGHT)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	/** T-200: whether the attack's own tick is drawn as an attack or a special (not on an unscored tick). */
+	private static boolean scoredAttack(FightTimeline.View view, FightTimeline.Attack a)
+	{
+		final int k = a.tick - view.startTick;
+		return k >= 0 && k < view.states.length && (view.states[k] == FightTimeline.ATTACK
+			|| view.states[k] == FightTimeline.SPECIAL);
+	}
+
+	/** T-085's count: the ticks drawn as the attack, the special or cooldown from attack {@code i} to the next. */
+	private static int heldTicks(FightTimeline.View view, int i)
 	{
 		final List<FightTimeline.Attack> attacks = view.attacks;
 		final int from = attacks.get(i).tick - view.startTick;
