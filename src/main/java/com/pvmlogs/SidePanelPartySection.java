@@ -700,56 +700,30 @@ final class SidePanelPartySection
 	}
 
 	/** The meter's {@code dmg · luck · exec}, as the Damage card's switch: the picked word bright, a click picks. */
-	static final class MetricSwitch extends JPanel
+	static final class MetricSwitch extends SidePanelFightTab.Segmented
 	{
-		private final List<SidePanelText> words = new ArrayList<>();
-		private SidePanelParty.Metric picked;
-
 		MetricSwitch(SidePanelParty.Metric picked, java.util.function.Consumer<SidePanelParty.Metric> onPick)
 		{
-			setOpaque(false);
-			setLayout(new javax.swing.BoxLayout(this, javax.swing.BoxLayout.X_AXIS));
-			// Clicks between the words are the switch's, not the header's fold.
-			addMouseListener(new MouseAdapter()
-			{
-			});
+			super(labels(), TIPS, picked.ordinal(), i -> onPick.accept(SidePanelParty.Metric.values()[i]));
+		}
+
+		/** T-207: each choice in plain words, on its own pill's tooltip. */
+		static final String[] TIPS = {"Show each member's damage", "Show each member's luck", "Show each member's skill"};
+
+		private static String[] labels()
+		{
 			final SidePanelParty.Metric[] all = SidePanelParty.Metric.values();
+			final String[] out = new String[all.length];
 			for (int i = 0; i < all.length; i++)
 			{
-				if (i > 0)
-				{
-					add(new SidePanelText(PanelSnapshot.Text.small(SidePanelFightTab.TargetSwitch.DOT, SidePanelStyle.MUTED),
-						false));
-				}
-				final SidePanelParty.Metric m = all[i];
-				final SidePanelText w = new SidePanelText(PanelSnapshot.Text.small(m.word(), SidePanelStyle.MUTED), false);
-				w.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-				w.addMouseListener(new MouseAdapter()
-				{
-					@Override
-					public void mouseClicked(MouseEvent e)
-					{
-						if (m != MetricSwitch.this.picked)
-						{
-							onPick.accept(m);
-						}
-					}
-				});
-				words.add(w);
-				add(w);
+				out[i] = all[i].word();
 			}
-			set(picked);
+			return out;
 		}
 
 		void set(SidePanelParty.Metric m)
 		{
-			picked = m;
-			final SidePanelParty.Metric[] all = SidePanelParty.Metric.values();
-			for (int i = 0; i < all.length; i++)
-			{
-				words.get(i).set(PanelSnapshot.Text.small(all[i].word(), all[i] == m ? SidePanelStyle.VALUE
-					: SidePanelStyle.MUTED));
-			}
+			set(m.ordinal(), null);
 		}
 	}
 

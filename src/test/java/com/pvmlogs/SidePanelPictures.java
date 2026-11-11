@@ -152,6 +152,11 @@ public final class SidePanelPictures
 			clarity(out);
 			return;
 		}
+		if (args.length > 1 && "alignment".equals(args[1]))
+		{
+			alignment(out);
+			return;
+		}
 		if (args.length > 1 && "onecard".equals(args[1]))
 		{
 			oneCard(out);
@@ -1005,7 +1010,11 @@ public final class SidePanelPictures
 			return card;
 		}
 		final javax.swing.JToolTip tip = words.createToolTip();
-		tip.setTipText(words.getToolTipText());
+		// T-207: the hovered pill's own tooltip (the picked one's at rest).
+		words.setSize(words.getPreferredSize());
+		final java.awt.Rectangle pill = words.pill(Math.max(0, hover));
+		tip.setTipText(words.getToolTipText(new java.awt.event.MouseEvent(words, java.awt.event.MouseEvent.MOUSE_MOVED, 0L, 0,
+			pill.x + 2, pill.y + 2, 0, false)));
 		tip.setSize(tip.getPreferredSize());
 		layout(tip);
 		final int w = Math.max(card.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
@@ -2265,6 +2274,125 @@ public final class SidePanelPictures
 		panel.partySection().select(id);
 		openAll(panel.partySection().memberFight());
 		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/**
+	 * T-207: the card's tiles mirrored line for line on an unlucky kill like Eric's Yama ("bottom 2%", "-29 s") and live,
+	 * the folded summaries with one full-width bar each, and both switches at rest and hovered. Normal and Larger.
+	 */
+	private static void alignment(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-card-unlucky", scale, cardOnly(unluckyCard(), scale));
+				write(dir, "b-card-live", scale, cardOnly(SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card,
+					scale));
+				write(dir, "g-folded-summaries", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "h-live-tab", scale, fightTab(SidePanelKillCardExamples.araxxorLive(), scale));
+				write(dir, "c-damage-switch", scale, switchCard(SidePanelTargetExamples.input(
+					SidePanelTargetExamples.araxxor()), scale, -1, false));
+				write(dir, "d-damage-switch-hovered", scale, switchCard(SidePanelTargetExamples.input(
+					SidePanelTargetExamples.araxxor()), scale, 2, true));
+				write(dir, "e-party-switch", scale, partySwitch(-1, scale));
+				write(dir, "f-party-switch-hovered", scale, partySwitch(1, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-207: the kill card alone, as Eric's Yama kill read: Araxxor KC 555's card with its luck the bottom 2% and 29 s
+	 * slower (the card's own fields; the sections under it are the example's).
+	 */
+	static PanelSnapshot.KillCard unluckyCard()
+	{
+		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card;
+		c.luckP = 0.02;
+		c.luckAt = 2;
+		c.rolled = 2;
+		c.luckTime = "-29 s";
+		return c;
+	}
+
+	/** T-207: one kill card painted on the panel's ground, at the content width. */
+	static BufferedImage cardOnly(PanelSnapshot.KillCard c, double scale)
+	{
+		SidePanelStyle.setText(larger, smooth);
+		final SidePanelKillCard view = new SidePanelKillCard(c, null);
+		final int h = view.getPreferredSize().height;
+		view.setSize(SidePanelStyle.CONTENT_WIDTH, h);
+		final int pad = 6;
+		final BufferedImage img = new BufferedImage((int) Math.ceil((SidePanelStyle.CONTENT_WIDTH + 2 * pad) * scale),
+			(int) Math.ceil((h + 2 * pad) * scale), BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		g.scale(scale, scale);
+		g.translate(pad, pad);
+		view.paint(g);
+		g.dispose();
+		return img;
+	}
+
+	/** T-207: the party's switch after the fight, a pill hovered (-1 none) with its tooltip under it. */
+	private static BufferedImage partySwitch(int hover, double scale)
+	{
+		final SidePanelParty.Input in = SidePanelPartyExamples.toa();
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
+		SidePanelPartySection.MetricSwitch words = null;
+		for (Component k : all(panel.partySection().top()))
+		{
+			if (k instanceof SidePanelPartySection.MetricSwitch)
+			{
+				words = (SidePanelPartySection.MetricSwitch) k;
+			}
+		}
+		if (hover >= 0)
+		{
+			words.hover(hover);
+		}
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection section = sectionOf(panel.partySection().top(), SidePanelPartySection.PARTY);
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + 60) * scale));
+		final BufferedImage card = whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+		if (hover < 0)
+		{
+			return card;
+		}
+		words.setSize(words.getPreferredSize());
+		final java.awt.Rectangle pill = words.pill(hover);
+		final javax.swing.JToolTip tip = words.createToolTip();
+		tip.setTipText(words.getToolTipText(new java.awt.event.MouseEvent(words, java.awt.event.MouseEvent.MOUSE_MOVED, 0L,
+			0, pill.x + 2, pill.y + 2, 0, false)));
+		tip.setSize(tip.getPreferredSize());
+		layout(tip);
+		final int w = Math.max(card.getWidth(), (int) Math.ceil(tip.getWidth() * scale));
+		final BufferedImage img = new BufferedImage(w, card.getHeight() + (int) Math.ceil((tip.getHeight() + 8) * scale),
+			BufferedImage.TYPE_INT_RGB);
+		final Graphics2D g = img.createGraphics();
+		g.setColor(SidePanelStyle.PANEL);
+		g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		g.drawImage(card, 0, 0, null);
+		g.translate(0, card.getHeight() + 4 * scale);
+		g.scale(scale, scale);
+		tip.printAll(g);
+		g.dispose();
+		return img;
 	}
 
 	/**

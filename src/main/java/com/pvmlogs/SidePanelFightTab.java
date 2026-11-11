@@ -1254,113 +1254,228 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	static final String TIMELINE = "Timeline";
 
 	/**
-	 * T-105: the Damage card's switch in its header, {@code boss · adds · all} in small lower-case text like the other
-	 * hints: the picked word bright, the others and the dots muted, no fill. Hovering a word that isn't picked brings it
-	 * to the secondary grey, with a hand cursor; a click on it picks that view. A hover is a colour change, painted in
-	 * place: the words keep their widths, so it never asks for layout (T-046).
+	 * T-207 (Eric: "It's not clear that you can click dmg luck skill to change the graphs. Same with boss and adds in
+	 * damage"): a small segmented control, painted: a track with a pill a choice, the chosen one filled with white text,
+	 * the others in secondary text. Under the mouse a pill gets a lighter ground and the hand cursor; each has its own
+	 * tooltip. Its clicks are its own, so a click on it never folds the header. A hover or a pick is a repaint; it lays
+	 * nothing out (its width is its words', set once).
 	 */
-	static final class TargetSwitch extends JPanel
+	static class Segmented extends javax.swing.JComponent
 	{
-		static final String DOT = " · ";
-		private final List<SidePanelText> words = new ArrayList<>();
-		private final List<SidePanelText> dots = new ArrayList<>();
+		static final int PAD_X = 4;
+		static final int GAP = 1;
+		static final int INSET = 1;
+		private final String[] words;
+		private final String[] tips;
+		private final java.util.function.IntConsumer onPick;
 		private int picked;
 		private int hover = -1;
+		/** A note after the choice's own tooltip (Damage's: the damage and time on that view); null for none. */
+		private String note;
 
+		Segmented(String[] words, String[] tips, int picked, java.util.function.IntConsumer onPick)
+		{
+			this.words = words.clone();
+			this.tips = tips.clone();
+			this.picked = picked;
+			this.onPick = onPick;
+			setOpaque(false);
+			// Registers it with the tooltip manager; the text is per pill (getToolTipText(MouseEvent)).
+			setToolTipText("");
+			final MouseAdapter mouse = new MouseAdapter()
+			{
+				@Override
+				public void mouseMoved(MouseEvent e)
+				{
+					hover(at(e.getX()));
+				}
+
+				@Override
+				public void mouseEntered(MouseEvent e)
+				{
+					hover(at(e.getX()));
+				}
+
+				@Override
+				public void mouseExited(MouseEvent e)
+				{
+					hover(-1);
+				}
+
+				@Override
+				public void mouseClicked(MouseEvent e)
+				{
+					final int i = at(e.getX());
+					if (i >= 0 && i != Segmented.this.picked)
+					{
+						Segmented.this.onPick.accept(i);
+					}
+				}
+			};
+			addMouseListener(mouse);
+			addMouseMotionListener(mouse);
+		}
+
+		private java.awt.FontMetrics metrics()
+		{
+			return SidePanelStyle.metrics(this, SidePanelStyle.Type.SMALL.font());
+		}
+
+		private int pillWidth(int i)
+		{
+			return metrics().stringWidth(words[i]) + 2 * PAD_X;
+		}
+
+		/** The pill {@code i}'s box, in this component. */
+		java.awt.Rectangle pill(int i)
+		{
+			int x = INSET;
+			for (int k = 0; k < i; k++)
+			{
+				x += pillWidth(k) + GAP;
+			}
+			return new java.awt.Rectangle(x, INSET, pillWidth(i), getHeight() - 2 * INSET);
+		}
+
+		/** The pill under {@code x}; -1 for none. */
+		int at(int x)
+		{
+			for (int i = 0; i < words.length; i++)
+			{
+				final java.awt.Rectangle r = pill(i);
+				if (x >= r.x && x < r.x + r.width)
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
+
+		@Override
+		public java.awt.Dimension getPreferredSize()
+		{
+			int w = 2 * INSET + (words.length - 1) * GAP;
+			for (int i = 0; i < words.length; i++)
+			{
+				w += pillWidth(i);
+			}
+			return new java.awt.Dimension(w, SidePanelStyle.Type.SMALL.lineHeight() + 2 + 2 * INSET);
+		}
+
+		@Override
+		public java.awt.Dimension getMaximumSize()
+		{
+			return getPreferredSize();
+		}
+
+		@Override
+		protected void paintComponent(java.awt.Graphics g0)
+		{
+			final java.awt.Graphics2D g = (java.awt.Graphics2D) g0.create();
+			SidePanelStyle.textHints(g);
+			g.setColor(SidePanelStyle.SEGMENT_TRACK);
+			g.fillRect(0, 0, getWidth(), getHeight());
+			g.setFont(SidePanelStyle.Type.SMALL.font());
+			final java.awt.FontMetrics fm = SidePanelStyle.metrics(g, SidePanelStyle.Type.SMALL.font());
+			for (int i = 0; i < words.length; i++)
+			{
+				final java.awt.Rectangle r = pill(i);
+				if (i == picked || i == hover)
+				{
+					g.setColor(i == picked ? SidePanelStyle.SEGMENT_ON : SidePanelStyle.SEGMENT_HOVER);
+					g.fillRect(r.x, r.y, r.width, r.height);
+				}
+				g.setColor(i == picked ? SidePanelStyle.VALUE : SidePanelStyle.SECONDARY);
+				g.drawString(words[i], r.x + PAD_X, r.y + (r.height - fm.getHeight()) / 2 + fm.getAscent());
+			}
+			g.dispose();
+		}
+
+		@Override
+		public String getToolTipText(MouseEvent e)
+		{
+			final int i = at(e.getX());
+			final String own = i < 0 ? null : tips[i];
+			final String text = own == null ? note : note == null ? own : own + "<br>" + note;
+			return text == null ? null : SidePanelStyle.tip(text);
+		}
+
+		/** The choice picked and the note after each tooltip; a repaint. */
+		void set(int picked, String note)
+		{
+			this.picked = picked;
+			this.note = note;
+			repaint();
+		}
+
+		/** The pill under the mouse, -1 for none: the hand cursor over a choice not picked. A repaint. */
+		void hover(int i)
+		{
+			if (i == hover)
+			{
+				return;
+			}
+			hover = i;
+			setCursor(i >= 0 && i != picked ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			repaint();
+		}
+
+		/** For tests: the words, the one picked, the one hovered, and a choice's own tooltip. */
+		List<String> words()
+		{
+			return java.util.Arrays.asList(words);
+		}
+
+		int picked()
+		{
+			return picked;
+		}
+
+		int hovered()
+		{
+			return hover;
+		}
+
+		String tip(int i)
+		{
+			return tips[i];
+		}
+	}
+
+	/**
+	 * T-105: the Damage card's switch in its header, {@code boss · adds · all}; a click on a choice picks that view.
+	 * T-207: drawn as a segmented control (see {@link Segmented}); the view's note (its damage, time and what isn't
+	 * scored) follows each choice's tooltip.
+	 */
+	static final class TargetSwitch extends Segmented
+	{
 		TargetSwitch(FightTab tab, java.util.function.IntConsumer onPick)
 		{
-			setOpaque(false);
-			setLayout(new javax.swing.BoxLayout(this, javax.swing.BoxLayout.X_AXIS));
-			picked = tab.target;
-			// Clicks between the words are the switch's, not the header's fold.
-			final MouseAdapter absorb = new MouseAdapter()
-			{
-			};
-			addMouseListener(absorb);
-			for (int i = 0; i < tab.byTarget.size(); i++)
-			{
-				if (i > 0)
-				{
-					final SidePanelText dot = new SidePanelText(Text.small(DOT, SidePanelStyle.MUTED), false);
-					dot.addMouseListener(absorb);
-					dots.add(dot);
-					add(dot);
-				}
-				final int view = i;
-				final SidePanelText word = new SidePanelText(Text.small(tab.byTarget.get(i).label.toLowerCase(
-					java.util.Locale.ENGLISH), SidePanelStyle.MUTED), false);
-				word.addMouseListener(new MouseAdapter()
-				{
-					@Override
-					public void mouseEntered(MouseEvent e)
-					{
-						hover = view;
-						paintWords();
-					}
-
-					@Override
-					public void mouseExited(MouseEvent e)
-					{
-						if (hover == view)
-						{
-							hover = -1;
-							paintWords();
-						}
-					}
-
-					@Override
-					public void mouseClicked(MouseEvent e)
-					{
-						if (view != picked)
-						{
-							onPick.accept(view);
-						}
-					}
-				});
-				words.add(word);
-				add(word);
-			}
+			super(labels(tab), tips(tab), tab.target, onPick);
 			set(tab.target, tab.byTarget.get(tab.target).note);
 		}
 
-		void set(int picked, String tooltip)
+		private static String[] labels(FightTab tab)
 		{
-			this.picked = picked;
-			setToolTipText(SidePanelStyle.tip(tooltip));
-			for (SidePanelText w : words)
+			final String[] out = new String[tab.byTarget.size()];
+			for (int i = 0; i < out.length; i++)
 			{
-				w.setToolTipText(SidePanelStyle.tip(tooltip));
+				out[i] = tab.byTarget.get(i).label.toLowerCase(java.util.Locale.ENGLISH);
 			}
-			for (SidePanelText d : dots)
-			{
-				d.setToolTipText(SidePanelStyle.tip(tooltip));
-			}
-			paintWords();
+			return out;
 		}
 
-		private void paintWords()
+		/** Each choice in plain words. */
+		static String[] tips(FightTab tab)
 		{
-			for (int i = 0; i < words.size(); i++)
+			final String[] out = new String[tab.byTarget.size()];
+			for (int i = 0; i < out.length; i++)
 			{
-				final SidePanelText w = words.get(i);
-				final Color c = i == picked ? SidePanelStyle.VALUE : i == hover ? SidePanelStyle.SECONDARY
-					: SidePanelStyle.MUTED;
-				w.set(Text.small(w.getText(), c));
-				w.setCursor(i == picked ? Cursor.getDefaultCursor() : Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				final String w = tab.byTarget.get(i).label.toLowerCase(java.util.Locale.ENGLISH);
+				out[i] = w.equals("boss") ? "Show the boss only" : w.equals("adds") ? "Show the adds only"
+					: w.equals("all") ? "Show the boss and the adds together" : "Show " + w;
 			}
-		}
-
-		/** The words as shown, for tests. */
-		List<SidePanelText> words()
-		{
-			return words;
-		}
-
-		/** The word hovered, -1 for none: for tests and renders. */
-		void hover(int view)
-		{
-			hover = view;
-			paintWords();
+			return out;
 		}
 	}
 

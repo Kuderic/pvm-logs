@@ -384,6 +384,20 @@ final class SidePanelSection extends JPanel
 		return summary.isVisible() ? summary.mark : null;
 	}
 
+	/**
+	 * T-207: the folded summary's bar in the section's coordinates (its full width on the first line), for tests; null
+	 * for none, or a summary without a bar.
+	 */
+	java.awt.Rectangle summaryBar()
+	{
+		if (!summary.isVisible() || !summary.tall() || summary.text.isEmpty())
+		{
+			return null;
+		}
+		final java.awt.Point p = javax.swing.SwingUtilities.convertPoint(summary.getParent(), summary.getLocation(), this);
+		return new java.awt.Rectangle(p.x, p.y + Summary.BAR_TOP, summary.getWidth(), Summary.TIME_BAR);
+	}
+
 	/** T-188: the summary on show, for tests; empty for none. */
 	String summary()
 	{
@@ -400,22 +414,27 @@ final class SidePanelSection extends JPanel
 	private static final class Summary extends JComponent
 	{
 		static final int TIME_BAR = 6;
-		static final int LUCK_TRACK_W = 44;
-		static final int SHARE_W = 80;
 		String text = "";
 		java.awt.Color colour = SidePanelStyle.SECONDARY;
 		PanelSnapshot.Mark mark;
 
-		/** The time's bar takes a line of its own above the words. */
+		/**
+		 * The time's bar takes a line of its own above the words. T-207 (Eric: "These 3 collapsed sections have different
+		 * length bars"): so do Damage's share bar and Luck's track, one shape for every summary with a bar: the bar the
+		 * full width on the first line, the numbers under it. The grade's chip stays beside its words.
+		 */
 		boolean tall()
 		{
-			return mark != null && mark.kind == PanelSnapshot.Mark.Kind.TIME;
+			return mark != null && mark.kind != PanelSnapshot.Mark.Kind.GRADE;
 		}
+
+		/** T-207: the bar's top in a tall summary, room for Luck's marker above and below it. */
+		static final int BAR_TOP = 2;
 
 		@Override
 		public java.awt.Dimension getPreferredSize()
 		{
-			return new java.awt.Dimension(0, SidePanelStyle.Type.SMALL.lineHeight() + (tall() ? TIME_BAR + 4 : 0));
+			return new java.awt.Dimension(0, SidePanelStyle.Type.SMALL.lineHeight() + (tall() ? BAR_TOP + TIME_BAR + 4 : 0));
 		}
 
 		@Override
@@ -468,28 +487,28 @@ final class SidePanelSection extends JPanel
 				case TIME:
 				{
 					// The perfect fight, what was lost, and luck's stretch striped in its violet.
+					final int y = BAR_TOP;
 					g.setColor(SidePanelStyle.TRACK);
-					g.fillRect(0, 0, w, TIME_BAR);
+					g.fillRect(0, y, w, TIME_BAR);
 					final int kept = (int) Math.round(m.kept * w);
 					final int lost = (int) Math.round((m.kept + m.lost) * w);
 					g.setColor(SidePanelStyle.KEPT);
-					g.fillRect(0, 0, kept, TIME_BAR);
+					g.fillRect(0, y, kept, TIME_BAR);
 					g.setColor(SidePanelStyle.COST);
-					g.fillRect(kept, 0, Math.max(m.lost > 0 ? 1 : 0, lost - kept), TIME_BAR);
+					g.fillRect(kept, y, Math.max(m.lost > 0 ? 1 : 0, lost - kept), TIME_BAR);
 					final int from = m.luckSaved ? (int) Math.round((1 - m.luck) * w) : lost;
 					final int to = m.luckSaved ? w : (int) Math.round((m.kept + m.lost + m.luck) * w);
 					g.setColor(SidePanelStyle.LUCK);
 					for (int x = from; x < to; x += 3)
 					{
-						g.fillRect(x, 0, Math.min(2, to - x), TIME_BAR);
+						g.fillRect(x, y, Math.min(2, to - x), TIME_BAR);
 					}
 					return 0;
 				}
 				case SHARES:
 				{
-					// T-198: Damage's share bar in small.
-					final int h = 6;
-					final int y = lineTop + (line - h) / 2;
+					// T-198: Damage's share bar in small; T-207: the full width, the numbers under it.
+					final int y = BAR_TOP;
 					double total = 0;
 					for (double f : m.shares)
 					{
@@ -500,30 +519,29 @@ final class SidePanelSection extends JPanel
 					for (int i = 0; i < m.shares.length; i++)
 					{
 						acc += m.shares[i];
-						final int end = i == m.shares.length - 1 ? SHARE_W : (int) Math.round(acc / Math.max(1e-9, total)
-							* SHARE_W);
+						final int end = i == m.shares.length - 1 ? w : (int) Math.round(acc / Math.max(1e-9, total) * w);
 						g.setColor(m.colours[i]);
-						g.fillRect(x, y, Math.max(0, end - x), h);
+						g.fillRect(x, y, Math.max(0, end - x), TIME_BAR);
 						x = end;
 					}
-					return SHARE_W + 6;
+					return 0;
 				}
 				case LUCK:
 				{
-					final int h = 6;
-					final int y = lineTop + (line - h) / 2;
-					final int a = LUCK_TRACK_W / 4;
-					final int b = LUCK_TRACK_W * 3 / 4;
+					// T-207: the track the full width, its marker standing above and below it, the band under it.
+					final int y = BAR_TOP;
+					final int a = w / 4;
+					final int b = w * 3 / 4;
 					g.setColor(SidePanelStyle.LUCK_TRACK_DIM);
-					g.fillRect(0, y, a, h);
+					g.fillRect(0, y, a, TIME_BAR);
 					g.setColor(SidePanelStyle.LUCK_TRACK_NORMAL);
-					g.fillRect(a, y, b - a, h);
+					g.fillRect(a, y, b - a, TIME_BAR);
 					g.setColor(SidePanelStyle.LUCK_TRACK_BRIGHT);
-					g.fillRect(b, y, LUCK_TRACK_W - b, h);
-					final int at = (int) Math.round((Math.max(1, Math.min(100, m.roll)) - 1) / 99.0 * (LUCK_TRACK_W - 2));
+					g.fillRect(b, y, w - b, TIME_BAR);
+					final int at = (int) Math.round((Math.max(1, Math.min(100, m.roll)) - 1) / 99.0 * (w - 2));
 					g.setColor(SidePanelStyle.VALUE);
-					g.fillRect(at, y - 2, 2, h + 4);
-					return LUCK_TRACK_W + 6;
+					g.fillRect(at, y - BAR_TOP, 2, TIME_BAR + 2 * BAR_TOP);
+					return 0;
 				}
 				default:
 				{

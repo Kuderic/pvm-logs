@@ -32,10 +32,9 @@ public class SidePanelDamageSwitchTest
 	{
 		final SidePanelFightTab view = tab(SidePanelTargetExamples.araxxor());
 		final SidePanelFightTab.TargetSwitch s = only(view);
-		assertEquals("[boss, adds, all]", texts(s.words()).toString());
-		assertEquals(SidePanelStyle.VALUE, s.words().get(0).colour());
-		assertEquals(SidePanelStyle.MUTED, s.words().get(1).colour());
-		assertEquals(SidePanelStyle.MUTED, s.words().get(2).colour());
+		// T-207: a segmented control, the boss's pill picked.
+		assertEquals("[boss, adds, all]", s.words().toString());
+		assertEquals(0, s.picked());
 		// In the header, beside its title: the switch is the section's hint.
 		final SidePanelSection damage = section(view, "damage");
 		assertTrue(all(damage.getComponent(0), SidePanelFightTab.TargetSwitch.class).contains(s));
@@ -51,11 +50,16 @@ public class SidePanelDamageSwitchTest
 		{
 			fail("a paragraph in the Damage card: " + p);
 		}
-		final String tip = Tips.plain(only(view).getToolTipText());
-		assertEquals("1,504 on the boss over 2:40. Luck and skill cover the whole kill.", tip);
-		for (SidePanelText w : only(view).words())
+		// T-207: each choice's own words first, then the view's facts.
+		final SidePanelFightTab.TargetSwitch s = only(view);
+		assertEquals("Show the boss only 1,504 on the boss over 2:40. Luck and skill cover the whole kill.",
+			Tips.plain(tipAt(s, 0)));
+		assertEquals("Show the adds only", s.tip(1));
+		assertEquals("Show the boss and the adds together", s.tip(2));
+		for (int i = 0; i < 3; i++)
 		{
-			assertEquals(tip, Tips.plain(w.getToolTipText()));
+			assertTrue(Tips.plain(tipAt(s, i)), Tips.plain(tipAt(s, i)).endsWith(
+				"1,504 on the boss over 2:40. Luck and skill cover the whole kill."));
 		}
 	}
 
@@ -64,36 +68,37 @@ public class SidePanelDamageSwitchTest
 	{
 		final SidePanelFightTab view = tab(SidePanelTargetExamples.araxxor());
 		final int built = view.builds();
-		click(only(view).words().get(0));
+		click(only(view), 0);
 		assertEquals(built, view.builds());
-		click(only(view).words().get(1));
+		click(only(view), 1);
 		assertEquals(built + 1, view.builds());
 		assertEquals(1, SidePanelFightTab.target());
 		final SidePanelFightTab.TargetSwitch s = only(view);
-		assertEquals(SidePanelStyle.VALUE, s.words().get(1).colour());
-		assertEquals(SidePanelStyle.MUTED, s.words().get(0).colour());
-		assertTrue(Tips.plain(s.getToolTipText()), Tips.plain(s.getToolTipText()).startsWith("384 on the adds over "));
+		assertEquals(1, s.picked());
+		assertTrue(Tips.plain(tipAt(s, 1)), Tips.plain(tipAt(s, 1)).startsWith("Show the adds only 384 on the adds over "));
 	}
 
 	@Test
-	public void aHoverOnlyRecoloursAWord()
+	public void aHoverLightsAPillWithTheHandCursorAndLaysNothingOut()
 	{
 		final SidePanelFightTab view = tab(SidePanelTargetExamples.araxxor());
 		final SidePanelFightTab.TargetSwitch s = only(view);
 		final int built = view.builds();
 		final int width = s.getPreferredSize().width;
-		enter(s.words().get(2));
-		assertEquals(SidePanelStyle.SECONDARY, s.words().get(2).colour());
-		assertEquals(java.awt.Cursor.HAND_CURSOR, s.words().get(2).getCursor().getType());
-		assertEquals(java.awt.Cursor.DEFAULT_CURSOR, s.words().get(0).getCursor().getType());
+		final int layouts = SidePanelParts.relayouts;
+		move(s, 2);
+		assertEquals(2, s.hovered());
+		assertEquals(java.awt.Cursor.HAND_CURSOR, s.getCursor().getType());
 		// No rebuild and no new width, so no layout.
 		assertEquals(built, view.builds());
 		assertEquals(width, s.getPreferredSize().width);
-		exit(s.words().get(2));
-		assertEquals(SidePanelStyle.MUTED, s.words().get(2).colour());
-		// Hovering the picked word changes nothing.
-		enter(s.words().get(0));
-		assertEquals(SidePanelStyle.VALUE, s.words().get(0).colour());
+		assertEquals(layouts, SidePanelParts.relayouts);
+		exit(s);
+		assertEquals(-1, s.hovered());
+		assertEquals(java.awt.Cursor.DEFAULT_CURSOR, s.getCursor().getType());
+		// Over the picked pill: no hand, it does nothing.
+		move(s, 0);
+		assertEquals(java.awt.Cursor.DEFAULT_CURSOR, s.getCursor().getType());
 	}
 
 	@Test
@@ -119,7 +124,8 @@ public class SidePanelDamageSwitchTest
 			lines.add(p.text());
 		}
 		assertEquals("[Nothing scored on the adds: their time counts in the kill's.]", lines.toString());
-		assertTrue(Tips.plain(only(view).getToolTipText()), Tips.plain(only(view).getToolTipText()).startsWith("0:03 on the adds, not scored."));
+		assertTrue(Tips.plain(tipAt(only(view), 1)), Tips.plain(tipAt(only(view), 1)).startsWith("Show the adds only 0:03 on"
+			+ " the adds, not scored."));
 	}
 
 	@Test
@@ -205,6 +211,38 @@ public class SidePanelDamageSwitchTest
 			}
 		}
 		return out;
+	}
+
+	/** T-207: the pill {@code i}'s centre. */
+	private static java.awt.Point at(SidePanelFightTab.Segmented s, int i)
+	{
+		s.setSize(s.getPreferredSize());
+		final java.awt.Rectangle r = s.pill(i);
+		return new java.awt.Point(r.x + r.width / 2, r.y + r.height / 2);
+	}
+
+	private static String tipAt(SidePanelFightTab.Segmented s, int i)
+	{
+		final java.awt.Point p = at(s, i);
+		return s.getToolTipText(new MouseEvent(s, MouseEvent.MOUSE_MOVED, 0L, 0, p.x, p.y, 0, false));
+	}
+
+	private static void click(SidePanelFightTab.Segmented s, int i)
+	{
+		final java.awt.Point p = at(s, i);
+		for (MouseListener l : s.getMouseListeners())
+		{
+			l.mouseClicked(new MouseEvent(s, MouseEvent.MOUSE_CLICKED, 0L, 0, p.x, p.y, 1, false));
+		}
+	}
+
+	private static void move(SidePanelFightTab.Segmented s, int i)
+	{
+		final java.awt.Point p = at(s, i);
+		for (java.awt.event.MouseMotionListener l : s.getMouseMotionListeners())
+		{
+			l.mouseMoved(new MouseEvent(s, MouseEvent.MOUSE_MOVED, 0L, 0, p.x, p.y, 0, false));
+		}
 	}
 
 	private static void click(Component c)
