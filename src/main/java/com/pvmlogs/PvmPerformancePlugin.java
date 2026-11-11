@@ -1985,7 +1985,8 @@ public class PvmPerformancePlugin extends Plugin
 				damageByIndex.compute(index, (i, v) -> Math.max(0, (v == null ? 0 : v) - Math.max(0, amount)));
 				break;
 			case OTHER_PLAYER:
-				fight.recordOthersDamage(amount);
+				// T-216: with its tick, for the party chart's line of the members not running Luck vs Skill.
+				fight.recordOthersDamage(amount, tick);
 				break;
 			case ROOM:
 				// T-131: under the rule that names it, for Details' rows.

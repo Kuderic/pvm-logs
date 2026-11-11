@@ -250,6 +250,75 @@ final class PanelSnapshot
 			this.echo = echo;
 			return this;
 		}
+
+		/**
+		 * T-216 (Orchestrator's answer to Eric: "yes, DPS live, damage after"): the row's DPS, as a number for the live sort
+		 * and as written ({@code 8.4}, {@code ~3.1} for an estimate); 0 and empty for none.
+		 */
+		double rate;
+		String rateText = "";
+		/**
+		 * T-216: luck and Skill so far at each of {@link #metricTicks}' points, 0 to 1, NaN where not known; empty for none
+		 * (members not running Luck vs Skill have neither).
+		 */
+		float[] seriesLuck = new float[0];
+		float[] seriesSkill = new float[0];
+		/** T-216: the ticks of their points (a member's are {@link #seriesTicks}; yours are your updates'). */
+		int[] metricTicks = new int[0];
+		/**
+		 * T-216: the members not running Luck vs Skill, one or a group: their damage and line are estimated from other
+		 * players' splats, drawn solid but lighter, and said so on hover.
+		 */
+		boolean estimate;
+
+		/** T-216: this row with its DPS. */
+		PartyRow rate(double rate, String text)
+		{
+			this.rate = rate;
+			this.rateText = text == null ? "" : text;
+			return this;
+		}
+
+		/** T-216: this row with its luck and Skill over the fight. */
+		PartyRow metrics(int[] ticks, float[] luck, float[] skill)
+		{
+			this.metricTicks = ticks == null ? new int[0] : ticks;
+			this.seriesLuck = luck == null ? new float[0] : luck;
+			this.seriesSkill = skill == null ? new float[0] : skill;
+			return this;
+		}
+
+		/** T-216: whether it has any luck ({@code luck}) or Skill to chart. */
+		boolean charts(SidePanelParty.Metric m)
+		{
+			final float[] v = m == SidePanelParty.Metric.LUCK ? seriesLuck : seriesSkill;
+			for (int i = 0; i < v.length && i < metricTicks.length; i++)
+			{
+				if (!Float.isNaN(v[i]))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/** T-216: the figure on the row's first column: DPS live, damage after. */
+		String first()
+		{
+			return live && !rateText.isEmpty() ? rateText : dmg[0];
+		}
+
+		/** T-216: luck or Skill at {@code tick}, the last point at or before it; NaN for none. */
+		double metricAt(SidePanelParty.Metric m, int tick)
+		{
+			final float[] v = m == SidePanelParty.Metric.LUCK ? seriesLuck : seriesSkill;
+			double out = Double.NaN;
+			for (int i = 0; i < metricTicks.length && i < v.length && metricTicks[i] <= tick; i++)
+			{
+				out = Float.isNaN(v[i]) ? out : v[i];
+			}
+			return out;
+		}
 		/** T-128: their Discord picture; null for none, when the colour swatch stands in. */
 		java.awt.image.BufferedImage avatar;
 		/** T-128: their Fight tab, for the member opened; null otherwise. */
@@ -328,6 +397,21 @@ final class PanelSnapshot
 			final PartyRow r = new PartyRow(id, name, SidePanelParty.ABOUT, Collections.<String>singletonList(""), tip,
 				false, fill, dmg, series, colour);
 			r.avatar = avatar;
+			return r;
+		}
+
+		/**
+		 * T-216: the members not running Luck vs Skill in the fight: one by their picture and name ({@code id} theirs), or
+		 * two or more as {@code N members} ({@link #OTHERS_ID}); "~" before the figures, what they are on hover. Its line is
+		 * an estimate, drawn lighter.
+		 */
+		static PartyRow estimate(long id, String name, java.awt.image.BufferedImage avatar, String tip, double fill,
+			String[] dmg, int[][] series, Color colour)
+		{
+			final PartyRow r = new PartyRow(id, name, null, Collections.<String>emptyList(), tip, false, fill, dmg, series,
+				colour);
+			r.avatar = avatar;
+			r.estimate = true;
 			return r;
 		}
 

@@ -152,6 +152,11 @@ public final class SidePanelPictures
 			clarity(out);
 			return;
 		}
+		if (args.length > 1 && "partyboard".equals(args[1]))
+		{
+			partyBoard(out);
+			return;
+		}
 		if (args.length > 1 && "partyrows".equals(args[1]))
 		{
 			partyRows(out);
@@ -2308,6 +2313,73 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-216: the party board: a duo with the partner not running the plugin (his picture and name) and a four-member ToA
+	 * room with one not running it, live and after; the chart by damage, luck and skill; one hover readout each. Invented
+	 * names and pictures. Normal and Larger, 1× and 2×.
+	 */
+	private static void partyBoard(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-duo-live", scale, partyBoard(SidePanelPartyBoardTest.duo(true), null, -1, scale));
+				write(dir, "b-duo-after-dmg", scale, partyBoard(SidePanelPartyBoardTest.duo(false), null, -1, scale));
+				write(dir, "c-duo-after-luck", scale, partyBoard(SidePanelPartyBoardTest.duo(false),
+					SidePanelParty.Metric.LUCK, 300, scale));
+				write(dir, "d-duo-after-skill", scale, partyBoard(SidePanelPartyBoardTest.duo(false),
+					SidePanelParty.Metric.EXEC, -1, scale));
+				write(dir, "e-four-live-dps", scale, partyBoard(SidePanelPartyBoardTest.four(true), null, 60, scale));
+				write(dir, "f-four-live-luck", scale, partyBoard(SidePanelPartyBoardTest.four(true),
+					SidePanelParty.Metric.LUCK, -1, scale));
+				write(dir, "g-four-after-dmg", scale, partyBoard(SidePanelPartyBoardTest.four(false), null, 150, scale));
+				write(dir, "h-four-after-luck", scale, partyBoard(SidePanelPartyBoardTest.four(false),
+					SidePanelParty.Metric.LUCK, 150, scale));
+				write(dir, "i-four-after-skill", scale, partyBoard(SidePanelPartyBoardTest.four(false),
+					SidePanelParty.Metric.EXEC, 150, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-216: the Party section alone, the switch on {@code metric} (null: damage), the chart hovered at a tick (-1 none). */
+	private static BufferedImage partyBoard(SidePanelParty.Input in, SidePanelParty.Metric metric, int hover, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		styled(panel);
+		final PanelSnapshot.FightTab yours = SidePanelPartyMemberViewTest.yours(in);
+		panel.apply(new PanelSnapshot(yours, null, SidePanelParty.party(in)));
+		final PanelSnapshot.KillCard card = SidePanelModel.fight(in.live ? SidePanelKillCardExamples.araxxorLive()
+			: SidePanelKillCardExamples.araxxorKill()).card;
+		// Your card's DPS, as your figures in the example have it.
+		card.dps = String.format(java.util.Locale.ENGLISH, "%.1f", in.members.get(0).figures.all() / in.seconds);
+		panel.partySection().setYours(card);
+		if (metric != null)
+		{
+			panel.partySection().pick(metric);
+		}
+		if (hover >= 0)
+		{
+			panel.partySection().chart().setHover(hover);
+		}
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection section = sectionOf(panel.partySection().top(), SidePanelPartySection.PARTY);
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height) * scale));
+		return whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
 	}
 
 	/** T-208: the Party section alone, with your grade from a kill card after the fight. */

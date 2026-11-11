@@ -1053,6 +1053,14 @@ class PvmPerformancePanel extends PluginPanel
 				in.othersDamage += f.getOthersDamage();
 			}
 		}
+		// T-216: your luck and Skill so far, a point every few ticks as you send them, for the chart's luck and skill lines.
+		if (!light)
+		{
+			for (LuckVsSkillUpdate u : mine)
+			{
+				recordYours(u);
+			}
+		}
 		// The player's own row has an id of its own: the dev loopback's echo is a member with the player's party id.
 		final SidePanelParty.Member you = new SidePanelParty.Member(SidePanelParty.YOU_ID, SidePanelParty.YOU_NAME, true,
 			raidScope ? SidePanelParty.sum(mine) : mine.get(0));
@@ -1061,10 +1069,27 @@ class PvmPerformancePanel extends PluginPanel
 		// T-176: your Fight panels are the Fight tab's own, under the party: no second build of them here.
 		if (!light)
 		{
-			final int[][] series = SidePanelParty.series((raidScope ? FightTimeline.raid(raid, plugin.getTimelines())
-				: FightTimeline.room(room, plugin.getTimelines())).damage);
+			final FightTimeline.View view = raidScope ? FightTimeline.raid(raid, plugin.getTimelines())
+				: FightTimeline.room(room, plugin.getTimelines());
+			final int[][] series = SidePanelParty.series(view.damage);
 			you.ticks = series[0];
 			you.damage = series[1];
+			// T-216: your luck and Skill at your recorded points, on the room's clock as the members' are.
+			final List<List<PartyBoard.Point>> points = new ArrayList<>();
+			final List<PartyBoard.View> own = yours.view(null);
+			for (LuckVsSkillUpdate u : mine)
+			{
+				points.add(own.isEmpty() ? java.util.Collections.<PartyBoard.Point>emptyList()
+					: own.get(0).series.getOrDefault(u.roomKey(), java.util.Collections.<PartyBoard.Point>emptyList()));
+			}
+			final float[][] m = SidePanelParty.metrics(points);
+			you.metricTicks = SidePanelParty.concat(points)[0];
+			you.luck = m[0];
+			you.skill = m[1];
+			// T-216: the other players' splats, tick by tick, on the same axis as your line.
+			final int[][] others = othersSeries(rooms, view.startTick);
+			in.othersTicks = others[0];
+			in.othersTotals = others[1];
 		}
 		in.members.add(you);
 		// The party's: the room on show by its name, sent since it started; or their raid's rooms summed.
@@ -1283,8 +1308,78 @@ class PvmPerformancePanel extends PluginPanel
 			final int[][] s = SidePanelParty.concat(series);
 			m.ticks = s[0];
 			m.damage = s[1];
+			// T-216: their luck and Skill so far at each update.
+			final float[][] metrics = SidePanelParty.metrics(series);
+			m.luck = metrics[0];
+			m.skill = metrics[1];
 		}
 		return m;
+	}
+
+	/**
+	 * T-216: your own updates, as you send them, kept as the board keeps the members' (a point at most every
+	 * {@link #YOURS_EVERY} ticks, and the room's end), for your luck and skill lines. Client thread; never saved.
+	 */
+	private final PartyBoard yours = new PartyBoard();
+	private final java.util.Map<String, Integer> yoursAt = new java.util.HashMap<>();
+	static final int YOURS_EVERY = 5;
+
+	private void recordYours(LuckVsSkillUpdate u)
+	{
+		if (u == null || u.r == null)
+		{
+			return;
+		}
+		final String key = u.roomKey();
+		final Integer at = yoursAt.get(key);
+		if (at != null && u.isLive() && u.ct - at < YOURS_EVERY)
+		{
+			return;
+		}
+		if (at != null && !u.isLive() && u.ct == at)
+		{
+			return;
+		}
+		yoursAt.put(key, u.ct);
+		if (yoursAt.size() > PartyBoard.MAX_ROOMS * 4)
+		{
+			yoursAt.clear();
+		}
+		yours.accept(SidePanelParty.YOU_ID, u, SidePanelParty.YOU_NAME, System.currentTimeMillis());
+	}
+
+	/**
+	 * T-216: the other players' splats on the rooms' fights, tick by tick: their running total at each tick one landed, on
+	 * the axis whose first tick is {@code start} (your line's: tick 1 is the first). Empty for none.
+	 */
+	static int[][] othersSeries(List<Encounter> rooms, int start)
+	{
+		final java.util.TreeMap<Integer, Integer> byTick = new java.util.TreeMap<>();
+		for (Encounter e : rooms)
+		{
+			for (Fight f : e.getFights())
+			{
+				final int[][] s = f.getOthersSeries();
+				int before = 0;
+				for (int i = 0; i < s[0].length; i++)
+				{
+					byTick.merge(s[0][i] - start + 1, s[1][i] - before, Integer::sum);
+					before = s[1][i];
+				}
+			}
+		}
+		final int[] ticks = new int[byTick.size()];
+		final int[] totals = new int[byTick.size()];
+		int i = 0;
+		int total = 0;
+		for (java.util.Map.Entry<Integer, Integer> e : byTick.entrySet())
+		{
+			total += e.getValue();
+			ticks[i] = Math.max(0, e.getKey());
+			totals[i] = total;
+			i++;
+		}
+		return new int[][]{ticks, totals};
 	}
 
 	/** The trip's figures and rooms (spec 3.3); client thread. The saved rooms are rebuilt only when the history or trip change. */

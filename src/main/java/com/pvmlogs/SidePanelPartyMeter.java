@@ -25,11 +25,15 @@ import javax.swing.JComponent;
  * after the fight, in its strength's ink live); skill as the grade chip after the fight where the grade is known (yours:
  * a member's isn't shared) and the Skill % otherwise, as the card has it. The share is the bar; DPS, share, luck's words
  * and skill are on the row's hover. The header's switch sorts the rows by damage, luck or skill.
+ * <p>
+ * T-216 (Eric: "The three numbers for dmg, luck, skill during the fight have no header"; "Do you think dps makes more
+ * sense than dmg during a live fight?"): a header row over the columns, {@code dps luck skill} live and {@code dmg luck
+ * skill} after, the switch's pick in its selected style; the first column DPS live (yours the card's), damage after.
  */
 final class SidePanelPartyMeter extends JComponent
 {
 	/** Between the value columns. */
-	static final int GAP = 7;
+	static final int GAP = 6;
 	/** Left of the name: past the bar's edge. */
 	static final int NAME_X = 6;
 
@@ -40,6 +44,8 @@ final class SidePanelPartyMeter extends JComponent
 	private String yourGrade;
 	private Color yourGradeColour;
 	private SidePanelParty.Metric metric = SidePanelParty.Metric.DMG;
+	/** T-216: your DPS as the card has it (T-200), live; null for none. */
+	private String yourDps;
 	private int hover = -1;
 	/** T-130: the member whose Fight panels show under the chart, outlined in their colour; you by default. */
 	private long selected = SidePanelParty.YOU_ID;
@@ -86,13 +92,80 @@ final class SidePanelPartyMeter extends JComponent
 	void set(List<PanelSnapshot.PartyRow> rows)
 	{
 		final boolean count = rows.size() != this.rows.size();
+		final boolean header = header(rows) != header(this.rows);
 		this.rows = rows;
-		this.shown = order(rows, metric);
-		if (count)
+		this.shown = order(rows, metric, yourRate());
+		if (count || header)
 		{
 			revalidate();
 		}
 		repaint();
+	}
+
+	/** T-216: your DPS on your row live, the card's (T-200); null for the model's. A repaint. */
+	void setYourDps(String dps)
+	{
+		if (!java.util.Objects.equals(dps, yourDps))
+		{
+			yourDps = dps;
+			shown = order(rows, metric, yourRate());
+			repaint();
+		}
+	}
+
+	/** T-216: whether the rows are the fight's live ones: the first column is DPS. */
+	private boolean live()
+	{
+		for (PanelSnapshot.PartyRow r : rows)
+		{
+			if (r.live)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** T-216: the first column's figure on a row: DPS live (yours the card's), damage after. */
+	String first(PanelSnapshot.PartyRow r)
+	{
+		return r.you && r.live && yourDps != null ? yourDps : r.first();
+	}
+
+	/** T-216: the header's words, one a column: {@code dps luck skill} live, {@code dmg luck skill} after. */
+	String[] headerWords()
+	{
+		final boolean live = live();
+		final SidePanelParty.Metric[] all = SidePanelParty.Metric.values();
+		final String[] out = new String[all.length];
+		for (int i = 0; i < all.length; i++)
+		{
+			out[i] = all[i].word(live);
+		}
+		return out;
+	}
+
+	/** T-216: a header over the rows wherever there's a member's figures: not over members listed alone. */
+	static boolean header(List<PanelSnapshot.PartyRow> rows)
+	{
+		for (PanelSnapshot.PartyRow r : rows)
+		{
+			if (!r.listed)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	static int headerHeight()
+	{
+		return SidePanelStyle.Type.SMALL.lineHeight() + 4;
+	}
+
+	private int top()
+	{
+		return header(rows) ? headerHeight() : 0;
 	}
 
 	/** T-208: your grade's chip on your row after the fight; null for none. A repaint. */
@@ -112,13 +185,38 @@ final class SidePanelPartyMeter extends JComponent
 	 */
 	static List<PanelSnapshot.PartyRow> order(List<PanelSnapshot.PartyRow> rows, SidePanelParty.Metric m)
 	{
+		return order(rows, m, Double.NaN);
+	}
+
+	/** T-216: your DPS as the card has it, for the live sort; NaN for none. */
+	private double yourRate()
+	{
+		try
+		{
+			return yourDps == null ? Double.NaN : Double.parseDouble(yourDps);
+		}
+		catch (NumberFormatException e)
+		{
+			return Double.NaN;
+		}
+	}
+
+	/** T-216: as {@link #order(List, SidePanelParty.Metric)}, live by DPS with yours at {@code yourRate} (NaN: the row's). */
+	static List<PanelSnapshot.PartyRow> order(List<PanelSnapshot.PartyRow> rows, SidePanelParty.Metric m, double yourRate)
+	{
 		final List<PanelSnapshot.PartyRow> members = new java.util.ArrayList<>();
 		final List<PanelSnapshot.PartyRow> rest = new java.util.ArrayList<>();
 		for (PanelSnapshot.PartyRow r : rows)
 		{
 			(r.others ? rest : members).add(r);
 		}
-		if (m != SidePanelParty.Metric.DMG)
+		if (m == SidePanelParty.Metric.DMG && !members.isEmpty() && members.get(0).live)
+		{
+			// T-216: live, by DPS, as the column shows.
+			members.sort(java.util.Comparator.comparingDouble((PanelSnapshot.PartyRow r) -> -(r.you && !Double.isNaN(
+				yourRate) ? yourRate : r.rate)));
+		}
+		else if (m != SidePanelParty.Metric.DMG)
 		{
 			// A stable sort: equals keep the damage order the model gave them.
 			members.sort(java.util.Comparator.comparingDouble((PanelSnapshot.PartyRow r) ->
@@ -157,7 +255,7 @@ final class SidePanelPartyMeter extends JComponent
 		if (this.metric != metric)
 		{
 			this.metric = metric;
-			this.shown = order(rows, metric);
+			this.shown = order(rows, metric, yourRate());
 			repaint();
 		}
 	}
@@ -174,8 +272,9 @@ final class SidePanelPartyMeter extends JComponent
 
 	private int rowAt(int y)
 	{
-		final int i = y / rowHeight();
-		return y < 0 || i >= shown.size() ? -1 : i;
+		final int at = y - top();
+		final int i = at / rowHeight();
+		return at < 0 || i >= shown.size() ? -1 : i;
 	}
 
 	private void hover(int i)
@@ -202,15 +301,22 @@ final class SidePanelPartyMeter extends JComponent
 			// T-167: others, others taken as members', or a member listed without figures: each says what it is.
 			return SidePanelStyle.tip(r.tip != null ? r.tip : SidePanelParty.OTHERS_NOTE);
 		}
-		return SidePanelStyle.tip(rowTip(r, r.you ? yourGrade : null));
+		return SidePanelStyle.tip(rowTip(r, r.you ? yourGrade : null, r.you && r.live ? yourDps : null));
 	}
 
 	/** T-208: what a member's row doesn't show: DPS and share, luck in words, Skill % and grade. */
 	static String rowTip(PanelSnapshot.PartyRow r, String grade)
 	{
+		return rowTip(r, grade, null);
+	}
+
+	/** T-216: both figures, damage and DPS, live and after; {@code dps} yours from the card, null for the row's. */
+	static String rowTip(PanelSnapshot.PartyRow r, String grade, String dps)
+	{
 		final StringBuilder b = new StringBuilder();
 		b.append(r.you ? "You" : r.name).append(": ").append(r.dmg[0]).append(" damage, ").append(r.dmg[2])
-			.append(" of the party's, ").append(r.dmg[1]).append(" dps.");
+			.append(" of the party's, ").append(dps != null ? dps : r.dmg[1]).append(" dps").append(r.live ? " so far."
+			: ".");
 		if (!r.luckWords.isEmpty())
 		{
 			b.append("<br>Luck: ").append(r.luckWords).append(r.live ? " so far." : ".");
@@ -226,7 +332,8 @@ final class SidePanelPartyMeter extends JComponent
 	@Override
 	public Dimension getPreferredSize()
 	{
-		return new Dimension(SidePanelStyle.CONTENT_WIDTH - 2 * SidePanelStyle.CARD_PAD_H, rows.size() * rowHeight());
+		return new Dimension(SidePanelStyle.CONTENT_WIDTH - 2 * SidePanelStyle.CARD_PAD_H, top() + rows.size()
+			* rowHeight());
 	}
 
 	/** For tests: how many value columns fitted at the last paint, and how many paints there were. */
@@ -267,13 +374,18 @@ final class SidePanelPartyMeter extends JComponent
 		// T-208: three figures on the right of each member's row: damage, luck's mini track, skill (chip or %), each
 		// column as wide as its widest; the group and others rows have their damage in the first column alone.
 		int dmgW = 0;
+		final boolean header = header(rows);
+		final String[] words = headerWords();
 		for (PanelSnapshot.PartyRow r : shown)
 		{
-			if (!r.listed)
+			// T-216: the estimate rows' "~" figures are right-aligned in the column but don't widen it: their names take
+			// what their own figure leaves.
+			if (!r.listed && !r.others)
 			{
-				dmgW = Math.max(dmgW, fs.stringWidth(r.dmg[0]));
+				dmgW = Math.max(dmgW, fs.stringWidth(first(r)));
 			}
 		}
+		dmgW = header ? Math.max(dmgW, fs.stringWidth(words[0]) + 2 * PILL_PAD) : dmgW;
 		final int skillW = Math.max(fs.stringWidth("100%"), chipWidth(g));
 		final int trackW = TRACK_W;
 		final int right = 3 + skillW + GAP + trackW + GAP + dmgW;
@@ -286,10 +398,36 @@ final class SidePanelPartyMeter extends JComponent
 		cutNames = 0;
 		final int smallBase = (rh + fs.getAscent() - fs.getDescent()) / 2;
 		final int bodyBase = (rh + fb.getAscent() - fb.getDescent()) / 2;
+		final int top = header ? headerHeight() : 0;
+		if (header)
+		{
+			// T-216: the header, each word over its column's centre; the switch's pick in its selected style.
+			final int skillX = w - 3 - skillW;
+			final int trackX = skillX - GAP - trackW;
+			final int dmgRight = trackX - GAP;
+			final int[] centre = {dmgRight - dmgW / 2, trackX + trackW / 2, skillX + skillW / 2};
+			g.setFont(small);
+			headerBoxes.clear();
+			for (int c = 0; c < words.length; c++)
+			{
+				final int ww = fs.stringWidth(words[c]);
+				final int x = Math.min(w - ww - PILL_PAD, centre[c] - ww / 2);
+				final boolean picked = c == metric.ordinal();
+				final java.awt.Rectangle box = new java.awt.Rectangle(x - PILL_PAD, 0, ww + 2 * PILL_PAD, headerHeight() - 2);
+				if (picked)
+				{
+					g.setColor(SidePanelStyle.SEGMENT_ON);
+					g.fillRoundRect(box.x, box.y, box.width, box.height, 6, 6);
+				}
+				g.setColor(picked ? SidePanelStyle.VALUE : SidePanelStyle.SECONDARY);
+				g.drawString(words[c], x, (headerHeight() - 2 + fs.getAscent() - fs.getDescent()) / 2);
+				headerBoxes.add(box);
+			}
+		}
 		for (int i = 0; i < shown.size(); i++)
 		{
 			final PanelSnapshot.PartyRow r = shown.get(i);
-			final int y = i * rh;
+			final int y = top + i * rh;
 			final boolean muted = r.others && !r.person() || r.left;
 			// The bar behind the row: the member's colour dimmed under the text, a solid edge on the left.
 			g.setColor(SidePanelStyle.alpha(r.colour, r.left ? 0.18 : r.you ? 0.30 : r.others ? 0.45 : 0.42));
@@ -314,7 +452,8 @@ final class SidePanelPartyMeter extends JComponent
 			final String name = r.name + (r.left ? " (left)" : "");
 			// T-167: a listed member's row has no values: the name and its hint take the row. T-208: the group's row has its
 			// damage alone, in the damage column, so its name has the same room as a member's.
-			final int room = r.listed ? w - nameX - 3 : nameRoom;
+			final int room = r.listed ? w - nameX - 3 : r.others ? Math.min(nameRoom + dmgW, w - nameX - 4 - (3 + skillW + GAP
+				+ trackW + GAP) - fs.stringWidth(first(r))) : nameRoom;
 			final String shownName = cut(name, fn, room);
 			cutNames += shownName.equals(name) ? 0 : 1;
 			g.drawString(shownName, nameX, y + bodyBase);
@@ -344,7 +483,9 @@ final class SidePanelPartyMeter extends JComponent
 			final int trackX = skillX - GAP - trackW;
 			final int dmgRight = trackX - GAP;
 			g.setColor(muted || r.others ? SidePanelStyle.MUTED : SidePanelStyle.VALUE);
-			g.drawString(r.dmg[0], dmgRight - fs.stringWidth(r.dmg[0]), y + smallBase);
+			final String first = first(r);
+			g.drawString(first, dmgRight - fs.stringWidth(first), y + smallBase);
+			lastFirsts.put(r.id, first);
 			if (r.others)
 			{
 				continue;
@@ -377,6 +518,22 @@ final class SidePanelPartyMeter extends JComponent
 			}
 		}
 		g.dispose();
+	}
+
+	/** T-216: the room either side of the header's picked word. */
+	static final int PILL_PAD = 3;
+	/** T-216: the header's words' boxes and each row's first figure at the last paint, for tests. */
+	private final List<java.awt.Rectangle> headerBoxes = new java.util.ArrayList<>();
+	private final java.util.Map<Long, String> lastFirsts = new java.util.HashMap<>();
+
+	List<java.awt.Rectangle> headerBoxes()
+	{
+		return new java.util.ArrayList<>(headerBoxes);
+	}
+
+	String lastFirst(long id)
+	{
+		return lastFirsts.get(id);
 	}
 
 	/** T-208: luck's mini track, as Luck's folded summary has it: three strengths, the marker 2 px over and under. */

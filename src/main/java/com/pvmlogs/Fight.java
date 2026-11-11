@@ -68,6 +68,10 @@ class Fight
 	private int healed;
 	// Other players' hits on the target, which take its health down and are nobody's business here beyond that.
 	private int othersDamage;
+	// T-216: othersDamage as it grew, a point a tick a splat landed on (game tick, running total). Not saved.
+	private transient int[] othersTicks;
+	private transient int[] othersTotals;
+	private transient int othersPoints;
 	// T-106: the room's damage on the target, a mechanic's or its own (Araxxor's Ruptura explosions and enraged cleave):
 	// shown as another player's with no other player there. Takes its health down like others' damage and isn't the
 	// player's; not another player's either, so the solo tests stay solo. 0 on a fight saved before, whose room damage
@@ -416,6 +420,46 @@ class Fight
 	void recordOthersDamage(int amount)
 	{
 		othersDamage += Math.max(0, amount);
+	}
+
+	/**
+	 * T-216 (Eric: "Party dps timeline should display the other 1 member even if they don't have luck vs skill"): another
+	 * player's hit on the target on game tick {@code tick}, also kept as a series, the running total at each tick a splat
+	 * landed, so the party chart can draw the members not running Luck vs Skill as they dealt it. Never saved: the total
+	 * is what history keeps.
+	 */
+	void recordOthersDamage(int amount, int tick)
+	{
+		recordOthersDamage(amount);
+		if (amount <= 0)
+		{
+			return;
+		}
+		if (othersTicks == null)
+		{
+			othersTicks = new int[16];
+			othersTotals = new int[16];
+		}
+		if (othersPoints > 0 && othersTicks[othersPoints - 1] == tick)
+		{
+			othersTotals[othersPoints - 1] = othersDamage;
+			return;
+		}
+		if (othersPoints == othersTicks.length)
+		{
+			othersTicks = java.util.Arrays.copyOf(othersTicks, othersPoints * 2);
+			othersTotals = java.util.Arrays.copyOf(othersTotals, othersPoints * 2);
+		}
+		othersTicks[othersPoints] = tick;
+		othersTotals[othersPoints] = othersDamage;
+		othersPoints++;
+	}
+
+	/** T-216: the others' series, {game ticks, running total}; empty for none (no splat, or a fight from history). */
+	int[][] getOthersSeries()
+	{
+		return new int[][]{othersTicks == null ? new int[0] : java.util.Arrays.copyOf(othersTicks, othersPoints),
+			othersTotals == null ? new int[0] : java.util.Arrays.copyOf(othersTotals, othersPoints)};
 	}
 
 	/** The room's damage on the target (T-106). See roomDamage. */

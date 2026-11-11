@@ -12,7 +12,8 @@ import java.util.function.LongFunction;
  * T-124: what the party's Luck vs Skill players have shared, for the side
  * panel's Party card (T-125). Per member: the latest live figures, the last
  * room's summary, the damage series of each room (one point per live update:
- * scored ticks, damage, expected) and, in a raid, each room's summary.
+ * scored ticks, damage, expected; T-216: luck and Skill so far) and, in a raid,
+ * each room's summary.
  *
  * <p>Fed from RuneLite's websocket thread and read from Swing's, so every
  * method is synchronized and {@link #view} hands out copies. Never saved:
@@ -42,6 +43,13 @@ final class PartyBoard
 		 * that didn't send it.
 		 */
 		final int clockTicks;
+		/**
+		 * T-216: luck so far at the update, its percentile 0 to 1 ({@link LuckVsSkillUpdate#p}), and Skill so far, 0 to 1
+		 * ({@link LuckVsSkillUpdate#x}): the party chart's luck and skill lines. -1 for none (not known yet, or a sender
+		 * that didn't send it).
+		 */
+		final double luck;
+		final double skill;
 
 		Point(int scoredTicks, int damage, double expected)
 		{
@@ -50,10 +58,17 @@ final class PartyBoard
 
 		Point(int scoredTicks, int damage, double expected, int clockTicks)
 		{
+			this(scoredTicks, damage, expected, clockTicks, -1, -1);
+		}
+
+		Point(int scoredTicks, int damage, double expected, int clockTicks, double luck, double skill)
+		{
 			this.scoredTicks = scoredTicks;
 			this.damage = damage;
 			this.expected = expected;
 			this.clockTicks = clockTicks;
+			this.luck = luck;
+			this.skill = skill;
 		}
 
 		/** The x the chart draws it at: the room's clock, or the scored ticks from a sender without it. */
@@ -148,7 +163,8 @@ final class PartyBoard
 		final Point last = points.isEmpty() ? null : points.get(points.size() - 1);
 		if (last == null || last.scoredTicks != u.st || last.damage != u.d || last.clockTicks != u.ct)
 		{
-			points.add(new Point(u.st, u.d, u.e, u.ct));
+			// T-216: with luck and Skill so far, one point an update, for the party chart's luck and skill lines.
+			points.add(new Point(u.st, u.d, u.e, u.ct, u.p, u.x));
 			if (points.size() > MAX_POINTS)
 			{
 				points.remove(0);

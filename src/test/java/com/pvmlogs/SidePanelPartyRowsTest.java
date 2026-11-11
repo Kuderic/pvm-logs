@@ -90,10 +90,12 @@ public class SidePanelPartyRowsTest
 	public void membersNotRunningThePluginAreOnlyInTheGroupRow()
 	{
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(SidePanelPartyExamples.yamaDuoWithAway(false));
-		assertEquals(Arrays.asList("you", "Quillon", "1 member"), names(t));
+		// T-216: one member, by name and picture, as an estimate.
+		assertEquals(Arrays.asList("you", "Quillon", "Ash Kettle"), names(t));
 		final PanelSnapshot.PartyRow group = t.rows.get(2);
 		assertTrue(group.others);
-		assertEquals(PanelSnapshot.PartyRow.OTHERS_ID, group.id);
+		assertTrue(group.estimate);
+		assertEquals(77L, group.id);
 		assertTrue(group.dmg[0].startsWith(SidePanelParty.APPROX));
 		// Its tooltip names who is in it and says the damage is estimated; the paragraph under the meter is gone.
 		assertTrue(group.tip, group.tip.contains("Ash Kettle"));
