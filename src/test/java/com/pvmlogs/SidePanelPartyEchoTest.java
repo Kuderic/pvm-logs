@@ -38,9 +38,10 @@ public class SidePanelPartyEchoTest
 	{
 		// Zebak [72991] in pvm-debug-20261104-151902.log: others 1381, Eric's own 1634.
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(SidePanelPartyExamples.zebakDuoWithEcho());
-		final PanelSnapshot.PartyRow partner = row(t, "Ash Kettle");
+		// T-208: the partner is the group row, "1 member".
+		final PanelSnapshot.PartyRow partner = row(t, "1 member");
 		assertEquals("~1,381", partner.dmg[0]);
-		assertEquals(SidePanelParty.ABOUT, partner.hint);
+		assertTrue(partner.tip, partner.tip.contains("Ash Kettle"));
 		assertEquals(1_381, SidePanelParty.others(1_381, SidePanelPartyExamples.zebakDuoWithEcho().members));
 		// Before T-169 the echo's 1,634 was taken from it: 0.
 		final SidePanelParty.Input before = SidePanelPartyExamples.zebakDuoWithEcho();

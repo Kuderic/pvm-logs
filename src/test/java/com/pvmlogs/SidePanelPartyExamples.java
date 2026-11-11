@@ -275,6 +275,36 @@ final class SidePanelPartyExamples
 		return in;
 	}
 
+	/**
+	 * T-208: a duo Yama kill in a party of four (invented names): you, Quillon sharing, Ash Kettle in the fight without
+	 * the plugin (his damage is the group's), Old Tam in the party but not at the fight. Live, or after the kill.
+	 */
+	static SidePanelParty.Input yamaDuoWithAway(boolean live)
+	{
+		final double seconds = live ? 96 : 233;
+		final double k = seconds / 233;
+		final SidePanelParty.Input in = input("Yama", seconds, live, null, (int) Math.round((5_420 + 4_310) * k));
+		in.partySize = 4;
+		in.members.add(member(SidePanelParty.YOU_ID, "you", true, 0, figures("Yama", !live, (int) Math.round(6_240 * k),
+			6_960 * k, (int) Math.round(388 * k), live ? 0.31 : 0.02, live ? -3 : -29, live ? 0.96 : 0.98, live ? 3 : 6,
+			attacks(TWISTED_BOW, (int) Math.round(150 * k), (int) Math.round(112 * k), (int) Math.round(6_240 * k),
+				6_960 * k, false)), (int) Math.round(388 * k)));
+		in.members.add(member(51, "Quillon", false, 0, figures("Yama", !live, (int) Math.round(5_420 * k), 5_210 * k,
+			(int) Math.round(388 * k), live ? 0.7 : 0.81, live ? 4 : 12, live ? 0.9 : 0.93, live ? 6 : 14,
+			attacks(SCYTHE, (int) Math.round(140 * k), (int) Math.round(118 * k), (int) Math.round(5_420 * k), 5_210 * k,
+				false)), (int) Math.round(388 * k)));
+		in.unshared.add(new SidePanelParty.Unshared(77, "Ash Kettle", null));
+		in.unshared.add(new SidePanelParty.Unshared(78, "Old Tam", null));
+		in.inFight = new java.util.HashSet<>(java.util.Arrays.asList(51L, 77L));
+		if (live)
+		{
+			// A live update carries luck so far (PartyShare sends the percentile live too).
+			in.members.get(0).figures.p = 0.31;
+			in.members.get(1).figures.p = 0.7;
+		}
+		return in;
+	}
+
 	/** A trio where only you share: two members listed, one combined row for what they did between them. */
 	static SidePanelParty.Input trioTwoNotSharing()
 	{

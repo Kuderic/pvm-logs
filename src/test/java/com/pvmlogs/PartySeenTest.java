@@ -104,31 +104,35 @@ public class PartySeenTest
 		final SidePanelParty.Input in = SidePanelPartyExamples.trioTwoNotSharing();
 		in.inFight = Collections.singleton(MOSS);
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(in);
-		// One member: others is about theirs (T-167's one-member case); Brindle is listed apart, out of it.
-		assertEquals(SidePanelParty.aboutOne("Moss Pike"), t.othersNote);
+		// One member: the group row "1 member" is theirs (T-208); Brindle is set apart, out of it.
 		final List<String> names = new ArrayList<>();
 		for (PanelSnapshot.PartyRow r : t.rows)
 		{
 			names.add(r.name);
 		}
+		assertTrue(names.toString(), names.contains("1 member"));
 		assertFalse(names.contains("2 members"));
-		final PanelSnapshot.PartyRow moss = rowById(t, MOSS);
-		assertTrue(moss.others);
-		assertEquals(SidePanelParty.ABOUT, moss.hint);
-		final PanelSnapshot.PartyRow brindle = rowById(t, BRINDLE);
-		assertTrue(brindle.listed);
-		assertEquals(SidePanelParty.NOT_RUNNING, brindle.hint);
+		assertFalse(names.contains("Brindle"));
+		assertFalse(names.contains("Moss Pike"));
+		final PanelSnapshot.PartyRow group = t.rows.get(t.rows.size() - 1);
+		assertTrue(group.tip, group.tip.contains("Moss Pike"));
+		assertFalse(group.tip, group.tip.contains("Brindle"));
+		assertEquals("not in this fight: 1", t.away);
+		assertTrue(t.awayTip.contains("Brindle"));
 		// For T-208's rows.
 		assertSame(in.inFight, t.inFight);
-		// Both in it: one combined row, as before.
+		// Both in it: one combined row.
 		in.inFight = new HashSet<>(Arrays.asList(MOSS, BRINDLE));
-		assertEquals(SidePanelParty.aboutMany(2), SidePanelParty.party(in).othersNote);
+		assertTrue(SidePanelParty.party(in).rows.stream().anyMatch(r -> r.name.equals("2 members")));
+		assertEquals(null, SidePanelParty.party(in).away);
 		// Not known (no fight in a party): as before, every member who hasn't shared.
 		in.inFight = null;
-		assertEquals(SidePanelParty.aboutMany(2), SidePanelParty.party(in).othersNote);
-		// Neither in it: others stays others, no one's.
+		assertTrue(SidePanelParty.party(in).rows.stream().anyMatch(r -> r.name.equals("2 members")));
+		// Neither in it: others stays others, no one's; both set apart.
 		in.inFight = Collections.emptySet();
-		assertEquals(SidePanelParty.OTHERS_NOTE, SidePanelParty.party(in).othersNote);
+		final PanelSnapshot.PartyTab neither = SidePanelParty.party(in);
+		assertEquals("others", neither.rows.get(neither.rows.size() - 1).name);
+		assertEquals("not in this fight: 2", neither.away);
 	}
 
 	private static PanelSnapshot.PartyRow rowById(PanelSnapshot.PartyTab t, long id)

@@ -75,7 +75,9 @@ public class SidePanelPartyTest
 		assertEquals(SidePanelParty.COLOURS[0], top.colour);
 		assertEquals(SidePanelParty.COLOURS[1], t.rows.get(2).colour);
 		assertEquals(SidePanelParty.OTHERS, t.rows.get(3).colour);
-		assertNotNull(t.othersNote);
+		// T-208: what others is, on its row's hover, not a paragraph under the meter.
+		assertNull(t.othersNote);
+		assertEquals(SidePanelParty.OTHERS_NOTE, t.rows.get(3).tip);
 	}
 
 	@Test
@@ -336,7 +338,12 @@ public class SidePanelPartyTest
 								final SidePanelPartyMeter meter = p.partySection().meter();
 								if (meter != null)
 								{
-									assertEquals(at + "names cut", 0, meter.cutNames());
+									// T-208: three figures beside every name; at Smooth or Larger a long name may be cut
+									// shorter (it's whole on the row's hover), never at Normal.
+									if (!larger && !smooth)
+									{
+										assertEquals(at + "names cut", 0, meter.cutNames());
+									}
 									if (meter.shownColumns() < 3)
 									{
 										dropped.add(at.trim());

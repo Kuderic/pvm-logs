@@ -95,6 +95,11 @@ final class SidePanelPartySection
 	// The current components, for updates in place.
 	private SidePanelParts.Line header;
 	private SidePanelPartyMeter meter;
+	/** T-208: the "not in this fight" line under the meter; null without one. */
+	private SidePanelParts.Line awayLine;
+	/** T-208: your grade and its colour, from your kill card; null without one. */
+	private String yourGrade;
+	private java.awt.Color yourGradeColour;
 	private SidePanelPartyChart chart;
 	private MetricSwitch words;
 	private Picture headingPicture;
@@ -237,6 +242,7 @@ final class SidePanelPartySection
 		memberArea.removeAll();
 		header = null;
 		meter = null;
+		awayLine = null;
 		chart = null;
 		words = null;
 		clearMember();
@@ -349,6 +355,7 @@ final class SidePanelPartySection
 		top.removeAll();
 		header = null;
 		meter = null;
+		awayLine = null;
 		chart = null;
 		words = null;
 		memberBuiltFor = null;
@@ -405,6 +412,7 @@ final class SidePanelPartySection
 		meter = new SidePanelPartyMeter(this::select);
 		meter.setToolTipText(SidePanelStyle.tip(SWITCH_HINT));
 		meter.setMetric(metric);
+		meter.setYourGrade(yourGrade, yourGradeColour);
 		meter.set(t.rows);
 		meter.setSelected(selected);
 		card.add(meter);
@@ -412,6 +420,14 @@ final class SidePanelPartySection
 		{
 			card.add(new SidePanelParts.Paragraph(t.othersNote, SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL,
 				SidePanelStyle.CONTENT_WIDTH - 14));
+		}
+		// T-208: who wasn't in the fight, set apart in one muted line; their names on its hover.
+		if (t.away != null)
+		{
+			awayLine = new SidePanelParts.Line(PanelSnapshot.Text.small(t.away, SidePanelStyle.MUTED),
+				PanelSnapshot.Text.NONE);
+			awayLine.setTip(t.awayTip);
+			card.add(awayLine);
 		}
 		list.add(card);
 		// Its Timeline, as Damage's: the subhead, then the chart, on a card of its own under the meter's.
@@ -686,12 +702,38 @@ final class SidePanelPartySection
 			meter.set(t.rows);
 			meter.setSelected(selected);
 		}
+		if (awayLine != null && t.away != null)
+		{
+			awayLine.set(PanelSnapshot.Text.small(t.away, SidePanelStyle.MUTED), null, PanelSnapshot.Text.NONE);
+			awayLine.setTip(t.awayTip);
+		}
 		if (chart != null)
 		{
 			chart.set(t, focus());
 		}
 		member(t, false);
 	}
+
+	/**
+	 * T-208: your kill card, for your row's grade chip after the fight (a member's grade isn't shared, so theirs shows
+	 * their Skill %). Null, or live, for none. A repaint.
+	 */
+	void setYours(PanelSnapshot.KillCard card)
+	{
+		yourGrade = card == null || card.live ? null : card.grade;
+		yourGradeColour = card == null ? null : card.gradeColour;
+		if (meter != null)
+		{
+			meter.setYourGrade(yourGrade, yourGradeColour);
+		}
+	}
+
+	/** T-208: the "not in this fight" line, for tests; null without one. */
+	SidePanelParts.Line awayLine()
+	{
+		return awayLine;
+	}
+
 
 	/** The header's right: the clock and the party's DPS, {@code 2:09 · party 79.1 dps}. */
 	static String headerRight(PanelSnapshot.PartyTab t)
@@ -707,8 +749,11 @@ final class SidePanelPartySection
 			super(labels(), TIPS, picked.ordinal(), i -> onPick.accept(SidePanelParty.Metric.values()[i]));
 		}
 
-		/** T-207: each choice in plain words, on its own pill's tooltip. */
-		static final String[] TIPS = {"Show each member's damage", "Show each member's luck", "Show each member's skill"};
+		/**
+		 * T-207: each choice in plain words, on its own pill's tooltip. T-208: the rows always show all three; the switch
+		 * sorts them. The Timeline charts damage whichever is picked: the party's updates carry no luck or skill over time.
+		 */
+		static final String[] TIPS = {"Sort the rows by damage", "Sort the rows by luck", "Sort the rows by skill"};
 
 		private static String[] labels()
 		{

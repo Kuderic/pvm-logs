@@ -1482,6 +1482,8 @@ class PvmPerformancePanel extends PluginPanel
 			lastTrip = snapshot.trip;
 		}
 		// T-176: the party first, so the Fight tab places its blocks as this snapshot has them.
+		// T-208: your grade for your row in the party's meter.
+		partySection.setYours(snapshot.fight == null ? null : snapshot.fight.card);
 		partySection.apply(snapshot.party);
 		if (snapshot.fight != null)
 		{

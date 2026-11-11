@@ -411,7 +411,12 @@ public class SidePanelPartyMemberViewTest
 							}
 							if (p.partySection().meter() != null)
 							{
-								assertEquals(at + "names cut", 0, p.partySection().meter().cutNames());
+								// T-208: three figures beside every name; at Smooth or Larger a long name may be cut
+								// shorter (it's whole on the row's hover), never at Normal.
+								if (!larger && !smooth)
+								{
+									assertEquals(at + "names cut", 0, p.partySection().meter().cutNames());
+								}
 							}
 						}
 						finally
