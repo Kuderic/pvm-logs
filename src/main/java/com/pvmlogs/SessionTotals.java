@@ -16,6 +16,8 @@ class SessionTotals
 	// Our thrall's damage and damage over time (burn, poison, venom, bleed), fed where Fight's are. Kept out of damage
 	// dealt like Fight keeps them, and shown beside it (T-014).
 	private int thrallDamage;
+	// T-204: the player's cannon's, on scored fights, as the thrall's.
+	private int cannonDamage;
 	private int dotDamage;
 	// Recoil and vengeance (T-017 Part B), kept out of damage dealt like the thrall's.
 	private int reflectDamage;
@@ -102,6 +104,7 @@ class SessionTotals
 		kills = 0;
 		damageDealt = 0;
 		thrallDamage = 0;
+		cannonDamage = 0;
 		dotDamage = 0;
 		reflectDamage = 0;
 		damageTaken = 0;
@@ -269,6 +272,12 @@ class SessionTotals
 	void recordThrallDamage(int damage)
 	{
 		thrallDamage += Math.max(0, damage);
+	}
+
+	/** T-204: see {@code Fight.recordCannonDamage}. */
+	void recordCannonDamage(int damage)
+	{
+		cannonDamage += Math.max(0, damage);
 	}
 
 	/** See {@code Fight.recordReflectDamage}. */
@@ -539,7 +548,7 @@ class SessionTotals
 	double luckSeconds(double damage)
 	{
 		return DrainValue.seconds(damage, scoredCombatTicks, getSumExpectedAverageHit(),
-			Math.max(0, thrallDamage) + Math.max(0, dotDamage) + Math.max(0, reflectDamage));
+			Math.max(0, thrallDamage) + Math.max(0, cannonDamage) + Math.max(0, dotDamage) + Math.max(0, reflectDamage));
 	}
 
 	/**

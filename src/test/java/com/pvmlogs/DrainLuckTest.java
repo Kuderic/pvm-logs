@@ -233,7 +233,8 @@ public class DrainLuckTest
 		assertEquals(12.5, back.getSumExpectedAverageHit(), 0);
 		assertEquals(100, back.damageVariance(), 0);
 		final String[] cells = PvmPerformancePlugin.csvRow(back).trim().split(",", -1);
-		assertEquals(Arrays.asList("", "", "", "", "", ""), Arrays.asList(cells).subList(cells.length - 6, cells.length));
+		// T-204: cannonDamage after them.
+		assertEquals(Arrays.asList("", "", "", "", "", ""), Arrays.asList(cells).subList(cells.length - 7, cells.length - 1));
 		// A kill with them keeps them through the history file.
 		final Fight now = fight();
 		now.recordExpected(50, 0.5, 12.5, 100);

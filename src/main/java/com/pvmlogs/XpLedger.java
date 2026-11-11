@@ -212,6 +212,11 @@ class XpLedger
 
 	// What the last close() took for casts rather than attacks, for the plugin's log; null when nothing.
 	private String castNote;
+	// T-204: the player's cannon is set up, so Ranged a tick paid may be its.
+	private boolean cannon;
+	// T-204: the cannon damage the last close() read from its Ranged, or -1; and what it took, as a log line.
+	private int cannonDamage = -1;
+	private String cannonNote;
 	// T-139: the Magic it took, for the Mark of Darkness's fallback; 0 when nothing.
 	private int castMagic;
 
@@ -230,6 +235,8 @@ class XpLedger
 	{
 		castNote = null;
 		castMagic = 0;
+		cannonDamage = -1;
+		cannonNote = null;
 		boolean any = false;
 		for (boolean r : reported)
 		{
@@ -240,6 +247,30 @@ class XpLedger
 		for (int i = 0; any && i < g.length; i++)
 		{
 			g[i] = reported[i] ? open[i] : cannotReport != null && cannotReport[i] ? XpDecoder.UNKNOWN : 0;
+		}
+		// T-204: the cannon's Ranged first, before a cast is looked for: beside a barrage it read as an attack's Ranged, so
+		// the barrage's Magic was taken for a cast.
+		if (any && cannon && g[RANGED] > 0)
+		{
+			final double m = multiplierFor(targetId, formulaMultiplier);
+			final int[] split = cannonSplit(g, m);
+			if (split != null)
+			{
+				cannonDamage = split[0];
+				cannonNote = String.format("CANNON xp on %d: +%d Ranged is the cannon's %d (2 a point at x%.3f)%s", tick,
+					split[1], split[0], m, g[RANGED] - split[1] > 0 || g[HITPOINTS] > 0 ? "; the rest is the attack's" : "");
+				g[RANGED] -= split[1];
+				any = false;
+				for (int gain : g)
+				{
+					any |= gain > 0;
+				}
+			}
+			else if (g[HITPOINTS] > 0)
+			{
+				cannonNote = String.format("CANNON xp on %d: no cannon damage splits whole from +%d Ranged and +%d Hitpoints "
+					+ "(x%.3f): left as the attack's", tick, g[RANGED], g[HITPOINTS], m);
+			}
 		}
 		final String cast = any ? castMagic(g) : null;
 		if (cast != null)
@@ -281,6 +312,85 @@ class XpLedger
 		java.util.Arrays.fill(open, 0);
 		java.util.Arrays.fill(reported, false);
 		return award;
+	}
+
+	/** T-204: whether the player's cannon is set up, so a tick's Ranged may be partly its. */
+	void setCannon(boolean setUp)
+	{
+		cannon = setUp;
+	}
+
+	/** T-204: the cannon damage the last {@link #close} read from its Ranged, or -1. */
+	int cannonDamage()
+	{
+		return cannonDamage;
+	}
+
+	/** T-204: what the last {@link #close} did with the cannon's Ranged, as a log line; null when nothing. */
+	String cannonNote()
+	{
+		return cannonNote;
+	}
+
+	/**
+	 * T-204: the cannon's part of a tick's Ranged, as {damage, experience}, or null when none can be told. The cannon
+	 * pays 2 Ranged a point at the monster's bonus and no Hitpoints (OSRS Wiki; Eric's 2026-11-10 log), and one ball a
+	 * tick at most.
+	 * <ul>
+	 * <li>Ranged and nothing else: all of it the cannon's (a ranged attack that dealt damage pays Hitpoints too, one that
+	 * dealt none pays nothing).</li>
+	 * <li>Beside Magic, Attack or Strength: the attack is a spell or a blow, which pays no Ranged, so all of it.</li>
+	 * <li>Beside Hitpoints (a ranged attack's, maybe with Defence for longrange): the cannon damage that leaves what
+	 * decodes to one attack, the attack's damage told by Hitpoints. None when the attack decodes whole as it is.</li>
+	 * </ul>
+	 * Ranged from a skill that can't report (200m) can't be split, and isn't.
+	 */
+	static int[] cannonSplit(int[] g, double multiplier)
+	{
+		final int ranged = g[RANGED];
+		if (ranged <= 0 || g[HITPOINTS] == XpDecoder.UNKNOWN)
+		{
+			return null;
+		}
+		final double perPoint = CannonTracker.XP_PER_DAMAGE * multiplier;
+		// A spell's Magic (not a cast's that isn't an attack) or a blow's Attack or Strength.
+		final boolean otherStyle = g[ATTACK] > 0 || g[STRENGTH] > 0 || g[MAGIC] > 0 && castsPaying(g[MAGIC]) == null;
+		if (otherStyle || g[HITPOINTS] <= 0)
+		{
+			return new int[]{(int) Math.round(ranged / perPoint), ranged};
+		}
+		if (decodes(g, ranged, multiplier))
+		{
+			return null;
+		}
+		// Hitpoints says the attack's damage, so its Ranged; what's over it is the cannon's, to the nearest point.
+		final int estimate = (int) Math.round((ranged - (g[DEFENCE] > 0 ? g[DEFENCE] : 3.0 * g[HITPOINTS])) / perPoint);
+		for (int d = 0; d <= 2; d++)
+		{
+			for (int c : new int[]{estimate - d, estimate + d})
+			{
+				if (c <= 0 || c > CannonTracker.MAX_HIT)
+				{
+					continue;
+				}
+				for (int slack = -1; slack <= 1; slack++)
+				{
+					final int taken = (int) Math.round(c * perPoint) + slack;
+					if (taken > 0 && taken < ranged && decodes(g, ranged - taken, multiplier))
+					{
+						return new int[]{c, taken};
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	private static boolean decodes(int[] g, int ranged, double multiplier)
+	{
+		// A cast's Magic beside it is no attack's, as castMagic takes it.
+		final int magic = g[MAGIC] > 0 && castsPaying(g[MAGIC]) != null ? 0 : g[MAGIC];
+		return XpDecoder.damageRange(g[ATTACK], g[STRENGTH], g[DEFENCE], ranged, magic, g[HITPOINTS], multiplier) != null;
 	}
 
 	/** What the last {@link #close} took for casts that are not attacks, as a log line; null when nothing. */

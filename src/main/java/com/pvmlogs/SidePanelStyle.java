@@ -87,6 +87,8 @@ final class SidePanelStyle
 	static final Color THRALL = new Color(0xB48CFF);
 	static final Color DOT = new Color(0xE6A0D4);
 	static final Color REFLECT = new Color(0x9AA5B1);
+	/** T-204: the player's cannon: a khaki, apart from the styles', the thrall's violet, cost's orange and the grades'. */
+	static final Color CANNON = new Color(0xBDB76B);
 	/** T-188: luck's own colour on the kill card and in its words, always: the thrall's violet, apart from skill's. */
 	static final Color LUCK = THRALL;
 	/**

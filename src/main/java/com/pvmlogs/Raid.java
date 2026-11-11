@@ -44,6 +44,17 @@ class Raid
 		endMillis = now;
 	}
 
+	/** T-204: the cannon's damage across the raid's rooms. */
+	int getCannonDamage()
+	{
+		int total = 0;
+		for (Encounter encounter : encounters)
+		{
+			total += encounter.getCannonDamage();
+		}
+		return total;
+	}
+
 	int getThrallDamage()
 	{
 		int total = 0;
@@ -516,7 +527,8 @@ class Raid
 		int total = 0;
 		for (Encounter encounter : encounters)
 		{
-			total += encounter.getScoredThrallDamage() + encounter.getScoredDotDamage() + encounter.getScoredReflectDamage();
+			total += encounter.getScoredThrallDamage() + encounter.getScoredCannonDamage() + encounter.getScoredDotDamage()
+				+ encounter.getScoredReflectDamage();
 		}
 		return total;
 	}

@@ -207,7 +207,9 @@ public class PvmPerformancePlugin extends Plugin
 		+ "drainValueDamage,drainValueExpected,specLuckDamage,drainValueSec,drainValueExpectedSec,specLuckSec,"
 		// T-134: all your damage (weapon, thrall, recoil and vengeance, damage over time) over the scored clock, as the
 		// side panel's DPS. dps above stays the weapon's over the whole duration, so older exports still compare.
-		+ "dpsAll\n";
+		+ "dpsAll,"
+		// T-204: the player's cannon's damage, as thrallDamage; at the end so no older column moves.
+		+ "cannonDamage\n";
 
 	private static final DateTimeFormatter ROW_TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -267,6 +269,10 @@ public class PvmPerformancePlugin extends Plugin
 	private DefenceDrain drain;
 	// T-160: what lands on a splashed special's target over its window, for the log.
 	private final SplashCheck splashCheck = new SplashCheck();
+	// T-204: the player's own cannon: where it stands, its balls in the air, and what its experience said it dealt.
+	private final CannonTracker cannon = new CannonTracker();
+	// T-204: the cannon's varps read once at the first tick, for a plugin started with the cannon already set up.
+	private boolean cannonVarpsRead;
 
 	// The bosses' damage modifiers (T-057): the windows that change the player's damage.
 	@Inject
@@ -925,6 +931,8 @@ public class PvmPerformancePlugin extends Plugin
 		health.clear();
 		thralls.clear();
 		xpLedger.clear();
+		cannon.clear();
+		cannonVarpsRead = false;
 		targetIds.clear();
 		java.util.Arrays.fill(lastSkillXp, 0);
 		nightmareBoss = null;
@@ -993,6 +1001,16 @@ public class PvmPerformancePlugin extends Plugin
 			// T-153: the core's damage, passed on fivefold to a Warden whose core is out: her hitpoints, but not an attack of
 			// the player's on her. The attack's own splat is the one on the core, beside it.
 			final boolean passedOn = coreDamagePassedOn(npc.getId(), hitsplat.getAmount());
+			// T-204: a ball from the player's own cannon, before anything takes it for the weapon's: never an attack, a hit, an
+			// extra splat, a splash or a fight's opening. Its damage is the cannon's, in the kill like the thrall's.
+			if (!passedOn && cannon.isSetUp() && cannon.claim(npc.getIndex(), hitsplat.getAmount(), client.getTickCount(),
+				weaponLandsOn(npc.getIndex(), client.getTickCount())))
+			{
+				debug.log("hitsplat %d on %s (npc %d, index %d): CANNON, a ball from the player's cannon", hitsplat.getAmount(),
+					npc.getName(), npc.getId(), npc.getIndex());
+				creditCannon(npc, hitsplat.getAmount(), client.getTickCount());
+				return;
+			}
 			// Every splat of mine, before anything judges it (T-049): a special's own is picked from them by its tick and the
 			// order they arrive in, as RuneLite's special attack counter picks it, so a thrall's is never taken.
 			if (!passedOn)
@@ -2107,6 +2125,56 @@ public class PvmPerformancePlugin extends Plugin
 	}
 
 	// A thrall's splat: real damage, so it counts towards what the target has left - but none of it is the player's.
+	/**
+	 * T-204: a splat of the player's cannon. On the fight's target (or the room's boss while the player is on an add) it is
+	 * the fight's cannon damage and comes off the target's count, as the thrall's does; on anything else it is kept for a
+	 * fight that opens on it, and opens none itself.
+	 */
+	private void creditCannon(NPC npc, int amount, int tick)
+	{
+		// Nor a special's hit, for its splash check.
+		splashCheck.thrall(npc.getIndex(), tick, amount);
+		final boolean open = current != null && !current.isEnded();
+		final Fight boss = open ? roomBossFight(npc) : null;
+		if (open && (npc.getIndex() == current.getTargetIndex() || boss != null))
+		{
+			damageByIndex.merge(npc.getIndex(), amount, Integer::sum);
+			health.damage(npc.getIndex(), npc.getId(), amount, tick);
+			final Fight fight = boss != null ? boss : current;
+			if (boss != null)
+			{
+				whileOnAnAdd.merge(npc.getIndex(), amount, Integer::sum);
+			}
+			fight.recordCannonDamage(amount);
+			if (fight.isScored())
+			{
+				trip(fight).recordCannonDamage(amount);
+			}
+			return;
+		}
+		cannon.bank(npc.getIndex(), amount);
+	}
+
+	/**
+	 * T-204: whether the player's own attack lands on this npc this tick, for telling a cannon's 0 (or an unpaid splat)
+	 * from the weapon's: a projectile of the player's due on it now, or a melee weapon off its cooldown.
+	 */
+	private boolean weaponLandsOn(int npcIndex, int tick)
+	{
+		final List<PendingHit> due = pendingMineHits.get(npcIndex);
+		if (due != null)
+		{
+			for (PendingHit hit : due)
+			{
+				if (Math.abs(hit.lands - tick) <= FLIGHT_SLACK_TICKS)
+				{
+					return true;
+				}
+			}
+		}
+		return combatCalc.isMeleeEquipped() && (attackDueTick == Integer.MIN_VALUE || tick >= attackDueTick);
+	}
+
 	private void creditThrall(NPC npc, int amount, int tick)
 	{
 		// T-160: nor a special's hit, for its drain.
@@ -2286,6 +2354,14 @@ public class PvmPerformancePlugin extends Plugin
 			targetId = ((NPC) me.getInteracting()).getId();
 		}
 		final MonsterStatsProvider.MonsterStats stats = targetId < 0 ? null : monsterStats.get(targetId);
+		// T-204: the cannon's state, read once for a plugin started with it set up; the varps keep it after.
+		if (!cannonVarpsRead)
+		{
+			cannonVarpsRead = true;
+			cannon.onVarp(VarPlayerID.OWNEDMCANNON, client.getVarpValue(VarPlayerID.OWNEDMCANNON));
+			cannon.onVarp(VarPlayerID.DROPCANNON, client.getVarpValue(VarPlayerID.DROPCANNON));
+		}
+		xpLedger.setCannon(cannon.isSetUp());
 		final XpLedger.Award award = xpLedger.close(tick, targetId, stats == null ? 1.0 : stats.getXpMultiplier(),
 			cannotReport);
 		// A cast that is not an attack (Vengeance, a thrall, Death Charge; T-024) pays Magic the ledger takes out before
@@ -2295,6 +2371,13 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log(xpLedger.castNote());
 		}
 		inferMark(tick, xpLedger.castNote(), xpLedger.castMagic());
+		// T-204: the cannon's Ranged, taken out before the attack's was decoded; its damage is what a ball's splat matches.
+		if (xpLedger.cannonNote() != null)
+		{
+			debug.log("%s", xpLedger.cannonNote());
+		}
+		cannon.onPaid(xpLedger.cannonDamage(), tick);
+		cannon.expire(tick);
 		if (award != null)
 		{
 			debug.log("xp award %s against npc %d", award, targetId);
@@ -2742,6 +2825,23 @@ public class PvmPerformancePlugin extends Plugin
 			// mine.
 			thralls.onThrallProjectile(source instanceof NPC ? ((NPC) source).getIndex() : thrallLeftFrom(projectile),
 				((NPC) target).getIndex(), client.getTickCount(), lands);
+			return;
+		}
+		// T-204: a cannonball is never an attack of the player's, whoever's cannon fired it: the player's own is booked as the
+		// cannon's when it lands, another player's is nobody's here (its splat is theirs). It sets off beside the player
+		// standing at his cannon, so "from my tile" took some for his shots.
+		if (source == null && CannonTracker.isCannonball(projectile.getId()))
+		{
+			final WorldPoint from = WorldPoint.fromLocal(client, projectile.getX1(), projectile.getY1(), client.getPlane());
+			final boolean mine = cannon.fromMyCannon(from.getX(), from.getY(), from.getPlane());
+			final int lands = landingTick(projectile);
+			if (mine)
+			{
+				cannon.onBall(((NPC) target).getIndex(), client.getTickCount(), lands);
+			}
+			debug.log("CANNON ball %d at npc %d (index %d), lands tick %d: %s", projectile.getId(), ((NPC) target).getId(),
+				((NPC) target).getIndex(), lands, mine ? "from the player's cannon"
+					: cannon.isSetUp() ? "from another cannon, ignored" : "no cannon of the player's set up, ignored");
 			return;
 		}
 		if (!isProjectileMine(projectile, me, target))
@@ -5454,7 +5554,8 @@ public class PvmPerformancePlugin extends Plugin
 		final boolean targetDead = targetNpc != null && targetNpc.getIndex() == index && targetNpc.isDead();
 		final int left = health.remaining(index, client.getTickCount());
 		final int full = current.getMaxHp();
-		final boolean hurt = left >= 0 && full > 0 ? left < full : current.getDamageDealt() + current.getThrallDamage() > 0;
+		final boolean hurt = left >= 0 && full > 0 ? left < full
+			: current.getDamageDealt() + current.getThrallDamage() + current.getCannonDamage() > 0;
 		return BossAway.resumable(raidType != null, current.isMonsterRoom(), EncounterGroup.isUnscored(current.getTargetId()),
 			targetDead, hurt);
 	}
@@ -6006,6 +6107,8 @@ public class PvmPerformancePlugin extends Plugin
 	private void handleNpcDespawned(NpcDespawned event)
 	{
 		final NPC npc = event.getNpc();
+		// T-204: what the cannon dealt it with no fight of the player's on it goes with it.
+		cannon.forget(npc.getIndex());
 		// T-174: gone on the tick of its kill message, or the next, is dead, whatever its dead flag says.
 		final boolean byMessage = !npc.isDead()
 			&& killedByMessage(killMessageTick, killMessageIndex, npc.getIndex(), client.getTickCount());
@@ -7071,6 +7174,16 @@ public class PvmPerformancePlugin extends Plugin
 			drain.onVarbitChanged(event.getVarbitId(), event.getValue());
 		}
 		noteSpecialEnergy();
+		// T-204: the player's cannon set up or picked up, and where it stands.
+		if (event.getVarpId() == VarPlayerID.DROPCANNON || event.getVarpId() == VarPlayerID.OWNEDMCANNON)
+		{
+			final boolean was = cannon.isSetUp();
+			cannon.onVarp(event.getVarpId(), event.getValue());
+			if (was != cannon.isSetUp())
+			{
+				debug.log("CANNON %s", cannon.isSetUp() ? "set up" : "not set up (picked up, broken or decayed)");
+			}
+		}
 		// T-182: the ammo in Dizana's quiver, read again when its varps change rather than every tick.
 		final String quiver = combatCalc.onVarpChanged(event.getVarpId());
 		if (quiver != null)
@@ -7509,6 +7622,7 @@ public class PvmPerformancePlugin extends Plugin
 		damageModifiers.clear();
 			thralls.clear();
 			xpLedger.clear();
+			cannon.clear();
 			targetIds.clear();
 			// Whether Mark of Darkness or Charge outlasts a logout or a hop is not known here, so both read down until a
 			// message says otherwise (T-026).
@@ -7571,6 +7685,14 @@ public class PvmPerformancePlugin extends Plugin
 		final int maxHp = spawnHp(npc, raidHp);
 		health.setTableMaxHp(npc.getIndex(), npc.getId(), maxHp, client.getTickCount(), raidHp != tableHp,
 			RaidScaling.fullMayBeShort(client, npc.getId()));
+		// T-204: what the player's cannon dealt it before this fight: in its count before the overhead bar is read, so the bar
+		// doesn't call it unseen; booked to the fight once it is made.
+		final int cannonBefore = cannon.takeBanked(npc.getIndex());
+		if (cannonBefore > 0)
+		{
+			health.damage(npc.getIndex(), npc.getId(), cannonBefore, client.getTickCount());
+			damageByIndex.merge(npc.getIndex(), cannonBefore, Integer::sum);
+		}
 		// T-153: and in the Tombs, what it was read from, scaled or not.
 		final String basis = RaidScaling.hitpointsBasis(client, npc.getId());
 		if (raidHp != tableHp || basis != null)
@@ -7628,6 +7750,14 @@ public class PvmPerformancePlugin extends Plugin
 		labelOlmPhase(current);
 		labelNightmareTotem(current, npc.getId());
 		openEncounterFor(current, now);
+		if (cannonBefore > 0)
+		{
+			current.recordCannonDamage(cannonBefore);
+			if (current.isScored())
+			{
+				trip(current).recordCannonDamage(cannonBefore);
+			}
+		}
 		debug.log("fight START %s (npc %d, index %d, maxHp %d) group=%s room=%s raid=%s world=%d",
 			current.getTargetName(), npc.getId(), npc.getIndex(), maxHp,
 			current.getGroupName(), current.encounterName(), raidType, client.getWorld());
@@ -8529,13 +8659,15 @@ public class PvmPerformancePlugin extends Plugin
 		final int onAnAdd = whileOnAnAdd.getOrDefault(index, 0);
 		// T-146: what only its overhead bar showed it had taken: others' damage before the fight.
 		final int unseen = health.unseenDamage(index);
-		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + reflect %d + dot %d + room %s "
+		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + cannon %d + reflect %d + dot %d "
+				+ "+ room %s "
 				+ "+ others %d + unclassified %d" + (unseen > 0 ? " + seen only on its bar " + unseen : "")
 				+ (current.getPassedOn() > 0 ? " + the core's passed on " + current.getPassedOn() : "")
 				+ ", healed %d%s%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
 				+ "read %d, now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
-			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getReflectDamage(),
+			current.getDamageDealt(), current.notHitpointsTotal(), current.getThrallDamage(), current.getCannonDamage(),
+			current.getReflectDamage(),
 			current.getDotDamage(), current.getRoomDamage() + reconcileRoomSplit(current), current.getOthersDamage(),
 			current.getUnclassifiedDamage(), current.getHealed(),
 			regenerated == 0 ? "" : String.format(" + regenerated %d (a hitpoint every %d ticks below full)", regenerated,
@@ -8858,11 +8990,11 @@ public class PvmPerformancePlugin extends Plugin
 		unlistedAdds.reset(Integer.MIN_VALUE);
 		mechanics.finish();
 		settleStall(current);
-		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d hits=%d ticksLost=%d "
-				+ "combatTicks=%d expDamage=%.1f",
+		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d cannonDamage=%d hits=%d "
+				+ "ticksLost=%d combatTicks=%d expDamage=%.1f",
 			current.getTargetName(), current.getTargetId(), reason, current.getAttempts(), current.getAttacksMade(),
-			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
-			current.getCombatTicks(), current.getSumExpectedAverageHit());
+			current.getDamageDealt(), current.getThrallDamage(), current.getCannonDamage(), current.getHits(),
+			current.getTicksLost(), current.getCombatTicks(), current.getSumExpectedAverageHit());
 		debug.log("%s", luckLine(current));
 		// T-059: weapon damage the timeline could give no attack, which the Damage card shows as "Not matched to an attack".
 		final FightTimeline ended = timelines.of(current);
@@ -9663,7 +9795,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = room.getTargets();
 		return csvScope("room", raidName, raidRun, room.getName())
 			+ String.format("%s,,,,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d,%d,%s,%s,%s,%s%n",
+				+ "%d,%d,%d,%d,%d,%s,%s,%s,%s,%d%n",
 				started,
 				room.isKilled(),
 				room.getDamageDealt(),
@@ -9701,7 +9833,8 @@ public class PvmPerformancePlugin extends Plugin
 				csvExpected(room.getAvoidableEatingTicks(), 1),
 				csvDrain(room.getDrainValueDamage(), room.getDrainValueExpected(), room.getSpecLuckDamage(),
 					room::luckSeconds),
-				csvDpsAll(LedgerRows.of(room)));
+				csvDpsAll(LedgerRows.of(room)),
+				room.getCannonDamage());
 	}
 
 	static String csvRaidRow(String raidName, int raidRun, List<Encounter> rooms)
@@ -9718,7 +9851,7 @@ public class PvmPerformancePlugin extends Plugin
 		final int targets = raid.getTargets();
 		return csvScope("raid", raidName, raidRun, null)
 			+ String.format("%s,,,,,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-				+ "%d,%d,%d,%d,%d,%s,%s,%s,%s%n",
+				+ "%d,%d,%d,%d,%d,%s,%s,%s,%s,%d%n",
 				started,
 				raid.getDamageDealt(),
 				raid.getDamageTaken(),
@@ -9755,7 +9888,8 @@ public class PvmPerformancePlugin extends Plugin
 				csvExpected(raid.getAvoidableEatingTicks(), 1),
 				csvDrain(raid.getDrainValueDamage(), raid.getDrainValueExpected(), raid.getSpecLuckDamage(),
 					raid::luckSeconds),
-				csvDpsAll(LedgerRows.of(raid)));
+				csvDpsAll(LedgerRows.of(raid)),
+				raid.getCannonDamage());
 	}
 
 	private static String csvFightRow(String raidName, int raidRun, Fight fight)
@@ -9770,7 +9904,7 @@ public class PvmPerformancePlugin extends Plugin
 		final String started = ROW_TS.format(LocalDateTime.ofInstant(
 			Instant.ofEpochMilli(fight.getStartMillis()), ZoneId.systemDefault()));
 		return String.format("%s,\"%s\",%d,%d,%b,%d,%d,%d,%d,%d,%.1f,%.1f,%.2f,%.2f,%s,%s,%s,%d,%s,%d,%d,%d,%d,%d,%s,%s,%s,%s,%d,%d,%d,%s,"
-			+ "%d,%d,%d,%d,%d,%s,%s,%s,%s%n",
+			+ "%d,%d,%d,%d,%d,%s,%s,%s,%s,%d%n",
 			started,
 			fight.getTargetName().replace('"', '\''),
 			fight.getTargetId(),
@@ -9812,7 +9946,8 @@ public class PvmPerformancePlugin extends Plugin
 			csvExpected(fight.getAvoidableEatingTicks(), 1),
 			csvDrain(fight.getDrainValueDamage(), fight.getDrainValueExpected(), fight.getSpecLuckDamage(),
 				fight::luckSeconds),
-			csvDpsAll(LedgerRows.of(alone(fight))));
+			csvDpsAll(LedgerRows.of(alone(fight))),
+			fight.getCannonDamage());
 	}
 
 	/** T-134: the dpsAll column: the side panel's DPS ({@code LedgerRows.Numbers.dps}); blank with no scored time. */

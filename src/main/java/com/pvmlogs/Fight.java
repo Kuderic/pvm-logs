@@ -49,6 +49,9 @@ class Fight
 	// Our thrall's damage on this fight's npcs (issue #1). Real damage, so it takes the target's health down, but none of
 	// it is the player's: it is kept out of damage dealt, the hits and everything they feed.
 	private int thrallDamage;
+	// T-204: the player's own cannon's damage on this fight's npcs. Like the thrall's: real damage, in the kill's count, but
+	// no attack of the player's threw it, so it is kept out of damage dealt, the hits, luck and skill.
+	private int cannonDamage;
 	// Damage the player reflected onto this fight's target: a recoil ring's and vengeance's (T-017 Part B). Real damage
 	// that takes the target's health down, but no attack threw it, so it is kept out of damage dealt, the hits and the
 	// attacks, like the thrall's. Luck-neutral: nothing expects it and nothing marks it down.
@@ -329,6 +332,12 @@ class Fight
 	void recordThrallDamage(int amount)
 	{
 		thrallDamage += amount;
+	}
+
+	/** T-204: a splat of the player's cannon. Counted on its own and nowhere else - see cannonDamage. */
+	void recordCannonDamage(int amount)
+	{
+		cannonDamage += Math.max(0, amount);
 	}
 
 	/** A recoil or vengeance splat on the target. See reflectDamage. */
@@ -973,7 +982,7 @@ class Fight
 	double luckSeconds(double damage)
 	{
 		return DrainValue.seconds(damage, isScored() ? combatTicks : 0, getSumExpectedAverageHit(),
-			Math.max(0, thrallDamage) + Math.max(0, dotDamage) + Math.max(0, reflectDamage));
+			Math.max(0, thrallDamage) + Math.max(0, cannonDamage) + Math.max(0, dotDamage) + Math.max(0, reflectDamage));
 	}
 
 	/**

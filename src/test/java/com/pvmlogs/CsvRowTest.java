@@ -33,9 +33,10 @@ public class CsvRowTest
 	{
 		// attempts and targets are both there now: one throw of chinchompas is one attempt and several targets. T-018 added
 		// four at the end, T-017 Part B one more (reflectDamage), T-041 two (damageTakenAvoidable, avoidableEatingTicks), T-050
-		// six (the drain value, realized and averaged, and the spec luck, in damage and in seconds), T-134 one (dpsAll).
-		assertEquals(50, COLUMNS);
-		assertEquals("dpsAll", PvmPerformancePlugin.CSV_HEADER.trim().substring(
+		// six (the drain value, realized and averaged, and the spec luck, in damage and in seconds), T-134 one (dpsAll),
+		// T-204 one (cannonDamage).
+		assertEquals(51, COLUMNS);
+		assertEquals("cannonDamage", PvmPerformancePlugin.CSV_HEADER.trim().substring(
 			PvmPerformancePlugin.CSV_HEADER.trim().lastIndexOf(',') + 1));
 	}
 
@@ -103,9 +104,9 @@ public class CsvRowTest
 	{
 		final java.util.List<String> header = java.util.Arrays.asList(PvmPerformancePlugin.CSV_HEADER.trim().split(",", -1));
 		// T-018's four, followed since T-017 Part B by reflectDamage, since T-041 by the two avoidable columns, since
-		// T-050 by the six drain columns and since T-134 by dpsAll.
+		// T-050 by the six drain columns, since T-134 by dpsAll and since T-204 by cannonDamage.
 		assertEquals(Arrays.asList("dotTaken", "hitsTaken", "biggestHitTaken", "damageTakenUnprotected"),
-			header.subList(header.size() - 14, header.size() - 10));
+			header.subList(header.size() - 15, header.size() - 11));
 		assertEquals(10, header.indexOf("damageTaken"));
 		final Fight f = fight();
 		f.recordHitTaken(41, true, 700L);

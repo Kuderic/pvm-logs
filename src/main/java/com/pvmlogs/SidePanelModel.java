@@ -388,6 +388,8 @@ final class SidePanelModel
 		int missedHitsTaken;
 		/** Thrall, DoT and reflected damage on the scored fights only, each apart, for the Damage rows. */
 		int scoredThrall;
+		/** T-204: the player's cannon's, scored fights only, for its Damage row. */
+		int scoredCannon;
 		int scoredDot;
 		/** T-063: {@link #scoredDot} by kind (T-062); the part with no kind is the remainder, an old kill's. */
 		Map<String, Integer> scoredDotByKind = Collections.emptyMap();
@@ -747,7 +749,7 @@ final class SidePanelModel
 	/** The Damage card's whole: weapon damage and the other damage it lists (thrall, DoT, recoil), scored fights only. */
 	static int whole(LedgerRows.Numbers n, Input in)
 	{
-		return Math.max(0, n.damage) + in.scoredThrall + in.scoredDot + in.scoredReflect;
+		return Math.max(0, n.damage) + in.scoredThrall + in.scoredCannon + in.scoredDot + in.scoredReflect;
 	}
 
 	/**
@@ -995,6 +997,7 @@ final class SidePanelModel
 	private static void fillOther(Input in, List<Fight> fights)
 	{
 		int thrall = 0;
+		int cannon = 0;
 		int dot = 0;
 		int reflect = 0;
 		final Map<String, Integer> dotByKind = new LinkedHashMap<>();
@@ -1003,12 +1006,14 @@ final class SidePanelModel
 			if (f.isScored())
 			{
 				thrall += Math.max(0, f.getThrallDamage());
+				cannon += Math.max(0, f.getCannonDamage());
 				dot += Math.max(0, f.getDotDamage());
 				DotKinds.addAll(dotByKind, f.getDotDamageByKind());
 				reflect += Math.max(0, f.getReflectDamage());
 			}
 		}
 		in.scoredThrall = thrall;
+		in.scoredCannon = cannon;
 		in.scoredDot = dot;
 		in.scoredDotByKind = dotByKind;
 		in.scoredReflect = reflect;
@@ -3966,6 +3971,8 @@ final class SidePanelModel
 			}
 		}
 		source(rows, "Thrall", in.scoredThrall, whole, SidePanelStyle.THRALL, -1, SidePanelIcons.THRALL_SPRITE);
+		// T-204: the player's cannon, beside the thrall: in the kill, not the weapon's.
+		source(rows, "Cannon", in.scoredCannon, whole, SidePanelStyle.CANNON, SidePanelIcons.CANNON_ITEM, -1);
 		// T-063: a row a kind of damage over time, each with its share of the whole card.
 		for (Map.Entry<String, Integer> e : DotKinds.split(in.scoredDotByKind, in.scoredDot, DotKinds.REMAINDER).entrySet())
 		{

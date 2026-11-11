@@ -518,7 +518,9 @@ final class LedgerRows
 
 			public int scoredOtherDamage()
 			{
-				return room.getScoredThrallDamage() + room.getScoredDotDamage() + room.getScoredReflectDamage();
+				// T-204: the cannon's too, as the thrall's.
+				return room.getScoredThrallDamage() + room.getScoredCannonDamage() + room.getScoredDotDamage()
+					+ room.getScoredReflectDamage();
 			}
 
 			public double damageVariance()
@@ -936,7 +938,7 @@ final class LedgerRows
 			public int scoredOtherDamage()
 			{
 				// The trip's thrall, DoT and reflect are recorded behind isScored() already.
-				return Math.max(0, trip.getThrallDamage()) + Math.max(0, trip.getDotDamage())
+				return Math.max(0, trip.getThrallDamage()) + Math.max(0, trip.getCannonDamage()) + Math.max(0, trip.getDotDamage())
 					+ Math.max(0, trip.getReflectDamage());
 			}
 
