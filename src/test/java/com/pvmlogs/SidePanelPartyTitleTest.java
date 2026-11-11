@@ -120,7 +120,14 @@ public class SidePanelPartyTitleTest
 			assertFalse("no card left plain", c.isOpaque() && SidePanelStyle.CARD.equals(c.getBackground()));
 			tinted += c.isOpaque() && card.equals(c.getBackground()) ? 1 : 0;
 		}
-		assertTrue(tinted > 5);
+		// T-206: the heading's card and each of their sections, one card each.
+		int sections = 0;
+		for (Component c : all(tab.memberArea()))
+		{
+			sections += c instanceof SidePanelSection ? 1 : 0;
+		}
+		assertTrue(sections >= 4);
+		assertTrue(tinted + " for " + sections, tinted >= sections + 1);
 		assertFalse(tab.memberArea().isOpaque());
 	}
 
@@ -343,8 +350,9 @@ public class SidePanelPartyTitleTest
 		final SidePanelPartySection tab = p.partySection();
 		assertEquals(0, lifted(tab.memberArea()));
 		tab.select(22);
+		// T-206: every section is a card now, its header inside: no muted text sits on the tint itself.
 		final int onTint = lifted(tab.memberArea());
-		assertTrue("muted section hints on the tinted area", onTint > 0);
+		assertEquals("nothing muted on the tinted area", 0, onTint);
 		// Inside the cards (not tinted by default) nothing is lifted.
 		for (Component c : all(tab.memberArea()))
 		{
