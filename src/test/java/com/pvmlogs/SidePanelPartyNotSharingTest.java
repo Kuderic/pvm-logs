@@ -38,20 +38,21 @@ public class SidePanelPartyNotSharingTest
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(in);
 		// The meter shows though nobody else shares: you, then your partner.
 		assertTrue(t.sharing);
-		assertEquals(Arrays.asList("you", "Ash Kettle"), names(t));
+		// T-208: no row of their own, only the group row, "1 member".
+		assertEquals(Arrays.asList("you", "1 member"), names(t));
 		final PanelSnapshot.PartyRow partner = t.rows.get(1);
-		assertEquals(77, partner.id);
-		assertSame(in.unshared.get(0).avatar, partner.avatar);
+		assertEquals(PanelSnapshot.PartyRow.OTHERS_ID, partner.id);
 		// Others' damage, labelled about, its value marked as an estimate; no click (no figures of theirs).
 		assertTrue(partner.others);
 		assertFalse(partner.listed);
 		assertEquals(SidePanelParty.ABOUT, partner.hint);
 		assertEquals("~9,870", partner.dmg[0]);
 		assertEquals("47%", partner.dmg[2]);
-		assertTrue(partner.person());
-		// The note and the tooltip say what it holds.
-		assertEquals(SidePanelParty.aboutOne("Ash Kettle"), t.othersNote);
-		assertEquals(t.othersNote, partner.tip);
+		// The note that was under the meter is its tooltip: who it is and that the damage is estimated.
+		assertNull(t.othersNote);
+		assertEquals(SidePanelParty.groupTip(in.unshared), partner.tip);
+		assertTrue(partner.tip.contains("Ash Kettle"));
+		assertTrue(partner.tip.contains("estimated"));
 		assertTrue(partner.tip.contains("not running Luck vs Skill"));
 		assertTrue(partner.tip.contains("Players outside the party"));
 		assertTrue(partner.tip.contains("thralls"));
@@ -65,31 +66,23 @@ public class SidePanelPartyNotSharingTest
 	public void aTrioWithOneSharerListsBothAndOneCombinedRow()
 	{
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(SidePanelPartyExamples.trioTwoNotSharing());
-		assertEquals(Arrays.asList("you", "Moss Pike", "Brindle", "2 members"), names(t));
-		for (int i = 1; i <= 2; i++)
-		{
-			final PanelSnapshot.PartyRow r = t.rows.get(i);
-			// Listed without a share: no values, no bar, no line on the chart.
-			assertTrue(r.listed);
-			assertEquals(SidePanelParty.NOT_RUNNING, r.hint);
-			assertEquals(Arrays.asList("", "", ""), Arrays.asList(r.dmg));
-			assertEquals(0, r.fill, 0);
-			assertEquals(0, r.seriesTicks.length);
-		}
-		final PanelSnapshot.PartyRow combined = t.rows.get(3);
+		// T-208: no rows of their own in a fight's view, only the combined one; the names on its hover.
+		assertEquals(Arrays.asList("you", "2 members"), names(t));
+		final PanelSnapshot.PartyRow combined = t.rows.get(1);
 		assertEquals(PanelSnapshot.PartyRow.OTHERS_ID, combined.id);
 		assertEquals(SidePanelParty.ABOUT, combined.hint);
 		assertEquals("~27.4k", combined.dmg[0]);
 		assertNull(combined.avatar);
-		assertEquals(SidePanelParty.aboutMany(2), t.othersNote);
-		assertTrue(t.othersNote.contains("can't be split"));
+		assertNull(t.othersNote);
+		assertTrue(combined.tip.contains("Moss Pike and Brindle"));
+		assertTrue(combined.tip.contains("can't be split"));
 	}
 
 	@Test
 	public void besideSharingMembersTheOneWhoDoesntTakesOthersAndTheFightLineAgrees()
 	{
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(SidePanelPartyExamples.toaOneNotSharing());
-		assertEquals(Arrays.asList("Moss Pike", "you", "Brindle", "Old Tam"), names(t));
+		assertEquals(Arrays.asList("Moss Pike", "you", "Brindle", "1 member"), names(t));
 		assertEquals("~1,830", t.rows.get(3).dmg[0]);
 		// T-167 part 3: the Fight tab's line counts the members who share, as the tab ranks them.
 		assertEquals("you 2nd of 3 · 29%", SidePanelPartyExamples.fightLine(t));
@@ -114,14 +107,14 @@ public class SidePanelPartyNotSharingTest
 		in.members.add(SidePanelPartyExamples.member(81, "Moss Pike", false, 0, SidePanelPartyExamples.figures("Nex",
 			true, 9_100, 9_000, 420, 0.5, 0, 0.9, 20), 420));
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(in);
-		assertEquals(Arrays.asList("you", "Moss Pike", "Brindle"), names(t));
+		assertEquals(Arrays.asList("you", "Moss Pike", "1 member"), names(t));
 		// A full row: clickable, with her figures.
 		assertFalse(t.rows.get(1).others);
 		assertNotNull(t.row(81));
 		assertEquals("9,100", t.rows.get(1).dmg[0]);
-		// Brindle is the one left: others is about hers now.
+		// Brindle is the one left: the group row is hers now.
 		assertEquals(SidePanelParty.ABOUT, t.rows.get(2).hint);
-		assertEquals(82, t.rows.get(2).id);
+		assertTrue(t.rows.get(2).tip.contains("Brindle"));
 	}
 
 	@Test
@@ -219,7 +212,8 @@ public class SidePanelPartyNotSharingTest
 							SidePanelPictures.draw(p.tabs(), p.fightTab(), scale);
 							final SidePanelPartyMeter m = p.partySection().meter();
 							final String where = larger + " " + smooth + " " + scale + " " + t.rows.size() + " rows: ";
-							if (m.cutNames() > 0)
+							// T-208: at Smooth or Larger a long name may be cut shorter beside the three figures.
+							if (m.cutNames() > 0 && !larger && !smooth)
 							{
 								problems.add(where + m.cutNames() + " names cut");
 							}
@@ -261,9 +255,13 @@ public class SidePanelPartyNotSharingTest
 		final SidePanelPartyMeter m = new SidePanelPartyMeter(id -> { });
 		m.set(t.rows);
 		final int rh = SidePanelPartyMeter.rowHeight();
+		// T-208: the group row says who's in it and that its damage is estimated.
 		assertTrue(tip(m, 1 * rh + 2).contains("not running Luck vs Skill"));
-		assertTrue(tip(m, 1 * rh + 2).startsWith("Moss Pike"));
-		assertEquals(SidePanelParty.aboutMany(2), tip(m, 3 * rh + 2));
+		assertTrue(tip(m, 1 * rh + 2).startsWith("2 members"));
+		assertTrue(tip(m, 1 * rh + 2).contains("Moss Pike and Brindle"));
+		// Your row: what the row doesn't show.
+		assertTrue(tip(m, 2), tip(m, 2).startsWith("You: 15.3k damage, 36% of the party's, 60.8 dps."));
+		assertTrue(tip(m, 2), tip(m, 2).contains("Luck: ") && tip(m, 2).contains("Skill: "));
 		// The plain others row keeps its note.
 		final PanelSnapshot.PartyTab toa = SidePanelParty.party(SidePanelPartyExamples.toa());
 		m.set(toa.rows);

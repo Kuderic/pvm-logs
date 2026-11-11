@@ -152,6 +152,11 @@ public final class SidePanelPictures
 			clarity(out);
 			return;
 		}
+		if (args.length > 1 && "partyrows".equals(args[1]))
+		{
+			partyRows(out);
+			return;
+		}
 		if (args.length > 1 && "alignment".equals(args[1]))
 		{
 			alignment(out);
@@ -2274,6 +2279,60 @@ public final class SidePanelPictures
 		panel.partySection().select(id);
 		openAll(panel.partySection().memberFight());
 		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/**
+	 * T-208: the party's rows with damage, luck and skill at a glance. A duo Yama kill in a party of four (you, a sharing
+	 * member, one in the fight without the plugin, one not there), live and after; a 5-member ToB room live and the ToB
+	 * raid after it. Invented names. Normal and Larger.
+	 */
+	private static void partyRows(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-duo-live", scale, partyCrop(SidePanelPartyExamples.yamaDuoWithAway(true), null, scale));
+				write(dir, "b-duo-after", scale, partyCrop(SidePanelPartyExamples.yamaDuoWithAway(false), null, scale));
+				write(dir, "c-duo-after-by-luck", scale, partyCrop(SidePanelPartyExamples.yamaDuoWithAway(false),
+					SidePanelParty.Metric.LUCK, scale));
+				write(dir, "d-five-live", scale, partyCrop(SidePanelPartyExamples.tobLive(), null, scale));
+				write(dir, "e-five-raid-after", scale, partyCrop(SidePanelPartyExamples.tobRaid(), null, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-208: the Party section alone, with your grade from a kill card after the fight. */
+	private static BufferedImage partyCrop(SidePanelParty.Input in, SidePanelParty.Metric metric, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		styled(panel);
+		final PanelSnapshot.FightTab yours = SidePanelPartyMemberViewTest.yours(in);
+		panel.apply(new PanelSnapshot(yours, null, SidePanelParty.party(in)));
+		if (!in.live)
+		{
+			panel.partySection().setYours(SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card);
+		}
+		if (metric != null)
+		{
+			panel.partySection().pick(metric);
+		}
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final SidePanelSection section = sectionOf(panel.partySection().top(), SidePanelPartySection.PARTY);
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height) * scale));
+		return whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
 	}
 
 	/**

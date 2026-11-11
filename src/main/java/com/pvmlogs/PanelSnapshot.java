@@ -75,6 +75,20 @@ final class PanelSnapshot
 		 * that isn't known (no fight on show, or none fought in a party). For T-208's rows.
 		 */
 		java.util.Set<Long> inFight;
+		/**
+		 * T-208: the members not seen in the fight, set apart under the meter ({@code not in this fight: 1}) and named in
+		 * its tooltip; null for none, or where who was in it isn't known.
+		 */
+		String away;
+		String awayTip;
+
+		/** T-208: this tab, with the members who weren't in the fight. */
+		PartyTab away(String line, String tip)
+		{
+			this.away = line;
+			this.awayTip = tip;
+			return this;
+		}
 
 		/** T-130: this tab, for this party. */
 		PartyTab party(long key)
@@ -147,7 +161,7 @@ final class PanelSnapshot
 		{
 			// T-129: an empty tab's line is its structure: joining a party changes it.
 			return !sharing ? "empty|" + empty + (rows.isEmpty() ? "" : "|listed" + rows.size()) : "rows" + rows.size() + (wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room")
-				+ (after ? "|after" : "") + (othersNote == null ? "" : "|n");
+				+ (after ? "|after" : "") + (othersNote == null ? "" : "|n") + (away == null ? "" : "|away");
 		}
 
 		/** T-128: whether any member has a Discord picture, so the meter keeps a picture's room on every row. */
@@ -209,6 +223,27 @@ final class PanelSnapshot
 		final boolean listed;
 		/** T-169: the dev loopback's echo of your own figures: shown, never counted in the Fight tab's line. */
 		boolean echo;
+		/**
+		 * T-208: the row's three figures at a glance: luck's percentile for the mini track (NaN for none) and its words
+		 * for the tooltip ({@code top 19% (12 s faster)}); the Skill share, 0 to 1 (-1 for none), as written ({@code 96%});
+		 * whether the fight is still on (live: the marker on the track and the Skill % so far).
+		 */
+		double luckP = Double.NaN;
+		String luckWords = "";
+		double skillShare = -1;
+		String skill = "";
+		boolean live;
+
+		/** T-208: this row with its luck and skill at a glance. */
+		PartyRow glance(double luckP, String luckWords, double skillShare, String skill, boolean live)
+		{
+			this.luckP = luckP;
+			this.luckWords = luckWords;
+			this.skillShare = skillShare;
+			this.skill = skill;
+			this.live = live;
+			return this;
+		}
 
 		PartyRow echo(boolean echo)
 		{

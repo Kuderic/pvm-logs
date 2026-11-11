@@ -53,12 +53,6 @@ final class SidePanelParty
 	 */
 	static final String OTHERS_NOTE = "others: damage on the targets no sharing member accounts for: members not running "
 		+ "Luck vs Skill.";
-	/**
-	 * T-167 (Eric, 2026-11-04: "still list them even if they arent running luck vs skill"): a party member with nothing on
-	 * the board, under their name. Outside a fight they may simply not have fought yet.
-	 */
-	static final String NOT_RUNNING = "not running Luck vs Skill";
-	static final List<String> NOT_RUNNING_SHORT = java.util.Arrays.asList("no Luck vs Skill", "");
 	static final String NO_FIGURES_YET = "no figures yet";
 	static final List<String> NO_FIGURES_YET_SHORT = Collections.singletonList("");
 	/** T-167: after the name of {@code others} taken as the members' who don't share. */
@@ -70,24 +64,56 @@ final class SidePanelParty
 	 */
 	static final String APPROX = "~";
 
-	/** T-167: the note under the meter, and the row's tooltip, for others taken as one member's. */
-	static String aboutOne(String name)
-	{
-		return "about: damage no sharing member accounts for, taken as " + name + "'s (not running Luck vs Skill). "
-			+ "Players outside the party, and thralls, are in it too.";
-	}
 
-	/** T-167: the same for two or more, whose damage can't be told apart. */
-	static String aboutMany(int n)
-	{
-		return "about: damage no sharing member accounts for, between the " + n + " members not running Luck vs Skill; "
-			+ "it can't be split. Players outside the party, and thralls, are in it too.";
-	}
-
-	/** T-167: two or more members not running Luck vs Skill: their combined row's name. */
+	/** T-167: two or more members not running Luck vs Skill: their combined row's name. T-208: "1 member" too. */
 	static String members(int n)
 	{
-		return n + " members";
+		return n == 1 ? "1 member" : n + " members";
+	}
+
+	/**
+	 * T-208 (Eric: "the 2 players in my party should be grouped as part of the '2 members' damage, not as their own
+	 * listing"): the group row's tooltip: who is in it, and that its damage is estimated (and, for two or more, can't be
+	 * split). The note that was under the meter.
+	 */
+	static String groupTip(List<Unshared> in)
+	{
+		final List<String> names = new ArrayList<>(in.size());
+		for (Unshared u : in)
+		{
+			names.add(u.name);
+		}
+		final String who = members(in.size()) + " not running Luck vs Skill: " + joined(names) + ".";
+		return who + (in.size() == 1 ? " Their damage is estimated: the damage on the targets that no sharing member "
+			+ "accounts for." : " Their damage is estimated, the damage on the targets that no sharing member accounts "
+			+ "for, and can't be split between them.") + " Players outside the party, and thralls, are in it too.";
+	}
+
+	/** T-208: the members not seen in the fight, under the meter, and their names on its hover. */
+	static String away(int n)
+	{
+		return "not in this fight: " + n;
+	}
+
+	static String awayTip(List<Unshared> away)
+	{
+		final List<String> names = new ArrayList<>(away.size());
+		for (Unshared u : away)
+		{
+			names.add(u.name);
+		}
+		return "Not seen in this fight: " + joined(names) + ". In your party, not running Luck vs Skill, and left out "
+			+ "of its damage.";
+	}
+
+	/** "A", "A and B", "A, B and C". */
+	static String joined(List<String> names)
+	{
+		if (names.size() <= 1)
+		{
+			return names.isEmpty() ? "" : names.get(0);
+		}
+		return String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.get(names.size() - 1);
 	}
 
 	/** An attack row the sender summed the rest into (T-124's {@link LuckVsSkillUpdate#MAX_ROWS}). */
@@ -291,52 +317,31 @@ final class SidePanelParty
 		}
 		final String[] othersDmg = {compact(others), "", share(others, total)};
 		final String[] aboutDmg = {APPROX + compact(others), "", share(others, total)};
-		String note = others > 0 ? OTHERS_NOTE : null;
 		// T-209: others is split only between the members who haven't shared and were in the fight; the rest are out of it.
 		final List<Unshared> fighting = atFight(unshared, in.inFight);
-		if (fighting.size() == 1 && others > 0)
+		final List<Unshared> away = new ArrayList<>(unshared);
+		away.removeAll(fighting);
+		if (!fighting.isEmpty())
 		{
-			// T-167: one member not running Luck vs Skill: others is theirs, about (players outside the party are in it).
-			final Unshared u = fighting.get(0);
-			note = aboutOne(u.name);
-			for (Unshared away : unshared)
-			{
-				if (away != u)
-				{
-					rows.add(PanelSnapshot.PartyRow.listed(away.id, away.name, away.avatar, NOT_RUNNING, NOT_RUNNING_SHORT,
-						away.name + " is in your party but not running Luck vs Skill: nothing of theirs is shared."));
-				}
-			}
-			rows.add(PanelSnapshot.PartyRow.about(u.id, u.name, u.avatar, note, fill(others, top), aboutDmg,
-				otherSeries(in), OTHERS));
+			// T-208: the members not running Luck vs Skill in the fight have no rows of their own: one group row, "1 member"
+			// or "N members", with the estimated damage and share; who they are, and what it is, on its hover.
+			rows.add(PanelSnapshot.PartyRow.about(PanelSnapshot.PartyRow.OTHERS_ID, members(fighting.size()), null,
+				groupTip(fighting), fill(others, top), aboutDmg, otherSeries(in), OTHERS));
 		}
-		else
+		else if (others > 0)
 		{
-			// T-167: listed by name, without figures; two or more share one others row, which can't be split.
-			for (Unshared u : unshared)
-			{
-				rows.add(PanelSnapshot.PartyRow.listed(u.id, u.name, u.avatar, NOT_RUNNING, NOT_RUNNING_SHORT,
-					u.name + " is in your party but not running Luck vs Skill: nothing of theirs is shared."));
-			}
-			if (others > 0 && fighting.size() > 1)
-			{
-				note = aboutMany(fighting.size());
-				rows.add(PanelSnapshot.PartyRow.about(PanelSnapshot.PartyRow.OTHERS_ID, members(fighting.size()), null,
-					note, fill(others, top), aboutDmg, otherSeries(in), OTHERS));
-			}
-			else if (others > 0)
-			{
-				rows.add(PanelSnapshot.PartyRow.others(fill(others, top), othersDmg, otherSeries(in), OTHERS));
-			}
+			rows.add(PanelSnapshot.PartyRow.others(fill(others, top), othersDmg, otherSeries(in), OTHERS));
 		}
 		int ticks = 1;
 		for (Member m : in.members)
 		{
 			ticks = Math.max(ticks, m.ticks.length == 0 ? 0 : m.ticks[m.ticks.length - 1]);
 		}
+		// T-208: the paragraph under the meter is the group row's tooltip now; who wasn't there, set apart under it.
 		return new PanelSnapshot.PartyTab(in.scope, String.format(Locale.ENGLISH,
-			"party %.1f dps", total / seconds), in.wholeRaid, !in.live, rows, note, ticks,
-			LedgerRows.duration(seconds)).party(in.partyKey).inFight(in.inFight);
+			"party %.1f dps", total / seconds), in.wholeRaid, !in.live, rows, null, ticks,
+			LedgerRows.duration(seconds)).party(in.partyKey).inFight(in.inFight).away(away.isEmpty() ? null
+			: away(away.size()), away.isEmpty() ? null : awayTip(away));
 	}
 
 	private static PanelSnapshot.PartyRow row(Member m, int rank, int of, int top, int total, double seconds, Input in)
@@ -355,8 +360,12 @@ final class SidePanelParty
 		final String place = ordinal(rank) + " of " + of + " · " + share(all, total) + " · " + dps(all, seconds) + " dps";
 		final PanelSnapshot.PartyBreakdown breakdown = new PanelSnapshot.PartyBreakdown(m.you ? "You" : m.name, place,
 			attacks(f, seconds, in.itemNames), summary(f, !in.live));
+		// T-208: luck and skill at a glance: the mini track's percentile, its words, and the Skill share.
+		final String luckWords = luckKnown ? SidePanelModel.luckText(f.p) + " (" + LedgerRows.fasterOrSlower(f.ls) + ")"
+			: "";
 		return new PanelSnapshot.PartyRow(m.id, name, m.you, m.left, m.colour(), fill(all, top), dmg, luck, exec,
-			luckColour, m.ticks, m.damage, breakdown).with(m.avatar, m.fight, m.fightLive).echo(m.echo);
+			luckColour, m.ticks, m.damage, breakdown).with(m.avatar, m.fight, m.fightLive).echo(m.echo).glance(
+			luckKnown ? f.p : Double.NaN, luckWords, f.x, f.x >= 0 ? LedgerRows.partPercent(f.x) : "", in.live);
 	}
 
 	/** The members, biggest damage first; the player first among equals. */
