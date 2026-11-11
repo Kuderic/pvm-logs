@@ -728,6 +728,130 @@ class CombatCalc
 			&& modifiers.hiddenApply(npc, weaponStyle(), landsInTicks(npc));
 	}
 
+	/**
+	 * T-212: which part of an attack's damage a max hit is worked out for. The top (what {@code MAX EXCEEDED} checks
+	 * against) has the rare effects in it: a bolt's proc, the keris's crit. The attack's own max leaves them out; a proc's
+	 * max is the proc's hit alone, through the same mitigation, modifiers and cap.
+	 */
+	enum MaxPart
+	{
+		TOP,
+		OWN,
+		PROC
+	}
+
+	private MaxPart maxPart = MaxPart.TOP;
+
+	private int maxOf(MaxPart part, java.util.function.IntSupplier figure)
+	{
+		final MaxPart was = maxPart;
+		maxPart = part;
+		try
+		{
+			return figure.getAsInt();
+		}
+		finally
+		{
+			maxPart = was;
+		}
+	}
+
+	/**
+	 * T-212: the ordinary attack's own max against this target: {@link #maxHit} without a bolt's proc or the keris's crit,
+	 * so the crossbow's 54 where ruby bolts make the top 100. The same where there's no such effect.
+	 */
+	int ownMaxHit(int npcId)
+	{
+		return maxOf(MaxPart.OWN, () -> maxHit(npcId));
+	}
+
+	/** T-212: {@link #ownMaxHit} for the special: {@link #specialAttackMaxHit} without the bolt's proc. */
+	int specialAttackOwnMaxHit(int npcId)
+	{
+		return specialAttack() == null ? 0 : maxOf(MaxPart.OWN, () -> specialAttackMaxHit(npcId));
+	}
+
+	/**
+	 * T-212: the rare effects that set the ordinary attack's top above its own max, each with its chance and its hit: the
+	 * enchanted bolt fired (worked out where {@link #averageHitMoments} weighs its branch in), the keris's crit against a
+	 * kalphite. With no target, the ruby's hit is its rule. Empty for most attacks.
+	 */
+	List<MaxHitProc> procs(int npcId)
+	{
+		final List<MaxHitProc> out = new ArrayList<>(1);
+		final MaxHitProc bolt = boltProc(npcId, false);
+		if (bolt != null)
+		{
+			out.add(bolt);
+		}
+		if (kerisCrit(npcId))
+		{
+			// GearBonusCalc's keris: "a 1/51 chance of tripling" its damage against kalphites and scabarites.
+			out.add(new MaxHitProc("keris crit", 1.0 / 51, false, maxHit(npcId), "x3"));
+		}
+		return out;
+	}
+
+	/**
+	 * T-212: the same for the special. A crossbow's special fires the bolt as an ordinary shot does; the Zaryte crossbow's
+	 * Evoke "guarantees the special effect of any enchanted bolts used, provided that the player lands a successful hit"
+	 * (OSRS Wiki, Zaryte crossbow, read 2026-11-11), so its row says "on hit". The hit is what the plugin works the
+	 * special's max out as; the special's scored damage has no bolt branch (unchanged here).
+	 */
+	List<MaxHitProc> specialProcs(int npcId)
+	{
+		if (specialAttack() == null)
+		{
+			return Collections.emptyList();
+		}
+		final MaxHitProc bolt = boltProc(npcId, true);
+		return bolt == null ? Collections.emptyList() : Collections.singletonList(bolt);
+	}
+
+	private MaxHitProc boltProc(int npcId, boolean special)
+	{
+		if (weaponStyle() == Style.MAGIC)
+		{
+			return null;
+		}
+		final EnchantedBolt bolt = loadedBolt(npcId);
+		if (bolt == null)
+		{
+			return null;
+		}
+		final boolean everyHit = special && specialAttack() == SpecialAttack.ZARYTE_CROSSBOW;
+		// Only the ruby's hit needs the target: a fifth of its health now.
+		final boolean noTarget = bolt == EnchantedBolt.RUBY && (npcId < 0 || targetCurrentHp(npcId) <= 0);
+		final int hit = noTarget ? -1
+			: maxOf(MaxPart.PROC, () -> special ? specialAttackMaxHit(npcId) : maxHit(npcId));
+		return new MaxHitProc(bolt.shortName(), bolt.chance(hasKandarinHardDiary()), everyHit, hit, bolt.rule());
+	}
+
+	/** T-212: a keris against a kalphite or scabarite, in melee: GearBonusCalc's crit is in its max. */
+	private boolean kerisCrit(int npcId)
+	{
+		if (!attackStyle().getAttackType().isMelee() || !GearBonusCalc.isKeris(weaponItemId()))
+		{
+			return false;
+		}
+		final MonsterStatsProvider.MonsterStats npc = monsters.get(npcId);
+		return npc != null && npc.hasAttribute("kalphite");
+	}
+
+	/**
+	 * T-212: for the {@code expected vs} line: {@code max 64 (ruby proc 100 at 6.6%)}, the attack's own max then each
+	 * proc; {@code max 64} alone with none.
+	 */
+	static String maxHitLabel(int ownMax, List<MaxHitProc> procs)
+	{
+		final StringBuilder b = new StringBuilder("max ").append(ownMax);
+		for (int i = 0; i < procs.size(); i++)
+		{
+			b.append(i == 0 ? " (" : ", ").append(procs.get(i).logLabel());
+		}
+		return procs.isEmpty() ? b.toString() : b.append(')').toString();
+	}
+
 	/** While set, the figures leave out the modifiers marked {@code hiddenLive}: for what is shown live (T-087). */
 	void setLiveFigures(boolean live)
 	{
@@ -3101,25 +3225,55 @@ class CombatCalc
 		{
 			return magicModel(npcId).maxHit();
 		}
-		final int hit = golembaneMax(npcId, (int) (baseMaxHit() * gearBonus(npcId).getDamage()))
-			+ colossalBladeBonus(npcId) + elementalWeaknessBonus(npcId);
+		final int hit = golembaneMax(npcId, ownGearMax(npcId)) + colossalBladeBonus(npcId) + elementalWeaknessBonus(npcId);
 		final EnchantedBolt bolt = loadedBolt(npcId);
-		if (bolt == null)
+		if (bolt == null || maxPart == MaxPart.OWN)
+		{
+			return hit;
+		}
+		return boltMax(bolt, maxPart, hit, bolt == EnchantedBolt.RUBY ? targetCurrentHp(npcId) : 0,
+			bolt == EnchantedBolt.DRAGONSTONE ? visibleRangedLevel() : 0);
+	}
+
+	/**
+	 * A bolt's effect on the max, from the attack's own {@code hit}. T-212: for the attack's own max ({@link MaxPart#OWN})
+	 * none; for the proc's ({@link MaxPart#PROC}) the proc's hit alone; for the top, the most either can deal. The ruby's
+	 * hit replaces the weapon's and only beats it on a target with a lot of health left; the others raise the hit.
+	 */
+	static int boltMax(EnchantedBolt bolt, MaxPart part, int hit, int targetHp, int visibleRangedLevel)
+	{
+		if (bolt == null || part == MaxPart.OWN)
 		{
 			return hit;
 		}
 		switch (bolt)
 		{
 			case RUBY:
-				// The bolt's hit replaces the weapon's, and only beats it on targets with a lot of health left.
-				return Math.max(hit, EnchantedBolt.rubyDamage(targetCurrentHp(npcId)));
+				final int ruby = EnchantedBolt.rubyDamage(targetHp);
+				return part == MaxPart.PROC ? ruby : Math.max(hit, ruby);
 			case DIAMOND:
 				return (int) (hit * 1.15);
 			case DRAGONSTONE:
-				return hit + EnchantedBolt.dragonstoneDamage(visibleRangedLevel());
+				return hit + EnchantedBolt.dragonstoneDamage(visibleRangedLevel);
 			default:
 				return (int) (hit * 1.20);
 		}
+	}
+
+	/**
+	 * The base max through the gear's multiplier. T-212: for the attack's own max, the keris's crit (a tripling folded into
+	 * the gear's max multiplier by GearBonusCalc) is taken back out.
+	 */
+	private int ownGearMax(int npcId)
+	{
+		final double damage = gearBonus(npcId).getDamage();
+		return maxPart == MaxPart.OWN && kerisCrit(npcId) ? kerisOwnMax(baseMaxHit(), damage) : (int) (baseMaxHit() * damage);
+	}
+
+	/** T-212: the keris's max without its crit: GearBonusCalc's max multiplier has the crit's tripling in it. */
+	static int kerisOwnMax(int baseMaxHit, double damageWithCrit)
+	{
+		return (int) Math.floor(baseMaxHit * damageWithCrit / 3.0 + 1e-9);
 	}
 
 	/**

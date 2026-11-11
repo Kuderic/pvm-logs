@@ -670,7 +670,7 @@ class GearBonusCalc
 		return GearBonus.split(accuracy, damage * 3.0, damage * (1.0 + 2.0 / 51.0));
 	}
 
-	private static boolean isKeris(int weapon)
+	static boolean isKeris(int weapon)
 	{
 		return weapon == ItemID.CONTACT_KERIS
 			|| weapon == ItemID.CONTACT_KERIS_P

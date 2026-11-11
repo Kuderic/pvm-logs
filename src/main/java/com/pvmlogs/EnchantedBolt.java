@@ -31,6 +31,31 @@ enum EnchantedBolt
 		return kandarinHardDiary ? baseChance * 1.1 : baseChance;
 	}
 
+	/** T-212: its name on the overlay's proc row: "ruby", "diamond", "onyx", "dragonstone". */
+	String shortName()
+	{
+		return name().toLowerCase(java.util.Locale.ROOT);
+	}
+
+	/**
+	 * T-212: what the proc deals, as a rule, for the overlay with no target to work it out against. Only the ruby's needs
+	 * one (a fifth of the target's health); the others are worked out from the attack's own max and shown as a number.
+	 */
+	String rule()
+	{
+		switch (this)
+		{
+			case RUBY:
+				return "20% hp";
+			case DIAMOND:
+				return "+15%";
+			case ONYX:
+				return "+20%";
+			default:
+				return "+ranged/5";
+		}
+	}
+
 	static int rubyDamage(int targetCurrentHp)
 	{
 		return Math.min(RUBY_DAMAGE_CAP, targetCurrentHp / 5);

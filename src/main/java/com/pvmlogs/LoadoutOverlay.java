@@ -187,10 +187,17 @@ class LoadoutOverlay extends OverlayPanel
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.attack = plugin.getAttackName();
 		// The plugin works these out on the tick the overlay goes idle; until it has, the last figures stand in.
-		l.maxHit = plugin.getIdleMaxHit() > 0 ? plugin.getIdleMaxHit() : plugin.getExpectedMaxHit();
+		final boolean worked = plugin.getIdleMaxHit() > 0;
+		l.maxHit = worked ? plugin.getIdleMaxHit() : plugin.getExpectedMaxHit();
+		// T-212: the attack's own max, and each proc with its rule where its hit needs a monster.
+		l.ownMaxHit = worked ? plugin.getIdleOwnMaxHit() : plugin.getExpectedOwnMaxHit();
+		l.procs = worked ? plugin.getIdleProcs() : plugin.getExpectedProcs();
 		if (plugin.getSpecialAttack() != null)
 		{
-			l.specMaxHit = plugin.getIdleSpecMaxHit() > 0 ? plugin.getIdleSpecMaxHit() : plugin.getExpectedSpecMaxHit();
+			final boolean spec = plugin.getIdleSpecMaxHit() > 0;
+			l.specMaxHit = spec ? plugin.getIdleSpecMaxHit() : plugin.getExpectedSpecMaxHit();
+			l.specOwnMaxHit = spec ? plugin.getIdleSpecOwnMaxHit() : plugin.getExpectedSpecOwnMaxHit();
+			l.specProcs = spec ? plugin.getIdleSpecProcs() : plugin.getExpectedSpecProcs();
 		}
 		return l;
 	}
@@ -201,11 +208,16 @@ class LoadoutOverlay extends OverlayPanel
 		final LedgerRows.Loadout l = new LedgerRows.Loadout();
 		l.attack = plugin.getAttackName();
 		l.maxHit = plugin.getExpectedMaxHit();
+		// T-212: the max hit row shows the attack's own; each proc gets a muted row under it.
+		l.ownMaxHit = plugin.getExpectedOwnMaxHit();
+		l.procs = plugin.getExpectedProcs();
 		l.accuracy = plugin.getExpectedAccuracy();
 		l.dps = plugin.getExpectedDps();
 		if (plugin.getSpecialAttack() != null)
 		{
 			l.specMaxHit = plugin.getExpectedSpecMaxHit();
+			l.specOwnMaxHit = plugin.getExpectedSpecOwnMaxHit();
+			l.specProcs = plugin.getExpectedSpecProcs();
 			l.specAccuracy = plugin.getExpectedSpecAccuracy();
 			// T-159: the gear's figure, not capped at the hp left.
 			l.specAverage = plugin.getExpectedSpecAverageShown();
