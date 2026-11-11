@@ -1777,7 +1777,27 @@ final class SidePanelModel
 		c.dpsTip = tipLines(c.dps == null ? "No DPS yet: it starts when your first attack lands." : null,
 			parts == null ? null : parts.replace("<html>", "").replace("</html>", ""),
 			c.expDps == null ? null : "Exp " + c.expDps + ": the DPS of average rolls with the same attacks (luck taken"
-				+ " out).", warning ? "Boss data unsure: expected is hidden." : null);
+				+ " out).", c.dps == null ? null : whatItDividesBy(n, r, warning),
+			warning ? "Boss data unsure: expected is hidden." : null);
+	}
+
+	/**
+	 * T-210 (Eric: "the dps infobox has higher dps than the expected dps in the side panel"): what the card's DPS line
+	 * divides by, the whole fight's seconds, eating and idle in them; and the expected rate over the ticks spent attacking
+	 * alone, the gear's rate as the infobox gives it (that one at the target's full hitpoints, so a little higher where a
+	 * bolt's proc or the hp left weakens as the fight goes).
+	 */
+	static String whatItDividesBy(LedgerRows.Numbers n, Rate r, boolean warning)
+	{
+		final double attacking = r.seconds - Math.max(0, n.uptimeCost) - Math.max(0, n.eatingCost)
+			- Math.max(0, n.mechanicsCost);
+		final String whole = "Per second of the whole fight, eating and idle included.";
+		if (warning || attacking <= 0 || n.expected <= 0)
+		{
+			return whole;
+		}
+		return whole + " While attacking: exp " + LedgerRows.oneDecimal((n.expected + Math.max(0, n.other)) / attacking)
+			+ ", the gear's rate (the infobox's).";
 	}
 
 	// ---- T-196: the card's blocks ----

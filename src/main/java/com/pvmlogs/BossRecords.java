@@ -71,7 +71,9 @@ final class BossRecords
 	 * T-195: the execution formula's own version, part of every scoring stamp. Raise it when {@code Numbers.execution}
 	 * changes how it scores every boss, so every window starts again.
 	 */
-	static final int EXECUTION_FORMULA = 1;
+	static final int EXECUTION_FORMULA = 2;
+	// 2 (T-210): a throw proven late by its experience or energy leaves its late ticks overdue (eating, a mechanic or
+	// idle), where they were read as its cooldown: uptime, and so execution, lower for every boss.
 	/**
 	 * T-195, once (records version 3): the scoring changes made before stamps were saved, by boss, with the first build
 	 * (its commit time, as a fight's build line gives it) that scored that way. A kill on an earlier build, or with no
