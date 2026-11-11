@@ -13,8 +13,9 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * T-176 (Eric, 2026-11-05: "rework the party tab to just be part of the fight tab and remove the party tab"): solo, the
- * Fight tab is exactly as before; in a party, the meter and the party's Damage over time (folded by default) sit between
- * the title and the tiles, and saved folds carry under the Party tab's ids.
+ * Fight tab is exactly as before; in a party, the Party section sits between the title and your panels, and saved folds
+ * carry under the Party tab's ids. T-205 (Eric, 22:01: "Party and party damage over time should match the way damage is
+ * handled bundled into one. Also open party by default"): one Party section, its Timeline inside, open by default.
  */
 public class SidePanelFightTabPartyTest
 {
@@ -55,56 +56,148 @@ public class SidePanelFightTabPartyTest
 	}
 
 	@Test
-	public void inAPartyTheMeterAndChartSitBetweenTheTitleAndTheTiles()
+	public void inAPartyThePartySitsBetweenTheTitleAndYourPanels()
 	{
 		final SidePanelParty.Input in = SidePanelPartyExamples.toaYouAndBrindle();
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
 		final List<String> ids = sections(p.fightTab());
 		assertEquals("|party", p.partySection().placement());
-		assertTrue(ids.toString(), ids.indexOf(SidePanelPartySection.PARTY) < ids.indexOf(
-			SidePanelPartySection.PARTY_CHART));
-		assertTrue(ids.toString(), ids.indexOf(SidePanelPartySection.PARTY_CHART) < ids.indexOf("damage"));
+		assertTrue(ids.toString(), ids.indexOf(SidePanelPartySection.PARTY) < ids.indexOf("damage"));
+		assertFalse(ids.toString(), ids.contains(SidePanelPartySection.PARTY_CHART));
 		// Your own panels below, as solo: their sections after the party's are the solo tab's, in its order.
 		final SidePanelFightTab solo = new SidePanelFightTab(SidePanelFightTab.NO_ACTIONS,
 			new SidePanelSection.MemoryFolds());
 		solo.apply(SidePanelPartyMemberViewTest.yours(in));
-		assertEquals(sections(solo), ids.subList(2, ids.size()));
+		assertEquals(sections(solo), ids.subList(1, ids.size()));
 	}
 
 	@Test
-	public void thePartysChartIsFoldedByDefaultAndSavedFoldsCarry()
+	public void onePartySectionWithItsTimelineInside()
 	{
 		final SidePanelParty.Input in = SidePanelPartyExamples.toaYouAndBrindle();
 		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
 		p.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
-		final SidePanelSection chart = SidePanelPictures.sectionOf(p.partySection().top(),
-			SidePanelPartySection.PARTY_CHART);
+		final List<SidePanelSection> party = new ArrayList<>();
+		for (Component k : p.partySection().top().getComponents())
+		{
+			if (k instanceof SidePanelSection)
+			{
+				party.add((SidePanelSection) k);
+			}
+		}
+		assertEquals(1, party.size());
+		final SidePanelSection section = party.get(0);
+		assertEquals("Party", section.title());
+		// The meter, then the Timeline subhead and the party's chart, as Damage has its Timeline.
+		final List<String> texts = texts(section);
+		assertTrue(texts.toString(), texts.contains(SidePanelFightTab.TIMELINE));
+		final SidePanelPartyChart chart = p.partySection().chart();
 		assertNotNull(chart);
-		assertTrue("folded by default", chart.isFolded());
-		// T-188: the meter folds under the card until opened; T-202: whatever Celebrations is.
-		assertTrue("the meter folded", SidePanelPictures.sectionOf(p.partySection().top(), SidePanelPartySection.PARTY)
-			.isFolded());
-		// Opened, it stays open through a rebuild in new text settings (kept as partyChart.opened).
-		chart.toggle();
-		assertFalse(chart.isFolded());
-		p.setText(true, false);
-		try
+		assertTrue(javax.swing.SwingUtilities.isDescendingFrom(chart, section));
+		assertTrue(javax.swing.SwingUtilities.isDescendingFrom(all(section, SidePanelPartyMeter.class).get(0), section));
+		for (SidePanelSection s : all(p.fightTab(), SidePanelSection.class))
 		{
-			assertFalse(SidePanelPictures.sectionOf(p.partySection().top(), SidePanelPartySection.PARTY_CHART).isFolded());
+			assertFalse(s.title(), s.title().equals("Party damage over time"));
 		}
-		finally
+		// Before a fight of yours is on show: the members listed, no chart.
+		final PvmPerformancePanel before = new PvmPerformancePanel(null, null, null, null);
+		before.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.preAttack()), null,
+			SidePanelParty.party(SidePanelPartyExamples.waitingWithMembers())));
+		assertNotNull(SidePanelPictures.sectionOf(before.partySection().top(), SidePanelPartySection.PARTY));
+		assertNull(before.partySection().chart());
+		assertFalse(texts(before.partySection().top()).contains(SidePanelFightTab.TIMELINE));
+	}
+
+	@Test
+	public void partyOpensByDefault()
+	{
+		// A fresh profile: open, Celebrations on or off.
+		for (boolean celebrations : new boolean[]{true, false})
 		{
-			p.setText(false, false);
+			final SidePanelParty.Input in = SidePanelPartyExamples.toaYouAndBrindle();
+			final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
+			p.setCelebrations(celebrations);
+			p.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
+			final SidePanelSection party = SidePanelPictures.sectionOf(p.partySection().top(),
+				SidePanelPartySection.PARTY);
+			assertFalse("open", party.isFolded());
+			// Folded, it stays folded through a rebuild in new text settings.
+			party.toggle();
+			p.setText(true, false);
+			try
+			{
+				assertTrue(SidePanelPictures.sectionOf(p.partySection().top(), SidePanelPartySection.PARTY).isFolded());
+			}
+			finally
+			{
+				p.setText(false, false);
+			}
 		}
-		// The fold store under the Party tab's ids: partyChart saved as folded before still reads folded, and the
-		// meter's "party" carries as it was.
+		assertFalse(PvmPerformancePanel.FOLDED_UNDER_CARD.contains(SidePanelPartySection.PARTY));
+		assertFalse(PvmPerformancePanel.FOLDED_BY_DEFAULT.contains(SidePanelPartySection.PARTY_CHART));
+	}
+
+	@Test
+	public void aProfileThatSavedPartyFoldedOpensItOnce()
+	{
+		// T-188 to T-204 kept Party open only under party.opened: absent, it read folded. T-205 reads "party", which a
+		// build before T-188 saved as folded here: opened once on this build, then remembered.
 		final SidePanelSection.MemoryFolds stored = new SidePanelSection.MemoryFolds();
 		stored.setFolded(SidePanelPartySection.PARTY, true);
-		stored.setFolded(SidePanelPartySection.PARTY_CHART, true);
-		assertTrue(PvmPerformancePanel.FOLDED_BY_DEFAULT.contains(SidePanelPartySection.PARTY_CHART));
-		assertFalse(PvmPerformancePanel.FOLDED_BY_DEFAULT.contains(SidePanelPartySection.PARTY));
-		assertFalse(stored.isFolded(SidePanelPartySection.PARTY_CHART + PvmPerformancePanel.OPENED));
+		assertTrue(PvmPerformancePanel.reopenPartyOnce(stored));
+		assertFalse(stored.isFolded(SidePanelPartySection.PARTY));
+		// Folded again by hand: the next start leaves it folded.
+		stored.setFolded(SidePanelPartySection.PARTY, true);
+		assertFalse(PvmPerformancePanel.reopenPartyOnce(stored));
+		assertTrue(stored.isFolded(SidePanelPartySection.PARTY));
+		// Damage's own once is a key of its own.
+		assertFalse(stored.isFolded(PvmPerformancePanel.DAMAGE_REOPENED));
+	}
+
+	@Test
+	public void anOpenedPartyChartOpensPartyAndFoldingPartyWritesItToo()
+	{
+		final PvmPerformancePanel p = new PvmPerformancePanel(null, null, null, null);
+		final SidePanelSection.Folds folds = p.fightFolds();
+		assertFalse(folds.isFolded(SidePanelPartySection.PARTY));
+		// Folding Party settles the old key as well: partyChart.opened goes with it.
+		folds.setFolded(SidePanelPartySection.PARTY, true);
+		assertTrue(folds.isFolded(SidePanelPartySection.PARTY));
+		assertFalse(folds.isFolded(SidePanelPartySection.PARTY_CHART + PvmPerformancePanel.OPENED));
+		folds.setFolded(SidePanelPartySection.PARTY, false);
+		assertTrue(folds.isFolded(SidePanelPartySection.PARTY_CHART + PvmPerformancePanel.OPENED));
+		// The party's Damage over time left open before T-205 (partyChart.opened) opens Party, folded or not.
+		folds.setFolded(SidePanelPartySection.PARTY, true);
+		folds.setFolded(SidePanelPartySection.PARTY_CHART + PvmPerformancePanel.OPENED, true);
+		assertFalse(folds.isFolded(SidePanelPartySection.PARTY));
+	}
+
+	private static List<String> texts(Container c)
+	{
+		final List<String> out = new ArrayList<>();
+		for (SidePanelText t : all(c, SidePanelText.class))
+		{
+			out.add(t.getText());
+		}
+		return out;
+	}
+
+	private static <T> List<T> all(Container c, Class<T> type)
+	{
+		final List<T> out = new ArrayList<>();
+		for (Component k : c.getComponents())
+		{
+			if (type.isInstance(k))
+			{
+				out.add(type.cast(k));
+			}
+			if (k instanceof Container)
+			{
+				out.addAll(all((Container) k, type));
+			}
+		}
+		return out;
 	}
 
 	@Test
