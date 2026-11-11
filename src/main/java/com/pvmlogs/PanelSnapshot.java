@@ -70,11 +70,23 @@ final class PanelSnapshot
 		final String clock;
 		/** T-130: the party it's for (RuneLite's party id, 0 out of one): a new party puts the selection back on you. */
 		long partyKey;
+		/**
+		 * T-209: the party members in the scope's fight (seen in the scene at it, or sharing for it), by id; null where
+		 * that isn't known (no fight on show, or none fought in a party). For T-208's rows.
+		 */
+		java.util.Set<Long> inFight;
 
 		/** T-130: this tab, for this party. */
 		PartyTab party(long key)
 		{
 			this.partyKey = key;
+			return this;
+		}
+
+		/** T-209: this tab, with the members in the fight. */
+		PartyTab inFight(java.util.Set<Long> ids)
+		{
+			this.inFight = ids;
 			return this;
 		}
 
