@@ -3648,6 +3648,18 @@ public class PvmPerformancePlugin extends Plugin
 			&& now < xpTick + Math.max(1, speed);
 	}
 
+	/**
+	 * T-210: whether the attack tick {@code now} judges ({@code now - lag}, the tick a booking arriving now was thrown on)
+	 * is on or after the throw a proof shows: only then is it that throw's cooldown. A throw proven after the due tick
+	 * leaves the ticks before it overdue: thrown on 1586 against a due 1584 (lag 2), ticks 1586 and 1587 judge 1584 and
+	 * 1585, which went by with nothing thrown (Eric's Hydra log of 2026-11-11, KC 1: 24 such ticks a kill read as
+	 * cooldown). With no due tick yet (the fight's first attack) nothing can be late, so it's cooldown as before.
+	 */
+	static boolean cooldownSinceThrow(int now, int lag, int dueTick, int proofTick)
+	{
+		return dueTick == Integer.MIN_VALUE || proofTick != Integer.MIN_VALUE && now - lag >= proofTick;
+	}
+
 	static boolean attackOverdue(int now, int dueTick, int bookingLag)
 	{
 		return now >= dueTick + bookingLag;
@@ -6617,7 +6629,13 @@ public class PvmPerformancePlugin extends Plugin
 			weaponByTick.getOrDefault(proofTick, combatCalc.equippedWeaponId())));
 		final boolean provenByXp = attackOverdue(client.getTickCount(), attackDueTick, lag)
 			&& throwProvenByXp(client.getTickCount(), attackDueTick, proofTick,
-			speedAfter(xpSpeed != null ? xpSpeed : combatCalc.attackSpeedTicks(), xpSpecial, false));
+			speedAfter(xpSpeed != null ? xpSpeed : combatCalc.attackSpeedTicks(), xpSpecial, false))
+			&& cooldownSinceThrow(client.getTickCount(), lag, attackDueTick, proofTick);
+		// T-210: a throw the XP (or the energy) proves came after the attack tick this one judges: that tick went by with
+		// nothing thrown, so it is overdue like any other, not the late throw's cooldown.
+		final boolean provenLate = !provenByXp && attackOverdue(client.getTickCount(), attackDueTick, lag)
+			&& attackDueTick != Integer.MIN_VALUE && proofTick != Integer.MIN_VALUE
+			&& proofTick > client.getTickCount() - lag && proofTick <= client.getTickCount();
 		if (!attackOverdue(client.getTickCount(), attackDueTick, lag) || provenByXp)
 		{
 			current.recordTickSpent(roomEngaged);
@@ -6688,10 +6706,12 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		// Only booked once the fight has an attack in it, so a lost tick that is NOT counted says so - that gap is what a
 		// safespot report looks like from here.
-		debug.log("tick LOST%s: overdue since %d + lag %d%s",
+		debug.log("tick LOST%s: overdue since %d + lag %d%s%s",
 			eating ? String.format(" (eating %d/%d)",
 				FoodDelay.eatingTickNumber(client.getTickCount(), attackDueTick, lag), added) : "",
-			attackDueTick, lag, counts ? "" : ", NOT COUNTED - no attack made in this fight yet");
+			attackDueTick, lag, provenLate ? String.format(", the throw on %d proven late by its %s", proofTick,
+				proofTick == specThrowTick && proofTick != xpThrowTick ? "energy" : "XP") : "",
+			counts ? "" : ", NOT COUNTED - no attack made in this fight yet");
 	}
 
 	/** Shows the uptime allowances the fight's target has the windows they ride on this tick (T-074). */
