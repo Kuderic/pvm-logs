@@ -212,6 +212,9 @@ class Fight
 	// T-191: of those, the stall a strategy calls for (Cerberus held above 400 hp until her 7th or 14th attack), moved out
 	// of the lost ticks once the fight has ended, never while it runs. Additive: a fight saved before has none.
 	private int ticksStall;
+	// T-211: how long a boss state shown where the time went was open, by what it's shown as (the Alchemical Hydra's
+	// "shield", from each phase's start to her weakening): shown, not counted in anything. Additive: null before.
+	private java.util.Map<String, Integer> shownTicks;
 	private int combatTicks;
 	private boolean attacking;
 	// This session's attack-by-attack and tick-by-tick record (T-035), fed from the methods below where each counts, so
@@ -1270,6 +1273,42 @@ class Fight
 			}
 		}
 		return n;
+	}
+
+	/** T-211: the fight is over, and the boss's shown states were open this long, by what each is shown as. */
+	void recordShownTicks(java.util.Map<String, Integer> ticks)
+	{
+		if (ticks == null || ticks.isEmpty())
+		{
+			return;
+		}
+		if (shownTicks == null)
+		{
+			shownTicks = new java.util.TreeMap<>();
+		}
+		for (java.util.Map.Entry<String, Integer> e : ticks.entrySet())
+		{
+			if (e.getKey() != null && e.getValue() != null && e.getValue() >= 0)
+			{
+				shownTicks.merge(e.getKey(), e.getValue(), Integer::sum);
+			}
+		}
+	}
+
+	/**
+	 * T-211: the ticks a boss state shown as {@code as} ("shield") was open in this fight, for Where the time went; 0 for
+	 * none. Shown only: it is in none of the fight's other figures.
+	 */
+	int getShownTicks(String as)
+	{
+		return shownTicks == null || as == null ? 0 : shownTicks.getOrDefault(as, 0);
+	}
+
+	/** T-211: what the fight's shown states are called, sorted; empty for none. */
+	java.util.Set<String> getShownStates()
+	{
+		return shownTicks == null ? java.util.Collections.emptySet()
+			: java.util.Collections.unmodifiableSet(shownTicks.keySet());
 	}
 
 	/** Every tick off cooldown with no attack, whatever the reason. */

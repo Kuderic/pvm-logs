@@ -118,6 +118,8 @@ public class SidePanelBossIconsTest
 		m.put("Judge of Yama", null);
 		m.put("Yama", HiscoreSkill.YAMA);
 		m.put("Abyssal Sire", HiscoreSkill.ABYSSAL_SIRE);
+		// T-211: her shield.
+		m.put("Alchemical Hydra", HiscoreSkill.ALCHEMICAL_HYDRA);
 		m.put("Bork", SidePanelBossIcons.FRACTURED_ARCHIVE);
 		m.put("Verzik Vitur", HiscoreSkill.THEATRE_OF_BLOOD);
 		m.put("Demonic Brutus", HiscoreSkill.BRUTUS);

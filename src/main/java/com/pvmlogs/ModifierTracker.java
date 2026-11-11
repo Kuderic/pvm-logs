@@ -32,6 +32,8 @@ final class ModifierTracker
 		boolean closed;
 		/** An attack thrown before the start lands free of it (T-078: the shot the stun's reset attack delay allows). */
 		boolean spareThrownBefore;
+		/** T-211: the player's hits that landed while it was open. */
+		int hits;
 
 		Window(String state, int start, int end)
 		{
@@ -62,6 +64,10 @@ final class ModifierTracker
 		int npcId = -1;
 		/** T-152: its hitpoints share at the last reading, for {@link BossRules.StateRule#startOnHeal}; -1 before one. */
 		double lastShare = -1;
+		/** T-211: the ticks each shown state ({@link BossRules.StateRule#shownAs}) has been open, closed windows only. */
+		final Map<String, Integer> shownTicks = new HashMap<>();
+		/** T-211: how many windows of each shown state have opened, for the log line's phase. */
+		final Map<String, Integer> shownOpened = new HashMap<>();
 
 		Boss(String name, BossRules.DamageModifierRules rules)
 		{
@@ -146,6 +152,10 @@ final class ModifierTracker
 		final int end = s.ticks > 0 ? tick + s.ticks : s.maxTicks > 0 ? tick + s.maxTicks : Integer.MAX_VALUE;
 		final Window opened = new Window(s.name, tick, end);
 		b.windows.put(s.name, opened);
+		if (s.shownAs != null)
+		{
+			b.shownOpened.merge(s.name, 1, Integer::sum);
+		}
 		log.accept(String.format("MOD %s: %s on at tick %d (%s%s)", b.name, s.name, tick, signal,
 			s.ticks > 0 ? ", for " + s.ticks + " ticks" : ""));
 		return opened;
@@ -162,6 +172,174 @@ final class ModifierTracker
 		w.closed = true;
 		log.accept(String.format("MOD %s: %s off at tick %d (%s, after %d ticks)", b.name, s.name, tick, signal,
 			tick - w.start));
+		noteShown(b, s, w, signal);
+	}
+
+	/**
+	 * T-211: a shown state's window closed: its ticks added to the boss's, and a line for the log, as
+	 * {@code SHIELD Alchemical Hydra phase 2: 9 ticks, 2 attacks shielded (the message "…")}; the phase is the state's
+	 * count of windows in the fight.
+	 */
+	private void noteShown(Boss b, BossRules.StateRule s, Window w, String signal)
+	{
+		if (s.shownAs == null)
+		{
+			return;
+		}
+		final int ticks = Math.max(0, w.end - w.start);
+		b.shownTicks.merge(s.name, ticks, Integer::sum);
+		log.accept(String.format("%s %s phase %d: %d ticks, %d attacks shielded (%s)",
+			s.shownAs.toUpperCase(java.util.Locale.ROOT), b.name, b.shownOpened.getOrDefault(s.name, 1), ticks, w.hits,
+			signal));
+	}
+
+	/**
+	 * T-211: the ticks the boss's shown states ({@link BossRules.StateRule#shownAs}) have been open up to {@code tick},
+	 * by what they're shown as; an open window counts to now. Empty for a boss with none.
+	 */
+	Map<String, Integer> shownTicks(int npcIndex, int tick)
+	{
+		final Boss b = bosses.get(npcIndex);
+		if (b == null)
+		{
+			return Collections.emptyMap();
+		}
+		final Map<String, Integer> out = new HashMap<>();
+		for (BossRules.StateRule s : states(b.rules))
+		{
+			if (s.shownAs == null)
+			{
+				continue;
+			}
+			int ticks = b.shownTicks.getOrDefault(s.name, 0);
+			final Window w = b.windows.get(s.name);
+			if (w != null && w.openAt(tick))
+			{
+				ticks += tick - w.start;
+			}
+			if (ticks > 0 || b.shownOpened.containsKey(s.name))
+			{
+				out.merge(s.shownAs, ticks, Integer::sum);
+			}
+		}
+		return out;
+	}
+
+	/** T-211: one of the player's hits landed on the boss: counted in each window open now. */
+	void onPlayerHit(int npcIndex, int tick)
+	{
+		final Boss b = bosses.get(npcIndex);
+		if (b == null)
+		{
+			return;
+		}
+		for (Window w : b.windows.values())
+		{
+			if (w.openAt(tick))
+			{
+				w.hits++;
+			}
+		}
+	}
+
+	/** T-211: a game message (tags removed) while the boss is fought: the states it opens and closes. */
+	void onGameMessage(int npcIndex, String name, BossRules.DamageModifierRules rules, String message, int tick)
+	{
+		if (message == null)
+		{
+			return;
+		}
+		final Boss b = boss(npcIndex, name, rules);
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (matches(s.endOnGameMessage, message))
+			{
+				close(b, s, tick, "the message \"" + message + "\"");
+			}
+		}
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (matches(s.startOnGameMessage, message))
+			{
+				open(b, s, tick, "the message \"" + message + "\"");
+			}
+		}
+	}
+
+	/** T-211: whether any of the boss's states opens or closes on the npc id it takes, its form at the start included. */
+	static boolean opensOnNpcId(BossRules.DamageModifierRules rules)
+	{
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (s.startOnNpcId != null || s.endOnNpcId != null)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** T-211: whether any of the boss's states is shown where the time went, or closes on a hit over the max. */
+	static boolean hasShown(BossRules.DamageModifierRules rules)
+	{
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (s.shownAs != null || s.endOnMaxExceeded)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** T-211: whether any of the boss's states listens for game messages, so the plugin logs them in its fights. */
+	static boolean listensForMessages(BossRules.DamageModifierRules rules)
+	{
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (s.startOnGameMessage != null || s.endOnGameMessage != null)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	static boolean matches(List<String> texts, String message)
+	{
+		if (texts == null || message == null)
+		{
+			return false;
+		}
+		final String m = message.toLowerCase(java.util.Locale.ROOT);
+		for (String t : texts)
+		{
+			if (t != null && !t.isEmpty() && m.contains(t.toLowerCase(java.util.Locale.ROOT)))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * T-211: one of the player's hits on the boss landed over the max expected for its attack: a state whose modifier
+	 * shrinks the max ({@link BossRules.StateRule#endOnMaxExceeded}) can't be holding.
+	 */
+	void onMaxExceeded(int npcIndex, int hit, int max, int tick)
+	{
+		final Boss b = bosses.get(npcIndex);
+		if (b == null)
+		{
+			return;
+		}
+		for (BossRules.StateRule s : states(b.rules))
+		{
+			if (s.endOnMaxExceeded)
+			{
+				close(b, s, tick, String.format("a hit of %d over the max of %d", hit, max));
+			}
+		}
 	}
 
 	/** The player's own cast of {@code spell} lands on the boss on {@code landTick}. */
@@ -328,6 +506,21 @@ final class ModifierTracker
 		{
 			return;
 		}
+		// T-211: a phase's form opens a state, a transition's closes it.
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (contains(s.endOnNpcId, npcId))
+			{
+				close(b, s, tick, "npc " + npcId);
+			}
+		}
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (contains(s.startOnNpcId, npcId))
+			{
+				open(b, s, tick, "npc " + npcId);
+			}
+		}
 		for (BossRules.ModifierRule m : modifiers(rules))
 		{
 			if (m.npcIds == null)
@@ -360,6 +553,7 @@ final class ModifierTracker
 					w.closed = true;
 					log.accept(String.format("MOD %s: %s off at tick %d (npc %d is here, after %d ticks)", b.name, s.name,
 						now, ender, Math.max(0, now - w.start)));
+					noteShown(b, s, w, "npc " + ender + " is here");
 				}
 			}
 			for (Iterator<Window> it = b.windows.values().iterator(); it.hasNext(); )

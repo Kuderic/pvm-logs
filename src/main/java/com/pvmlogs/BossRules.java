@@ -414,6 +414,27 @@ class BossRules
 		boolean resetsAttackDelay;
 		/** Not open while an npc of one of these ids is present: it is not opened, and one open is closed (T-078). */
 		int[] endWhileNpc;
+		/**
+		 * T-211: the boss takes one of these npc ids, the form it fights in when the fight starts included: a phase's form
+		 * (the Alchemical Hydra's 8615, 8619, 8620, each starting shielded).
+		 */
+		int[] startOnNpcId;
+		/** T-211: the boss takes one of these npc ids: the phase the state was opened for is over (a transition). */
+		int[] endOnNpcId;
+		/** T-211: a game message, tags removed, containing one of these texts (case ignored) opens it. */
+		List<String> startOnGameMessage;
+		/** T-211: a game message, tags removed, containing one of these texts (case ignored) closes it. */
+		List<String> endOnGameMessage;
+		/**
+		 * T-211: one of the player's hits lands over the max the plugin expected for its attack (a MAX EXCEEDED line).
+		 * For a state whose modifier shrinks the max, such a hit can't happen while it holds: proof it's over.
+		 */
+		boolean endOnMaxExceeded;
+		/**
+		 * T-211: what the state's open time is called where the time went ("shield"): kept per fight, shown, not charged
+		 * to anything. Null for a state that isn't shown.
+		 */
+		String shownAs;
 		String source;
 	}
 

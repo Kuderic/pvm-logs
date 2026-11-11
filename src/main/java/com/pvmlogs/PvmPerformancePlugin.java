@@ -820,6 +820,8 @@ public class PvmPerformancePlugin extends Plugin
 		gearBonuses.resetBuffs("the plugin has just started");
 		markMessageLogged = false;
 		maxHits = new MaxHitCheck(line -> debug.log("%s", line));
+		// T-211: a hit over the shielded max ends the Hydra's shield, whatever the message says.
+		maxHits.setOnExceeded(damageModifiers::onMaxExceeded);
 		timelines.setClock(client::getTickCount);
 		// T-135: a boss's hitpoints for its modifiers (Yama's phase 3 from a third), as counted here.
 		damageModifiers.setHitpoints(index -> new int[]{health.remaining(index, client.getTickCount()), health.maxHp(index)});
@@ -1612,6 +1614,25 @@ public class PvmPerformancePlugin extends Plugin
 	 * The fight is ending (T-191): the idle ticks that were a strategy's stall leave the lost ticks for the mechanics',
 	 * as the stall's. Only now: nothing live moved with her attack count.
 	 */
+	/**
+	 * T-211: the boss's states shown where the time went (the Hydra's shield) go into the fight's record as it ends, read
+	 * by its npc's index (the Hydra keeps hers through every form). Shown only: they move no other figure.
+	 */
+	private void recordShownStates(Fight fight)
+	{
+		final java.util.Map<String, Integer> shown = damageModifiers.shownTicks(fight.getTargetIndex());
+		if (shown.isEmpty())
+		{
+			return;
+		}
+		fight.recordShownTicks(shown);
+		for (java.util.Map.Entry<String, Integer> e : shown.entrySet())
+		{
+			debug.log("SHOWN %s %s: %d ticks (%.1f s), shown where the time went, not counted", e.getKey(),
+				fight.getTargetName(), e.getValue(), e.getValue() * 0.6);
+		}
+	}
+
 	private void settleStall(Fight fight)
 	{
 		final StrategyStall judged = stallFight == fight ? stall : null;
@@ -7194,6 +7215,11 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			noteBlowpipeCheck(message);
 			recordKillMessage(message);
+			// T-211: in a fight with a boss whose states listen for one (the Hydra's weakening), logged with the tick.
+			if (current != null && targetNpc != null)
+			{
+				damageModifiers.onGameMessage(targetNpc, message);
+			}
 		}
 		final String buff = gearBonuses.onGameMessage(message, client.getTickCount());
 		if (buff != null)
@@ -7285,6 +7311,12 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			debug.log("VENGEANCE said Taste vengeance!");
 			reflect.vengeanceFired(client.getTickCount());
+		}
+		// T-211: what the fight's boss says, for a boss whose states listen for game messages: logged, nothing more.
+		if (current != null && targetNpc != null && event.getActor() == targetNpc && damageModifiers.logsMessages(targetNpc))
+		{
+			debug.log("OVERHEAD TEXT tick %d (%s, npc %d): %s", client.getTickCount(), current.getTargetName(),
+				targetNpc.getId(), event.getOverheadText());
 		}
 	}
 
@@ -9061,6 +9093,7 @@ public class PvmPerformancePlugin extends Plugin
 		unlistedAdds.reset(Integer.MIN_VALUE);
 		mechanics.finish();
 		settleStall(current);
+		recordShownStates(current);
 		debug.log("fight END %s (npc %d) %s: attempts=%d made=%d damage=%d thrallDamage=%d cannonDamage=%d hits=%d "
 				+ "ticksLost=%d combatTicks=%d expDamage=%.1f",
 			current.getTargetName(), current.getTargetId(), reason, current.getAttempts(), current.getAttacksMade(),
