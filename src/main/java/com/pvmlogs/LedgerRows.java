@@ -146,6 +146,11 @@ final class LedgerRows
 		WARNING(0xFFFF00),
 		DEAD(0xFF7070),
 		/**
+		 * T-212: a figure under another that it qualifies, read second: a bolt's proc under the max hit. RuneLite's light
+		 * grey (ColorScheme.LIGHT_GRAY_COLOR).
+		 */
+		MUTED(0xA5A5A5),
+		/**
 		 * A boss's name heading the overlay (Eric, 2026-10-28): its own themed
 		 * colour, carried on the row ({@link Row#leftRgb}), this accent where it has
 		 * none. See {@link BossColours}.
@@ -1126,11 +1131,23 @@ final class LedgerRows
 	{
 		/** What the figures are for: the weapon, and the spell when one is cast (T-016). Null reads as "Loadout". */
 		String attack;
+		/** The top of the attack's damage, a bolt's proc or the keris's crit included: what MAX EXCEEDED checks against. */
 		int maxHit;
+		/**
+		 * T-212: the attack's own max, without those (the crossbow's 54 where ruby bolts make the top 100); 0 for unknown,
+		 * when the row shows {@link #maxHit}.
+		 */
+		int ownMaxHit;
+		/** T-212: each proc that sets the top, a muted row of its own under the max hit. */
+		List<MaxHitProc> procs = Collections.emptyList();
 		double accuracy = -1;
 		double dps = -1;
 		/** Only for a weapon with a special that hits. */
 		int specMaxHit;
+		/** T-212: the special's own max, without the bolt's proc; 0 for unknown. */
+		int specOwnMaxHit;
+		/** T-212: the bolt's proc on the special (the Zaryte crossbow's comes with every landed hit). */
+		List<MaxHitProc> specProcs = Collections.emptyList();
 		double specAccuracy = -1;
 		/** What one spec is expected to deal: hit chance times damage, as the plugin books it (Eric, 2026-10-26). */
 		double specAverage = -1;
@@ -1665,7 +1682,8 @@ final class LedgerRows
 		}
 		if (l.maxHit > 0)
 		{
-			rows.add(detail(" max hit", String.valueOf(l.maxHit), Colour.NEUTRAL));
+			rows.add(detail(" max hit", String.valueOf(l.ownMaxHit > 0 ? l.ownMaxHit : l.maxHit), Colour.NEUTRAL));
+			rows.addAll(procRows(l.procs));
 		}
 		if (l.accuracy >= 0)
 		{
@@ -1676,7 +1694,9 @@ final class LedgerRows
 			// A bold section of its own, like DPS (T-077, Eric 2026-10-29): its max hit, accuracy and expected damage under
 			// it. Gone idle there's no target, so the max hit alone.
 			rows.add(main(SPEC, ""));
-			rows.add(detail(" max hit", String.valueOf(l.specMaxHit), Colour.NEUTRAL));
+			rows.add(detail(" max hit", String.valueOf(l.specOwnMaxHit > 0 ? l.specOwnMaxHit : l.specMaxHit),
+				Colour.NEUTRAL));
+			rows.addAll(procRows(l.specProcs));
 			if (l.specAccuracy >= 0)
 			{
 				rows.add(detail(" accuracy", percent(l.specAccuracy), Colour.NEUTRAL));
@@ -1703,6 +1723,26 @@ final class LedgerRows
 				? new Row(versus, "", FontRole.DETAIL, FontRole.DETAIL, Colour.NEUTRAL, Colour.NEUTRAL, versus)
 				: new Row(versus, "", FontRole.DETAIL, FontRole.DETAIL, Colour.BOSS, Colour.NEUTRAL, versus, null,
 					l.versusRgb));
+		}
+		return rows;
+	}
+
+	/**
+	 * T-212: a row per proc under a max hit, both sides muted: {@code  ruby proc 6.6%   100}, or its rule with no target
+	 * ({@code 20% hp}). On a box saved narrow the label is cut to the proc's name first ({@code  ruby}), never the number.
+	 */
+	static List<Row> procRows(List<MaxHitProc> procs)
+	{
+		if (procs == null || procs.isEmpty())
+		{
+			return Collections.emptyList();
+		}
+		final List<Row> rows = new ArrayList<>(procs.size());
+		for (MaxHitProc p : procs)
+		{
+			final String name = " " + p.name;
+			final String left = name + (p.name.endsWith("crit") ? " " : " proc ") + p.chanceLabel();
+			rows.add(new Row(left, p.hitLabel(), FontRole.DETAIL, FontRole.DETAIL, Colour.MUTED, Colour.MUTED, name));
 		}
 		return rows;
 	}

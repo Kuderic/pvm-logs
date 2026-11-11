@@ -316,6 +316,16 @@ public class PvmPerformancePlugin extends Plugin
 	// "Always show DPS overlay" is on and the player has stopped attacking; -1 otherwise.
 	private int idleMaxHit = -1;
 	private int idleSpecMaxHit = -1;
+	// T-212: the attack's own max (the top above has a bolt's proc or the keris's crit in it) and each such proc, for the
+	// DPS overlay; the special's alike; and the idle figures of each. MAX EXCEEDED keeps checking against the top.
+	private int expectedOwnMaxHit;
+	private List<MaxHitProc> expectedProcs = Collections.emptyList();
+	private int expectedSpecOwnMaxHit;
+	private List<MaxHitProc> expectedSpecProcs = Collections.emptyList();
+	private int idleOwnMaxHit = -1;
+	private List<MaxHitProc> idleProcs = Collections.emptyList();
+	private int idleSpecOwnMaxHit = -1;
+	private List<MaxHitProc> idleSpecProcs = Collections.emptyList();
 	private double expectedSpecAccuracy = -1;
 	private double expectedSpecAverageHit = -1;
 	/** T-030: what the special deals beyond its own hitsplats on average (Burning barrage's burn), for the loadout only. */
@@ -3437,6 +3447,7 @@ public class PvmPerformancePlugin extends Plugin
 			expectedSpecExtra = combatCalc.specialExtraAverage(shownId);
 			expectedVariance = varianceOf(ordinary);
 			expectedSpecVariance = varianceOf(special);
+			noteMaxHitParts(shownId);
 			expectedForNpcId = shownId;
 			final double[] row = new double[EXP_WIDTH];
 			row[EXP_MAX] = expectedMaxHit;
@@ -3472,6 +3483,7 @@ public class PvmPerformancePlugin extends Plugin
 					expectedSpecAverageShown = combatCalc.specialAttackAverageShown(shownId);
 					expectedVariance = varianceOf(shownOrdinary);
 					expectedSpecVariance = varianceOf(shownSpecial);
+					noteMaxHitParts(shownId);
 				}
 				finally
 				{
@@ -3504,12 +3516,13 @@ public class PvmPerformancePlugin extends Plugin
 				// overlay showing a max hit and nothing under it is saying.
 				// T-159: avg is as scored, capped at the hp left; dps is the gear's rate, uncapped, as the overlay shows it.
 				// T-203: golembane and the target's flat armour, where they apply, after the dps.
-				debug.log("expected vs %s (npc %d%s): max %d, acc %.3f, avg %.2f (capped at the hp left), gear's dps %.2f%s%s%s",
+				// T-212: the attack's own max, then each proc that sets the top: "max 64 (ruby proc 100 at 6.6%)".
+				debug.log("expected vs %s (npc %d%s): %s, acc %.3f, avg %.2f (capped at the hp left), gear's dps %.2f%s%s%s",
 					shown.getTargetName(), expectedForNpcId,
 					judgedBy == null ? "" : String.format(", '%s' def %d, %d hp left (%s)", version, defence,
 						health.remaining(shown.getTargetIndex(), client.getTickCount()),
 						health.source(shown.getTargetIndex(), client.getTickCount())),
-					expectedMaxHit, expectedAccuracy, expectedAverageHit,
+					CombatCalc.maxHitLabel(expectedOwnMaxHit, expectedProcs), expectedAccuracy, expectedAverageHit,
 					expectedDps, combatCalc.targetEffectsNote(expectedForNpcId), expectedAccuracy < 0 ? "  <- NO MONSTER STATS FOR THIS ID" : "",
 					// A guardian reads zero for everything unless a pickaxe is in hand, which is the mechanic and not a fault.
 					EncounterGroup.isGuardian(expectedForNpcId)
@@ -3519,6 +3532,7 @@ public class PvmPerformancePlugin extends Plugin
 		else
 		{
 			expectedMaxHit = combatCalc.maxHit(-1);
+			noteMaxHitParts(-1);
 			expectedAccuracy = -1;
 			expectedAverageHit = -1;
 			expectedDps = -1;
@@ -3537,11 +3551,19 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			idleMaxHit = combatCalc.maxHit(-1);
 			idleSpecMaxHit = combatCalc.specialAttackMaxHit(-1);
+			idleOwnMaxHit = combatCalc.ownMaxHit(-1);
+			idleProcs = combatCalc.procs(-1);
+			idleSpecOwnMaxHit = combatCalc.specialAttackOwnMaxHit(-1);
+			idleSpecProcs = combatCalc.specialProcs(-1);
 		}
 		else
 		{
 			idleMaxHit = -1;
 			idleSpecMaxHit = -1;
+			idleOwnMaxHit = -1;
+			idleProcs = Collections.emptyList();
+			idleSpecOwnMaxHit = -1;
+			idleSpecProcs = Collections.emptyList();
 		}
 		// Last: the calculator is aimed elsewhere while it runs, and put back.
 		recordAimedRow(shown);
@@ -9607,6 +9629,63 @@ public class PvmPerformancePlugin extends Plugin
 	int getExpectedMaxHit()
 	{
 		return expectedMaxHit;
+	}
+
+	/** T-212: the ordinary attack's own max and the special's, against the target (or none), worked out as shown. */
+	private void noteMaxHitParts(int npcId)
+	{
+		expectedOwnMaxHit = combatCalc.ownMaxHit(npcId);
+		expectedProcs = combatCalc.procs(npcId);
+		expectedSpecOwnMaxHit = combatCalc.specialAttackOwnMaxHit(npcId);
+		expectedSpecProcs = combatCalc.specialProcs(npcId);
+	}
+
+	/** T-212: the attack's own max, without a bolt's proc or the keris's crit (0 if unknown). */
+	int getExpectedOwnMaxHit()
+	{
+		return expectedOwnMaxHit;
+	}
+
+	/** T-212: the procs that set the attack's top above its own max, each with its chance and hit. */
+	List<MaxHitProc> getExpectedProcs()
+	{
+		return expectedProcs;
+	}
+
+	/** T-212: the special's own max, without the bolt's proc. */
+	int getExpectedSpecOwnMaxHit()
+	{
+		return expectedSpecOwnMaxHit;
+	}
+
+	/** T-212: the bolt's proc on the special, or none. */
+	List<MaxHitProc> getExpectedSpecProcs()
+	{
+		return expectedSpecProcs;
+	}
+
+	/** T-212: {@link #getIdleMaxHit}'s own max, -1 when not idle. */
+	int getIdleOwnMaxHit()
+	{
+		return idleOwnMaxHit;
+	}
+
+	/** T-212: the procs with no monster while idle: the ruby's is its rule. */
+	List<MaxHitProc> getIdleProcs()
+	{
+		return idleProcs;
+	}
+
+	/** T-212: {@link #getIdleSpecMaxHit}'s own max, -1 when not idle. */
+	int getIdleSpecOwnMaxHit()
+	{
+		return idleSpecOwnMaxHit;
+	}
+
+	/** T-212: the special's procs with no monster while idle. */
+	List<MaxHitProc> getIdleSpecProcs()
+	{
+		return idleSpecProcs;
 	}
 
 	/** T-073: the max hit with no monster while the DPS overlay is idle, else -1. */
