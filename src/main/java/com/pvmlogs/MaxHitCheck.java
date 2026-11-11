@@ -62,9 +62,23 @@ final class MaxHitCheck
 	private final Map<Fight, Integer> exceeded = new IdentityHashMap<>();
 	private int tick = Integer.MIN_VALUE;
 
+	/** T-211: told of each hit over its max: {npc index, the hit, the max}. */
+	interface Exceeded
+	{
+		void exceeded(int npcIndex, int hit, int max);
+	}
+
+	private Exceeded onExceeded = (npcIndex, hit, max) -> { };
+
 	MaxHitCheck(Consumer<String> log)
 	{
 		this.log = log == null ? line -> { } : log;
+	}
+
+	/** T-211: who to tell of a hit over its max (a boss state that can't hold through one, the Hydra's shield). */
+	void setOnExceeded(Exceeded onExceeded)
+	{
+		this.onExceeded = onExceeded == null ? (npcIndex, hit, max) -> { } : onExceeded;
 	}
 
 	/** One of the player's own splats on an npc (after the thrall's, recoil and delayed specials are set aside). */
@@ -125,6 +139,7 @@ final class MaxHitCheck
 						log.accept(String.format("BLOWPIPE dart may be stale: hit %d > max %d with %s", splat.amount, s.max,
 							s.dart));
 					}
+					onExceeded.exceeded(s.npcIndex, splat.amount, s.max);
 				}
 			}
 		}

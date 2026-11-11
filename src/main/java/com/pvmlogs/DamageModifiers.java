@@ -129,6 +129,8 @@ class DamageModifiers
 			return;
 		}
 		final int now = client.getTickCount();
+		noteForm(npc, boss);
+		tracker.onPlayerHit(npc.getIndex(), now);
 		final List<BossRules.ModifierRule> landed = tracker.applying(npc.getIndex(), boss.damageModifiers, npc.getId(),
 			null, now, behind(npc), this::inside);
 		final List<String> names = new java.util.ArrayList<>(landed.size());
@@ -196,6 +198,71 @@ class DamageModifiers
 	{
 		tracker.tick(client.getTickCount());
 		noteHitpoints(target);
+		final BossRules.Boss boss = target == null ? null : bossFor(target.getId());
+		if (boss != null)
+		{
+			noteForm(target, boss);
+		}
+	}
+
+	/**
+	 * T-211: the form the boss is in, for a state that opens on an npc id. A change of form comes with an NpcChanged
+	 * event, but the form a fight starts in doesn't (the Hydra is 8615 before the player's first attack), so it's read
+	 * whenever the boss's modifiers are, and once a tick for the fight's target. Unchanged, it does nothing.
+	 */
+	private void noteForm(NPC npc, BossRules.Boss boss)
+	{
+		if (ModifierTracker.opensOnNpcId(boss.damageModifiers))
+		{
+			tracker.onNpcId(npc.getIndex(), boss.name, boss.damageModifiers, npc.getId(), client.getTickCount());
+		}
+	}
+
+	/**
+	 * T-211: a game message (tags removed) during a fight with {@code target}: for a boss whose states listen for one,
+	 * or that has a shown state, it's logged with the tick ({@code GAME MESSAGE tick N: text}) and handed to its states.
+	 */
+	void onGameMessage(NPC target, String message)
+	{
+		final BossRules.Boss boss = target == null ? null : bossFor(target.getId());
+		if (boss == null || message == null)
+		{
+			return;
+		}
+		final boolean listens = ModifierTracker.listensForMessages(boss.damageModifiers);
+		if (!listens && !ModifierTracker.hasShown(boss.damageModifiers))
+		{
+			return;
+		}
+		log.accept(String.format("GAME MESSAGE tick %d (%s, npc %d): %s", client.getTickCount(), boss.name,
+			target.getId(), message));
+		if (listens)
+		{
+			tracker.onGameMessage(target.getIndex(), boss.name, boss.damageModifiers, message, client.getTickCount());
+		}
+	}
+
+	/** T-211: whether the fight's target is a boss whose game messages and overhead text are logged. */
+	boolean logsMessages(NPC target)
+	{
+		final BossRules.Boss boss = target == null ? null : bossFor(target.getId());
+		return boss != null && (ModifierTracker.listensForMessages(boss.damageModifiers)
+			|| ModifierTracker.hasShown(boss.damageModifiers));
+	}
+
+	/** T-211: one of the player's hits on {@code npcIndex} landed over the max expected for it (a MAX EXCEEDED line). */
+	void onMaxExceeded(int npcIndex, int hit, int max)
+	{
+		tracker.onMaxExceeded(npcIndex, hit, max, client.getTickCount());
+	}
+
+	/**
+	 * T-211: the ticks the boss's shown states were open, by what each is shown as ("shield"), for the fight's record at
+	 * its end. Empty for a boss with none.
+	 */
+	Map<String, Integer> shownTicks(int npcIndex)
+	{
+		return tracker.shownTicks(npcIndex, client.getTickCount());
 	}
 
 	// T-152: the fight's target, where its state opens on its hitpoints.
@@ -240,6 +307,7 @@ class DamageModifiers
 		{
 			return Collections.emptyList();
 		}
+		noteForm(npc, boss);
 		final int distance = hasMeleeRule(boss.damageModifiers) ? meleeDistance(npc) : NO_DISTANCE;
 		final Boolean inMelee = distance == NO_DISTANCE ? null : distance == IN_MELEE;
 		final ModifierTracker.Situation situation = hasSituationRule(boss.damageModifiers) ? situation(npc, style)

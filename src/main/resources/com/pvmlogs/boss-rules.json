@@ -233,6 +233,33 @@
       }
     },
     {
+      "name": "Alchemical Hydra",
+      "npcIds": [8615, 8616, 8617, 8618, 8619, 8620, 8621, 8622],
+      "versionByNpcId": {
+        "8615": "Serpentine", "8616": "Serpentine",
+        "8619": "Electric", "8617": "Electric",
+        "8620": "Fire", "8618": "Fire",
+        "8621": "Extinguished", "8622": "Extinguished"
+      },
+      "notes": "T-211. Forms in the order of Eric's kills of 2026-11-11 (one npc index through all of them): 8615 phase 1 (Serpentine, gameval HYDRABOSS), 8616 its transition, 8619 phase 2 (Electric, HYDRABOSS_4), 8617 its transition, 8620 phase 3 (Fire, HYDRABOSS_3), 8618 its transition, 8621 phase 4 (Extinguished, enraged, HYDRABOSS_2), 8622 the death (HYDRABOSS_FINALDEATH). The DPS calc's data lists 8615, 8619, 8620 and 8621, all 1100 hp and defence 100, with the versions named here; a transition id takes the version of the phase it ends (the same stats), the death the last phase's.",
+      "damageModifiers": {
+        "states": [
+          {
+            "name": "unweakened",
+            "startOnNpcId": [8615, 8619, 8620],
+            "endOnNpcId": [8616, 8617, 8618, 8621, 8622],
+            "endOnGameMessage": ["neutralise the Alchemical Hydra's defences", "neutralize the Alchemical Hydra's defences"],
+            "endOnMaxExceeded": true,
+            "shownAs": "shield",
+            "source": "OSRS Wiki, Alchemical Hydra, read 2026-11-11: at the start of each phase it 'has a 75% damage reduction', which 'can be removed if it is lured over a vent on the floor which spews chemical liquid' ('the vent must be the correct one'); 'Barring the last phase, the damage reduction is reapplied' after each phase change, so phases 1-3 and not the last (8621). The page gives no message for the weakening. Opened by each of the three forms (the fight starts in 8615, which comes with no change of form: read from the boss when the fight starts), closed by the next form. The message is \"The chemicals neutralise the Alchemical Hydra's defences!\" as client forks that run on the live game match it in full (SanLite's and OpenOSRS-era HydraPlugin, read 2026-11-11; the text only); not yet in Eric's logs, as no build logged game messages in her fights before T-211's. A hit over the shielded max closes it too, so a wrong text can't leave a whole phase shielded; that fallback scores the hit that proves her weakened as a shielded one."
+          }
+        ],
+        "modifiers": [
+          {"name": "shield", "state": "unweakened", "multiply": [1, 4], "hiddenLive": true, "source": "The 75% damage reduction, the wiki as above. Rounded down: in Eric's kills of 2026-11-11 a max-hit splat (type 43) of 13 landed under the shield with an ordinary max of 54 (54 / 4 = 13.5; up or to the nearest would show 14), and the ruby bolt's 100 showed as 25. Hidden live: the overlay's gear rate shows her weakened rate, the player's own, never whether she is shielded now."}
+        ]
+      }
+    },
+    {
       "name": "Abyssal Sire",
       "npcIds": [5886, 5887, 5888, 5889, 5890, 5891, 5908],
       "versionByNpcId": {

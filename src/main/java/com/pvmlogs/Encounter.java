@@ -1115,6 +1115,17 @@ class Encounter
 		return total;
 	}
 
+	/** T-211: the ticks a boss state shown as {@code as} ("shield") was open, over the room's fights; shown, not counted. */
+	int getShownTicks(String as)
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getShownTicks(as);
+		}
+		return total;
+	}
+
 	/** T-191: of the mechanics ticks, a strategy's stall. */
 	int getTicksStall()
 	{
