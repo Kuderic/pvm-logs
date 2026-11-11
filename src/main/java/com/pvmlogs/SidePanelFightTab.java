@@ -497,8 +497,10 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 	}
 
-	/** T-196: a small heading inside a section's card, with its note on the right: {@code Timeline}. */
-	private static JComponent subhead(String title, String note)
+	/**
+	 * T-196: a small heading inside a section's card, with its note on the right: {@code Timeline} (T-205: Party's too).
+	 */
+	static JComponent subhead(String title, String note)
 	{
 		return new SidePanelParts.Line(Text.small(title, SidePanelStyle.BODY), note == null ? Text.NONE
 			: Text.small(note, SidePanelStyle.SECONDARY));

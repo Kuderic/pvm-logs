@@ -108,28 +108,28 @@ class PvmPerformancePanel extends PluginPanel
 	 */
 	static final int UPDATE_TICKS = 5;
 	/**
-	 * T-176: the sections folded until they're opened: the party's Damage over time, now on the Fight tab above the tiles.
-	 * Its id stays {@code partyChart}; it's kept open under {@code partyChart.opened}. A fold saved as folded before still
-	 * reads folded, and one left open reads folded, the new default.
+	 * T-176: the sections folded until they're opened, each kept open under its own {@link #OPENED} key. T-205: none now;
+	 * the party's Damage over time ({@code partyChart}) is Party's Timeline, and its key is read through {@link #MERGED}.
 	 */
-	static final java.util.Set<String> FOLDED_BY_DEFAULT = java.util.Collections.singleton(
-		SidePanelPartySection.PARTY_CHART);
+	static final java.util.Set<String> FOLDED_BY_DEFAULT = java.util.Collections.emptySet();
 	static final String OPENED = ".opened";
 	/**
 	 * T-188: the Fight tab's sections fold below the kill card until opened, each kept open under its own
 	 * {@link #OPENED} key; the keys they had stay as they were, for the other tabs. T-194 (Eric, 21:32: "I like having
 	 * them open, at least for damage"): Damage isn't one, so it opens by default and keeps its own key, folded or open as
 	 * you leave it. T-202: in every view, whatever Celebrations is; Damage over time, Ticks and Details aren't sections
-	 * any more, so their keys are read only through {@link #MERGED}.
+	 * any more, so their keys are read only through {@link #MERGED}. T-205 (Eric: "open party by default when player is
+	 * in a party"): Party isn't one either; it keeps its own key, as Damage does.
 	 */
 	static final java.util.Set<String> FOLDED_UNDER_CARD = java.util.Collections.unmodifiableSet(
 		new java.util.HashSet<>(java.util.Arrays.asList("curve", "budget", "execution", "targets", "defence", "later",
-			"taken", SidePanelPartySection.PARTY)));
+			"taken")));
 	/**
 	 * T-196: the sections merged under the card, by the section that holds them now: Damage over time ({@code chart}) in
-	 * Damage, Ticks in Your play ({@code execution}), Details' hits in Luck ({@code curve}). Each kept its fold key
-	 * ({@code <id>.opened}, T-188): one left open opens the section it's in, and folding or opening that section writes
-	 * the old key too, so the old one never overrules it again.
+	 * Damage, Ticks in Your play ({@code execution}), Details' hits in Luck ({@code curve}); T-205: the party's Damage
+	 * over time ({@code partyChart}) in Party. Each kept its fold key ({@code <id>.opened}, T-188, T-176): one left open
+	 * opens the section it's in, and folding or opening that section writes the old key too, so the old one never
+	 * overrules it again.
 	 */
 	static final java.util.Map<String, java.util.List<String>> MERGED;
 
@@ -139,6 +139,7 @@ class PvmPerformancePanel extends PluginPanel
 		m.put("damage", java.util.Collections.singletonList("chart"));
 		m.put("execution", java.util.Collections.singletonList("ticks"));
 		m.put("curve", java.util.Collections.singletonList("details"));
+		m.put(SidePanelPartySection.PARTY, java.util.Collections.singletonList(SidePanelPartySection.PARTY_CHART));
 		MERGED = java.util.Collections.unmodifiableMap(m);
 	}
 
@@ -161,6 +162,29 @@ class PvmPerformancePanel extends PluginPanel
 		}
 		stored.setFolded("damage", false);
 		stored.setFolded(DAMAGE_REOPENED, true);
+		return true;
+	}
+
+	/**
+	 * T-205: the key that says Party has been opened once on this build. T-188 to T-204 kept Party under the card, open
+	 * only under {@code party.opened}; T-205 reads its own key, {@code party}, which a build before T-188 may have
+	 * saved folded.
+	 */
+	static final String PARTY_REOPENED = "party.reopened";
+
+	/**
+	 * T-205 (Eric: "open party by default when player is in a party"): Party opens once on this build, as Damage did in
+	 * T-199, even where an earlier build saved it folded; after that, its fold is remembered as usual. Returns whether
+	 * it opened it now.
+	 */
+	static boolean reopenPartyOnce(SidePanelSection.Folds stored)
+	{
+		if (stored.isFolded(PARTY_REOPENED))
+		{
+			return false;
+		}
+		stored.setFolded(SidePanelPartySection.PARTY, false);
+		stored.setFolded(PARTY_REOPENED, true);
 		return true;
 	}
 
@@ -225,6 +249,7 @@ class PvmPerformancePanel extends PluginPanel
 		final SidePanelSection.Folds stored = configManager == null ? new SidePanelSection.MemoryFolds()
 			: new ConfigFolds(configManager);
 		reopenDamageOnce(stored);
+		reopenPartyOnce(stored);
 		// A fold updates at once (T-046): an unfolded section shows this tick's figures, not those of up to 3 s ago.
 		final SidePanelSection.Folds folds = new SidePanelSection.Folds()
 		{

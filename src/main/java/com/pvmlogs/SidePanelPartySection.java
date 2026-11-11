@@ -24,8 +24,8 @@ import javax.swing.border.EmptyBorder;
  * the switch, the title, the meter, the party's Damage over time, then a member's heading and their Fight panels. The
  * Fight tab has its own switch, title and panels, so what's left is two blocks the Fight tab places:
  * <ul>
- * <li>{@link #top()}: the meter (section {@code party}) and the party's Damage over time ({@code partyChart}, folded by
- * default), after the title, before the tiles; out of a fight, the party's line and the members listed (T-167);</li>
+ * <li>{@link #top()}: the Party section ({@code party}): the meter, then its Timeline (T-205; was the party's Damage over
+ * time, {@code partyChart}), after the title; out of a fight, the party's line and the members listed (T-167);</li>
  * <li>{@link #member()}: with a member selected, their heading, tinted (T-132), and their Fight panels from the tiles
  * down, in place of yours. Clicking them again, or your own row, goes back to yours.</li>
  * </ul>
@@ -40,7 +40,10 @@ final class SidePanelPartySection
 		+ "for yours.";
 	/** T-132: the heading's picture, at 1× (Eric, 2026-10-31: "Just the Picture made larger and the person's name"). */
 	static final int HEADING_PICTURE = 24;
-	/** T-176: the sections' ids, as the Party tab had them, so saved folds carry. */
+	/**
+	 * T-176: the sections' ids, as the Party tab had them, so saved folds carry. T-205: {@code partyChart} isn't a section
+	 * any more; its key opens Party.
+	 */
 	static final String PARTY = "party";
 	static final String PARTY_CHART = "partyChart";
 
@@ -369,13 +372,6 @@ final class SidePanelPartySection
 			return;
 		}
 		meterSection(t);
-		chart = new SidePanelPartyChart();
-		chart.set(t, focus());
-		final JPanel card = SidePanelParts.card(4);
-		card.add(chart);
-		// No hint beside the title: in Larger and Smooth text the title takes the width. Folded by default (T-176): the
-		// panel's folds read this id as folded until it's opened.
-		top.add(new SidePanelSection(PARTY_CHART, "Party damage over time", PanelSnapshot.Text.NONE, card, folds));
 		member(t, true);
 		top.revalidate();
 		top.repaint();
@@ -391,8 +387,15 @@ final class SidePanelPartySection
 		summary = null;
 	}
 
+	/**
+	 * T-205 (Eric: "Party and party damage over time should match the way damage is handled bundled into one"): one
+	 * Party section, built as Damage is: the party's DPS, the meter and the others' note on one card, then the
+	 * "Timeline" subhead and the party's chart on the next (was the "Party damage over time" section, {@code partyChart},
+	 * whose fold key now opens Party through the panel's MERGED).
+	 */
 	private void meterSection(PanelSnapshot.PartyTab t)
 	{
+		final JPanel list = SidePanelParts.stack(SidePanelStyle.ROW_GAP);
 		final JPanel card = SidePanelParts.card(5);
 		// T-132: the room's name and clock are the Fight tab's title, above: the party's DPS alone here.
 		header = new SidePanelParts.Line(PanelSnapshot.Text.small(t.partyDps, SidePanelStyle.SECONDARY),
@@ -410,7 +413,15 @@ final class SidePanelPartySection
 			card.add(new SidePanelParts.Paragraph(t.othersNote, SidePanelStyle.MUTED, SidePanelStyle.Type.SMALL,
 				SidePanelStyle.CONTENT_WIDTH - 14));
 		}
-		final SidePanelSection section = new SidePanelSection(PARTY, "Party", PanelSnapshot.Text.NONE, card, folds);
+		list.add(card);
+		// Its Timeline, as Damage's: the subhead, then the chart, on a card of its own under the meter's.
+		final JPanel box = SidePanelParts.card(5);
+		box.add(SidePanelFightTab.subhead(SidePanelFightTab.TIMELINE, null));
+		chart = new SidePanelPartyChart();
+		chart.set(t, focus());
+		box.add(chart);
+		list.add(box);
+		final SidePanelSection section = new SidePanelSection(PARTY, "Party", PanelSnapshot.Text.NONE, list, folds);
 		if (t.after)
 		{
 			words = new MetricSwitch(metric, this::pick);

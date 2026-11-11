@@ -152,6 +152,11 @@ public final class SidePanelPictures
 			clarity(out);
 			return;
 		}
+		if (args.length > 1 && "partytimeline".equals(args[1]))
+		{
+			partyTimeline(out);
+			return;
+		}
 		if (args.length > 1 && "onetab".equals(args[1]))
 		{
 			oneTab(out);
@@ -2255,6 +2260,38 @@ public final class SidePanelPictures
 		panel.partySection().select(id);
 		openAll(panel.partySection().memberFight());
 		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/**
+	 * T-205: one Party section, its Timeline inside, open by default. A 4-member ToB room live (Corvane not running the
+	 * plugin, in others), a 4-member ToA room after it, and the members listed before a fight. Normal and Larger.
+	 */
+	private static void partyTimeline(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				final SidePanelParty.Input live = SidePanelPartyExamples.tobLive();
+				live.members.remove(4);
+				write(dir, "a-four-live", scale, party(live, null, -1, null, scale));
+				write(dir, "b-four-after", scale, party(SidePanelPartyExamples.toa(), null, -1, null, scale));
+				write(dir, "c-four-after-hovered", scale, party(SidePanelPartyExamples.toa(), null, 140, null, scale));
+				final PvmPerformancePanel listed = new PvmPerformancePanel(null, null, null, null);
+				styled(listed);
+				listed.apply(new PanelSnapshot(SidePanelModel.fight(SidePanelExamples.preAttack()), null,
+					SidePanelParty.party(SidePanelPartyExamples.waitingWithMembers())));
+				write(dir, "d-members-listed", scale, draw(listed.tabs(), listed.fightTab(), scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
 	}
 
 	/** T-194: History with every kill shown: its Show more pressed until it's gone. */

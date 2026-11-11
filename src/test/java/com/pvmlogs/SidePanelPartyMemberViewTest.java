@@ -74,10 +74,10 @@ public class SidePanelPartyMemberViewTest
 		assertTrue(place(fight, budget) > place(fight, tab.top()));
 		// No line faded for you.
 		assertEquals(SidePanelPartySection.NONE, tab.chart().focus());
-		// The meter, then the party's chart, inside the party's block, before the tiles.
-		final List<Component> order = new ArrayList<>(Arrays.asList(tab.top().getComponents()));
-		assertTrue(order.indexOf(SidePanelPictures.sectionOf(tab.top(), "party")) < order.indexOf(
-			SidePanelPictures.sectionOf(tab.top(), "partyChart")));
+		// The meter, then the party's chart (T-205: Party's Timeline), inside the party's block, before your panels.
+		assertTrue(javax.swing.SwingUtilities.isDescendingFrom(tab.chart(), SidePanelPictures.sectionOf(tab.top(),
+			"party")));
+		assertNull(SidePanelPictures.sectionOf(tab.top(), "partyChart"));
 		assertTrue(place(fight, tab.top()) < place(fight, SidePanelPictures.sectionOf(fight, "damage")));
 	}
 

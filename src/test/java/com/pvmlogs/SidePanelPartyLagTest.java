@@ -1,6 +1,7 @@
 package com.pvmlogs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -212,8 +213,9 @@ public class SidePanelPartyLagTest
 	/**
 	 * T-130 review had the Party tab's "panel repaint after apply" at ~29 ms p50 against the Fight tab's ~6 ms in the
 	 * 10:35 log, then fixed. T-176 moves the party onto the Fight tab, open during fights. The same fight, ten minutes of
-	 * snapshots, on the Fight tab solo and in a party of four (the meter, the party's chart folded and open, your panels
-	 * below): the build, apply and paint printed side by side, the layout passes held near solo's.
+	 * snapshots, on the Fight tab solo and in a party of four (the meter, the party's chart, your panels below): the
+	 * build, apply and paint printed side by side, the layout passes held near solo's. T-205: Party open by default with
+	 * its Timeline inside (the dearer case), and folded, as T-188 to T-204 had it by default.
 	 */
 	@Test
 	public void theFightTabInAPartyCostsWhatItDoesSolo()
@@ -224,13 +226,14 @@ public class SidePanelPartyLagTest
 		solo.setSize(242, 1000);
 		final PvmPerformancePanel inParty = new PvmPerformancePanel(null, null, null, null);
 		inParty.setSize(242, 1000);
-		// The party's chart opened (it's folded by default): the dearer case.
+		// Party folded, the meter and Timeline undrawn: T-188 to T-204's default.
 		final PvmPerformancePanel opened = new PvmPerformancePanel(null, null, null, null);
 		opened.setSize(242, 1000);
 		solo.apply(party.fightSnapshot());
 		inParty.apply(party.snapshot());
 		opened.apply(party.snapshot());
-		SidePanelPictures.sectionOf(opened.partySection().top(), SidePanelPartySection.PARTY_CHART).toggle();
+		assertFalse(SidePanelPictures.sectionOf(inParty.partySection().top(), SidePanelPartySection.PARTY).isFolded());
+		SidePanelPictures.sectionOf(opened.partySection().top(), SidePanelPartySection.PARTY).toggle();
 		final JComponent soloTab = solo.fightTab();
 		final JComponent partyTab = inParty.fightTab();
 		final JComponent openTab = opened.fightTab();
@@ -292,7 +295,7 @@ public class SidePanelPartyLagTest
 		System.out.println(String.format("T-176, %d updates over ten minutes, on the same fight:%n"
 				+ "  Fight tab solo:       build p50 %.2f ms, apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms, layout asked %d times%n"
 				+ "  Fight tab in a party: build p50 %.2f ms, apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms, layout asked %d times%n"
-				+ "  ... its chart opened:                    apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms",
+				+ "  ... Party folded:                        apply p50 %.2f p99 %.2f ms, paint p50 %.2f p99 %.2f ms",
 			updates, ms(soloBuild, 0.5), ms(soloApply, 0.5), ms(soloApply, 0.99), ms(soloPaint, 0.5),
 			ms(soloPaint, 0.99), soloLayouts, ms(partyBuild, 0.5), ms(partyApply, 0.5), ms(partyApply, 0.99),
 			ms(partyPaint, 0.5), ms(partyPaint, 0.99), partyLayouts, ms(openApply, 0.5), ms(openApply, 0.99),
