@@ -152,6 +152,11 @@ public final class SidePanelPictures
 			clarity(out);
 			return;
 		}
+		if (args.length > 1 && "timebar".equals(args[1]))
+		{
+			timeBar(out);
+			return;
+		}
 		if (args.length > 1 && "partyrows".equals(args[1]))
 		{
 			partyRows(out);
@@ -2366,6 +2371,79 @@ public final class SidePanelPictures
 		smooth = false;
 		larger = false;
 		SidePanelStyle.setText(false, false);
+	}
+
+	/**
+	 * T-214: Where the time went folded and open, one bar at two sizes, for the Araxxor KC 555 kill and Eric's Yama
+	 * example; the live Skill tile at 3 attacks, 10 on time and 10 with two late, with its tooltip. Normal and Larger, 1×
+	 * and 2×.
+	 */
+	private static void timeBar(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-araxxor-folded", scale, timeSection(SidePanelKillCardExamples.araxxorKill(), false, scale));
+				write(dir, "b-araxxor-open", scale, timeSection(SidePanelKillCardExamples.araxxorKill(), true, scale));
+				write(dir, "c-yama-folded", scale, timeSection(SidePanelTimeBarTest.yama(), false, scale));
+				write(dir, "d-yama-open", scale, timeSection(SidePanelTimeBarTest.yama(), true, scale));
+				write(dir, "e-live-3-attacks", scale, liveCells(new int[]{0, 0, 0}, scale));
+				write(dir, "f-live-10-on-time", scale, liveCells(new int[10], scale));
+				write(dir, "g-live-10-two-late", scale, liveCells(new int[]{0, 0, 0, 1, 0, 0, 0, 0, 2, 0}, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-214: the Where the time went section alone, folded or open. */
+	private static BufferedImage timeSection(SidePanelModel.Input in, boolean open, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
+		styled(panel);
+		final SidePanelSection s = sectionOf(panel.fightTab(), "budget");
+		if (s.isFolded() == open)
+		{
+			s.toggle();
+		}
+		return card(panel, s, scale);
+	}
+
+	private static BufferedImage card(PvmPerformancePanel panel, SidePanelSection section, double scale)
+	{
+		final BufferedImage whole = draw(panel.tabs(), panel.fightTab(), scale);
+		final java.awt.Rectangle r = javax.swing.SwingUtilities.convertRectangle(section.getParent(), section.getBounds(),
+			panel.fightTab());
+		final int top = panel.tabs().getHeight();
+		final int y0 = (int) Math.floor((top + r.y - 4) * scale);
+		final int y1 = Math.min(whole.getHeight(), (int) Math.ceil((top + r.y + r.height + 4) * scale));
+		return whole.getSubimage(0, y0, (int) Math.ceil((SIDEBAR - SCROLLBAR) * scale), y1 - y0);
+	}
+
+	/** T-214: the live card (Araxxor KC 555, 42 s in) with these last attacks' delays, the Skill tile's tooltip under it. */
+	private static BufferedImage liveCells(int[] delays, double scale)
+	{
+		final PanelSnapshot.KillCard c = SidePanelModel.fight(SidePanelKillCardExamples.araxxorLive()).card;
+		c.attacks = delays;
+		int late = 0;
+		for (int d : delays)
+		{
+			late += d > 0 ? 1 : 0;
+		}
+		// The tooltip's lines for these cells (the example's own timeline has other attacks).
+		c.skillTip = SidePanelModel.tipLines("Skill so far " + c.skill + " of a perfect fight.",
+			delays.length == 0 ? null : SidePanelModel.lastAttacksLine(delays), "Late so far: " + late + " of "
+				+ delays.length + " attacks.", "Uptime 97%, idle 1.2 s of 42 s (off cooldown with no attack).",
+			SidePanelModel.CELLS_KEY, "Avoidable damage is counted at the kill.");
+		return withTooltip(cardOnly(c, scale), SidePanelStyle.tip(c.skillTip), scale);
 	}
 
 	/**

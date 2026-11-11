@@ -398,6 +398,12 @@ final class SidePanelSection extends JPanel
 		return new java.awt.Rectangle(p.x, p.y + Summary.BAR_TOP, summary.getWidth(), Summary.TIME_BAR);
 	}
 
+	/** T-214: the fills the folded time bar drew last (any section's), for tests. */
+	static java.util.List<PanelSnapshot.Fill> summaryBarDrawn()
+	{
+		return Summary.drawn;
+	}
+
 	/** T-188: the summary on show, for tests; empty for none. */
 	String summary()
 	{
@@ -479,6 +485,9 @@ final class SidePanelSection extends JPanel
 			g.dispose();
 		}
 
+		/** T-214: the time bar's fills as last painted, for tests. */
+		static java.util.List<PanelSnapshot.Fill> drawn = java.util.Collections.emptyList();
+
 		/** The picture; returns where the words start. */
 		private static int paintMark(java.awt.Graphics2D g, PanelSnapshot.Mark m, int w, int lineTop, int line)
 		{
@@ -486,23 +495,8 @@ final class SidePanelSection extends JPanel
 			{
 				case TIME:
 				{
-					// The perfect fight, what was lost, and luck's stretch striped in its violet.
-					final int y = BAR_TOP;
-					g.setColor(SidePanelStyle.TRACK);
-					g.fillRect(0, y, w, TIME_BAR);
-					final int kept = (int) Math.round(m.kept * w);
-					final int lost = (int) Math.round((m.kept + m.lost) * w);
-					g.setColor(SidePanelStyle.KEPT);
-					g.fillRect(0, y, kept, TIME_BAR);
-					g.setColor(SidePanelStyle.COST);
-					g.fillRect(kept, y, Math.max(m.lost > 0 ? 1 : 0, lost - kept), TIME_BAR);
-					final int from = m.luckSaved ? (int) Math.round((1 - m.luck) * w) : lost;
-					final int to = m.luckSaved ? w : (int) Math.round((m.kept + m.lost + m.luck) * w);
-					g.setColor(SidePanelStyle.LUCK);
-					for (int x = from; x < to; x += 3)
-					{
-						g.fillRect(x, y, Math.min(2, to - x), TIME_BAR);
-					}
+					// T-214: the open section's bar, its segments, order and colours, 6 px tall; no tick, labels or marker.
+					drawn = SidePanelTimeBudgetBar.paintBar(g, m.budget, 0, BAR_TOP, w, TIME_BAR);
 					return 0;
 				}
 				case SHARES:

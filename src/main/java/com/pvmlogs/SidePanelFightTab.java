@@ -708,7 +708,9 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			final JPanel row = new JPanel(new BorderLayout(1, 0));
 			row.setOpaque(false);
+			// T-214: the legend, a swatch for each of the bar's segments in its order and fill, luck's in its violet.
 			final SidePanelParts.Swatch sw = new SidePanelParts.Swatch(r.swatch);
+			sw.set(r.swatch, r.swatch.luck() ? tab.budget.luckStripe : null);
 			final SidePanelParts.Line line = new SidePanelParts.Line(r.label, r.value);
 			line.left.cutSuffixFirst();
 			// T-123: a setup part's damage gives up width before its label does, "-16"; its ticks on hover. The others
@@ -753,7 +755,7 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			for (int i = 0; i < lines.size(); i++)
 			{
 				final PanelSnapshot.BudgetRow r = t.budget.rows.get(i);
-				swatches.get(i).set(r.swatch, r.swatch == PanelSnapshot.Fill.LUCK_FASTER ? t.budget.luckSavedColour : null);
+				swatches.get(i).set(r.swatch, r.swatch.luck() ? t.budget.luckStripe : null);
 				lines.get(i).set(r.label, r.hint.isEmpty() ? null : new Text(" " + r.hint.text, r.hint.colour,
 					r.hint.type), r.value);
 				lines.get(i).setRightShort(r.valueShort);

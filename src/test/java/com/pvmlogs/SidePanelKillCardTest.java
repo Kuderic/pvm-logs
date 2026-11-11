@@ -268,15 +268,17 @@ public class SidePanelKillCardTest
 		assertEquals(LedgerRows.partPercent(n.executionLive), c.skill);
 		assertEquals("96%", c.skill);
 		assertEquals("-" + SidePanelModel.secs(SidePanelModel.lostSeconds(n, false)), c.lost);
-		assertNotNull(c.strip);
-		assertEquals(70, c.strip.length);
-		int idle = 0;
-		for (byte b : c.strip)
+		// T-214: the last 10 attacks; the timeline's two lost ticks made one of them 2 ticks late.
+		assertNotNull(c.attacks);
+		assertEquals(PanelSnapshot.KillCard.CELLS, c.attacks.length);
+		int late = 0;
+		for (int d : c.attacks)
 		{
-			idle += b == PanelSnapshot.KillCard.STRIP_IDLE ? 1 : 0;
+			late += d > 0 ? 1 : 0;
 		}
-		assertEquals("the timeline's two lost ticks", 2, idle);
+		assertEquals(1, late);
 		assertTrue(c.skillTip, c.skillTip.contains("Uptime 97%, idle 1.2 s of 42 s"));
+		assertTrue(c.skillTip, c.skillTip.contains("Late so far: 1 of 17 attacks."));
 		// Luck so far: one word, its strength; the damage against average rolls on hover.
 		assertEquals("average", c.luckWord.text);
 		assertEquals(SidePanelStyle.LUCK, c.luckWord.colour);
@@ -286,19 +288,6 @@ public class SidePanelKillCardTest
 		assertEquals(-1, c.rolled);
 		assertNull(c.best);
 		assertNull(c.rank);
-	}
-
-	@Test
-	public void theStripKeepsAtMostOneBucketAPixel()
-	{
-		final byte[] states = new byte[1000];
-		states[0] = FightTimeline.LOST;
-		states[999] = FightTimeline.EATING;
-		final byte[] strip = SidePanelModel.strip(states, SidePanelModel.STRIP_BUCKETS);
-		assertEquals(SidePanelModel.STRIP_BUCKETS, strip.length);
-		assertEquals(PanelSnapshot.KillCard.STRIP_IDLE, strip[0]);
-		assertEquals(PanelSnapshot.KillCard.STRIP_EATING, strip[strip.length - 1]);
-		assertEquals(3, SidePanelModel.strip(new byte[3], SidePanelModel.STRIP_BUCKETS).length);
 	}
 
 	// ---- luck, written one way ----
@@ -487,7 +476,8 @@ public class SidePanelKillCardTest
 		assertEquals("luck +10 s", bar.runs[2].text);
 		assertEquals(SidePanelStyle.LUCK, bar.runs[2].colour);
 		assertTrue(bar.luckSaved);
-		assertEquals(1, bar.kept + bar.lost + bar.luck, 0.15);
+		// T-214: the open section's bar, small.
+		assertNotNull(bar.budget);
 		final SidePanelSection play = SidePanelPictures.sectionOf(p.fightTab(), "execution");
 		assertEquals("99%", play.summary());
 		assertEquals("A", play.summaryMark().grade);

@@ -51,8 +51,10 @@ public class SidePanelAvoidableTest
 		assertEquals(PanelSnapshot.Fill.KEPT, s.get(0).fill);
 		assertTrue(s.get(2).fill == PanelSnapshot.Fill.COST || s.get(2).fill == PanelSnapshot.Fill.MINOR_COST);
 		assertEquals(10.8, s.get(2).seconds, 1e-9);
-		assertEquals(PanelSnapshot.Fill.EATING, s.get(3).fill);
-		assertEquals(16.2 - 10.8, s.get(3).seconds, 1e-9);
+		// T-214: eating after skill's stretches (the setup's), the neutral time.
+		final PanelSnapshot.Segment eating = s.stream().filter(x -> x.fill == PanelSnapshot.Fill.EATING).findFirst().get();
+		assertTrue(s.indexOf(eating) > 2);
+		assertEquals(16.2 - 10.8, eating.seconds, 1e-9);
 		final List<String> rows = rowLabels(b);
 		// T-196's plain rows, in seconds.
 		assertTrue(rows.toString(), rows.contains("avoidable eating -11 s"));
@@ -87,7 +89,7 @@ public class SidePanelAvoidableTest
 			before += s.get(i).seconds;
 		}
 		assertEquals(b.clock, before, 1e-9);
-		assertEquals(PanelSnapshot.Fill.KEPT, s.get(s.size() - 1).fill);
+		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, s.get(s.size() - 1).fill);
 	}
 
 	// ---- 2. The Execution card, 3. the tile ----
