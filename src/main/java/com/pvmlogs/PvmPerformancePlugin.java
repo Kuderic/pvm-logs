@@ -43,6 +43,7 @@ import net.runelite.api.Player;
 import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
 import net.runelite.api.Projectile;
+import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
@@ -717,6 +718,8 @@ public class PvmPerformancePlugin extends Plugin
 	// T-124: what the party's Luck vs Skill players have shared (the side panel's Party card, T-125); the room last shared
 	// live, whether its summary has gone, the tick the last live update went, and the dev loopback's state.
 	private final PartyBoard partyBoard = new PartyBoard();
+	// T-209: which party members were in each room's fight, seen in the scene or sharing for it.
+	private final PartySeen partySeen = new PartySeen();
 	private Encounter partyRoom;
 	private boolean partyRoomEndSent;
 	private int partyLastSent = Integer.MIN_VALUE;
@@ -5290,6 +5293,11 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("PARTY loopback: the party server echoes your own updates");
 		}
 		partyBoard.accept(update.getMemberId(), update, own ? PartyBoard.ECHO_NAME : null, System.currentTimeMillis());
+		// T-209: a member's own update for a room is the stronger proof they were in it; matched on the client thread.
+		if (!own)
+		{
+			partySeen.shared(update.getMemberId(), update.r, System.currentTimeMillis());
+		}
 	}
 
 	/** T-128: another member's room Fight tab, from RuneLite's websocket thread; your own echo as the update's. */
@@ -5313,6 +5321,7 @@ public class PvmPerformancePlugin extends Plugin
 	public void onPartyChanged(PartyChanged event)
 	{
 		partyBoard.clear();
+		partySeen.clear();
 		partyRoom = null;
 		partyEchoSeen = false;
 		partySent = 0;
@@ -5322,6 +5331,61 @@ public class PvmPerformancePlugin extends Plugin
 	public void onUserPart(UserPart event)
 	{
 		partyBoard.part(event.getMemberId());
+	}
+
+	/**
+	 * T-209: the party's members in the scene now, at the fight: anywhere in an instance, within {@link
+	 * PartySeen#OPEN_WORLD_TILES} of the target in the open world. Matched by name; only their ids are kept. And the
+	 * sharing members' updates for this room, waiting since the last scan.
+	 */
+	private void scanPartyInFight()
+	{
+		final Encounter room = currentEncounter;
+		final WorldView view = client.getTopLevelWorldView();
+		if (room == null || view == null)
+		{
+			return;
+		}
+		partySeen.looked(room);
+		partySeen.matchShared(room, System.currentTimeMillis());
+		final PartyMember me = partyService.getLocalMember();
+		final Map<Long, String> names = new HashMap<>();
+		for (PartyMember m : partyService.getMembers())
+		{
+			names.put(m.getMemberId(), m.getDisplayName());
+		}
+		final Map<String, Long> byKey = PartySeen.byKey(names, me == null ? Long.MIN_VALUE : me.getMemberId());
+		if (byKey.isEmpty())
+		{
+			return;
+		}
+		final Player local = client.getLocalPlayer();
+		final WorldPoint at = targetNpc != null && targetNpc.getIndex() == current.getTargetIndex()
+			? targetNpc.getWorldLocation() : local == null ? null : local.getWorldLocation();
+		final boolean instance = view.isInstance();
+		for (Player p : view.players())
+		{
+			if (p == null || p == local)
+			{
+				continue;
+			}
+			final Long id = byKey.get(PartySeen.key(p.getName()));
+			final WorldPoint where = p.getWorldLocation();
+			if (id != null && (at == null || where != null && PartySeen.inReach(instance, where.getX() - at.getX(),
+				where.getY() - at.getY(), where.getPlane(), at.getPlane())))
+			{
+				partySeen.seen(room, id);
+			}
+		}
+	}
+
+	/**
+	 * T-209: the party members in the room's fight, by id: seen in the scene at it, or sharing for it. Null when the
+	 * room wasn't fought in a party. For the side panel's party rows (T-208).
+	 */
+	Set<Long> partyInFight(Encounter room)
+	{
+		return partySeen.inFight(room);
 	}
 
 	/** T-124: what the party has shared, for the side panel's Party card (T-125). Safe from any thread. */
@@ -7382,6 +7446,13 @@ public class PvmPerformancePlugin extends Plugin
 		if (current != null && !current.isEnded() && partyService != null && partyService.isInParty())
 		{
 			current.markInParty();
+			// T-209: who of the party is at it, every 5 ticks (with the party update), never a tick.
+			if (client.getTickCount() % PartyShare.INTERVAL_TICKS == 0)
+			{
+				final long scanStarted = perf.start();
+				scanPartyInFight();
+				perf.stop(PerfProbe.Slot.PARTY_SEEN, scanStarted);
+			}
 		}
 
 		// After the tick's bookings, before the panel reads the board (T-124).
@@ -8864,6 +8935,15 @@ public class PvmPerformancePlugin extends Plugin
 			current.getDamageDealt(), current.getThrallDamage(), current.getHits(), current.getTicksLost(),
 			current.getCombatTicks(), current.getSumExpectedAverageHit());
 		debug.log("%s", luckLine(current));
+		// T-209: how many of the party were at it: counts only, never a name (logs end up in fixtures).
+		if (partyService != null && partyService.isInParty() && currentEncounter != null)
+		{
+			partySeen.matchShared(currentEncounter, System.currentTimeMillis());
+			final Set<Long> seen = partySeen.inFight(currentEncounter);
+			final int members = Math.max(0, partyService.getMembers().size() - 1);
+			debug.log("%s", PartySeen.line(currentEncounter.getName(), seen == null ? 0 : seen.size(), members,
+				partySeen.sharing(currentEncounter)));
+		}
 		// T-059: weapon damage the timeline could give no attack, which the Damage card shows as "Not matched to an attack".
 		final FightTimeline ended = timelines.of(current);
 		if (ended != null)

@@ -25,6 +25,18 @@ final class PartyShare
 	 * Only {@code PvmPerformancePluginTest}'s launcher sets it.
 	 */
 	static final String ECHO_PROPERTY = "luckvsskill.partyEcho";
+	/**
+	 * T-209: the environment variable the dev launcher sets {@link #ECHO_PROPERTY} from: the loopback is off unless it's
+	 * {@code true}, since in a real party it shows your own damage beside your own (Eric, 2026-11-10: 56% beside 56%).
+	 */
+	static final String ECHO_ENV = "LUCKVSSKILL_PARTY_ECHO";
+
+	/** T-209: whether the environment asks for the dev loopback: {@link #ECHO_ENV} set to {@code true} (or 1). */
+	static boolean echoAsked(String env)
+	{
+		final String v = env == null ? "" : env.trim();
+		return "true".equalsIgnoreCase(v) || "1".equals(v);
+	}
 
 	/** After this many updates sent with no echo back from the server, the loopback feeds a local copy instead. */
 	static final int ECHO_WAIT = 3;

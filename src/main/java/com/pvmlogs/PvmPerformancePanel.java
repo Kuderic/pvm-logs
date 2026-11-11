@@ -929,6 +929,22 @@ class PvmPerformancePanel extends PluginPanel
 	 * members' are the board's, for the room on show (by its name, updated since it started) or summed over the raid.
 	 * {@code light}: the Fight tab's line only, without attack rows or series. Client thread.
 	 */
+	/** T-209: the party members in any of these rooms' fights; null when none was fought in a party. */
+	private java.util.Set<Long> inFight(List<Encounter> rooms)
+	{
+		java.util.Set<Long> all = null;
+		for (Encounter r : rooms)
+		{
+			final java.util.Set<Long> seen = plugin.partyInFight(r);
+			if (seen != null)
+			{
+				all = all == null ? new java.util.HashSet<>() : all;
+				all.addAll(seen);
+			}
+		}
+		return all;
+	}
+
 	private SidePanelParty.Input readParty(Fight fight, Encounter display, Encounter room, Raid raid, boolean whole,
 		boolean pre, boolean light)
 	{
@@ -997,6 +1013,8 @@ class PvmPerformancePanel extends PluginPanel
 		in.live = raidScope ? !PvmPerformanceOverlay.isOver(fight, display) : !roomEnded(room, fight);
 		final List<Encounter> rooms = raidScope ? raid.getEncounters() : java.util.Collections.singletonList(room);
 		in.scope = raidScope ? raid.getName() : room.getName();
+		// T-209: who of the party was in the fight, for others' split (and T-208's rows): over the raid, any room of it.
+		in.inFight = inFight(rooms);
 		// The player's own figures, as they send them.
 		final List<LuckVsSkillUpdate> mine = new ArrayList<>();
 		for (Encounter e : rooms)

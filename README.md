@@ -87,6 +87,8 @@ These are the steps that work on Windows. Run them in PowerShell, from the repo 
 5. **Capture a debug log:** after a fight, press **Save debug log** on the side panel's Fight tab (or **Save log** under History → Tools). It writes the last few thousand lines. For a whole session, turn on **Debug logging** in the plugin's settings instead.
 6. **Find the files** in `%USERPROFILE%\.runelite\plugin-data\luck-vs-skill\`: `pvm-debug-recent-*.log` (the button), `pvm-debug-*.log` (the setting), `history.json` and CSV exports.
 
+**Party echo (testing the party meter alone):** set `LUCKVSSKILL_PARTY_ECHO=true` before `run` (PowerShell: `$env:LUCKVSSKILL_PARTY_ECHO="true"`) to see your own figures back as "You (echo)". Off by default, since in a real party it shows your damage twice.
+
 **Tests:** `.\gradlew.bat test` on Windows, or `./gradlew test` on Linux and macOS (JDK 11 or newer). CI runs them on every push and pull request.
 
 **History repair (T-138, one-off):** with RuneLite closed, `.\gradlew.bat historyRepair` lists the Yama kills saved split before T-136 and changes nothing; add `-Papply` to stitch them, after a backup beside `history.json` (`-ParaxxorSolo` also marks the Araxxor kills saved before T-106 solo).
