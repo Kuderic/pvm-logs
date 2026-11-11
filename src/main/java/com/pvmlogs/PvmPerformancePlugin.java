@@ -433,6 +433,8 @@ public class PvmPerformancePlugin extends Plugin
 	private int delayResetTick = Integer.MIN_VALUE;
 	// T-136: the last tick an XP drop proved an attack, so the ticks before its booking arrives aren't counted lost.
 	private int xpThrowTick = Integer.MIN_VALUE;
+	// T-213: the npc that throw was at (its index), so a fight opened on it this tick knows it is under way.
+	private int xpThrowNpcIndex = -1;
 	// T-121: the Royal Titans' elementals the player's splats killed, by the tick each went down, and their indices so each
 	// counts once. Each brings the next attack a tick sooner (wiki, Royal Titans/Strategies: "For each elemental killed, the
 	// player receives a 1-tick reduction to their attack delay"): at [7239] of the 10:30 log a Fire Wave killed three ice
@@ -559,6 +561,8 @@ public class PvmPerformancePlugin extends Plugin
 	private final Map<Integer, Integer> specWeaponByDrop = new HashMap<>();
 	// T-145: the tick the energy last fell with a special's weapon held: a throw, whether or not it pays experience.
 	private int specThrowTick = Integer.MIN_VALUE;
+	// T-213: the npc the special was aimed at (its index), or -1.
+	private int specThrowNpcIndex = -1;
 	// T-145: a special whose miss pays nothing and shows nothing (the Eye of Ayak's Soul Rend), watched until the tick
 	// after its throw: with no experience by then it splashed, and is booked as a miss.
 	private PendingSpecial pendingSpecial;
@@ -923,6 +927,7 @@ public class PvmPerformancePlugin extends Plugin
 		unspentSpecDrops.clear();
 		specWeaponByDrop.clear();
 		specThrowTick = Integer.MIN_VALUE;
+		specThrowNpcIndex = -1;
 		pendingSpecial = null;
 		specEnergy = -1;
 		recentSpecDrops.clear();
@@ -2379,6 +2384,7 @@ public class PvmPerformancePlugin extends Plugin
 		// The fight's target, or what the player is aimed at: a melee blow pays its drop the tick before its splat opens
 		// the fight, and read against no target its bonus would be missing.
 		int targetId = current != null && !current.isEnded() ? targetLiveId : -1;
+		int targetIndex = current != null && !current.isEnded() ? current.getTargetIndex() : -1;
 		final Player me = client.getLocalPlayer();
 		// Or rather what the player is aimed at, when that is an npc (T-086, T-092): the drop is on the attack's tick, so it
 		// pays at the bonus of the npc that attack was on. A shot at a Maggot King larva read at the King's x2.45 was
@@ -2386,6 +2392,7 @@ public class PvmPerformancePlugin extends Plugin
 		if (me != null && me.getInteracting() instanceof NPC)
 		{
 			targetId = ((NPC) me.getInteracting()).getId();
+			targetIndex = ((NPC) me.getInteracting()).getIndex();
 		}
 		final MonsterStatsProvider.MonsterStats stats = targetId < 0 ? null : monsterStats.get(targetId);
 		// T-204: the cannon's state, read once for a plugin started with it set up; the varps keep it after.
@@ -2417,6 +2424,8 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("xp award %s against npc %d", award, targetId);
 			// T-136: the drop is on the attack's tick, so it proves a throw before its booking arrives.
 			xpThrowTick = tick;
+			xpThrowNpcIndex = targetIndex;
+			noteThrowKnown(tick, targetIndex, "XP");
 			bookSplash(award, tick);
 			// The drop is on the attack tick, so it proves an attack thrown now. If the last booking says the weapon was still
 			// busy, that booking was not the player's - most likely a thrall's splat taken for a blow. Not undone here: a
@@ -2930,6 +2939,7 @@ public class PvmPerformancePlugin extends Plugin
 			.add(attackThrownOn(startTick(projectile), lands, npc.getId(), projectileBookedTick(client.getTickCount())));
 		debug.log("projectile %d taken as mine, aimed at npc %d (index %d), lands tick %d",
 			projectile.getId(), npc.getId(), npc.getIndex(), lands);
+		noteThrowKnown(startTick(projectile), npc.getIndex(), "projectile");
 		noteDartInFlight(projectile.getId(), startTick(projectile));
 		// A projectile is never a spell that has none (T-066): a shadow spell clicked at a boss it stuns and still in hand
 		// is not what this is, whatever the cast animation did. The bow's next shot was scored as the Shadow Rush before it.
@@ -3701,6 +3711,22 @@ public class PvmPerformancePlugin extends Plugin
 	static boolean cooldownSinceThrow(int now, int lag, int dueTick, int proofTick)
 	{
 		return dueTick == Integer.MIN_VALUE || proofTick != Integer.MIN_VALUE && now - lag >= proofTick;
+	}
+
+	/**
+	 * T-213: the open fight's first throw at {@code npcIndex} is known on {@code tick}, before its booking: the fight is
+	 * under way, and the panel and overlay show it live, not as "no attacks yet". A throw at another npc changes nothing.
+	 */
+	private void noteThrowKnown(int tick, int npcIndex, String by)
+	{
+		if (current == null || current.isEnded() || npcIndex < 0 || current.getTargetIndex() != npcIndex
+			|| current.isThrowKnown())
+		{
+			return;
+		}
+		current.noteThrowKnown(tick);
+		debug.log("fight UNDER WAY %s: the throw on %d known by its %s, before its booking", current.getTargetName(), tick,
+			by);
 	}
 
 	static boolean attackOverdue(int now, int dueTick, int bookingLag)
@@ -5216,6 +5242,10 @@ public class PvmPerformancePlugin extends Plugin
 			startFight(target, now);
 		}
 		lastCastBookedTick = client.getTickCount();
+		if (!mechanic)
+		{
+			noteThrowKnown(client.getTickCount(), target.getIndex(), "cast");
+		}
 		// Due when the damage would land: hitpoints xp arrives WITH THE DAMAGE, not at the cast. Judged on the cast tick,
 		// every cast read as a splash - the gauntlets armed on hits and expected damage counted at the cast.
 		final int distance = castDistance(target);
@@ -7409,6 +7439,8 @@ public class PvmPerformancePlugin extends Plugin
 				specThrowTick = specFiredTick;
 				final Player me = client.getLocalPlayer();
 				final Actor aimed = me == null ? null : me.getInteracting();
+				specThrowNpcIndex = aimed instanceof NPC ? ((NPC) aimed).getIndex() : -1;
+				noteThrowKnown(specFiredTick, specThrowNpcIndex, "special's energy");
 				if (thrown.missShowsNothing() && aimed instanceof NPC)
 				{
 					pendingSpecial = new PendingSpecial(specFiredTick, (NPC) aimed, thrown);
@@ -7907,6 +7939,16 @@ public class PvmPerformancePlugin extends Plugin
 			current.getTargetName(), npc.getId(), npc.getIndex(), maxHp,
 			current.getGroupName(), current.encounterName(), raidType, client.getWorld());
 		debug.log("  %s", monsterStats.describe(npc.getId()));
+		// T-213: opened on a throw this tick's experience or energy already showed (a respawned boss, Eric's Hydra log of
+		// 2026-11-11): under way at once, not shown as "no attacks yet" while the throw flies.
+		if (xpThrowTick == client.getTickCount() && xpThrowNpcIndex == npc.getIndex())
+		{
+			noteThrowKnown(xpThrowTick, npc.getIndex(), "XP");
+		}
+		else if (specThrowTick == client.getTickCount() && specThrowNpcIndex == npc.getIndex())
+		{
+			noteThrowKnown(specThrowTick, npc.getIndex(), "special's energy");
+		}
 		if (raidHpNote != null)
 		{
 			debug.log("%s", raidHpNote);
@@ -9612,7 +9654,8 @@ public class PvmPerformancePlugin extends Plugin
 	/** The room the overlay should display, or null if nothing has been fought. */
 	Encounter getDisplayEncounter()
 	{
-		if (currentEncounter != null && currentEncounter.hasAttempts())
+		// T-213: from the first throw known, not its booking, so a fight opened on a throw isn't shown as not begun.
+		if (currentEncounter != null && PvmPerformanceOverlay.isUnderway(currentEncounter))
 		{
 			return currentEncounter;
 		}

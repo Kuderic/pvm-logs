@@ -474,6 +474,10 @@ class PvmPerformanceOverlay extends OverlayPanel
 	 * the last one. A fight on a new add in a room already under way is not "before
 	 * the first attack", so a room's adds don't blink the panel back to its
 	 * title one by one.
+	 * <p>
+	 * T-213: under way from the first throw known, not its booking ({@link Fight#isThrowKnown}). A fight opened on a
+	 * throw's experience showed the title, "no attacks yet", while its bolt flew (Eric's Hydra log, 2026-11-11: START on
+	 * 2026, booked on 2028). The title stays for a fight opened by targeting, until the throw.
 	 */
 	static boolean isBeforeFirstAttack(Fight fight, Encounter room)
 	{
@@ -481,8 +485,28 @@ class PvmPerformanceOverlay extends OverlayPanel
 		{
 			return false;
 		}
-		final boolean ownRoomUnderway = room != null && room.hasAttempts() && containsSame(room, fight);
+		final boolean ownRoomUnderway = room != null && isUnderway(room) && containsSame(room, fight);
 		return !ownRoomUnderway;
+	}
+
+	/**
+	 * T-213: whether the room has begun: an attack booked in it, or a throw known in one of its fights. The plugin shows
+	 * the room from then ({@code getDisplayEncounter}), where it waited for the booking.
+	 */
+	static boolean isUnderway(Encounter room)
+	{
+		if (room == null)
+		{
+			return false;
+		}
+		for (Fight f : room.getFights())
+		{
+			if (f.isThrowKnown())
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean containsSame(Encounter room, Fight fight)
