@@ -435,6 +435,31 @@ class Encounter
 		return total;
 	}
 
+	/** T-204: the player's cannon's damage across the room's fights, which damage dealt leaves out, as the thrall's. */
+	int getCannonDamage()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			total += fight.getCannonDamage();
+		}
+		return total;
+	}
+
+	/** T-204: the cannon's damage on the scored fights only, for luck's other damage, as the thrall's. */
+	int getScoredCannonDamage()
+	{
+		int total = 0;
+		for (Fight fight : fights)
+		{
+			if (fight.isScored())
+			{
+				total += fight.getCannonDamage();
+			}
+		}
+		return total;
+	}
+
 	/** Recoil and vengeance across the room's fights, which damage dealt leaves out (T-017 Part B). */
 	int getReflectDamage()
 	{
@@ -821,7 +846,7 @@ class Encounter
 	double luckSeconds(double damage)
 	{
 		return DrainValue.seconds(damage, getScoredCombatTicks(), sumExpectedAverageHit(),
-			getScoredThrallDamage() + getScoredDotDamage() + getScoredReflectDamage());
+			getScoredThrallDamage() + getScoredCannonDamage() + getScoredDotDamage() + getScoredReflectDamage());
 	}
 
 	/** HP taken by attack (T-041) over the same fights; empty with none. */

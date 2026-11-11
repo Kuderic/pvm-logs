@@ -30,6 +30,8 @@ interface SidePanelIcons
 
 	/** The thrall row's icon: the Resurrect spells' ghost (1.13.4 has a sprite for the lesser one only). */
 	int THRALL_SPRITE = SpriteID.SPELL_RESURRECT_LESSER_GHOST;
+	/** T-204: the cannon row's icon: a cannonball. */
+	int CANNON_ITEM = ItemID.MCANNONBALL;
 	/** The recoil and vengeance row's icon. */
 	int RECOIL_ITEM = ItemID.RING_OF_RECOIL;
 

@@ -1255,6 +1255,8 @@ class PvmPerformancePanel extends PluginPanel
 		in.missedHitsTaken = trip.getMissedHitsTaken();
 		// The trip records thrall, DoT and reflect on scored fights only (T-025), so its other damage is the scored kind too.
 		in.scoredThrall = in.thrall = Math.max(0, trip.getThrallDamage());
+		// T-204: the cannon's, on scored fights, as the thrall's.
+		in.scoredCannon = Math.max(0, trip.getCannonDamage());
 		in.scoredDot = in.dot = Math.max(0, trip.getDotDamage());
 		// T-063: by kind; DoT booked before T-062 is the remainder.
 		in.scoredDotByKind = in.dotByKind = trip.getDotDamageByKind();
