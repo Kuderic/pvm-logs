@@ -116,6 +116,13 @@ final class SidePanelStyle
 	static final Color ZONE_C = new Color(0x4A4A4A);
 	/** T-196: the speed track's stretch from your best to this kill. */
 	static final Color SPEED_FILL = new Color(0x6A6A6A);
+	/**
+	 * T-207 (Eric: "It's not clear that you can click dmg luck skill to change the graphs"): a segmented control's track,
+	 * its chosen pill, and a pill under the mouse.
+	 */
+	static final Color SEGMENT_TRACK = new Color(0x2A2A2A);
+	static final Color SEGMENT_ON = new Color(0x4C4C4C);
+	static final Color SEGMENT_HOVER = new Color(0x3A3A3A);
 	/** T-196: the card's rule between its blocks, on the card's ground. */
 	static final Color DIVIDER_ON_CARD = new Color(0x3C3C3C);
 	static final Color ZONE_B = new Color(0x3E5C7A);

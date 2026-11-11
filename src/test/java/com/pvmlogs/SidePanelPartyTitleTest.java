@@ -240,7 +240,18 @@ public class SidePanelPartyTitleTest
 		p.partySection().select(22);
 		final SidePanelFightTab hers = p.partySection().memberFight();
 		hers.pick(1);
-		assertTrue(texts(hers).contains("adds"));
+		// T-207: the switch is a painted segmented control.
+		final List<SidePanelFightTab.TargetSwitch> switches = new ArrayList<>();
+		for (Component c : all(hers))
+		{
+			if (c instanceof SidePanelFightTab.TargetSwitch)
+			{
+				switches.add((SidePanelFightTab.TargetSwitch) c);
+			}
+		}
+		assertEquals(1, switches.size());
+		assertTrue(switches.get(0).words().contains("adds"));
+		assertEquals(1, switches.get(0).picked());
 		assertTrue(texts(hers).contains("Zaryte crossbow"));
 		assertFalse(texts(hers).contains("Noxious halberd"));
 	}
