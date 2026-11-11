@@ -133,7 +133,9 @@ public class SidePanelDamageSwitchTest
 				final SidePanelFightTab view = tab(SidePanelTargetExamples.araxxor());
 				final SidePanelSection damage = section(view, "damage");
 				final SidePanelText title = all(damage.getComponent(0), SidePanelText.class).get(0);
-				final int need = title.getPreferredSize().width + 6 + only(view).getPreferredSize().width;
+				// T-206: the chevron and the card's padding beside them.
+				final int need = title.getPreferredSize().width + 6 + only(view).getPreferredSize().width + 11
+					+ 2 * SidePanelStyle.CARD_PAD_H;
 				final String at = "larger " + larger + " smooth " + smooth + ": " + need;
 				assertTrue(at, need <= SidePanelStyle.CONTENT_WIDTH);
 				// Laid out at the panel's width: the title whole, the switch at the right edge, one line.
@@ -143,7 +145,8 @@ public class SidePanelDamageSwitchTest
 				assertTrue(at, title.getWidth() >= title.getPreferredSize().width);
 				final java.awt.Rectangle s = javax.swing.SwingUtilities.convertRectangle(only(view).getParent(),
 					only(view).getBounds(), header);
-				assertEquals(at, SidePanelStyle.CONTENT_WIDTH, s.x + s.width);
+				// T-206: inside the section's card, at its padding.
+				assertEquals(at, SidePanelStyle.CONTENT_WIDTH - SidePanelStyle.CARD_PAD_H, s.x + s.width);
 				assertTrue(at, header.getHeight() <= title.getPreferredSize().height + 8);
 			}
 		}

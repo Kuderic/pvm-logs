@@ -152,6 +152,11 @@ public final class SidePanelPictures
 			clarity(out);
 			return;
 		}
+		if (args.length > 1 && "onecard".equals(args[1]))
+		{
+			oneCard(out);
+			return;
+		}
 		if (args.length > 1 && "partytimeline".equals(args[1]))
 		{
 			partyTimeline(out);
@@ -1925,7 +1930,7 @@ public final class SidePanelPictures
 		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
 		styled(panel);
 		panel.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
-		sectionOf(panel.partySection().top(), SidePanelPartySection.PARTY_CHART).toggle();
+		// T-205: the chart is Party's Timeline, open with it.
 		draw(panel.tabs(), panel.fightTab(), scale);
 		panel.partySection().chart().setHover(120);
 		return draw(panel.tabs(), panel.fightTab(), scale);
@@ -2259,6 +2264,54 @@ public final class SidePanelPictures
 		panel.apply(new PanelSnapshot(SidePanelPartyMemberViewTest.yours(in), null, SidePanelParty.party(in)));
 		panel.partySection().select(id);
 		openAll(panel.partySection().memberFight());
+		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/**
+	 * T-206: each section one card, its title inside. Araxxor KC 555's Fight tab folded and all open, a hovered header
+	 * folded and open, History, the Trip tab, a 4-member party and a member's panels. Normal and Larger, 1x and 2x.
+	 */
+	private static void oneCard(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-fight-folded", scale, fightTab(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "b-fight-open", scale, openedAs(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "c-hover-folded", scale, hovered(SidePanelKillCardExamples.araxxorKill(), true, scale));
+				write(dir, "d-hover-open", scale, hoveredOpen(SidePanelKillCardExamples.araxxorKill(), scale));
+				write(dir, "e-history", scale, renderHistory(false, scale));
+				write(dir, "f-trip", scale, renderTrip(SidePanelExamples.trip(), scale));
+				write(dir, "g-party-four", scale, party(SidePanelPartyExamples.toa(), null, -1, null, scale));
+				write(dir, "h-party-member", scale, member(SidePanelPartyExamples.toaYouAndBrindle(), 22L, scale));
+			}
+		}
+		smooth = false;
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** T-206: Luck opened, its header hovered: only the title strip lights. */
+	private static BufferedImage hoveredOpen(SidePanelModel.Input in, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.setCelebrations(in.celebrations);
+		styled(panel);
+		panel.apply(new PanelSnapshot(SidePanelModel.fight(in), null, SidePanelParty.party(new SidePanelParty.Input())));
+		final SidePanelSection luck = sectionOf(panel.fightTab(), "curve");
+		if (luck.isFolded())
+		{
+			luck.toggle();
+		}
+		final java.awt.Component head = luck.getComponent(0);
+		head.dispatchEvent(new java.awt.event.MouseEvent(head, java.awt.event.MouseEvent.MOUSE_ENTERED, 0, 0, 5, 5, 0,
+			false));
 		return draw(panel.tabs(), panel.fightTab(), scale);
 	}
 

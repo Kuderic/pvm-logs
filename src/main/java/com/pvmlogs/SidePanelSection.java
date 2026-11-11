@@ -12,6 +12,12 @@ import javax.swing.border.EmptyBorder;
  * hint or total on the right, and the body under it. Clicking the header folds
  * the body away; a folded section stays folded, across fights and restarts,
  * through the {@link Folds} it's given (spec section 7).
+ * <p>
+ * T-206 (Eric, 2026-11-10 22:12: "it should all be contained in one colored section so the user knows what goes with
+ * what"): the section is one card, folded or open: the chevron and title at its top, inside, and the body under them on
+ * the same ground. A body that is a card gives up its own ground; a body that is a list of cards makes them rows of this
+ * one, a {@link SidePanelStyle#DIVIDER_ON_CARD} line between them. Parts with their own ground (a tinted source row, a
+ * selected row) keep it, inset on the card.
  */
 final class SidePanelSection extends JPanel
 {
@@ -71,22 +77,32 @@ final class SidePanelSection extends JPanel
 	private PanelSnapshot.Text hint = PanelSnapshot.Text.NONE;
 	/** T-105: a control in the hint's place (the Damage card's switch); null for the text hint. */
 	private JComponent hintComponent;
-	/** T-188: the header and, while folded, the one-line summary under it, on a card. */
+	/** T-188: the header and, while folded, the one-line summary under it. */
 	private final JPanel head;
+	/** T-206: the title strip (chevron, title, hint), the only part the hover lights. */
+	private final JPanel strip;
 	private final Summary summary = new Summary();
+	/** T-206: the summary with the card's padding round it. */
+	private final JPanel summaryBox = new JPanel(new SidePanelStack(0));
+	/** T-206: the body's parts that were cards and are rows of this one now, a divider between each and the one above. */
+	private final java.util.Set<java.awt.Component> rows = java.util.Collections.newSetFromMap(
+		new java.util.IdentityHashMap<>());
 	/** T-188: run when the section opens, so a body skipped while folded catches up. */
 	private final java.util.List<Runnable> onOpen = new java.util.ArrayList<>(1);
 
 	SidePanelSection(String id, String title, PanelSnapshot.Text hint, JComponent body, Folds folds)
 	{
-		super(new SidePanelStack(SidePanelStyle.BLOCK_GAP));
+		super(new SidePanelStack(0));
 		this.id = id;
 		this.title = title;
 		this.folds = folds;
 		this.body = body;
-		setOpaque(false);
+		// T-206: one card, folded or open.
+		setOpaque(true);
+		setBackground(SidePanelStyle.CARD);
 		header = new SidePanelParts.Line(PanelSnapshot.Text.title(title, SidePanelStyle.VALUE), hint);
-		head = new JPanel(new SidePanelStack(3));
+		head = new JPanel(new SidePanelStack(0));
+		head.setOpaque(false);
 		final MouseAdapter click = new MouseAdapter()
 		{
 			@Override
@@ -114,47 +130,164 @@ final class SidePanelSection extends JPanel
 		top.setOpaque(false);
 		top.add(chevron, java.awt.BorderLayout.WEST);
 		top.add(header, java.awt.BorderLayout.CENTER);
+		strip = new JPanel(new SidePanelStack(0));
+		strip.setOpaque(false);
+		strip.setBackground(SidePanelStyle.CARD_HOVER);
+		strip.add(top);
+		summaryBox.setOpaque(false);
+		summaryBox.setBorder(new EmptyBorder(0, SidePanelStyle.CARD_PAD_H, SUMMARY_PAD_BOTTOM, SidePanelStyle.CARD_PAD_H));
+		summaryBox.add(summary);
 		// The parts with their own listener take the mouse; the header's texts and the chevron pass it to theirs.
-		for (JComponent c : new JComponent[]{head, top, header, summary})
+		for (JComponent c : new JComponent[]{head, strip, top, header, summary, summaryBox})
 		{
 			c.addMouseListener(click);
 		}
-		for (JComponent c : new JComponent[]{head, top, chevron, header, header.left, header.right, summary})
+		for (JComponent c : new JComponent[]{head, strip, top, chevron, header, header.left, header.right, summary,
+			summaryBox})
 		{
 			c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		}
-		head.add(top);
-		summary.setVisible(false);
-		head.add(summary);
+		head.add(strip);
+		summaryBox.setVisible(false);
+		head.add(summaryBox);
 		add(head);
 		add(body);
+		flatten();
 		body.setVisible(!folds.isFolded(id));
 		restyleHead();
 		setHint(hint);
 	}
 
+	/** T-206: the title strip's padding: the card's sides, 5 px above the title. */
+	static final int STRIP_TOP = 5;
+	/** T-206: under the title: on its own (folded, no summary), before the summary, and before the open body. */
+	static final int STRIP_BOTTOM_ALONE = 6;
+	static final int STRIP_BOTTOM_SUMMARY = 3;
+	static final int STRIP_BOTTOM_OPEN = 2;
+	static final int SUMMARY_PAD_BOTTOM = 6;
+
 	/**
-	 * T-188: the header as before; folded with a summary, a card holding the title, its value and the line under them,
-	 * as the design canvas draws the folded sections under the kill card.
+	 * T-188, T-206: the title strip at the card's top; folded with a summary, the line under it (as the design canvas
+	 * draws the folded sections under the kill card); open, the body under it. Padding only: the card is always there.
 	 */
 	private void restyleHead()
 	{
-		final boolean card = isFolded() && !summary.text.isEmpty();
-		head.setBorder(card ? new EmptyBorder(5, 7, 6, 7) : new EmptyBorder(4, 0, 0, 0));
-		summary.setVisible(card);
+		final boolean withSummary = isFolded() && !summary.text.isEmpty();
+		final int bottom = !isFolded() ? STRIP_BOTTOM_OPEN : withSummary ? STRIP_BOTTOM_SUMMARY : STRIP_BOTTOM_ALONE;
+		strip.setBorder(new EmptyBorder(STRIP_TOP, SidePanelStyle.CARD_PAD_H, bottom, SidePanelStyle.CARD_PAD_H));
+		summaryBox.setVisible(withSummary);
 		chevron.folded = isFolded();
 		paintHead();
 		setTooltip(ownTip);
 	}
 
-	/** T-198: the header's ground: the card's, lighter on hover; none for an open header at rest. A repaint, no layout. */
+	/**
+	 * T-198, T-206: the hover lights the title strip only, inside the card ({@link SidePanelStyle#CARD_HOVER}); the rest
+	 * of the card stays. A repaint, no layout.
+	 */
 	private void paintHead()
 	{
-		final boolean card = isFolded() && !summary.text.isEmpty();
-		head.setOpaque(card || hover);
-		head.setBackground(hover ? (card ? SidePanelStyle.CARD_HOVER : SidePanelStyle.HEADER_HOVER) : SidePanelStyle.CARD);
-		head.repaint();
+		strip.setOpaque(hover);
+		strip.repaint();
 		chevron.repaint();
+	}
+
+	/**
+	 * T-206: the body's own cards give up their ground to this one. A body that is a card is the card's lower part; a
+	 * body that is a stack of parts has each card among them made a row, divided from the part above it. Run when built
+	 * and again on each layout (new rows, as History's Show more adds), never per tick.
+	 */
+	private void flatten()
+	{
+		if (isCardGround(body))
+		{
+			body.setOpaque(false);
+		}
+		if (body.getLayout() instanceof SidePanelStack)
+		{
+			for (java.awt.Component k : body.getComponents())
+			{
+				if (isCardGround(k))
+				{
+					((JComponent) k).setOpaque(false);
+					rows.add(k);
+				}
+			}
+		}
+	}
+
+	private static boolean isCardGround(java.awt.Component k)
+	{
+		return k instanceof JComponent && k.isOpaque() && SidePanelStyle.CARD.equals(k.getBackground());
+	}
+
+	@Override
+	public void doLayout()
+	{
+		flatten();
+		super.doLayout();
+	}
+
+	/** T-206: the dividers between the body's rows, as Damage's Timeline is divided from the rows above it. */
+	@Override
+	protected void paintComponent(java.awt.Graphics g)
+	{
+		super.paintComponent(g);
+		if (!body.isVisible() || rows.isEmpty())
+		{
+			return;
+		}
+		g.setColor(SidePanelStyle.DIVIDER_ON_CARD);
+		java.awt.Component above = null;
+		for (java.awt.Component k : body.getComponents())
+		{
+			if (!k.isVisible())
+			{
+				continue;
+			}
+			if (above != null && (rows.contains(k) || rows.contains(above)))
+			{
+				final int y = body.getY() + (above.getY() + above.getHeight() + k.getY()) / 2;
+				g.fillRect(SidePanelStyle.CARD_PAD_H, y, getWidth() - 2 * SidePanelStyle.CARD_PAD_H, 1);
+			}
+			above = k;
+		}
+	}
+
+	/** T-206: the y of each divider line on the card, for tests; empty while folded. */
+	java.util.List<Integer> dividers()
+	{
+		final java.util.List<Integer> out = new java.util.ArrayList<>();
+		if (!body.isVisible())
+		{
+			return out;
+		}
+		java.awt.Component above = null;
+		for (java.awt.Component k : body.getComponents())
+		{
+			if (!k.isVisible())
+			{
+				continue;
+			}
+			if (above != null && (rows.contains(k) || rows.contains(above)))
+			{
+				out.add(body.getY() + (above.getY() + above.getHeight() + k.getY()) / 2);
+			}
+			above = k;
+		}
+		return out;
+	}
+
+	/** T-206: the title strip, for tests: what the hover lights. */
+	JComponent strip()
+	{
+		return strip;
+	}
+
+	/** T-206: the body, for tests. */
+	JComponent body()
+	{
+		return body;
 	}
 
 	private void setHover(boolean h)
