@@ -60,6 +60,8 @@ final class PerfProbe
 		ON_COMMAND_EXECUTED("onCommandExecuted", false),
 		// Inside the handlers above.
 		TIMELINE("FightTimeline hooks", true),
+		// T-209: the scene's players against the party's names, every 5 ticks in a party's fight.
+		PARTY_SEEN("party members at the fight (T-209)", true),
 		// T-050's outcome distribution: the tick's figures at each state, each booking, each tick's drains.
 		DRAIN_OUTCOMES("spec outcomes (T-050)", true),
 		// A frame's overlays.
