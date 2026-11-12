@@ -26,10 +26,12 @@ import javax.swing.border.EmptyBorder;
 /**
  * The Fight tab (T-033; spec 3.1 and section 6). {@link #apply} is the only
  * way in: it rebuilds the components when the snapshot's
- * {@link FightTab#structure()} changes (a state change, a section appearing, a
- * row more) and otherwise only copies texts and colours onto the components it
- * has, so a tick never costs a {@code removeAll()} (spec 5.1). Swing's thread
- * only.
+ * {@link FightTab#frame()} changes (a state change, a section appearing) and
+ * otherwise only copies texts and colours onto the components it has, so a
+ * tick never costs a {@code removeAll()} (spec 5.1). T-218: the sections whose
+ * rows change in a fight (Damage, Skill, Damage taken, Targets, Rooms, Defence)
+ * are slots, each rebuilt on its own when its key changes; a row more in
+ * Damage, Skill or Damage taken is added in place. Swing's thread only.
  */
 final class SidePanelFightTab extends JPanel implements Scrollable
 {
@@ -54,6 +56,21 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	public boolean isPaintingOrigin()
 	{
 		return isOpaque();
+	}
+
+	/** T-218: the tab's own repaints asked for, for tests (a child's, the kill-end moment's, aren't counted). */
+	private int tabRepaints;
+
+	int tabRepaints()
+	{
+		return tabRepaints;
+	}
+
+	@Override
+	public void repaint(long tm, int x, int y, int width, int height)
+	{
+		tabRepaints++;
+		super.repaint(tm, x, y, width, height);
 	}
 
 	@Override
@@ -131,7 +148,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	/** T-099: the last snapshot, shown again with the other view when the switch is clicked. */
 	private FightTab last;
 	private final SidePanelSection.Folds folds;
-	private final List<Consumer<FightTab>> updaters = new ArrayList<>();
+	// T-218: not final: a slot's build collects its updaters in a list of its own while this field points at it.
+	private List<Consumer<FightTab>> updaters = new ArrayList<>();
 	/** T-189: the last card on show was a live one: its kill, next, earns the kill-end moment. */
 	private boolean cardLive;
 	private String structure;
@@ -230,7 +248,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		// The chart's tail goes into the copy every snapshot, whatever else changes, so no tick is skipped.
 		chartData.apply(tab.chart);
 		// T-176: where the party's blocks go is part of the structure: they come or go, or a member's panels take yours'.
-		final String s = tab.structure() + (party == null ? "" : party.placement());
+		// T-218: the frame only; a section's own rows rebuild that section in place (its slot), never the tab.
+		final String s = tab.frame() + (party == null ? "" : party.placement());
 		if (!s.equals(structure))
 		{
 			final long started = PerfProbe.start(perf);
@@ -387,17 +406,20 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 				// T-202: a run of monsters keeps its four tiles (kills, kills an hour, DPS, damage); every other view has
 				// the card or its title, and the sections under it.
 				tiles(tab);
-				damage(tab);
+				// T-218 (Eric's Hydra kill: three whole rebuilds in a fight, 12 to 15 ms each, from a weapon switch, the
+				// first hit taken and a missed switch): the sections whose rows can change in a fight are each a slot,
+				// rebuilt on their own when their rows do.
+				slot(FightTab::damageKey, this::damage, tab);
 				curve(tab);
 				budget(tab);
-				execution(tab);
-				listSection(tab, "targets", "Targets", tab.targets, t -> t.targets, false);
-				listSection(tab, "rooms", "Rooms", tab.rooms, t -> t.rooms, true);
-				defence(tab);
+				slot(FightTab::executionKey, this::execution, tab);
+				slot(FightTab::targetsKey, t -> listSection(t, "targets", "Targets", t.targets, x -> x.targets, false), tab);
+				slot(FightTab::roomsKey, t -> listSection(t, "rooms", "Rooms", t.rooms, x -> x.rooms, true), tab);
+				slot(FightTab::defenceKey, this::defence, tab);
 				later(tab);
 				// T-202 (Eric: "Why does the celebrations setting move damage over time out from damage?"): one set of
 				// sections in every view; Damage over time, Ticks and Details are in Damage, Skill and Luck (T-196).
-				rowsSection(tab, "taken", "Damage taken", tab.taken, t -> t.taken);
+				slot(FightTab::takenKey, t -> rowsSection(t, "taken", "Damage taken", t.taken, x -> x.taken), tab);
 				summaries(tab);
 				break;
 		}
@@ -466,16 +488,169 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		{
 			return;
 		}
+		summarise(tab);
+		// T-218: the sections on show as each update finds them, so a section rebuilt in its slot gets its line too.
+		updaters.add(this::summarise);
+	}
+
+	private void summarise(FightTab t)
+	{
 		for (Component c : getComponents())
 		{
 			if (c instanceof SidePanelSection)
 			{
 				final SidePanelSection section = (SidePanelSection) c;
 				final String id = section.id();
-				section.setSummary(tab.summaries.get(id), mark(tab, id));
-				updaters.add(t -> section.setSummary(t.summaries.get(id), mark(t, id)));
+				section.setSummary(t.summaries.get(id), mark(t, id));
 			}
 		}
+	}
+
+	// ---- T-218: sections rebuilt on their own ----
+
+	/** Where a slot's components go while it builds: at this index, counting up; -1 appends. */
+	private int insertAt = -1;
+	/** For tests: the slots rebuilt on their own so far. */
+	private int slotBuilds;
+
+	int slotBuilds()
+	{
+		return slotBuilds;
+	}
+
+	@Override
+	protected void addImpl(Component comp, Object constraints, int index)
+	{
+		if (insertAt >= 0 && index == -1)
+		{
+			super.addImpl(comp, constraints, insertAt++);
+			return;
+		}
+		super.addImpl(comp, constraints, index);
+	}
+
+	/**
+	 * T-218: a part of the tab built by {@code build} and kept apart: its own updaters, and an invisible mark before its
+	 * components, so when {@code key} changes (a row more) only it is built again, where it was, and the tab's other
+	 * components and updaters stay. One layout pass for its new height.
+	 */
+	private void slot(java.util.function.Function<FightTab, String> key, Consumer<FightTab> build, FightTab tab)
+	{
+		final Slot slot = new Slot(key, build);
+		final JComponent mark = new JComponent()
+		{
+		};
+		mark.setVisible(false);
+		add(mark);
+		slot.mark = mark;
+		slot.build(tab);
+		updaters.add(slot::update);
+	}
+
+	private final class Slot
+	{
+		final java.util.function.Function<FightTab, String> key;
+		final Consumer<FightTab> build;
+		JComponent mark;
+		String built;
+		final List<Component> parts = new ArrayList<>();
+		final List<Consumer<FightTab>> own = new ArrayList<>();
+
+		Slot(java.util.function.Function<FightTab, String> key, Consumer<FightTab> build)
+		{
+			this.key = key;
+			this.build = build;
+		}
+
+		/** Builds its components after its mark, and keeps the updaters they registered as its own. */
+		void build(FightTab t)
+		{
+			final List<Consumer<FightTab>> outer = updaters;
+			final List<Consumer<FightTab>> mine = new ArrayList<>();
+			updaters = mine;
+			final int at = indexOf(mark) + 1;
+			final int before = getComponentCount();
+			insertAt = at;
+			try
+			{
+				build.accept(t);
+			}
+			finally
+			{
+				insertAt = -1;
+				updaters = outer;
+			}
+			final int added = getComponentCount() - before;
+			parts.clear();
+			for (int i = 0; i < added; i++)
+			{
+				parts.add(getComponent(at + i));
+			}
+			own.clear();
+			own.addAll(mine);
+			built = key.apply(t);
+		}
+
+		void update(FightTab t)
+		{
+			if (!key.apply(t).equals(built))
+			{
+				final long started = PerfProbe.start(perf);
+				for (Component c : parts)
+				{
+					remove(c);
+				}
+				build(t);
+				slotBuilds++;
+				if (t.state == PanelSnapshot.State.LIVE && getWidth() > 0)
+				{
+					for (Component c : parts)
+					{
+						if (c instanceof java.awt.Container)
+						{
+							reserveDigits((java.awt.Container) c);
+						}
+					}
+				}
+				SidePanelParts.relayout(SidePanelFightTab.this);
+				if (started != 0L)
+				{
+					perf.stopSwing(PerfProbe.SwingSlot.REBUILD, started);
+				}
+				return;
+			}
+			for (Consumer<FightTab> u : own)
+			{
+				u.accept(t);
+			}
+		}
+	}
+
+	/** T-218: where {@code c} is among {@code parent}'s children; their count when it isn't one. */
+	private static int indexIn(java.awt.Container parent, Component c)
+	{
+		final Component[] all = parent.getComponents();
+		for (int i = 0; i < all.length; i++)
+		{
+			if (all[i] == c)
+			{
+				return i;
+			}
+		}
+		return all.length;
+	}
+
+	private int indexOf(Component c)
+	{
+		final Component[] all = getComponents();
+		for (int i = 0; i < all.length; i++)
+		{
+			if (all[i] == c)
+			{
+				return i;
+			}
+		}
+		return all.length;
 	}
 
 	/** T-196: a folded section's small picture, or null. */
@@ -990,6 +1165,21 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 		body(section, t ->
 		{
+			// T-218: a part more (the first missed switch) is a bar added in place, before the rhythm.
+			if (t.execution.parts.size() != bars.size())
+			{
+				while (bars.size() > t.execution.parts.size())
+				{
+					card.remove(bars.remove(bars.size() - 1));
+				}
+				while (bars.size() < t.execution.parts.size())
+				{
+					final SidePanelPartBar bar = new SidePanelPartBar(t.execution.parts.get(bars.size()));
+					card.add(bar, bars.size());
+					bars.add(bar);
+				}
+				SidePanelParts.relayout(card);
+			}
 			for (int i = 0; i < bars.size(); i++)
 			{
 				bars.get(i).set(t.execution.parts.get(i));
@@ -1013,26 +1203,30 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	 */
 	private Piece chartPiece(FightTab tab, JPanel card)
 	{
-		final SidePanelDamageChart chart = new SidePanelDamageChart(chartData);
-		chart.setPerf(perf);
-		chartView = chart;
-		// T-112: hovering the chart draws a line there, and outlines that tick in the strip.
-		final java.awt.event.MouseAdapter onChart = new java.awt.event.MouseAdapter()
+		// T-218: Damage rebuilt in its slot (a row more) keeps its chart and the image it has drawn.
+		final SidePanelDamageChart chart = chartView != null ? chartView : new SidePanelDamageChart(chartData);
+		if (chart != chartView)
 		{
-			@Override
-			public void mouseMoved(MouseEvent e)
+			chart.setPerf(perf);
+			chartView = chart;
+			// T-112: hovering the chart draws a line there, and outlines that tick in the strip.
+			final java.awt.event.MouseAdapter onChart = new java.awt.event.MouseAdapter()
 			{
-				hover(chart.tickAt(e.getX()));
-			}
+				@Override
+				public void mouseMoved(MouseEvent e)
+				{
+					hover(chart.tickAt(e.getX()));
+				}
 
-			@Override
-			public void mouseExited(MouseEvent e)
-			{
-				hover(-1);
-			}
-		};
-		chart.addMouseListener(onChart);
-		chart.addMouseMotionListener(onChart);
+				@Override
+				public void mouseExited(MouseEvent e)
+				{
+					hover(-1);
+				}
+			};
+			chart.addMouseListener(onChart);
+			chart.addMouseMotionListener(onChart);
+		}
 		card.add(chart);
 		final SidePanelParts.Line ends = new SidePanelParts.Line(Text.small("0:00", SidePanelStyle.MUTED),
 			Text.small(tab.chart.end, SidePanelStyle.MUTED));
@@ -1065,26 +1259,30 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	 */
 	private Piece stripPiece(FightTab tab, JPanel card)
 	{
-		final SidePanelTickStrip strip = new SidePanelTickStrip(chartData);
-		strip.setPerf(perf);
-		stripView = strip;
-		// T-112: hovering a tick cell draws the chart's line at its time.
-		final java.awt.event.MouseAdapter onStrip = new java.awt.event.MouseAdapter()
+		// T-218: Skill rebuilt in its slot (a part more) keeps its strip and the image it has drawn.
+		final SidePanelTickStrip strip = stripView != null ? stripView : new SidePanelTickStrip(chartData);
+		if (strip != stripView)
 		{
-			@Override
-			public void mouseMoved(MouseEvent e)
+			strip.setPerf(perf);
+			stripView = strip;
+			// T-112: hovering a tick cell draws the chart's line at its time.
+			final java.awt.event.MouseAdapter onStrip = new java.awt.event.MouseAdapter()
 			{
-				hover(strip.tickAt(e.getX(), e.getY()));
-			}
+				@Override
+				public void mouseMoved(MouseEvent e)
+				{
+					hover(strip.tickAt(e.getX(), e.getY()));
+				}
 
-			@Override
-			public void mouseExited(MouseEvent e)
-			{
-				hover(-1);
-			}
-		};
-		strip.addMouseListener(onStrip);
-		strip.addMouseMotionListener(onStrip);
+				@Override
+				public void mouseExited(MouseEvent e)
+				{
+					hover(-1);
+				}
+			};
+			strip.addMouseListener(onStrip);
+			strip.addMouseMotionListener(onStrip);
+		}
 		card.add(strip);
 		final SidePanelParts.Legend legend = new SidePanelParts.Legend(SidePanelStyle.CONTENT_WIDTH - 14);
 		card.add(legend);
@@ -1233,6 +1431,25 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 		body(section, t ->
 		{
+			// T-218: a source more or fewer (a weapon switched to, a burn) is a row added or taken away in place.
+			final int want = t.damage == null ? 0 : t.damage.rows.size();
+			if (want != rows.size())
+			{
+				while (rows.size() > want)
+				{
+					list.remove(rows.remove(rows.size() - 1));
+				}
+				// After the last row, or the share bar's box when there's none.
+				int at = rows.isEmpty() ? (shares != null ? 1 : 0) : indexIn(list, rows.get(rows.size() - 1)) + 1;
+				while (rows.size() < want)
+				{
+					final SidePanelParts.SourceRowView v = new SidePanelParts.SourceRowView(t.damage.rows.get(rows.size()),
+						icons, forms);
+					list.add(v, Math.min(at++, list.getComponentCount()));
+					rows.add(v);
+				}
+				SidePanelParts.relayout(list);
+			}
 			for (int i = 0; i < rows.size(); i++)
 			{
 				rows.get(i).set(t.damage.rows.get(i));

@@ -465,7 +465,8 @@ class PvmPerformancePanel extends PluginPanel
 		{
 			clientThread.invokeLater(this::onTick);
 		}
-		historyTab.refresh();
+		// T-218: History only if it's the tab on show.
+		refreshHistoryIfShown();
 	}
 
 	@Override
@@ -482,14 +483,24 @@ class PvmPerformancePanel extends PluginPanel
 	// ---- the plugin's calls ----
 
 	/**
-	 * Called by the plugin after a fight is saved, history is loaded or cleared:
-	 * the next snapshot is built whatever its key says, and the History tab reads
-	 * the list again.
+	 * Called by the plugin after a fight is saved, history is loaded or cleared, and a kill's record is saved: the History
+	 * tab reads the list again. T-218: the Fight tab is no longer forced to build again: what these change is in its key
+	 * (the history's size and newest fight, and whether the kill on show has its record), so a kill's two calls (saved,
+	 * then recorded) build it once, when its record is in.
 	 */
 	void refresh()
 	{
-		dirty = true;
-		SwingUtilities.invokeLater(historyTab::refresh);
+		// T-218: History is rebuilt only while it's on show; hidden, its next show rebuilds it (its tab's select does).
+		SwingUtilities.invokeLater(this::refreshHistoryIfShown);
+	}
+
+	/** T-218: History's rebuild, only while it's the tab on show. Swing's thread. */
+	private void refreshHistoryIfShown()
+	{
+		if (visibleTab == HISTORY_TAB)
+		{
+			historyTab.refresh();
+		}
 	}
 
 	void setStatus(String text)
@@ -562,24 +573,88 @@ class PvmPerformancePanel extends PluginPanel
 		builtAt = ticks;
 
 		final long building = PerfProbe.start(perf);
-		final PanelSnapshot snapshot;
 		if (tab == TRIP_TAB)
 		{
-			snapshot = new PanelSnapshot(null, SidePanelModel.trip(readTrip(trip, history, head, fighting ? display : null)));
+			// The Trip tab reads saved rooms and the running one deeply as it builds: built here, as before (T-218).
+			final PanelSnapshot snapshot = new PanelSnapshot(null, SidePanelModel.trip(readTrip(trip, history, head,
+				fighting ? display : null)));
+			PerfProbe.stop(perf, PerfProbe.Slot.PANEL_BUILD, building);
+			SwingUtilities.invokeLater(() -> apply(snapshot));
+			return;
 		}
-		else
+		// T-218: the client thread copies what the build needs (the read, then SidePanelCopy); the build runs on the
+		// panel's own thread, and its snapshot goes to Swing's.
+		final SidePanelModel.Input in = SidePanelCopy.freeze(read(fight, display, room, raid, whole, pre, history));
+		if (holdForRecord(in, room, whole))
 		{
-			final SidePanelModel.Input in = read(fight, display, room, raid, whole, pre, history);
-			// T-176: the party with the Fight tab, in a party or with the board holding anyone (the dev loopback's echo
-			// too); out of one, an empty party, so the party's block goes.
-			// A read that clashed with a member coming or going (rare) keeps what's shown, and reads again next tick.
-			final PanelSnapshot.PartyTab party = partyMembers != null || board != null && !board.isEmpty()
-				? SidePanelParty.party(readParty(fight, display, room, raid, whole, pre, false))
-				: partyClashed ? null : SidePanelParty.party(new SidePanelParty.Input());
-			snapshot = new PanelSnapshot(SidePanelModel.fight(in), null, party);
+			// T-218: a kill whose record is still being saved waits for it (a few ticks at most), so the kill's card,
+			// standing and badges come in one snapshot and one apply, not two.
+			dirty = true;
+			lastKey = null;
+			PerfProbe.stop(perf, PerfProbe.Slot.PANEL_BUILD, building);
+			return;
 		}
+		// T-176: the party with the Fight tab, in a party or with the board holding anyone (the dev loopback's echo
+		// too); out of one, an empty party, so the party's block goes.
+		// A read that clashed with a member coming or going (rare) keeps what's shown, and reads again next tick.
+		final SidePanelParty.Input partyIn = partyMembers != null || board != null && !board.isEmpty()
+			? readParty(fight, display, room, raid, whole, pre, false)
+			: partyClashed ? null : new SidePanelParty.Input();
 		PerfProbe.stop(perf, PerfProbe.Slot.PANEL_BUILD, building);
-		SwingUtilities.invokeLater(() -> apply(snapshot));
+		builder.submit(() -> new PanelSnapshot(SidePanelModel.fight(in), null, party(partyIn)), this::apply);
+	}
+
+	/** T-218: the party's build, on the panel's thread: the members' Fight panels first, then the board. */
+	private static PanelSnapshot.PartyTab party(SidePanelParty.Input in)
+	{
+		if (in == null)
+		{
+			return null;
+		}
+		if (in.panels != null)
+		{
+			in.panels.run();
+		}
+		return SidePanelParty.party(in);
+	}
+
+	/** T-218: the build thread. */
+	private final SidePanelBuilder builder = new SidePanelBuilder();
+	/** T-218: the tick a kill began waiting for its record; -1 when none waits. Client thread. */
+	private long heldSince = -1;
+	/** T-218: how long a kill waits for its record before it shows without it (a slow save): 3 s. */
+	static final int RECORD_WAIT_TICKS = 5;
+
+	/**
+	 * T-218: whether to wait a tick before showing this kill: killed, its record (T-187) not saved yet, and a kill the
+	 * record will take ({@link LedgerHistory#counts}: a counted boss kill, not a raid's); for at most
+	 * {@link #RECORD_WAIT_TICKS}. Client thread.
+	 */
+	private boolean holdForRecord(SidePanelModel.Input in, Encounter room, boolean whole)
+	{
+		if (!waitsForRecord(in, room, whole, plugin.getRecords() != null))
+		{
+			heldSince = -1;
+			return false;
+		}
+		if (heldSince < 0)
+		{
+			heldSince = ticks;
+		}
+		return holds(ticks - heldSince);
+	}
+
+	/** T-218: a killed room the record will take, before its standing is in; {@code records}: whether they've loaded. */
+	static boolean waitsForRecord(SidePanelModel.Input in, Encounter room, boolean whole, boolean records)
+	{
+		return in.killed && in.standing == null && !whole && room != null && room.getRaid() == null && records
+			&& LedgerHistory.counts(room, java.util.Collections.<Fight>emptySet());
+	}
+
+	/** T-218: a kill waiting {@code ticksWaited} for its record still waits. */
+	static boolean holds(long ticksWaited)
+	{
+		return ticksWaited < RECORD_WAIT_TICKS;
 	}
 
 	/**
@@ -646,6 +721,9 @@ class PvmPerformancePanel extends PluginPanel
 					room == null ? 0 : room.getFights().size(), room == null || whole ? 0 : room.getKills()));
 			}
 		}
+		// T-218: whether the kill on show has its record yet (T-187's standing), in place of the refresh that forced a build.
+		final BossRecords records = plugin.getRecords();
+		key.add(room != null && room.isKilled() && records != null && records.standing(room) != null);
 		final SessionTotals t = plugin.getSession();
 		key.addAll(Arrays.asList(t.getCombatTicks(), t.getDamageDealt(), t.getSumExpectedAverageHit(), t.getAttacksMade(),
 			t.getDamageTaken(), t.getThrallDamage(), t.getDotDamage(), t.getReflectDamage(), t.getTicksLost(), t.getKills(),
@@ -1101,6 +1179,7 @@ class PvmPerformancePanel extends PluginPanel
 			partySeenScope = scopeKey;
 		}
 		final java.util.Set<Long> present = new java.util.HashSet<>();
+		final List<Runnable> panels = new ArrayList<>();
 		for (PartyBoard.View v : views)
 		{
 			final SidePanelParty.Member m = member(v, raidScope, in.scope, since, light);
@@ -1117,7 +1196,9 @@ class PvmPerformancePanel extends PluginPanel
 			{
 				// T-130 review: every member's, so a click shows theirs at once, never the compact breakdown first.
 				// A room's are built once per message; a live member's are the live update's few cards.
-				memberPanels.attach(m, v.fights, in.itemNames);
+				// T-218: built with the snapshot on the panel's thread (the board's view is a copy).
+				final java.util.Map<String, LuckVsSkillRoom> fights = v.fights;
+				panels.add(() -> memberPanels.attach(m, fights, in.itemNames));
 			}
 			in.members.add(m);
 			present.add(v.memberId);
@@ -1132,6 +1213,27 @@ class PvmPerformancePanel extends PluginPanel
 				in.members.add(gone);
 			}
 		}
+		// T-218: the build runs on the panel's thread, and item names are the client thread's to look up: every attack
+		// row's name now, from the map, so the build only reads it.
+		if (!light)
+		{
+			final java.util.Map<Integer, String> names = new java.util.HashMap<>();
+			for (SidePanelParty.Member m : in.members)
+			{
+				if (m.figures != null)
+				{
+					for (LuckVsSkillUpdate.Row r : m.figures.rows())
+					{
+						if (r.i >= 0)
+						{
+							names.computeIfAbsent(r.i, in.itemNames::apply);
+						}
+					}
+				}
+			}
+			in.itemNames = id -> names.getOrDefault(id, "item " + id);
+		}
+		in.panels = panels.isEmpty() ? null : () -> panels.forEach(Runnable::run);
 		return in;
 	}
 

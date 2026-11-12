@@ -317,10 +317,32 @@ final class SidePanelParts
 
 		void set(List<PanelSnapshot.Row> rows)
 		{
+			// T-218: a row more or fewer (the first hit of a kind taken) is added or taken away here, one layout for the
+			// card's height, never a rebuild of its section or the tab.
+			if (rows.size() != lines.size())
+			{
+				while (lines.size() > rows.size())
+				{
+					remove(lines.remove(lines.size() - 1));
+				}
+				while (lines.size() < rows.size())
+				{
+					final Line l = new Line(rows.get(lines.size()));
+					lines.add(l);
+					add(l);
+				}
+				relayout(this);
+			}
 			for (int i = 0; i < lines.size() && i < rows.size(); i++)
 			{
 				place(lines.get(i), rows.get(i), i);
 			}
+		}
+
+		/** T-218: its lines, for tests. */
+		int lines()
+		{
+			return lines.size();
 		}
 
 		/**

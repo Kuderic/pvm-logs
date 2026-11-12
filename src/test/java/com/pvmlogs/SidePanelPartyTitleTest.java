@@ -166,8 +166,11 @@ public class SidePanelPartyTitleTest
 		assertFalse(texts(panels).stream().anyMatch(x -> x.startsWith("Zebak")));
 		assertFalse(texts(panels).stream().anyMatch(x -> x.contains("900 HP")));
 		assertTrue(texts(panels).contains("Luck"));
-		assertTrue(panels.getComponent(0) instanceof SidePanelSection);
-		assertEquals("damage", ((SidePanelSection) panels.getComponent(0)).id());
+		// T-218: the first thing on show (a section's slot has an invisible mark before it).
+		final Component first = java.util.Arrays.stream(panels.getComponents()).filter(Component::isVisible).findFirst()
+			.get();
+		assertTrue(first instanceof SidePanelSection);
+		assertEquals("damage", ((SidePanelSection) first).id());
 		// The title stays the Fight tab's, still above.
 		assertSame(title.getClass(), titleOf(fight).getClass());
 		// The meter's header: the party's DPS, the room's name and clock left to the title.
