@@ -831,21 +831,44 @@ final class PanelSnapshot
 		/** T-081: time a boss's mechanic forced (T-074): neutral, neither kept nor a cost, apart from eating. */
 		MECHANICS,
 		/**
-		 * Only as a row's swatch (T-042): the time luck saved, drawn on the bar as
-		 * the stretch past your clock, dimmed under light stripes.
+		 * The time luck saved (T-042): the bar's last stretch, past your clock, best play dimmed under luck's stripes. T-214:
+		 * a segment of its own, so the bar and its legend list the same things in the same order.
 		 */
-		LUCK_FASTER
+		LUCK_FASTER;
+
+		/** T-214: a stretch skill lost (idle, avoidable eating, the setup parts): the bar's orange, the folded line's "skill". */
+		boolean skill()
+		{
+			return this == COST || this == MINOR_COST;
+		}
+
+		/** T-214: luck's stretch, in luck's violet. */
+		boolean luck()
+		{
+			return this == LUCK_SLOWER || this == LUCK_AVERAGE || this == LUCK_FASTER;
+		}
 	}
 
 	static final class Segment
 	{
 		final double seconds;
 		final Fill fill;
+		/**
+		 * T-214: whether the legend lists it. A listed stretch too thin to see is still drawn 1 px wide, in its place; an
+		 * unlisted one (a part under a tick, under 1 damage) is drawn at its own width only.
+		 */
+		final boolean listed;
 
 		Segment(double seconds, Fill fill)
 		{
+			this(seconds, fill, true);
+		}
+
+		Segment(double seconds, Fill fill, boolean listed)
+		{
 			this.seconds = seconds;
 			this.fill = fill;
+			this.listed = listed;
 		}
 	}
 
@@ -898,8 +921,11 @@ final class PanelSnapshot
 		final double clock;
 		/** Seconds the rolls saved (the dimmed, striped stretch past the clock), 0 for none. */
 		final double luckSaved;
-		/** The stripes' colour over that stretch: Better, or the average grey in the middle half. */
-		final Color luckSavedColour;
+		/**
+		 * T-214: luck's stripes on the bar and its swatch, saved or cost: luck's violet in its roll's strength (T-194), never
+		 * skill's orange or Better's green.
+		 */
+		final Color luckStripe;
 		/** The tick's label: your clock, as the title shows it ({@code 1:16}). */
 		final String clockLabel;
 		/** The bar's end when luck saved time ({@code 1:31 at average luck}); null when it didn't. */
@@ -912,20 +938,37 @@ final class PanelSnapshot
 		/** One line in the average's place ("not a kill, so no average to compare"), or null. */
 		final String note;
 
-		TimeBudget(List<Segment> segments, double total, double clock, double luckSaved, Color luckSavedColour,
+		TimeBudget(List<Segment> segments, double total, double clock, double luckSaved, Color luckStripe,
 			String clockLabel, String endLabel, double marker, List<BudgetRow> rows, List<Row> average, String note)
 		{
 			this.segments = list(segments);
 			this.total = total;
 			this.clock = clock;
 			this.luckSaved = luckSaved;
-			this.luckSavedColour = luckSavedColour;
+			this.luckStripe = luckStripe;
 			this.clockLabel = clockLabel;
 			this.endLabel = endLabel;
 			this.marker = marker;
 			this.rows = list(rows);
 			this.average = list(average);
 			this.note = note;
+		}
+
+		/**
+		 * T-214: the seconds the bar draws as skill's (idle, avoidable eating, the setup parts): the folded line's "skill".
+		 * The same as {@code SidePanelModel.lostSeconds}: the setup parts split the setup's seconds exactly.
+		 */
+		double skillSeconds()
+		{
+			double s = 0;
+			for (Segment seg : segments)
+			{
+				if (seg.fill.skill() && seg.seconds > 0)
+				{
+					s += seg.seconds;
+				}
+			}
+			return s;
 		}
 
 		/** What the segments add up to: the clock when luck cost time, T + L when it saved some. */
@@ -1576,8 +1619,8 @@ final class PanelSnapshot
 	}
 
 	/**
-	 * T-196: a folded section's small picture: Luck's mini 1 to 100 track with the roll, Where the time went's bar
-	 * (perfect fight, lost, luck as a stripe), Your play's grade chip.
+	 * T-196: a folded section's small picture: Luck's mini 1 to 100 track with the roll, Where the time went's bar, Your
+	 * play's grade chip. T-214: the time's bar is the open section's, its segments, order and colours, drawn small.
 	 */
 	static final class Mark
 	{
@@ -1588,10 +1631,9 @@ final class PanelSnapshot
 
 		final Kind kind;
 		final int roll;
-		/** TIME: the shares of the bar, perfect fight, lost and luck (its stretch, saved or cost). */
-		final double kept;
-		final double lost;
-		final double luck;
+		/** TIME (T-214): the open section's bar, drawn by the same painter at 6 px. */
+		final TimeBudget budget;
+		/** TIME: whether luck saved time (its stretch past the clock). */
 		final boolean luckSaved;
 		/** GRADE: the letter and its colour. */
 		final String grade;
@@ -1606,29 +1648,26 @@ final class PanelSnapshot
 		 */
 		final Text[] runs;
 
-		private Mark(Kind kind, int roll, double kept, double lost, double luck, boolean luckSaved, String grade, Color colour)
+		private Mark(Kind kind, int roll, TimeBudget budget, String grade, Color colour)
 		{
-			this(kind, roll, kept, lost, luck, luckSaved, grade, colour, new double[0], new Color[0]);
+			this(kind, roll, budget, grade, colour, new double[0], new Color[0]);
 		}
 
-		private Mark(Kind kind, int roll, double kept, double lost, double luck, boolean luckSaved, String grade, Color colour,
-			double[] shares, Color[] colours)
+		private Mark(Kind kind, int roll, TimeBudget budget, String grade, Color colour, double[] shares, Color[] colours)
 		{
-			this(kind, roll, kept, lost, luck, luckSaved, grade, colour, shares, colours, new Text[0]);
+			this(kind, roll, budget, grade, colour, shares, colours, new Text[0]);
 		}
 
-		private Mark(Kind kind, int roll, double kept, double lost, double luck, boolean luckSaved, String grade, Color colour,
-			double[] shares, Color[] colours, Text[] runs)
+		private Mark(Kind kind, int roll, TimeBudget budget, String grade, Color colour, double[] shares, Color[] colours,
+			Text[] runs)
 		{
 			this.runs = runs;
 			this.shares = shares;
 			this.colours = colours;
 			this.kind = kind;
 			this.roll = roll;
-			this.kept = kept;
-			this.lost = lost;
-			this.luck = luck;
-			this.luckSaved = luckSaved;
+			this.budget = budget;
+			this.luckSaved = budget != null && budget.luckSaved > 0;
 			this.grade = grade;
 			this.colour = colour;
 		}
@@ -1636,22 +1675,23 @@ final class PanelSnapshot
 		/** T-199: this picture with its summary in coloured runs. */
 		Mark withRuns(Text... runs)
 		{
-			return new Mark(kind, roll, kept, lost, luck, luckSaved, grade, colour, shares, colours, runs.clone());
+			return new Mark(kind, roll, budget, grade, colour, shares, colours, runs.clone());
 		}
 
 		static Mark luck(int roll)
 		{
-			return new Mark(Kind.LUCK, roll, 0, 0, 0, false, null, null);
+			return new Mark(Kind.LUCK, roll, null, null, null);
 		}
 
-		static Mark time(double kept, double lost, double luck, boolean luckSaved)
+		/** T-214: the open section's bar, small. */
+		static Mark time(TimeBudget budget)
 		{
-			return new Mark(Kind.TIME, -1, kept, lost, luck, luckSaved, null, null);
+			return new Mark(Kind.TIME, -1, budget, null, null);
 		}
 
 		static Mark grade(String grade, Color colour)
 		{
-			return new Mark(Kind.GRADE, -1, 0, 0, 0, false, grade, colour);
+			return new Mark(Kind.GRADE, -1, null, grade, colour);
 		}
 
 		/** T-198: Damage's sources, biggest first. */
@@ -1673,7 +1713,7 @@ final class PanelSnapshot
 				f[i] = shown.get(i).shareFraction;
 				c[i] = shown.get(i).colour;
 			}
-			return new Mark(Kind.SHARES, -1, 0, 0, 0, false, null, null, f, c);
+			return new Mark(Kind.SHARES, -1, null, null, null, f, c);
 		}
 	}
 
@@ -1681,8 +1721,8 @@ final class PanelSnapshot
 	 * T-188 (Eric, 2026-11-09: "let's choose A for all of them"), redrawn by T-196's clarity pass (Eric approved,
 	 * 21:5x) and T-198 (after Eric played it: "too wordy"): the kill card, in place of the Fight tab's title and four
 	 * tiles. Glance first, words on hover: three tiles, Time, Skill and Luck, each a number with its scale and one short
-	 * line, every explanation in its tooltip; the badges as icon chips. Live: the clock, skill so far with the fight's
-	 * idle strip, luck's word so far. Ticks are written as seconds throughout. Painted at the height its blocks need ({@code SidePanelKillCard}); which blocks it has is
+	 * line, every explanation in its tooltip; the badges as icon chips. Live: the clock, skill so far with your
+	 * last 10 attacks (T-214), luck's word so far. Ticks are written as seconds throughout. Painted at the height its blocks need ({@code SidePanelKillCard}); which blocks it has is
 	 * {@link #structure()}.
 	 *
 	 * <p>The header is fixed at construction; the blocks are set once by {@code SidePanelModel.card} on the client
@@ -1730,8 +1770,12 @@ final class PanelSnapshot
 		/** {@code −1.1 s} in orange; null when nothing was lost. */
 		String lost;
 		String skillTip;
-		/** Live: the fight so far in buckets, oldest first: {@link #STRIP_IDLE}, {@link #STRIP_EATING} or 0. */
-		byte[] strip;
+		/**
+		 * T-214 (Eric's pick, A): live, your last {@link #CELLS} attacks' delays in ticks, oldest first: 0 on time, 1 a tick
+		 * late, 2 or more. Idle ticks only: eating and a mechanic's excused ticks aren't late. Empty before the first; null
+		 * without the fight's timeline.
+		 */
+		int[] attacks;
 
 		// ---- T-199: DPS ----
 		/**
@@ -1767,8 +1811,8 @@ final class PanelSnapshot
 		/** T-189: the badges earned, only after a kill and only when earned; empty for none. */
 		List<Badge> badges = Collections.emptyList();
 
-		static final byte STRIP_IDLE = 1;
-		static final byte STRIP_EATING = 2;
+		/** T-214: the live Skill tile's cells, one an attack. */
+		static final int CELLS = 10;
 
 		KillCard(boolean live, String boss, Color tint, int icon, String sub, List<String> subShort, String corner,
 			String clock)
@@ -1790,10 +1834,10 @@ final class PanelSnapshot
 			return this;
 		}
 
-		/** Live or after, and what takes room: the strip live, the badges after. Every other line is always there. */
+		/** Live or after, and what takes room: the cells live, the badges after. Every other line is always there. */
 		String structure()
 		{
-			return live ? "l" + (strip == null ? "" : "s") : "k" + (badges.isEmpty() ? "" : "B" + badges.size());
+			return live ? "l" + (attacks == null ? "" : "s") : "k" + (badges.isEmpty() ? "" : "B" + badges.size());
 		}
 	}
 

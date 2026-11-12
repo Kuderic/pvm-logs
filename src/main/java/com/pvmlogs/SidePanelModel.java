@@ -1384,10 +1384,10 @@ final class SidePanelModel
 		{
 			marks.put("curve", PanelSnapshot.Mark.luck(roll(n.percentile)));
 		}
-		final PanelSnapshot.Mark time = timeMark(n, avoidable, warning);
-		if (b.budget != null && time != null)
+		if (b.budget != null && b.budget.total > 0)
 		{
-			marks.put("budget", time.withRuns(budgetRuns(n, avoidable, warning)));
+			// T-214: the open section's bar, small.
+			marks.put("budget", PanelSnapshot.Mark.time(b.budget).withRuns(budgetRuns(b.budget, n, warning)));
 		}
 		if (b.card != null && b.card.grade != null)
 		{
@@ -1505,28 +1505,6 @@ final class SidePanelModel
 	private static String costNote(double damage)
 	{
 		return Double.isNaN(damage) || damage < 0.5 ? "" : "-" + LedgerRows.number(Math.round(damage)) + " dmg";
-	}
-
-	/**
-	 * T-196: Where the time went's small bar, as shares of its length: the perfect fight, what was lost, and luck's
-	 * stretch, the part past your clock when it saved time, after the loss when it cost some. Null without luck.
-	 */
-	static PanelSnapshot.Mark timeMark(LedgerRows.Numbers n, boolean avoidable, boolean warning)
-	{
-		if (warning || Double.isNaN(n.luck) || n.clock <= 0)
-		{
-			return null;
-		}
-		final double lost = Math.max(0, lostSeconds(n, avoidable));
-		final double average = n.clock + n.luck;
-		final boolean saved = n.luck >= 0;
-		final double total = saved ? average : n.clock;
-		if (total <= 0)
-		{
-			return null;
-		}
-		final double perfect = Math.max(0, average - lost);
-		return PanelSnapshot.Mark.time(perfect / total, lost / total, Math.abs(n.luck) / total, saved);
 	}
 
 	// ---- T-188: the kill card ----
@@ -2112,10 +2090,12 @@ final class SidePanelModel
 	}
 
 	/**
-	 * T-198: Skill so far, with the fight's idle strip; the rest on hover. T-201 (Eric: "why does it say uptime during
-	 * the fight"): the Skill score so far ({@link #shownExecution}: {@code Numbers.executionLive} while the fight runs,
-	 * Skill without avoidable eating, which is judged at the kill), the same kind of number as after the kill, and the
-	 * time lost so far worked out the same way. Uptime and idle time on hover. Still no grade live.
+	 * T-198: Skill so far; the rest on hover. T-201 (Eric: "why does it say uptime during the fight"): the Skill score so
+	 * far ({@link #shownExecution}: {@code Numbers.executionLive} while the fight runs, Skill without avoidable eating,
+	 * which is judged at the kill), the same kind of number as after the kill, and the time lost so far worked out the
+	 * same way. Uptime and idle time on hover. Still no grade live. T-214 (Eric's pick, A: "Lets go with A"): under it,
+	 * your last 10 attacks, each on time or how late, in place of the whole fight's idle strip, whose 1-tick idles were
+	 * under a pixel.
 	 */
 	private static void livePlay(PanelSnapshot.KillCard c, Input in, LedgerRows.Numbers n)
 	{
@@ -2123,36 +2103,98 @@ final class SidePanelModel
 		c.skill = Double.isNaN(score) ? null : LedgerRows.partPercent(score);
 		final double lost = Math.max(0, lostSeconds(n, false));
 		c.lost = lost >= 0.05 ? "-" + secs(lost) : null;
-		c.strip = in.view == null ? null : strip(in.view.states, STRIP_BUCKETS);
+		final Delays d = in.view == null ? null : delays(in.view, PanelSnapshot.KillCard.CELLS);
+		c.attacks = d == null ? null : d.last;
 		final double idle = Double.isNaN(n.uptimeCost) ? 0 : n.uptimeCost;
 		c.skillTip = tipLines(c.skill == null ? null : "Skill so far " + c.skill + " of a perfect fight.",
+			d == null || d.last.length == 0 ? null : lastAttacksLine(d.last),
+			d == null ? null : "Late so far: " + d.late + " of " + d.attacks + " attacks.",
 			Double.isNaN(n.uptime) ? null : "Uptime " + LedgerRows.partPercent(n.uptime) + ", idle " + secs(idle) + " of "
-				+ secs(n.clock) + " (off cooldown with no attack). The strip is the fight so far, idle moments in orange.",
-			"Avoidable damage is counted at the kill.", c.lost == null ? null : SIGN_RULE);
+				+ secs(n.clock) + " (off cooldown with no attack).",
+			d == null ? null : CELLS_KEY, "Avoidable damage is counted at the kill.", c.lost == null ? null : SIGN_RULE);
 	}
 
-	/** T-196: the live strip's buckets at most: about one per pixel of the card. */
-	static final int STRIP_BUCKETS = 200;
+	/** T-214: the cells' colours, said on their hover. */
+	static final String CELLS_KEY = "Blue-grey: on time. Light orange: 0.6 s late. Orange: 1.2 s or more. Eating and a"
+		+ " boss's mechanics don't count as late.";
 
-	/** T-196: the fight's ticks in at most {@code buckets} buckets: idle where any tick in it was, else eating, else 0. */
-	static byte[] strip(byte[] states, int buckets)
+	/** T-214: {@code Your last 10 attacks, seconds late, newest last: 0, 0, 0.6, 0, 1.2.} */
+	static String lastAttacksLine(int[] last)
 	{
-		final int ticks = states.length;
-		final int size = Math.min(ticks, buckets);
-		final byte[] out = new byte[size];
-		for (int i = 0; i < ticks; i++)
+		final StringBuilder out = new StringBuilder("Your last " + (last.length == 1 ? "attack" : last.length + " attacks")
+			+ ", seconds late" + (last.length == 1 ? "" : ", newest last") + ": ");
+		for (int i = 0; i < last.length; i++)
 		{
-			final int k = (int) ((long) i * size / ticks);
-			if (states[i] == FightTimeline.LOST)
+			if (i > 0)
 			{
-				out[k] = PanelSnapshot.KillCard.STRIP_IDLE;
+				out.append(", ");
 			}
-			else if (states[i] == FightTimeline.EATING && out[k] == 0)
+			final String s = secs(last[i] * LedgerRows.SECONDS_PER_TICK);
+			out.append(s, 0, s.length() - 2);
+		}
+		return out.append('.').toString();
+	}
+
+	/** T-214: each attack's delay over a fight's timeline: the last few, and how many were late in all. */
+	static final class Delays
+	{
+		/** The last attacks' delays in ticks, oldest first. */
+		final int[] last;
+		/** Attacks a tick or more late, of {@link #attacks}. */
+		final int late;
+		final int attacks;
+
+		Delays(int[] last, int late, int attacks)
+		{
+			this.last = last;
+			this.late = late;
+			this.attacks = attacks;
+		}
+	}
+
+	/**
+	 * T-214: each attack's delay, the idle ticks ({@link FightTimeline#LOST}) between it and the attack before: off
+	 * cooldown with no attack, so how many ticks after its due tick it went out. Eating's ticks ({@link
+	 * FightTimeline#EATING}), a mechanic's excused ones ({@link FightTimeline#MECHANIC}), the adds' and the time between
+	 * phases aren't idle, so they don't make an attack late. Each attack is booked a fixed lag after its throw, so the
+	 * ticks between two bookings are the ticks between the two throws (T-210 books a throw proven late with its late ticks
+	 * as idle ones). The first attack is on time: the walk to the boss isn't counted. One pass over the ticks.
+	 */
+	static Delays delays(FightTimeline.View v, int keep)
+	{
+		final List<FightTimeline.Attack> attacks = v.attacks;
+		final int count = attacks.size();
+		final int shown = Math.min(keep, count);
+		final int[] last = new int[shown];
+		final byte[] states = v.states;
+		int late = 0;
+		int previous = -1;
+		for (int k = 0; k < count; k++)
+		{
+			final int at = Math.min(states.length, attacks.get(k).tick - v.startTick);
+			int idle = 0;
+			if (k > 0)
 			{
-				out[k] = PanelSnapshot.KillCard.STRIP_EATING;
+				for (int i = Math.max(0, previous + 1); i < at; i++)
+				{
+					if (states[i] == FightTimeline.LOST)
+					{
+						idle++;
+					}
+				}
+			}
+			previous = Math.max(previous, at);
+			if (idle > 0)
+			{
+				late++;
+			}
+			final int slot = k - (count - shown);
+			if (slot >= 0)
+			{
+				last[slot] = idle;
 			}
 		}
-		return out;
+		return new Delays(last, late, count);
 	}
 
 	/** T-198: Luck so far: one word, its strength, no number; the damage against average rolls on hover. */
@@ -2240,7 +2282,7 @@ final class SidePanelModel
 		{
 			// T-199: each number with its label, "skill −1.1 s · luck +10 s"; the mark paints them in their colours.
 			final StringBuilder line = new StringBuilder();
-			final Text[] runs = budgetRuns(n, avoidable, warning);
+			final Text[] runs = budgetRuns(b.budget, n, warning);
 			for (Text r : runs)
 			{
 				line.append(r.text);
@@ -2272,10 +2314,12 @@ final class SidePanelModel
 	 * T-199 (Eric: "why are there two numbers, one plus and one minus, with no labels?"): Where the time went's folded
 	 * line, each number with its label: {@code skill −1.1 s} in skill's loss orange ({@code skill ±0 s} muted with no
 	 * loss), then {@code luck +10 s} in luck's violet. One sign rule on the panel: + is time gained, − time lost.
+	 * T-214: skill's figure is what the bar draws as skill's ({@link PanelSnapshot.TimeBudget#skillSeconds}), so the
+	 * number matches the orange above it.
 	 */
-	static Text[] budgetRuns(LedgerRows.Numbers n, boolean avoidable, boolean warning)
+	static Text[] budgetRuns(PanelSnapshot.TimeBudget b, LedgerRows.Numbers n, boolean warning)
 	{
-		final double lost = Math.max(0, lostSeconds(n, avoidable));
+		final double lost = b.skillSeconds();
 		final Text skill = lost >= 0.05 ? Text.small("skill -" + secs(lost), SidePanelStyle.COST)
 			: Text.small("skill \u00b10 s", SidePanelStyle.MUTED);
 		if (warning || Double.isNaN(n.luck))
@@ -3108,45 +3152,12 @@ final class SidePanelModel
 		// before the tick and best play's last L seconds go past it, dimmed (Eric, 2026-10-27, after T-042). Up to the
 		// tick: (B - L) + Cu + Ce + Cb + Cp + Cg + U = T.
 		final double bestBeforeTick = Math.max(0, best - luckSaved);
-		final List<Segment> segments = new ArrayList<>();
-		segments.add(new Segment(bestBeforeTick, Fill.KEPT));
-		for (int i = 0; i < costs.length; i++)
-		{
-			segments.add(new Segment(costs[i], LedgerRows.isCosting(costs[i], n.clock) ? Fill.COST : Fill.MINOR_COST));
-			if (i == 0)
-			{
-				if (ca > 0)
-				{
-					segments.add(new Segment(ca, caCosting ? Fill.COST : Fill.MINOR_COST));
-				}
-				segments.add(new Segment(e - ca, Fill.EATING));
-				if (m > 0)
-				{
-					// Only where a boss's mechanic forced some: the bar of every other fight is as it was.
-					segments.add(new Segment(m - stall, Fill.MECHANICS));
-					if (stall > 0)
-					{
-						segments.add(new Segment(stall, Fill.MECHANICS));
-					}
-				}
-			}
-		}
-		segments.add(new Segment(Math.max(0, -l), averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER));
-		segments.add(new Segment(u, Fill.UNSCORED));
-		if (luckSaved > 0)
-		{
-			segments.add(new Segment(Math.max(0, best) - bestBeforeTick, Fill.KEPT));
-		}
-		final double total = t + Math.max(0, l);
-		// T-042: the bar marks your real time with a tick; when luck saved time it runs on to the time at average luck,
-		// labelled. Not when the two would read as the same clock (luck saved under a second).
-		final String clockLabel = LedgerRows.duration(t);
-		// T-198 (Eric: "too wordy"): under the card, a word or two and seconds; the explanations stay in tooltips.
-		final String endLabel = luckSaved > 0 && !LedgerRows.duration(total).equals(clockLabel)
-			? LedgerRows.duration(total) + " avg luck" : null;
-
-		final List<BudgetRow> rows = new ArrayList<>();
-		rows.add(new BudgetRow(Fill.KEPT, Text.small("perfect", SidePanelStyle.BODY), null,
+		// T-214 (Eric: "Where the time went score bar changes what makes up the bar when you expand it"): one list, the bar's
+		// segments and the legend's rows together, in the bar's order: perfect, skill's (idle, avoidable eating, the setup
+		// parts), the neutral time (eating, mechanics, the stall), the adds, and luck last, its stretch inside your time
+		// when it cost some and past the tick when it saved some. The folded bar draws the same list small.
+		final Budget out = new Budget();
+		out.add(bestBeforeTick, Fill.KEPT, new BudgetRow(Fill.KEPT, Text.small("perfect", SidePanelStyle.BODY), null,
 			Text.small(bestKnown ? SidePanelStyle.roundedDuration(best) : LedgerRows.UNKNOWN, SidePanelStyle.VALUE)));
 		for (int i = 0; i < costs.length; i++)
 		{
@@ -3157,56 +3168,64 @@ final class SidePanelModel
 			// and the overlay have it, its ticks on hover; its stretch of the bar stays its time. Without the damage (a kill
 			// saved before T-117) it keeps its ticks.
 			final long damage = i == 0 ? 0 : setupDamageRounded(setupDamage(n, labels[i]));
+			BudgetRow row = null;
 			if (damage >= 1)
 			{
-				rows.add(new BudgetRow(fill, Text.small(labels[i], SidePanelStyle.BODY), null,
+				row = new BudgetRow(fill, Text.small(labels[i], SidePanelStyle.BODY), null,
 					Text.small("-" + LedgerRows.number(damage) + " dmg", colour),
-					setupTip(labels[i], LedgerRows.ticks(costs[i]), damage)).withValueShort("-" + LedgerRows.number(damage)));
+					setupTip(labels[i], LedgerRows.ticks(costs[i]), damage)).withValueShort("-" + LedgerRows.number(damage));
 			}
 			// T-118 (Eric, 2026-10-30): the time parts in ticks once it rounds to a tick; T-199: "-25 ticks" (the hyphen,
 			// as this view's "-16 dmg" and the overlay have it), time lost, as
 			// the one sign rule has it (+ gained, − lost).
 			else if (LedgerRows.ticks(costs[i]) >= 1)
 			{
-				rows.add(new BudgetRow(fill, Text.small(i == 0 ? "idle" : labels[i], SidePanelStyle.BODY), null,
-					Text.small("-" + secs(costs[i]), colour)));
+				row = new BudgetRow(fill, Text.small(i == 0 ? "idle" : labels[i], SidePanelStyle.BODY), null,
+					Text.small("-" + secs(costs[i]), colour));
 			}
-			// After uptime's row, whether or not that one shows: a fight whose only lost ticks were eating has no uptime row.
-			if (i == 0 && LedgerRows.ticks(ca) >= 1)
+			out.add(costs[i], fill, row);
+			// After idle, whether or not that one shows: skill's stretches side by side.
+			if (i == 0 && ca > 0)
 			{
-				rows.add(new BudgetRow(caCosting ? Fill.COST : Fill.MINOR_COST, Text.small("avoidable eating",
-					SidePanelStyle.BODY), null, Text.small("-" + secs(ca), caCosting
-					? SidePanelStyle.COST : SidePanelStyle.BODY)));
-			}
-			if (i == 0 && LedgerRows.ticks(e - ca) >= 1)
-			{
-				rows.add(new BudgetRow(Fill.EATING, Text.small("eating", SidePanelStyle.BODY), null,
-					Text.small("-" + secs(e - ca), SidePanelStyle.BODY)));
-			}
-			if (i == 0 && LedgerRows.ticks(m - stall) >= 1)
-			{
-				rows.add(new BudgetRow(Fill.MECHANICS, Text.small(MECHANICS, SidePanelStyle.BODY), null,
-					Text.small("-" + secs(m - stall), SidePanelStyle.BODY)));
-			}
-			if (i == 0 && LedgerRows.ticks(stall) >= 1)
-			{
-				rows.add(new BudgetRow(Fill.MECHANICS, Text.small("stall", SidePanelStyle.BODY), null,
-					Text.small("-" + secs(stall), SidePanelStyle.BODY)));
+				out.add(ca, caCosting ? Fill.COST : Fill.MINOR_COST, LedgerRows.ticks(ca) < 1 ? null : new BudgetRow(
+					caCosting ? Fill.COST : Fill.MINOR_COST, Text.small("avoidable eating", SidePanelStyle.BODY), null,
+					Text.small("-" + secs(ca), caCosting ? SidePanelStyle.COST : SidePanelStyle.BODY)));
 			}
 		}
-		// Luck always shows, in the Luck tile's words (Orchestrator, T-034): "luck average (2 s faster)", "luck (14 s
-		// slower)", so a saving doesn't read like a cost. In seconds (T-118, Eric 10:04); the other parts are ticks.
-		// T-042: time luck saved is the striped stretch past your clock, in the middle half too (grey stripes there), and
-		// the row says it's the part past your time.
-		final Fill luckSwatch = luckSaved > 0 ? Fill.LUCK_FASTER : averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER;
-		rows.add(new BudgetRow(luckSwatch, Text.small("luck", SidePanelStyle.BODY), null,
-			Text.small(luckKnown ? luckTime(l) : LedgerRows.UNKNOWN,
-				luckKnown ? luckInk(n) : SidePanelStyle.VALUE)));
+		// The neutral time, after skill's: eating, then a boss's mechanics (only where one forced some), then a stall.
+		out.add(e - ca, Fill.EATING, LedgerRows.ticks(e - ca) < 1 ? null : new BudgetRow(Fill.EATING, Text.small("eating",
+			SidePanelStyle.BODY), null, Text.small("-" + secs(e - ca), SidePanelStyle.BODY)));
+		if (m > 0)
+		{
+			out.add(m - stall, Fill.MECHANICS, LedgerRows.ticks(m - stall) < 1 ? null : new BudgetRow(Fill.MECHANICS,
+				Text.small(MECHANICS, SidePanelStyle.BODY), null, Text.small("-" + secs(m - stall), SidePanelStyle.BODY)));
+			if (stall > 0)
+			{
+				out.add(stall, Fill.MECHANICS, LedgerRows.ticks(stall) < 1 ? null : new BudgetRow(Fill.MECHANICS,
+					Text.small("stall", SidePanelStyle.BODY), null, Text.small("-" + secs(stall), SidePanelStyle.BODY)));
+			}
+		}
 		if (u > 0)
 		{
-			rows.add(new BudgetRow(Fill.UNSCORED, Text.small("adds", SidePanelStyle.BODY),
-				null, Text.small("-" + secs(u), SidePanelStyle.BODY)));
+			out.add(u, Fill.UNSCORED, new BudgetRow(Fill.UNSCORED, Text.small("adds", SidePanelStyle.BODY), null,
+				Text.small("-" + secs(u), SidePanelStyle.BODY)));
 		}
+		// Luck always shows, in the Luck tile's words (Orchestrator, T-034), last. T-042: time luck saved is the striped
+		// stretch past your clock, best play's last L seconds dimmed; luck that cost time is a striped stretch inside it.
+		// T-214: luck in its violet either way, never skill's orange or Better's green.
+		final Fill luckFill = luckSaved > 0 ? Fill.LUCK_FASTER : averageBand ? Fill.LUCK_AVERAGE : Fill.LUCK_SLOWER;
+		out.add(luckSaved > 0 ? Math.max(0, best) - bestBeforeTick : Math.max(0, -l), luckFill, new BudgetRow(luckFill,
+			Text.small("luck", SidePanelStyle.BODY), null, Text.small(luckKnown ? luckTime(l) : LedgerRows.UNKNOWN,
+				luckKnown ? luckInk(n) : SidePanelStyle.VALUE)));
+		final List<Segment> segments = out.segments;
+		final List<BudgetRow> rows = out.rows;
+		final double total = t + Math.max(0, l);
+		// T-042: the bar marks your real time with a tick; when luck saved time it runs on to the time at average luck,
+		// labelled. Not when the two would read as the same clock (luck saved under a second).
+		final String clockLabel = LedgerRows.duration(t);
+		// T-198 (Eric: "too wordy"): under the card, a word or two and seconds; the explanations stay in tooltips.
+		final String endLabel = luckSaved > 0 && !LedgerRows.duration(total).equals(clockLabel)
+			? LedgerRows.duration(total) + " avg luck" : null;
 
 		// Against your average: after a kill only, outside a raid, never under the warning (spec 3.1).
 		final List<Row> average = new ArrayList<>(2);
@@ -3230,9 +3249,25 @@ final class SidePanelModel
 			average.add(new Row(Text.small("with average luck", SidePanelStyle.BODY), Text.small(LedgerRows.duration(
 				n.expectedDuration), SidePanelStyle.BODY)));
 		}
-		return new PanelSnapshot.TimeBudget(segments, total, t, luckSaved,
-			averageBand ? SidePanelStyle.AVERAGE_STRIPE : SidePanelStyle.BETTER, clockLabel, endLabel, marker, rows, average,
-			note);
+		return new PanelSnapshot.TimeBudget(segments, total, t, luckSaved, luckKnown ? luckInk(n) : SidePanelStyle.LUCK,
+			clockLabel, endLabel, marker, rows, average, note);
+	}
+
+	/** T-214: the time bar's segments and the legend's rows, built together in the bar's order. */
+	private static final class Budget
+	{
+		final List<Segment> segments = new ArrayList<>();
+		final List<BudgetRow> rows = new ArrayList<>();
+
+		/** A stretch of the bar, and its row in the legend, or null when the legend leaves it out. */
+		void add(double seconds, Fill fill, BudgetRow row)
+		{
+			segments.add(new Segment(seconds, fill, row != null));
+			if (row != null)
+			{
+				rows.add(row);
+			}
+		}
 	}
 
 	/** T-081: the time budget's and the strip's word for the ticks a boss's mechanic forced (T-074). */

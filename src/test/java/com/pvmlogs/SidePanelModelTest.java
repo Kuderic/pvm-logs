@@ -198,8 +198,9 @@ public class SidePanelModelTest
 		assertEquals(n.clock, b.sum(), 1e-9);
 		assertEquals(n.clock, b.total, 1e-9);
 		assertEquals(0, b.luckSaved, 0);
-		// Best play, then uptime's 15 idle seconds, eating's 4.2 (T-038: 19.2 s between them, as before), stat boost
-		// 2.35 s, then luck's 14.35 s: 157 + 23.4 + 6.5 + 3.7 + 22 px of 213. Best play doesn't move.
+		// Best play, then uptime's 15 idle seconds, stat boost 2.35 s (and prayer and gear), eating's 4.2 (T-038), then
+		// luck's 14.35 s: 157 + 23.4 + 3.7 + 6.5 + 22 px of 213. Best play doesn't move. T-214: skill's stretches side by
+		// side, then the neutral time, luck last.
 		final double[] px = new double[b.segments.size()];
 		for (int i = 0; i < px.length; i++)
 		{
@@ -207,9 +208,10 @@ public class SidePanelModelTest
 		}
 		assertEquals(157, px[0], 0.6);
 		assertEquals(23.4, px[1], 0.1);
-		assertEquals(PanelSnapshot.Fill.EATING, b.segments.get(2).fill);
-		assertEquals(6.5, px[2], 0.1);
-		assertEquals(3.7, px[3], 0.1);
+		assertEquals(3.7, px[2], 0.1);
+		assertEquals(PanelSnapshot.Fill.EATING, b.segments.get(5).fill);
+		assertEquals(6.5, px[5], 0.1);
+		assertTrue(b.segments.get(6).fill.luck());
 		assertEquals(22, px[6], 0.6);
 	}
 
@@ -236,12 +238,14 @@ public class SidePanelModelTest
 		final LedgerRows.Numbers n = new LedgerRows.Numbers(in.scope);
 		final PanelSnapshot.TimeBudget b = tab(in).budget;
 		assertEquals(n.clock, b.sum(), 1e-9);
-		final PanelSnapshot.Segment adds = b.segments.get(b.segments.size() - 1);
+		// T-214: the adds, then luck last.
+		final PanelSnapshot.Segment adds = b.segments.get(b.segments.size() - 2);
 		assertEquals(PanelSnapshot.Fill.UNSCORED, adds.fill);
 		assertEquals(n.clock - n.scoredClock, adds.seconds, 1e-9);
-		final PanelSnapshot.BudgetRow last = b.rows.get(b.rows.size() - 1);
-		assertEquals("adds", last.label.text);
-		assertEquals("-31 s", last.value.text);
+		final PanelSnapshot.BudgetRow addsRow = b.rows.get(b.rows.size() - 2);
+		assertEquals("adds", addsRow.label.text);
+		assertEquals("-31 s", addsRow.value.text);
+		assertEquals("luck", b.rows.get(b.rows.size() - 1).label.text);
 		assertEquals("perfect", b.rows.get(0).label.text);
 	}
 
@@ -465,19 +469,23 @@ public class SidePanelModelTest
 	// ---- T-038: eating as its own stretch of the time budget ----
 
 	@Test
-	public void eatingIsItsOwnNeutralStretchAfterUptime()
+	public void eatingIsItsOwnNeutralStretchAfterSkills()
 	{
 		final PanelSnapshot.TimeBudget b = tab(SidePanelExamples.dead()).budget;
 		// Best play stays 1:41: 136.8 - 14.3 - (15.0 + 4.2 + 2.4) = 100.9 s.
 		assertEquals("1:41", b.rows.get(0).value.text);
 		assertEquals("idle", b.rows.get(1).label.text);
 		assertEquals("-15 s", b.rows.get(1).value.text);
-		final PanelSnapshot.BudgetRow eating = b.rows.get(2);
+		final PanelSnapshot.BudgetRow eating = row(b, "eating");
 		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
-		assertEquals("eating", eating.label.text);
 		assertEquals("-4.2 s", eating.value.text);
 		assertEquals(SidePanelStyle.BODY, eating.value.colour);
-		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
+		assertEquals(4.2, segment(b, PanelSnapshot.Fill.EATING).seconds, 1e-9);
+		// T-214: after skill's rows (idle, the setup parts), as on the bar.
+		for (int i = 1; i < b.rows.indexOf(eating); i++)
+		{
+			assertTrue(b.rows.get(i).label.text, b.rows.get(i).swatch.skill());
+		}
 	}
 
 	@Test
@@ -500,7 +508,7 @@ public class SidePanelModelTest
 		final SidePanelModel.Input in = SidePanelExamples.raid();
 		final PanelSnapshot.TimeBudget b = tab(in).budget;
 		assertFalse(b.rows.stream().anyMatch(r -> r.swatch == PanelSnapshot.Fill.EATING));
-		assertEquals(0, b.segments.get(2).seconds, 0);
+		assertEquals(0, segment(b, PanelSnapshot.Fill.EATING).seconds, 0);
 	}
 
 	@Test
@@ -513,12 +521,21 @@ public class SidePanelModelTest
 		s.ticksLostEating = 7;
 		final PanelSnapshot.TimeBudget b = tab(in).budget;
 		assertFalse(b.rows.stream().anyMatch(r -> r.label.text.equals("idle")));
-		final PanelSnapshot.BudgetRow eating = b.rows.get(1);
+		final PanelSnapshot.BudgetRow eating = row(b, "eating");
 		assertEquals(PanelSnapshot.Fill.EATING, eating.swatch);
-		assertEquals("eating", eating.label.text);
 		assertEquals("-4.2 s", eating.value.text);
 		assertEquals(0, b.segments.get(1).seconds, 0);
-		assertEquals(4.2, b.segments.get(2).seconds, 1e-9);
+		assertEquals(4.2, segment(b, PanelSnapshot.Fill.EATING).seconds, 1e-9);
 		assertEquals(new LedgerRows.Numbers(s).clock, b.sum(), 1e-9);
+	}
+
+	private static PanelSnapshot.Segment segment(PanelSnapshot.TimeBudget b, PanelSnapshot.Fill fill)
+	{
+		return b.segments.stream().filter(x -> x.fill == fill).findFirst().get();
+	}
+
+	private static PanelSnapshot.BudgetRow row(PanelSnapshot.TimeBudget b, String label)
+	{
+		return b.rows.stream().filter(r -> r.label.text.equals(label)).findFirst().get();
 	}
 }
