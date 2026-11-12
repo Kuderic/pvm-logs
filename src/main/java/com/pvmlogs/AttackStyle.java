@@ -19,6 +19,17 @@ class AttackStyle
 	 * Invisible boost to the attack roll's effective level: melee and ranged +3
 	 * on accurate and +1 on controlled, magic +2 on accurate.
 	 */
+	/**
+	 * T-221: the type and stance the calc scores with, and the combat tab's name: {@code stab/aggressive (Lunge)}. For the
+	 * {@code expected vs} and {@code ATTACK} lines, which didn't say (Eric's 11-11 Kephri: "i was on stab").
+	 */
+	String label()
+	{
+		final String type = attackType == null ? "?" : attackType.name().toLowerCase(java.util.Locale.ENGLISH);
+		final String stance = combatStyle == null ? "?" : combatStyle.name().toLowerCase(java.util.Locale.ENGLISH);
+		return type + "/" + stance + (displayName == null || displayName.isEmpty() ? "" : " (" + displayName + ")");
+	}
+
 	int attackLevelBonus()
 	{
 		if (attackType == AttackType.MAGIC)

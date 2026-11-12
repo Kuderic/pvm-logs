@@ -5120,6 +5120,59 @@ class CombatCalc
 	}
 
 	// Whether the prayer that was up is at least the one intended for the style.
+	// T-221: the prayers each style's two halves are read from (meleeAccuracyPrayer and meleePrayer, and so on), for the
+	// log. Both halves of one tick come from the same reads, so a line names what the figures used.
+	private static final Prayer[] MELEE_OFFENSIVE = {Prayer.RP_INTENSIFY, Prayer.RP_DECIMATE, Prayer.RP_ANCIENT_STRENGTH,
+		Prayer.RP_TRINITAS, Prayer.ZEAL, Prayer.PIETY, Prayer.CHIVALRY, Prayer.INCREDIBLE_REFLEXES, Prayer.IMPROVED_REFLEXES,
+		Prayer.CLARITY_OF_THOUGHT, Prayer.ULTIMATE_STRENGTH, Prayer.SUPERHUMAN_STRENGTH, Prayer.BURST_OF_STRENGTH};
+	private static final Prayer[] RANGED_OFFENSIVE = {Prayer.RP_INTENSIFY, Prayer.RP_ANNIHILATE, Prayer.RP_ANCIENT_SIGHT,
+		Prayer.RP_TRINITAS, Prayer.RIGOUR, Prayer.DEADEYE, Prayer.EAGLE_EYE, Prayer.HAWK_EYE, Prayer.SHARP_EYE};
+	private static final Prayer[] MAGIC_OFFENSIVE = {Prayer.RP_INTENSIFY, Prayer.RP_VAPORISE, Prayer.RP_ANCIENT_WILL,
+		Prayer.RP_TRINITAS, Prayer.AUGURY, Prayer.MYSTIC_VIGOUR, Prayer.MYSTIC_MIGHT, Prayer.MYSTIC_LORE, Prayer.MYSTIC_WILL};
+
+	/** T-221: the style the figures are worked out for, {@code stab/aggressive (Lunge)}. */
+	String styleLabel()
+	{
+		return attackStyle().label();
+	}
+
+	/**
+	 * T-221: the offensive prayers up for the style the figures use, {@code Piety}, or {@code none}; with the intended
+	 * prayer substituted, its name. What "prayed=false" leaves out: Eric's 11-11 Kephri throw on 5412 was scored with
+	 * Chivalry's halves (accuracy x0.958 and max 47 against Piety's 50), not none.
+	 */
+	String offensivePrayerLabel()
+	{
+		if (intendedPrayer())
+		{
+			return String.valueOf(prayerGoal());
+		}
+		final AttackType type = attackStyle().getAttackType();
+		final Prayer[] read = type == AttackType.MAGIC ? MAGIC_OFFENSIVE
+			: type == AttackType.RANGED ? RANGED_OFFENSIVE : MELEE_OFFENSIVE;
+		final StringBuilder up = new StringBuilder();
+		for (Prayer p : read)
+		{
+			if (prayerActive(p))
+			{
+				up.append(up.length() == 0 ? "" : " + ").append(prayerName(p));
+			}
+		}
+		return up.length() == 0 ? "none" : up.toString();
+	}
+
+	/** T-221: {@code PIETY} as {@code Piety}, {@code RP_DECIMATE} as {@code Decimate}. */
+	static String prayerName(Prayer p)
+	{
+		final String n = p.name().startsWith("RP_") ? p.name().substring(3) : p.name();
+		final StringBuilder out = new StringBuilder();
+		for (String word : n.toLowerCase(java.util.Locale.ENGLISH).split("_"))
+		{
+			out.append(out.length() == 0 ? Character.toUpperCase(word.charAt(0)) + word.substring(1) : " " + word);
+		}
+		return out.toString();
+	}
+
 	boolean hasOffensivePrayer()
 	{
 		final PrayerIdeal.Goal goal = prayerGoal();

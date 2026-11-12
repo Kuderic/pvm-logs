@@ -319,7 +319,11 @@ final class RaidScaling
 		NpcID.AKKHA_ENRAGE_INITIAL, NpcID.AKKHA_ENRAGE, NpcID.AKKHA_ENRAGE_DUMMY,
 		NpcID.AKKHA_SHADOW, NpcID.AKKHA_SHADOW_ENRAGE, NpcID.AKKHA_SHADOW_ENRAGE_DUMMY,
 		NpcID.TOA_BABA, NpcID.TOA_BABA_COFFIN, NpcID.TOA_BABA_DIGGING,
-		NpcID.TOA_KEPHRI_BOSS_SHIELDED, NpcID.TOA_KEPHRI_BOSS_ENRAGE,
+		// T-221: and her middle form, as RAID HP takes it: TOA_KEPHRI_BOSS_WEAK isn't on the calculator's list (its data has
+		// the Shielded and Aggressive entries, 11719 and 11721, and 11720 resolves by name to Aggressive). Left out, her
+		// defence roll there was the table's at any raid level: Eric's 11-11 raid (level 350) read accuracy 0.822 on 11720
+		// against 0.570 on 11719 with the same keris, gear and stab, the (250 + 350) / 250 = 2.4 between them.
+		NpcID.TOA_KEPHRI_BOSS_SHIELDED, NpcID.TOA_KEPHRI_BOSS_WEAK, NpcID.TOA_KEPHRI_BOSS_ENRAGE,
 		NpcID.TOA_ZEBAK, NpcID.TOA_ZEBAK_ENRAGED, NpcID.TOA_ZEBAK_DEAD,
 		NpcID.TOA_WARDENS_P1_OBELISK_NPC_INACTIVE, NpcID.TOA_WARDENS_P1_OBELISK_NPC, NpcID.TOA_WARDENS_P2_OBELISK_NPC,
 		NpcID.TOA_WARDEN_ELIDINIS_PHASE2_MAGE, NpcID.TOA_WARDEN_ELIDINIS_PHASE2_RANGE,
