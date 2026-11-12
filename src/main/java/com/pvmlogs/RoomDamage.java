@@ -196,6 +196,48 @@ final class RoomDamage
 	}
 
 	/**
+	 * T-219: the rule that makes a splat the game shows as another's the room's even with other players there: one marked
+	 * {@code evenWithOthers} whose state (if any) is open, whose amounts hold it (or a killing splat capped below them), and,
+	 * with {@code afterBossAnim}, that lands {@code ticksAfterAnim} after the boss last started that animation. Null for
+	 * none.
+	 *
+	 * @param ticksSince ticks since the boss last started an animation, or a negative number for not since the fight began
+	 */
+	static BossRules.RoomDamageRule mechanicFor(List<BossRules.RoomDamageRule> rules, int amount, int left,
+		Predicate<String> open, java.util.function.IntUnaryOperator ticksSince)
+	{
+		if (rules == null)
+		{
+			return null;
+		}
+		for (BossRules.RoomDamageRule r : rules)
+		{
+			if (!r.evenWithOthers || r.amounts == null || r.amounts.length != 2 || r.state != null && !open.test(r.state))
+			{
+				continue;
+			}
+			final boolean inRange = amount >= r.amounts[0] && amount <= r.amounts[1];
+			final boolean cappedKill = amount < r.amounts[0] && amount > 0 && amount == left;
+			if (!inRange && !cappedKill)
+			{
+				continue;
+			}
+			if (r.afterBossAnim != null)
+			{
+				final int since = ticksSince.applyAsInt(r.afterBossAnim);
+				final int lo = r.ticksAfterAnim != null && r.ticksAfterAnim.length == 2 ? r.ticksAfterAnim[0] : 0;
+				final int hi = r.ticksAfterAnim != null && r.ticksAfterAnim.length == 2 ? r.ticksAfterAnim[1] : 0;
+				if (since < lo || since > hi)
+				{
+					continue;
+				}
+			}
+			return r;
+		}
+		return null;
+	}
+
+	/**
 	 * What a splat the game shows as another's is: another player's while one is
 	 * there, else the room's. Any other kind is left as it is.
 	 *

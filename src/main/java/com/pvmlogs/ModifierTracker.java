@@ -615,7 +615,11 @@ final class ModifierTracker
 			}
 			final boolean before = was >= 0 && contains(m.npcIds, was);
 			final boolean after = contains(m.npcIds, npcId);
-			if (before != after)
+			// T-219: a modifier that waits on a state isn't on while the state is shut, whatever the npc. The P3 Warden's
+			// "enraged" was logged on at each return from her invulnerable form (Eric's 11-11 duo, [7725], [7791], [7875],
+			// [7960]) with the state shut until [8001]; no attack was scored enraged, but the log said it was on.
+			final Window gate = m.state == null ? null : b.windows.get(m.state);
+			if (before != after && (m.state == null || gate != null && gate.openAt(tick)))
 			{
 				log.accept(String.format("MOD %s: %s %s at tick %d (npc %d)", b.name, m.name, after ? "on" : "off", tick,
 					npcId));

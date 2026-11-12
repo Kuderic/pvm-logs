@@ -226,6 +226,9 @@ class Fight
 	private transient FightTimeline timeline;
 	// T-153: see recordPassedOn.
 	private transient int passedOn;
+	// T-219: see recordOthersCore. For RECONCILE only.
+	private transient int othersPassedOn;
+	private transient int othersOnTheCore;
 	// T-213: the tick the fight's first throw is known on, booked or not: see noteThrowKnown. Never saved: a saved fight
 	// is over.
 	private transient int firstThrowTick = Integer.MIN_VALUE;
@@ -501,6 +504,32 @@ class Fight
 	int getPassedOn()
 	{
 		return passedOn;
+	}
+
+	/**
+	 * T-219: another player's core damage, passed on to the Warden five times over (wiki, Core), as their splat on her shows
+	 * it (Eric's 11-11 duo: 25 of 25 such splats multiples of 5, only while her core was out). Their hit on the core, a
+	 * fifth of it, is what goes into others' damage, the units the player's own core hits count in (T-172); the passed-on
+	 * total is RECONCILE's term beside the player's own, and neither is scored.
+	 */
+	void recordOthersCore(int passedOnAmount, int tick)
+	{
+		final int d = Math.max(0, passedOnAmount);
+		othersPassedOn += d;
+		othersOnTheCore += d / 5;
+		recordOthersDamage(d / 5, tick);
+	}
+
+	/** T-219: others' core damage passed on to the Warden, five times over. For RECONCILE only; not saved. */
+	int getOthersPassedOn()
+	{
+		return othersPassedOn;
+	}
+
+	/** T-219: of others' damage, their hits on the core (a fifth of what it passed on), not on her hitpoints. */
+	int getOthersOnTheCore()
+	{
+		return othersOnTheCore;
 	}
 
 	/** T-172: the Wardens' phase 2 in its parts, or null for any other fight (and a record saved before T-172). */
