@@ -196,6 +196,36 @@ final class PerfProbe
 
 	private List<String> lastReport = new ArrayList<>();
 
+	// ---- T-217: the 5 s after a kill ----
+	// Eric, 2026-11-11: "Game freezes after a boss dies". A fight's PERF block is written at its end, before the kill's own
+	// work (the kill card, the record, History, the history save), so nothing timed the freeze. A kill opens a window: the
+	// same timers, frames and probes as a fight, plus the executor's jobs and the collector, reported once at its end.
+	static final long AFTER_KILL_NANOS = 5_000_000_000L;
+	/** The kill the window is after, or null when no window is open. Read by the executor's jobs. */
+	private volatile String afterKill;
+	private volatile long afterKillStart;
+	private long gcCount0;
+	private long gcMillis0;
+	private final Object jobLock = new Object();
+	private final List<Job> jobs = new ArrayList<>();
+
+	/** One job on RuneLite's executor, started in the window. */
+	static final class Job
+	{
+		final String name;
+		final long queued;
+		final long started;
+		long nanos = -1;
+		String detail;
+
+		Job(String name, long queued, long started)
+		{
+			this.name = name;
+			this.queued = queued;
+			this.started = started;
+		}
+	}
+
 	// Input delay (T-045 item 4): how long a task posted to Swing's queue waits to run, which is how long a click waits.
 	// One probe a tick, reused: none is posted while the last is still waiting, so a wait past a tick is still recorded
 	// whole, once, when it runs.
@@ -294,6 +324,7 @@ final class PerfProbe
 			// Turned off mid-fight, the fight has no report: turned back on, the next fight starts clean.
 			lastFrame = 0;
 			fighting = false;
+			afterKill = null;
 			stopWatch();
 		}
 		this.on = on;
@@ -677,6 +708,31 @@ final class PerfProbe
 		{
 			return;
 		}
+		// The next fight closes the window after the last kill; the plugin writes its lines first (afterKillEnd).
+		afterKill = null;
+		resetWindow();
+		baselineCount = 0;
+		long earliest = Long.MAX_VALUE;
+		for (int i = 0; i < windowSize; i++)
+		{
+			final int k = Math.floorMod(windowNext - 1 - i, BASELINE_FRAMES);
+			// Frames that started inside the 30 s.
+			final long frameStart = windowEnds[k] - windowIntervals[k] * 1000L;
+			if (now - frameStart > BASELINE_NANOS)
+			{
+				break;
+			}
+			baseline[baselineCount++] = windowIntervals[k];
+			earliest = Math.min(earliest, frameStart);
+		}
+		baselineSpanNanos = baselineCount == 0 ? 0 : now - earliest;
+		fightStartNanos = now;
+		fighting = true;
+	}
+
+	/** Every timer, probe and frame count back to empty, for a fight or the window after a kill. */
+	private void resetWindow()
+	{
 		for (Timer t : timers)
 		{
 			t.reset();
@@ -707,25 +763,8 @@ final class PerfProbe
 		}
 		Arrays.fill(panelTicks, 0);
 		panelSeen = 0;
-		baselineCount = 0;
-		long earliest = Long.MAX_VALUE;
-		for (int i = 0; i < windowSize; i++)
-		{
-			final int k = Math.floorMod(windowNext - 1 - i, BASELINE_FRAMES);
-			// Frames that started inside the 30 s.
-			final long frameStart = windowEnds[k] - windowIntervals[k] * 1000L;
-			if (now - frameStart > BASELINE_NANOS)
-			{
-				break;
-			}
-			baseline[baselineCount++] = windowIntervals[k];
-			earliest = Math.min(earliest, frameStart);
-		}
-		baselineSpanNanos = baselineCount == 0 ? 0 : now - earliest;
 		frameCount = 0;
 		frameMax = 0;
-		fightStartNanos = now;
-		fighting = true;
 	}
 
 	/**
@@ -747,9 +786,18 @@ final class PerfProbe
 		final List<String> lines = new ArrayList<>();
 		final long span = Math.max(1, now - fightStartNanos);
 		lines.add(String.format("PERF %s: %.1f s; panel %s", fight, span / 1e9, panelSummary()));
+		lines.addAll(windowLines(span, true));
+		lastReport = new ArrayList<>(lines);
+		return lines;
+	}
+
+	/** The PERF lines after a stretch's first: frames, the client thread, Swing's, input delay, budgets, the watch. */
+	private List<String> windowLines(long span, boolean withBaseline)
+	{
+		final List<String> lines = new ArrayList<>();
 		lines.add("PERF frames: " + frameSummary(frames, Math.min(frameCount, frames.length), frameCount, frameMax,
-			span) + " | the 30 s before: " + frameSummary(baseline, baselineCount, baselineCount,
-			maxMicros(baseline, baselineCount) * 1000L, baselineSpanNanos));
+			span) + (withBaseline ? " | the 30 s before: " + frameSummary(baseline, baselineCount, baselineCount,
+			maxMicros(baseline, baselineCount) * 1000L, baselineSpanNanos) : ""));
 
 		// The plugin's own time on the client thread: the top-level timers only, the nested ones are inside them.
 		long plugin = 0;
@@ -806,8 +854,194 @@ final class PerfProbe
 		}
 		lines.add("PERF budgets: " + budgets());
 		lines.addAll(watchLines(span));
-		lastReport = new ArrayList<>(lines);
 		return lines;
+	}
+
+	// ---- The 5 s after a kill (T-217) ----
+
+	/**
+	 * A kill: the window after it opens. Its timers, frames and probes start empty, as a fight's; the executor's jobs that
+	 * start in it are timed ({@link #jobStart}); the collector's count and pause time are read now and at its end. Call
+	 * after the fight's own {@link #fightEnded}.
+	 */
+	void killEnded(String kill)
+	{
+		killEndedAt(kill, System.nanoTime());
+	}
+
+	void killEndedAt(String kill, long now)
+	{
+		if (!on || timers == null)
+		{
+			return;
+		}
+		resetWindow();
+		synchronized (jobLock)
+		{
+			jobs.clear();
+		}
+		final long[] gc = gc();
+		gcCount0 = gc[0];
+		gcMillis0 = gc[1];
+		fightStartNanos = now;
+		afterKillStart = now;
+		afterKill = kill;
+		fighting = true;
+	}
+
+	/** Whether the window after a kill is open. */
+	boolean afterKillOpen()
+	{
+		return afterKill != null;
+	}
+
+	/**
+	 * Once a tick on the client thread: the window's {@code PERF after the kill} lines once it has run 5 s, else none.
+	 * Nothing to do outside a window.
+	 */
+	List<String> afterKillDue()
+	{
+		return afterKillDueAt(System.nanoTime());
+	}
+
+	List<String> afterKillDueAt(long now)
+	{
+		final String kill = afterKill;
+		if (kill == null || now - afterKillStart < AFTER_KILL_NANOS)
+		{
+			return new ArrayList<>();
+		}
+		return afterKillEndAt(now, null);
+	}
+
+	/**
+	 * The window's lines now, before its 5 s when {@code cut} says why (the next fight started); empty with no window.
+	 * Closes it.
+	 */
+	List<String> afterKillEnd(String cut)
+	{
+		return afterKillEndAt(System.nanoTime(), cut);
+	}
+
+	List<String> afterKillEndAt(long now, String cut)
+	{
+		final String kill = afterKill;
+		if (kill == null || timers == null)
+		{
+			return new ArrayList<>();
+		}
+		afterKill = null;
+		fighting = false;
+		final long span = Math.max(1, now - afterKillStart);
+		final List<String> lines = new ArrayList<>();
+		lines.add(String.format("PERF after the kill %s: %.1f s%s; panel %s", kill, span / 1e9,
+			cut == null ? "" : " (cut short: " + cut + ")", panelSummary()));
+		for (String line : windowLines(span, false))
+		{
+			lines.add("PERF after the kill, " + line.substring("PERF ".length()));
+		}
+		lines.add("PERF after the kill, executor: " + jobsSummary(now));
+		final long[] gc = gc();
+		lines.add(gc[0] < 0 || gcCount0 < 0 ? "PERF after the kill, garbage collection: not readable here"
+			: String.format("PERF after the kill, garbage collection: %d collections, %d ms paused%s", gc[0] - gcCount0,
+			gc[1] - gcMillis0, gcDetail()));
+		lastReport.addAll(lines);
+		return lines;
+	}
+
+	/**
+	 * A job on RuneLite's executor starts: its start time when the window after a kill is open, else 0, which
+	 * {@link #jobEnded} ignores. {@code queued} is when it was handed to the executor (on the client thread).
+	 */
+	long jobStart()
+	{
+		return afterKill == null ? 0L : System.nanoTime();
+	}
+
+	/** The job started at {@code started} (from {@link #jobStart}) ended: kept for the window's executor line. */
+	void jobEnded(String name, long queued, long started, String detail)
+	{
+		jobEndedAt(name, queued, started, System.nanoTime(), detail);
+	}
+
+	void jobEndedAt(String name, long queued, long started, long ended, String detail)
+	{
+		if (started == 0L || started < afterKillStart)
+		{
+			return;
+		}
+		synchronized (jobLock)
+		{
+			final Job job = new Job(name, queued, started);
+			job.nanos = ended - started;
+			job.detail = detail;
+			jobs.add(job);
+		}
+	}
+
+	/** {@code history save 312.4 ms (6,705,225 bytes, 2500 fights; queued 0.0 s after the kill, waited 0.1 ms)}; ... */
+	private String jobsSummary(long now)
+	{
+		synchronized (jobLock)
+		{
+			if (jobs.isEmpty())
+			{
+				return "no job started in it";
+			}
+			final StringBuilder out = new StringBuilder();
+			long busy = 0;
+			for (Job j : jobs)
+			{
+				busy += j.nanos;
+				out.append(out.length() == 0 ? "" : "; ").append(String.format("%s %.1f ms (%s%sstarted %.2f s after the "
+						+ "kill, %.1f ms after it was queued)", j.name, j.nanos / 1e6, j.detail == null ? "" : j.detail,
+					j.detail == null ? "" : "; ", (j.started - afterKillStart) / 1e9, Math.max(0, j.started - j.queued) / 1e6));
+			}
+			return String.format("%d jobs, %.1f ms on its one thread: %s", jobs.size(), busy / 1e6, out);
+		}
+	}
+
+	/**
+	 * The collectors' total count and pause time in ms, from {@code java.lang.management}; {-1, -1} if they can't be read
+	 * (not on the Plugin Hub's forbidden list: ForbiddenApiTest).
+	 */
+	static long[] gc()
+	{
+		try
+		{
+			long count = 0;
+			long millis = 0;
+			for (java.lang.management.GarbageCollectorMXBean b : java.lang.management.ManagementFactory
+				.getGarbageCollectorMXBeans())
+			{
+				count += Math.max(0, b.getCollectionCount());
+				millis += Math.max(0, b.getCollectionTime());
+			}
+			return new long[]{count, millis};
+		}
+		catch (Throwable e)
+		{
+			return new long[]{-1, -1};
+		}
+	}
+
+	/** The collectors' names, for the line: the totals above are theirs. */
+	private static String gcDetail()
+	{
+		try
+		{
+			final StringBuilder out = new StringBuilder();
+			for (java.lang.management.GarbageCollectorMXBean b : java.lang.management.ManagementFactory
+				.getGarbageCollectorMXBeans())
+			{
+				out.append(out.length() == 0 ? " (collectors: " : ", ").append(b.getName());
+			}
+			return out.length() == 0 ? "" : out.append(")").toString();
+		}
+		catch (Throwable e)
+		{
+			return "";
+		}
 	}
 
 	/** The 20 ms watch's line, the layout passes' and the stalls' (T-046 follow-up). */

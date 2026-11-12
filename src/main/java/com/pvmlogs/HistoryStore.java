@@ -1,9 +1,16 @@
 package com.pvmlogs;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonIOException;
+import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -34,6 +41,10 @@ import net.runelite.client.util.Filepath;
  * {@code .tmp}) is loaded instead.</li>
  * </ul>
  * Everything goes through {@link Filepath} (the Plugin Hub rule), which offers the channel, its force and the atomic move.
+ * <p>
+ * T-217: the save streams the JSON to the {@code .tmp} through Gson's writer on a buffered stream. It used to build the
+ * whole file as one string and then its bytes ({@code gson.toJson(fights).getBytes(...)}): for 2,500 fights, 6.7 MB of
+ * JSON as about 13 MB of chars and 6.7 MB of bytes, made and dropped at every kill. The bytes written are the same.
  */
 class HistoryStore
 {
@@ -74,32 +85,70 @@ class HistoryStore
 		this.gson = gson;
 	}
 
-	/** Writes the history so a stop at any moment leaves the old file or the new one whole. */
-	void save(List<Fight> fights) throws IOException
+	/**
+	 * Writes the history so a stop at any moment leaves the old file or the new one whole. Returns the bytes written (the
+	 * window after a kill shows them, T-217).
+	 */
+	long save(List<Fight> fights) throws IOException
 	{
 		if (blocked)
 		{
 			throw new IOException(FILE + " didn't read and couldn't be moved aside, so it isn't saved over");
 		}
 		dir.createDirectories();
-		writeWhole(dir.joinSegment(TEMP), dir.joinSegment(FILE), gson.toJson(fights).getBytes(StandardCharsets.UTF_8));
+		return writeWhole(dir.joinSegment(TEMP), dir.joinSegment(FILE), out -> json(gson, fights, out));
 	}
 
 	/**
-	 * {@code bytes} to {@code temp}, forced to the disk, then moved over {@code target} in one step. Where the file system
-	 * can't move atomically, a replacing move: still only after the bytes are on the disk.
+	 * T-217: the fights as {@code gson.toJson(fights)} writes them, streamed in UTF-8: the same type it serialises them as
+	 * ({@code fights.getClass()}) and the writer it makes ({@link Gson#toJson(Object, java.lang.reflect.Type, Appendable)}
+	 * through {@code newJsonWriter}), so the bytes match the old save's.
 	 */
-	static void writeWhole(Filepath temp, Filepath target, byte[] bytes) throws IOException
+	static void json(Gson gson, List<Fight> fights, OutputStream out) throws IOException
 	{
+		// Buffered in chars too: OutputStreamWriter copies every string it's handed into a new array, and Gson's writer hands
+		// it one a token (326 MB allocated for Eric's 6.7 MB without this, against 84 MB for the old whole-string save).
+		final Writer writer = new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8), 1 << 14);
+		try
+		{
+			gson.toJson(fights, fights.getClass(), writer);
+		}
+		catch (JsonIOException e)
+		{
+			throw e.getCause() instanceof IOException ? (IOException) e.getCause() : new IOException(e);
+		}
+		writer.flush();
+	}
+
+	/** What a save writes to its stream. */
+	interface Body
+	{
+		void writeTo(OutputStream out) throws IOException;
+	}
+
+	/** {@link #writeWhole(Filepath, Filepath, Body)} for bytes already in hand (the last good copy, from a load). */
+	static long writeWhole(Filepath temp, Filepath target, byte[] bytes) throws IOException
+	{
+		return writeWhole(temp, target, out -> out.write(bytes));
+	}
+
+	/**
+	 * What {@code body} writes, streamed to {@code temp}, forced to the disk, then moved over {@code target} in one step.
+	 * Where the file system can't move atomically, a replacing move: still only after the bytes are on the disk. A body
+	 * that throws leaves {@code target} as it was. Returns the bytes written.
+	 */
+	static long writeWhole(Filepath temp, Filepath target, Body body) throws IOException
+	{
+		final long written;
 		try (FileChannel channel = temp.openFileChannel(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
 			StandardOpenOption.WRITE))
 		{
-			final ByteBuffer buffer = ByteBuffer.wrap(bytes);
-			while (buffer.hasRemaining())
-			{
-				channel.write(buffer);
-			}
+			// Not closed: closing the stream closes the channel, which the try closes after its force.
+			final Counting out = new Counting(new BufferedOutputStream(Channels.newOutputStream(channel), 1 << 16));
+			body.writeTo(out);
+			out.flush();
 			channel.force(true);
+			written = out.count;
 		}
 		try
 		{
@@ -108,6 +157,32 @@ class HistoryStore
 		catch (AtomicMoveNotSupportedException e)
 		{
 			temp.moveTo(target, StandardCopyOption.REPLACE_EXISTING);
+		}
+		return written;
+	}
+
+	/** Counts what goes through it. */
+	private static final class Counting extends FilterOutputStream
+	{
+		long count;
+
+		Counting(OutputStream out)
+		{
+			super(out);
+		}
+
+		@Override
+		public void write(int b) throws IOException
+		{
+			out.write(b);
+			count++;
+		}
+
+		@Override
+		public void write(byte[] b, int off, int len) throws IOException
+		{
+			out.write(b, off, len);
+			count += len;
 		}
 	}
 

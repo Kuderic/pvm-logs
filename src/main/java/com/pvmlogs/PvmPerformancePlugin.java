@@ -7705,6 +7705,11 @@ public class PvmPerformancePlugin extends Plugin
 		// (T-046 follow-up) runs on RuneLite's executor between ticks and sees every stall.
 		perf.postInputProbe();
 		perf.watchSwing(executor);
+		// T-217: the 5 s after a kill, once they've run.
+		for (String line : perf.afterKillDue())
+		{
+			debug.log("%s", line);
+		}
 	}
 
 	/** Whether the player is still interacting with this NPC. */
@@ -7920,6 +7925,11 @@ public class PvmPerformancePlugin extends Plugin
 		unlistedAdds.reset(client.getTickCount());
 		hpAboveCountGap = 0;
 		timelines.attach(current);
+		// T-217: a fight within 5 s of the last kill (a raid's next room) ends that kill's window first.
+		for (String line : perf.afterKillEnd("the next fight started"))
+		{
+			debug.log("%s", line);
+		}
 		perf.fightStarted();
 		// From the target's stats as the drains left them when the fight opened (T-050); started from its base if nothing
 		// has been thrown at it. Nothing is kept for an immune target or one without stats.
@@ -9226,6 +9236,16 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			debug.log("%s", line);
 		}
+		// T-217: the kill's own work (the kill card, the record, History, the history save) comes after the fight's PERF
+		// lines: the 5 s after it are measured as a window of their own, "PERF after the kill".
+		if (died && current.getAttempts() > 0)
+		{
+			for (String line : perf.afterKillEnd("another kill"))
+			{
+				debug.log("%s", line);
+			}
+			perf.killEnded(current.getTargetName());
+		}
 		closeTargetHealth(died);
 		debug.log("%s", DamageTaken.summary(current));
 		// T-062: the damage over time by kind, each way.
@@ -9517,37 +9537,65 @@ public class PvmPerformancePlugin extends Plugin
 		}
 	}
 
+	/**
+	 * The history saved on RuneLite's executor, then the records it gives (T-187): one job, the save then the records, on the
+	 * executor's one thread, so no two run at once.
+	 * <p>
+	 * T-217: a save asked for while the last is still waiting to start (a raid's room end and kill message on one tick)
+	 * hands that waiting job the newer snapshot instead of queueing a second 6.7 MB write behind it. Each part is timed for
+	 * the window after a kill ({@code PERF after the kill, executor}).
+	 */
 	private void saveHistory()
 	{
 		// Snapshot now so a later shutdown/clear can't race the write.
 		final List<Fight> snapshot = new ArrayList<>(history);
+		if (pendingHistorySave.getAndSet(snapshot) != null)
+		{
+			// The job still waiting writes this one.
+			return;
+		}
+		final long queued = System.nanoTime();
 		lastHistorySave = executor.submit(() ->
 		{
+			final List<Fight> latest = pendingHistorySave.getAndSet(null);
 			final HistoryStore store = historyStore;
-			if (store == null)
+			if (store == null || latest == null)
 			{
 				return;
 			}
+			final long started = perf.jobStart();
+			String saved;
 			try
 			{
-				store.save(snapshot);
+				saved = String.format("%,d bytes, %d fights", store.save(latest), latest.size());
 			}
 			catch (IOException | RuntimeException e)
 			{
+				saved = "failed: " + e.getMessage();
 				debug.log("HISTORY couldn't be saved: %s", e.getMessage());
 				log.warn("PvM Logs: could not save history", e);
 			}
-			noteRecords(snapshot);
+			final long recordsStarted = perf.jobStart();
+			perf.jobEnded("history save", queued, started, saved);
+			final String records = noteRecords(latest);
+			perf.jobEnded("records", recordsStarted, recordsStarted, records);
 		});
 	}
 
-	/** T-187: a counted kill in the history just saved goes into its boss's record, once, and the record is saved. */
-	private void noteRecords(List<Fight> snapshot)
+	// T-217: the snapshot the waiting save job will write, or null when none waits.
+	private final java.util.concurrent.atomic.AtomicReference<List<Fight>> pendingHistorySave =
+		new java.util.concurrent.atomic.AtomicReference<>();
+
+	/**
+	 * T-187: a counted kill in the history just saved goes into its boss's record, once, and the record is saved. Says what
+	 * it did, for the window after a kill.
+	 */
+	private String noteRecords(List<Fight> snapshot)
 	{
 		final BossRecords records = bossRecords;
 		if (records == null)
 		{
-			return;
+			return "not loaded";
 		}
 		try
 		{
@@ -9563,12 +9611,15 @@ public class PvmPerformancePlugin extends Plugin
 				{
 					panel.refresh();
 				}
+				return "noted and records.json saved";
 			}
+			return "nothing new";
 		}
 		catch (IOException | RuntimeException e)
 		{
 			debug.log("RECORDS couldn't be updated: %s", e.getMessage());
 			log.warn("PvM Logs: could not update the boss records", e);
+			return "failed: " + e.getMessage();
 		}
 	}
 
