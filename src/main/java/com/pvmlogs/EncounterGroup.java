@@ -266,6 +266,19 @@ final class EncounterGroup
 	 */
 	static final int WEAK_ADD_HP = 40;
 
+	/**
+	 * T-220 (Eric, 2026-11-12: "Scarab should not show as a boss"): a raid's monster that's in none of its groups and no
+	 * boss's add, at {@link #WEAK_ADD_HP} full hitpoints or less as it's fought (T-184's scaling): the Path of Scabaras
+	 * puzzle's scarabs (11697: 12 hp, 27 and 28 at higher levels in Eric's logs), which opened a fight and a room "Scarab"
+	 * beside Akkha and the Wardens. It opens no fight and no room; its hits stay in the trip's totals (T-180). Never a
+	 * Tombs monster that scales with the raid (T-184: Kephri's guardians).
+	 */
+	static boolean isRaidTrash(boolean inRaid, int npcId, int fullHp)
+	{
+		return inRaid && of(npcId) == null && !isBossesAdd(npcId) && !isBossForm(npcId) && fullHp > 0
+			&& fullHp <= WEAK_ADD_HP && !RaidScaling.tombsScales(npcId);
+	}
+
 	/** T-180: whether this npc is an add its group lists: a one-boss group's npc that isn't one of the boss's forms. */
 	static boolean isBossesAdd(int npcId)
 	{

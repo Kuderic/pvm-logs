@@ -5947,10 +5947,12 @@ public class PvmPerformancePlugin extends Plugin
 		}
 		final boolean listedAdd = EncounterGroup.isBossesAdd(addId);
 		final boolean monster = EncounterGroup.of(addId) == null && addIsMonster;
+		// T-220: a raid's weak monster outside its groups (the Scabaras puzzle's scarabs), boss fight or none.
+		final boolean trash = EncounterGroup.isRaidTrash(inRaid, addId, addFullHp);
 		// T-184: a Tombs monster whose hitpoints scale with the raid is never weak, at any raid level: Kephri's guardian
 		// scarabs (a table's 40, 99 to 110 as Eric fights them) were swatted, and he wants their fights and the overlay's
 		// DPS against them to weigh his weapons. A full hp read from the table alone had them at 40.
-		if (!listedAdd && !monster || addFullHp <= 0 || addFullHp > EncounterGroup.WEAK_ADD_HP
+		if (!listedAdd && !monster && !trash || addFullHp <= 0 || addFullHp > EncounterGroup.WEAK_ADD_HP
 			|| RaidScaling.tombsScales(addId))
 		{
 			return Swat.NONE;
@@ -5959,7 +5961,7 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			return Swat.IN_FIGHT;
 		}
-		return listedAdd ? Swat.NO_FIGHT : Swat.NONE;
+		return listedAdd || trash ? Swat.NO_FIGHT : Swat.NONE;
 	}
 
 	/** T-180: {@link #weakAddSwat} for this npc, against the fight open now. */
@@ -6016,6 +6018,13 @@ public class PvmPerformancePlugin extends Plugin
 			if (weakAddsSaid.size() > 256)
 			{
 				weakAddsSaid.clear();
+			}
+			if (!inFight && EncounterGroup.isRaidTrash(raidType != null, npc.getId(), fightHitpoints(npc)))
+			{
+				// T-220: the Scabaras puzzle's scarabs: no fight, no room.
+				debug.log("RAID TRASH %s (npc %d, %d hp): no fight", Text.removeTags(npc.getName()), npc.getId(),
+					fightHitpoints(npc));
+				return;
 			}
 			debug.log("WEAK ADD %s (npc %d, index %d, %d hp): swatted in passing, no fight of its own; %s",
 				Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(), fightHitpoints(npc),
