@@ -616,16 +616,16 @@ final class SidePanelParts
 				g.fill(area);
 				break;
 			case LUCK_SLOWER:
-				stripes(g, area, SidePanelStyle.COST_STRIPE_GROUND, SidePanelStyle.COST);
-				break;
 			case LUCK_AVERAGE:
-				stripes(g, area, SidePanelStyle.TRACK, SidePanelStyle.AVERAGE_STRIPE);
+				// T-214: luck that cost time, striped in luck's violet ({@code outline}: its roll's strength), never skill's
+				// orange: the bar's orange is skill's alone.
+				stripes(g, area, SidePanelStyle.LUCK_STRIPE_GROUND, outline == null ? SidePanelStyle.LUCK : outline);
 				break;
 			case LUCK_FASTER:
-				// The legend's swatch for the time luck saved (T-042): best play dimmed under the stripes, as on the bar.
+				// The time luck saved (T-042): best play dimmed under luck's stripes, on the bar and its swatch alike.
 				g.setColor(SidePanelStyle.KEPT);
 				g.fill(area);
-				SidePanelTimeBudgetBar.saved(g, area, outline);
+				SidePanelTimeBudgetBar.saved(g, area, outline == null ? SidePanelStyle.LUCK : outline);
 				break;
 			default:
 				break;

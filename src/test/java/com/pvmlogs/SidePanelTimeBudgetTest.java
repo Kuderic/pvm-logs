@@ -36,7 +36,8 @@ public class SidePanelTimeBudgetTest
 		assertEquals(76.2, b.clock, 1e-9);
 		assertEquals(15, b.luckSaved, 0.1);
 		assertEquals(b.clock + b.luckSaved, b.total, 1e-9);
-		assertEquals(b.clock / (b.clock + b.luckSaved) * W, SidePanelTimeBudgetBar.tickX(b, W), 1e-9);
+		// T-214: to the pixel, where luck's saved stretch starts.
+		assertEquals(b.clock / (b.clock + b.luckSaved) * W, SidePanelTimeBudgetBar.tickX(b, W), 1);
 		assertEquals(178, SidePanelTimeBudgetBar.tickX(b, W), 0.5);
 		assertEquals("1:16", b.clockLabel);
 		assertEquals("1:31 avg luck", b.endLabel);
@@ -144,7 +145,8 @@ public class SidePanelTimeBudgetTest
 		final PanelSnapshot.TimeBudget b = budget(SidePanelExamples.luckSaved(15));
 		final List<PanelSnapshot.Segment> s = b.segments;
 		final PanelSnapshot.Segment saved = s.get(s.size() - 1);
-		assertEquals(PanelSnapshot.Fill.KEPT, saved.fill);
+		// T-214: luck's own segment, last, as its legend row is.
+		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, saved.fill);
 		assertEquals(b.luckSaved, saved.seconds, 1e-9);
 		double before = 0;
 		for (int i = 0; i < s.size() - 1; i++)
@@ -155,12 +157,12 @@ public class SidePanelTimeBudgetTest
 		assertEquals(b.clock, before, 1e-9);
 		assertEquals(PanelSnapshot.Fill.KEPT, s.get(0).fill);
 		assertEquals(76.2 - 1.8 - 2.4 - 1.0, s.get(0).seconds, 1e-6);
-		// The past-the-tick stretch is best play, as the legend's swatch shows it.
-		assertEquals(b.clock / b.total * W, SidePanelTimeBudgetBar.tickX(b, W), 1e-9);
+		// The past-the-tick stretch is best play dimmed, as the legend's swatch shows it; the tick to the pixel.
+		assertEquals(b.clock / b.total * W, SidePanelTimeBudgetBar.tickX(b, W), 1);
 
-		// Luck that cost time: the bar as before, nothing past the clock.
+		// Luck that cost time: luck's stretch last, inside your time, nothing past the clock.
 		final PanelSnapshot.TimeBudget slower = budget(SidePanelExamples.luckSaved(-7));
-		assertEquals(PanelSnapshot.Fill.UNSCORED, slower.segments.get(slower.segments.size() - 1).fill);
+		assertTrue(slower.segments.get(slower.segments.size() - 1).fill.luck());
 		assertEquals(slower.clock, slower.sum(), 1e-9);
 	}
 
@@ -172,14 +174,14 @@ public class SidePanelTimeBudgetTest
 		// B = T - U + L - (Cu + Ce + Cb) = 76.2 + 15 - 1.8 - 2.4 - 1 = 86 s.
 		assertEquals("perfect", rows.get(0).label.text);
 		assertEquals("1:26", rows.get(0).value.text);
-		// T-196: idle time in seconds: 1.8 s, 2.4 s and 1 s.
+		// T-196: idle time in seconds: 1.8 s, 2.4 s and 1 s. T-214: in the bar's order, skill's before eating.
 		assertEquals("-1.8 s", rows.get(1).value.text);
-		assertEquals("eating", rows.get(2).label.text);
-		assertEquals("-2.4 s", rows.get(2).value.text);
-		assertEquals("stat boost", rows.get(3).label.text);
+		assertEquals("stat boost", rows.get(2).label.text);
 		// T-123: a setup part reads the damage it cost, its 2 ticks on hover.
-		assertEquals("-8 dmg", rows.get(3).value.text);
-		assertTrue(rows.get(3).tooltip, rows.get(3).tooltip.endsWith(", about 2 ticks of the kill."));
+		assertEquals("-8 dmg", rows.get(2).value.text);
+		assertTrue(rows.get(2).tooltip, rows.get(2).tooltip.endsWith(", about 2 ticks of the kill."));
+		assertEquals("eating", rows.get(3).label.text);
+		assertEquals("-2.4 s", rows.get(3).value.text);
 		double sum = 0;
 		for (PanelSnapshot.Segment s : b.segments)
 		{
@@ -191,18 +193,19 @@ public class SidePanelTimeBudgetTest
 		final PanelSnapshot.BudgetRow luck = rows.get(4);
 		assertEquals("luck", luck.label.text);
 		assertEquals("+15 s", luck.value.text);
-		// T-194: the words in luck's violet, by the roll's strength; the stripes keep the bar's colours.
-		assertEquals(SidePanelModel.luckInk(new LedgerRows.Numbers(SidePanelExamples.luckSaved(15).scope)),
-			luck.value.colour);
+		// T-194: the words in luck's violet, by the roll's strength; T-214: the stripes too, never Better's green.
+		final java.awt.Color ink = SidePanelModel.luckInk(new LedgerRows.Numbers(SidePanelExamples.luckSaved(15).scope));
+		assertEquals(ink, luck.value.colour);
 		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, luck.swatch);
-		assertEquals(SidePanelStyle.BETTER, b.luckSavedColour);
+		assertEquals(ink, b.luckStripe);
 
-		// In the middle half the stretch is striped grey, the same swatch.
+		// In the middle half the same swatch, in the middle's violet.
 		final PanelSnapshot.TimeBudget mid = budget(SidePanelExamples.luckSaved(2));
 		final PanelSnapshot.BudgetRow average = mid.rows.get(4);
 		assertEquals("luck", average.label.text);
 		assertEquals(PanelSnapshot.Fill.LUCK_FASTER, average.swatch);
-		assertEquals(SidePanelStyle.AVERAGE_STRIPE, mid.luckSavedColour);
+		assertEquals(SidePanelModel.luckInk(new LedgerRows.Numbers(SidePanelExamples.luckSaved(2).scope)),
+			mid.luckStripe);
 
 		// Luck that cost time: no "past" hint, the bar as before.
 		final PanelSnapshot.BudgetRow slower = budget(SidePanelExamples.luckSaved(-7)).rows.get(4);

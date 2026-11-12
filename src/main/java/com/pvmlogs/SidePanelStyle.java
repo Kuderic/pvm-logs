@@ -51,9 +51,10 @@ final class SidePanelStyle
 	static final Color DIVIDER = new Color(0x2E2E2E);
 	static final Color KEPT = new Color(0x7FA0B8);
 	static final Color MINOR_COST = new Color(0x8A6A44);
-	/** The stripes' dark ground for luck that cost time and for eating. */
+	/** The stripes' dark ground in a legend's striped swatch. */
 	static final Color COST_STRIPE_GROUND = new Color(0x5A4530);
-	static final Color AVERAGE_STRIPE = new Color(0x8A8A8A);
+	/** T-214: the dark ground under luck's violet stripes where luck cost time. */
+	static final Color LUCK_STRIPE_GROUND = new Color(0x2E2A3A);
 	static final Color UNSCORED = ColorScheme.MEDIUM_GRAY_COLOR;
 	/** The time budget's eating stretch (T-038): a light, neutral grey, apart from the unscored grey and luck's stripes. */
 	static final Color EATING = new Color(0xA8A8A8);
@@ -67,7 +68,7 @@ final class SidePanelStyle
 	 * saved the time: the card's colour at 60%, so they show at about 40%.
 	 */
 	static final Color SAVED_DIM = alpha(CARD, 0.6);
-	/** T-042: the light stripes over that stretch, in Better (or the average grey) at this opacity. */
+	/** T-042: the light stripes over that stretch at this opacity; T-214: in luck's violet. */
 	static final double SAVED_STRIPE_ALPHA = 0.6;
 	/** T-042: the tick at your real time on the time budget's bar. */
 	static final Color CLOCK_TICK = VALUE;
@@ -123,6 +124,13 @@ final class SidePanelStyle
 	static final Color SEGMENT_TRACK = new Color(0x2A2A2A);
 	static final Color SEGMENT_ON = new Color(0x4C4C4C);
 	static final Color SEGMENT_HOVER = new Color(0x3A3A3A);
+	/**
+	 * T-214: the live Skill tile's cell for an attack a tick late: a light orange, a step paler than {@link #COST}'s 2 or
+	 * more, apart from the on-time blue-grey ({@link #KEPT}).
+	 */
+	static final Color LATE_ONE = new Color(0xFFDAB0);
+	/** T-214: a cell no attack has filled yet, an outline on the tile. */
+	static final Color CELL_EMPTY = new Color(0x4A4A4A);
 	/** T-196: the card's rule between its blocks, on the card's ground. */
 	static final Color DIVIDER_ON_CARD = new Color(0x3C3C3C);
 	static final Color ZONE_B = new Color(0x3E5C7A);

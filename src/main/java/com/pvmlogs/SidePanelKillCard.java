@@ -67,7 +67,7 @@ final class SidePanelKillCard extends JComponent
 	final Rectangle gradeBox = new Rectangle();
 	/** T-199: the luck track's marker as painted last, for its test; -1 for none. */
 	int markerX = -1;
-	/** T-207: where Luck's track and Skill's live strip are painted (their bars' top, in the card), for tests; -1 if not. */
+	/** T-207: where Luck's track and Skill's live cells are painted (their bars' top, in the card), for tests; -1 if not. */
 	int trackY = -1;
 
 	/** T-207: the Luck and Skill tiles' boxes, for tests. */
@@ -82,10 +82,12 @@ final class SidePanelKillCard extends JComponent
 	}
 
 
-	int stripY = -1;
+	int cellsY = -1;
+	/** T-214: the live cells as last painted, oldest first, null for an empty outline; empty for none. */
+	List<Color> cells = java.util.Collections.emptyList();
 	/** T-207: the bars' left edge and width, the same in both tiles, for tests. */
 	int trackX = -1;
-	int stripX = -1;
+	int cellsX = -1;
 	/** The height last measured, and for which card and text mode: measuring lays the card out without painting it. */
 	private KillCard measured;
 	private int measuredFor = Integer.MIN_VALUE;
@@ -315,9 +317,10 @@ final class SidePanelKillCard extends JComponent
 		{
 			markerX = -1;
 			trackY = -1;
-			stripY = -1;
+			cellsY = -1;
 			trackX = -1;
-			stripX = -1;
+			cellsX = -1;
+			cells = java.util.Collections.emptyList();
 			paintCard(g);
 		}
 		finally
@@ -476,7 +479,7 @@ final class SidePanelKillCard extends JComponent
 		static final int RULE_ABOVE = 7;
 		static final int RULE_BELOW = 6;
 		static final int LINE = 3;
-		/** T-207: Luck's track and Skill's live strip, the same height at the same y in their tiles. */
+		/** T-207: Luck's track and Skill's live cells, the same height at the same y in their tiles. */
 		static final int TRACK_H = 6;
 		static final int STRIP_H = TRACK_H;
 		/** T-207: the bars' row in a tile: the bar, and the marker standing 2 px above and below it. */
@@ -618,7 +621,7 @@ final class SidePanelKillCard extends JComponent
 		/**
 		 * T-207 (Eric: "the bar that shows up in the skill card at the top doesn't line up vertically with luck"): the two
 		 * tiles mirror line for line, the same height live and after the kill: the name; the value line; a small line
-		 * (luck's seconds / the time Skill lost); the bars' row (Luck's track / Skill's live strip).
+		 * (luck's seconds / the time Skill lost); the bars' row (Luck's track / Skill's live cells, T-214).
 		 */
 		static int tileHeight()
 		{
@@ -765,10 +768,10 @@ final class SidePanelKillCard extends JComponent
 			final Text bottom = c.lost != null ? Text.small(c.lost, SidePanelStyle.COST)
 				: c.skill != null ? Text.small("±0 s", SidePanelStyle.MUTED) : Text.NONE;
 			text(bottom, x0, secondsTop(top), room);
-			// Line 3, live: the fight so far, level with Luck's track; after the kill, nothing under Skill.
-			if (c.live && c.strip != null && c.strip.length > 0)
+			// Line 3, live: your last 10 attacks, level with Luck's track; after the kill, nothing under Skill.
+			if (c.live && c.attacks != null)
 			{
-				strip(x0, barRowTop(top) + 2, room);
+				cells(x0, barRowTop(top) + 2, room);
 			}
 		}
 
@@ -881,34 +884,53 @@ final class SidePanelKillCard extends JComponent
 			return width(g, SidePanelStyle.Type.SMALL, text) <= room ? text : shorter;
 		}
 
+		/** T-214: the gap between two cells. */
+		static final int CELL_GAP = 2;
+
 		/**
-		 * Live: the fight so far, a thin bar in Skill's tile ({@code x}, {@code width}) at {@code y}, its idle moments
-		 * orange. T-207: inside the tile, level with Luck's track and as tall, at the same inset.
+		 * T-214 (Eric's pick, A): live, your last {@link KillCard#CELLS} attacks as cells across Skill's tile ({@code x},
+		 * {@code width}) at {@code y}, newest on the right, level with Luck's track and as tall: blue-grey on time, light
+		 * orange a tick late, orange 2 or more, so a 1-tick slip is a whole cell. Fewer attacks so far: empty outlines
+		 * for the rest, filling from the left.
 		 */
-		private void strip(int sx, int y, int sw)
+		private void cells(int sx, int y, int sw)
 		{
-			if (paint)
+			final int n = KillCard.CELLS;
+			final int[] a = c.attacks;
+			final List<Color> painted = new ArrayList<>(n);
+			for (int i = 0; i < n; i++)
 			{
-				g.setColor(SidePanelStyle.KEPT);
-				g.fillRect(sx, y, sw, STRIP_H);
-				final int n = c.strip.length;
-				for (int i = 0; i < n; i++)
+				final int x0 = sx + i * (sw + CELL_GAP) / n;
+				final int x1 = sx + (i + 1) * (sw + CELL_GAP) / n - CELL_GAP;
+				final Color fill = i < a.length ? cellColour(a[i]) : null;
+				painted.add(fill);
+				if (!paint)
 				{
-					if (c.strip[i] == 0)
-					{
-						continue;
-					}
-					final int x0 = sx + (int) ((long) i * sw / n);
-					final int x1 = Math.max(x0 + 2, sx + (int) ((long) (i + 1) * sw / n));
-					g.setColor(c.strip[i] == KillCard.STRIP_IDLE ? SidePanelStyle.COST : SidePanelStyle.EATING);
-					g.fillRect(x0, y, Math.min(x1, sx + sw) - x0, STRIP_H);
+					continue;
+				}
+				if (fill == null)
+				{
+					g.setColor(SidePanelStyle.CELL_EMPTY);
+					g.drawRect(x0, y, x1 - x0 - 1, STRIP_H - 1);
+				}
+				else
+				{
+					g.setColor(fill);
+					g.fillRect(x0, y, x1 - x0, STRIP_H);
 				}
 			}
 			if (owner != null)
 			{
-				owner.stripY = y;
-				owner.stripX = sx;
+				owner.cellsY = y;
+				owner.cellsX = sx;
+				owner.cells = painted;
 			}
+		}
+
+		/** T-214: a cell's colour by its attack's delay in ticks. */
+		static Color cellColour(int ticksLate)
+		{
+			return ticksLate <= 0 ? SidePanelStyle.KEPT : ticksLate == 1 ? SidePanelStyle.LATE_ONE : SidePanelStyle.COST;
 		}
 
 		/** The badges as icon chips: their names and what they read on hover. */

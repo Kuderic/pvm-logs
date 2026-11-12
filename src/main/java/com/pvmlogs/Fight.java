@@ -226,6 +226,9 @@ class Fight
 	private transient FightTimeline timeline;
 	// T-153: see recordPassedOn.
 	private transient int passedOn;
+	// T-213: the tick the fight's first throw is known on, booked or not: see noteThrowKnown. Never saved: a saved fight
+	// is over.
+	private transient int firstThrowTick = Integer.MIN_VALUE;
 	/** T-172: the Wardens' phase 2 in its parts (poise, core, passed on); null for any other fight and older records. */
 	private WardensPhase2 wardensP2;
 
@@ -1150,6 +1153,26 @@ class Fight
 		// initialisers, so the count is zero where it should be one per attack. Falling back to the attempts keeps every
 		// kill already on disk reading as it did, instead of reporting 0% accuracy for all of them.
 		return targets == 0 ? attempts : targets;
+	}
+
+	/**
+	 * T-213 (Eric: "When a boss respawns the side panel flashes a new screen for like a brief moment before going to the
+	 * live fight display"): the fight's first throw is known on {@code tick} before its booking, from the experience it
+	 * paid, the special's energy fall, a projectile of the player's at the target or a cast seen. The first one counts;
+	 * later ones change nothing.
+	 */
+	void noteThrowKnown(int tick)
+	{
+		if (firstThrowTick == Integer.MIN_VALUE)
+		{
+			firstThrowTick = tick;
+		}
+	}
+
+	/** T-213: whether the fight is under way: a throw known ({@link #noteThrowKnown}) or an attack booked. */
+	boolean isThrowKnown()
+	{
+		return firstThrowTick != Integer.MIN_VALUE || attempts > 0;
 	}
 
 	void recordAttackMade(boolean potted)

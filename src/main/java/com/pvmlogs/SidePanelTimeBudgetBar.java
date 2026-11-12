@@ -22,6 +22,10 @@ import javax.swing.JComponent;
  * didn't spend. Your average is a dashed grey marker
  * hanging below the bar, its clock under it. Shapes only, so it stays sharp at
  * 2× (spec section 1).
+ *
+ * <p>T-214 (Eric: "Where the time went score bar changes what makes up the bar when you expand it, can we keep a
+ * consistent design here"): {@link #paintBar} draws the segments for the open section and, 6 px tall with no tick,
+ * labels or marker, for its folded line: one list, one painter, two heights.
  */
 final class SidePanelTimeBudgetBar extends JComponent
 {
@@ -94,11 +98,137 @@ final class SidePanelTimeBudgetBar extends JComponent
 		return new Dimension(SidePanelStyle.CONTENT_WIDTH, height());
 	}
 
-	/** Where your real time falls on a bar {@code width} wide: T ÷ (T + L) of it, the end when luck didn't save time. */
+	/**
+	 * Where your real time falls on a bar {@code width} wide: where luck's saved stretch starts (T ÷ (T + L) of it, to the
+	 * pixel), the end when luck didn't save time.
+	 */
 	static double tickX(PanelSnapshot.TimeBudget b, double width)
 	{
-		return b.total <= 0 ? width : Math.min(1, b.clock / b.total) * width;
+		if (b.total <= 0)
+		{
+			return width;
+		}
+		final int saved = savedIndex(b);
+		if (saved < 0)
+		{
+			return Math.min(1, b.clock / b.total) * width;
+		}
+		return edges(b, (int) Math.round(width))[saved];
 	}
+
+	/** T-214: the luck-saved stretch's index, past the tick; -1 for none. */
+	private static int savedIndex(PanelSnapshot.TimeBudget b)
+	{
+		if (b.luckSaved <= 0)
+		{
+			return -1;
+		}
+		for (int i = b.segments.size() - 1; i >= 0; i--)
+		{
+			if (b.segments.get(i).fill == PanelSnapshot.Fill.LUCK_FASTER)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	/**
+	 * T-214: the segments' edges on a bar {@code width} px wide, in whole pixels: edge i is segment i's left, the last
+	 * the bar's end. Each segment its share of the length; one the legend lists that would be under a pixel is 1 px, in
+	 * its place (a 1-tick idle in a long fight still shows at 6 px), the pixels it takes come off the widest.
+	 */
+	static int[] edges(PanelSnapshot.TimeBudget b, int width)
+	{
+		final int n = b.segments.size();
+		final double scale = b.total > 0 ? width / b.total : 0;
+		final double[] want = new double[n];
+		final int[] px = new int[n];
+		int used = 0;
+		double length = 0;
+		for (int i = 0; i < n; i++)
+		{
+			final PanelSnapshot.Segment s = b.segments.get(i);
+			final double w = Double.isNaN(s.seconds) || s.seconds <= 0 ? 0 : s.seconds * scale;
+			length += w;
+			want[i] = s.listed && w > 0 && w < 1 ? 1 : w;
+			px[i] = (int) Math.floor(want[i]);
+			used += px[i];
+		}
+		// The pixels left over go to the largest remainders; too many (the 1 px stretches) come off the widest.
+		int left = (int) Math.round(Math.min(width, length)) - used;
+		while (left > 0)
+		{
+			int best = -1;
+			for (int i = 0; i < n; i++)
+			{
+				if (want[i] - px[i] > 0 && (best < 0 || want[i] - px[i] > want[best] - px[best]))
+				{
+					best = i;
+				}
+			}
+			if (best < 0)
+			{
+				break;
+			}
+			px[best]++;
+			left--;
+		}
+		while (left < 0)
+		{
+			int widest = 0;
+			for (int i = 1; i < n; i++)
+			{
+				widest = px[i] > px[widest] ? i : widest;
+			}
+			if (n == 0 || px[widest] <= 1)
+			{
+				break;
+			}
+			px[widest]--;
+			left++;
+		}
+		final int[] edges = new int[n + 1];
+		for (int i = 0; i < n; i++)
+		{
+			edges[i + 1] = edges[i] + px[i];
+		}
+		return edges;
+	}
+
+	/**
+	 * T-214: the bar's segments in {@code w} × {@code h} at ({@code x}, {@code y}), each in its fill, luck's in its violet
+	 * ({@link PanelSnapshot.TimeBudget#luckStripe}): the open section's bar and, small, its folded line's. Returns the
+	 * fills drawn, in order, for tests.
+	 */
+	static java.util.List<PanelSnapshot.Fill> paintBar(Graphics2D g, PanelSnapshot.TimeBudget b, int x, int y, int w, int h)
+	{
+		final java.util.List<PanelSnapshot.Fill> drawn = new java.util.ArrayList<>(b.segments.size());
+		final int[] edges = edges(b, w);
+		final Object aa = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		g.setColor(SidePanelStyle.TRACK);
+		g.fillRect(x, y, w, h);
+		for (int i = 0; i < b.segments.size(); i++)
+		{
+			final int sw = edges[i + 1] - edges[i];
+			if (sw <= 0)
+			{
+				continue;
+			}
+			final PanelSnapshot.Fill fill = b.segments.get(i).fill;
+			SidePanelParts.paint(g, new Rectangle2D.Double(x + edges[i], y, sw, h), fill, fill.luck() ? b.luckStripe : null);
+			drawn.add(fill);
+		}
+		if (aa != null)
+		{
+			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa);
+		}
+		return drawn;
+	}
+
+	/** T-214: the fills last painted, in order, for tests. */
+	java.util.List<PanelSnapshot.Fill> drawn = java.util.Collections.emptyList();
 
 	/** Where the clock and end labels go on a bar {@code width} wide (T-042): they never overlap. */
 	static final class Labels
@@ -158,24 +288,11 @@ final class SidePanelTimeBudgetBar extends JComponent
 			return;
 		}
 		final Graphics2D g2 = (Graphics2D) g.create();
-		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		final double width = getWidth();
 		final double scale = width / budget.total;
-		double x = 0;
-		for (PanelSnapshot.Segment s : budget.segments)
-		{
-			final double w = s.seconds * scale;
-			if (w > 0)
-			{
-				SidePanelParts.paint(g2, new Rectangle2D.Double(x, barTop(), w, BAR_HEIGHT), s.fill, null);
-			}
-			x += w;
-		}
+		drawn = paintBar(g2, budget, 0, barTop(), getWidth(), BAR_HEIGHT);
+		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		final double tick = tickX(budget, width);
-		if (budget.luckSaved > 0 && tick < width)
-		{
-			saved(g2, new Rectangle2D.Double(tick, barTop(), width - tick, BAR_HEIGHT), budget.luckSavedColour);
-		}
 		// The average marker, only when it falls on the bar; the row under it says it either way. Dashed and grey, hanging
 		// below the bar, so it never reads as the tick.
 		final boolean marker = markerLabel != null && budget.marker >= 0 && budget.marker <= budget.total;
@@ -228,7 +345,7 @@ final class SidePanelTimeBudgetBar extends JComponent
 
 	/**
 	 * The time luck saved (T-042): what's under {@code area} dimmed to about
-	 * 40%, then light stripes in {@code stripe} (Better, or the average grey).
+	 * 40%, then light stripes in {@code stripe} (T-214: luck's violet).
 	 * No outline. The legend's swatch paints best play's colour first and then
 	 * this, so it matches the bar.
 	 */

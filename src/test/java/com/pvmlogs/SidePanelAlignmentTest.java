@@ -101,15 +101,15 @@ public class SidePanelAlignmentTest
 			assertTrue(live.live);
 			final SidePanelKillCard view = painted(live);
 			assertTrue("track painted", view.trackY >= 0);
-			assertTrue("strip painted", view.stripY >= 0);
-			assertEquals("the same y", view.trackY, view.stripY);
+			assertTrue("strip painted", view.cellsY >= 0);
+			assertEquals("the same y", view.trackY, view.cellsY);
 			// The same inset in their tiles: each its tile's padding in from the tile's left.
-			assertEquals(view.trackX - view.luckBox().x, view.stripX - view.playBox().x);
+			assertEquals(view.trackX - view.luckBox().x, view.cellsX - view.playBox().x);
 			// After the kill, the track sits where it did: nothing jumps at the kill.
 			final SidePanelKillCard kill = painted(SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()).card);
 			assertEquals(view.trackY, kill.trackY);
 			assertEquals(view.luckBox().height, kill.luckBox().height);
-			assertEquals(-1, kill.stripY);
+			assertEquals(-1, kill.cellsY);
 		}
 	}
 
