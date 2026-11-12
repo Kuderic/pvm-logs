@@ -219,8 +219,16 @@ class DamageModifiers
 	}
 
 	/**
-	 * T-211: a game message (tags removed) during a fight with {@code target}: for a boss whose states listen for one,
-	 * or that has a shown state, it's logged with the tick ({@code GAME MESSAGE tick N: text}) and handed to its states.
+	 * T-215: the words that make a chat message worth logging in a fight with a boss that has a shown state (the Hydra):
+	 * what could tell of a vent's spray or the boss's defences. Never a message from a player.
+	 */
+	static final String[] LOGGED_WORDS = {"hydra", "chemical", "vent", "defence", "defense", "neutrali", "weaken", "spray",
+		"liquid"};
+
+	/**
+	 * T-211: a chat message with no sender (a game message or SPAM, tags removed) during a fight with {@code target}: for
+	 * a boss whose states listen for one, it's handed to them. T-215: it's logged with the tick only when it has one of
+	 * {@link #LOGGED_WORDS} or a state's own text in it, and isn't a drop or broadcast naming a player.
 	 */
 	void onGameMessage(NPC target, String message)
 	{
@@ -234,12 +242,57 @@ class DamageModifiers
 		{
 			return;
 		}
-		log.accept(String.format("GAME MESSAGE tick %d (%s, npc %d): %s", client.getTickCount(), boss.name,
-			target.getId(), message));
+		if (worthLogging(message))
+		{
+			log.accept(String.format("GAME MESSAGE tick %d (%s, npc %d): %s", client.getTickCount(), boss.name,
+				target.getId(), message));
+		}
 		if (listens)
 		{
 			tracker.onGameMessage(target.getIndex(), boss.name, boss.damageModifiers, message, client.getTickCount());
 		}
+	}
+
+	/** T-215: has one of {@link #LOGGED_WORDS}, and names no player (a drop or a broadcast: "… received a drop: …"). */
+	static boolean worthLogging(String message)
+	{
+		if (message == null)
+		{
+			return false;
+		}
+		final String m = message.toLowerCase(java.util.Locale.ROOT);
+		if (m.contains("received a drop") || m.contains("received a new") || m.contains(" has ") || m.contains("valuable drop"))
+		{
+			return false;
+		}
+		for (String w : LOGGED_WORDS)
+		{
+			if (m.contains(w))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * T-215: what an npc says overhead: for a boss whose states listen for it (the Hydra's roar as the vent sprays her),
+	 * handed to them, in a fight or before one (she can be sprayed before the first attack).
+	 */
+	void onOverheadText(NPC npc, String text)
+	{
+		final BossRules.Boss boss = npc == null ? null : bossFor(npc.getId());
+		if (boss == null || text == null || !ModifierTracker.listensForOverheadText(boss.damageModifiers))
+		{
+			return;
+		}
+		tracker.onOverheadText(npc.getIndex(), boss.name, boss.damageModifiers, text, client.getTickCount());
+	}
+
+	/** T-215: the stats warnings raised on {@code npcIndex} (a state's end missed), for the fight's record at its end. */
+	java.util.Set<String> warnings(int npcIndex)
+	{
+		return tracker.warnings(npcIndex);
 	}
 
 	/** T-211: whether the fight's target is a boss whose game messages and overhead text are logged. */
@@ -247,6 +300,7 @@ class DamageModifiers
 	{
 		final BossRules.Boss boss = target == null ? null : bossFor(target.getId());
 		return boss != null && (ModifierTracker.listensForMessages(boss.damageModifiers)
+			|| ModifierTracker.listensForOverheadText(boss.damageModifiers)
 			|| ModifierTracker.hasShown(boss.damageModifiers));
 	}
 

@@ -430,6 +430,25 @@ class BossRules
 		 * For a state whose modifier shrinks the max, such a hit can't happen while it holds: proof it's over.
 		 */
 		boolean endOnMaxExceeded;
+		/** T-215: the boss's overhead text containing one of these texts (case ignored) opens it. */
+		List<String> startOnOverheadText;
+		/**
+		 * T-215: the boss's overhead text containing one of these texts (case ignored) closes it: the Alchemical Hydra's
+		 * "Roaaaaaaaaaaar!" as the vent sprays her.
+		 */
+		List<String> endOnOverheadText;
+		/**
+		 * T-215: an end signal (a message or overhead text) heard while it's closed counts for its next opening, which then
+		 * opens and closes at once: the Hydra sprayed during a transition, or before the fight starts. Cleared when an
+		 * {@link #endOnNpcId} form comes.
+		 */
+		boolean endHeardBeforeStart;
+		/**
+		 * T-215: one of the player's hits over the max expected for it while it holds proves its end was missed. It isn't
+		 * closed (a close chosen by a high roll reads lucky); the fight gets this as its stats warning, so its luck is held
+		 * back and calibration skips it.
+		 */
+		String warnOnMaxExceeded;
 		/**
 		 * T-211: what the state's open time is called where the time went ("shield"): kept per fight, shown, not charged
 		 * to anything. Null for a state that isn't shown.

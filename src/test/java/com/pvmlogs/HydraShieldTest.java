@@ -16,16 +16,16 @@ import org.junit.Test;
 /**
  * T-211: the Alchemical Hydra takes 75% less damage from each of her first three phases' start until the right vent
  * weakens her (OSRS Wiki, Alchemical Hydra: "Barring the last phase, the damage reduction is reapplied"). The state
- * opens on a phase's npc id, closes on the weakening's game message, on a hit over the shielded max, or at the phase's
- * end; a shielded hit is a quarter, rounded down (a type-43 max-hit splat of 13 under an ordinary max of 54 in Eric's
- * kills of 2026-11-11).
+ * opens on a phase's npc id and closes on her roar as the vent sprays her (T-215; heard during the transition before,
+ * the phase starts weakened) or at the phase's end; a hit over the shielded max only warns. A shielded hit is a quarter,
+ * rounded down (a type-43 max-hit splat of 13 under an ordinary max of 54 in Eric's kills of 2026-11-11).
  */
 public class HydraShieldTest
 {
 	private static final BossRules RULES = BossRules.load(new Gson(), null);
 	private static final int INDEX = 37533;
 	private static final ModifierTracker.InsideCheck NOWHERE = (id, range) -> false;
-	private static final String WEAKENED = "The chemicals neutralise the Alchemical Hydra's defences!";
+	private static final String ROAR = "Roaaaaaaaaaaar!";
 
 	private final List<String> lines = new ArrayList<>();
 	private final ModifierTracker tracker = new ModifierTracker(lines::add);
@@ -79,46 +79,133 @@ public class HydraShieldTest
 		assertEquals(opened, lines.size());
 	}
 
-	@Test
-	public void closesOnTheWeakeningMessage()
+	private void roar(int tick)
 	{
+		tracker.onOverheadText(INDEX, "Alchemical Hydra", rules(), ROAR, tick);
+	}
+
+	@Test
+	public void closesOnHerRoar()
+	{
+		// T-215: she shouts as the vent sprays her (Eric's logs of 2026-11-11: 84 hits before it, 93% at 13 or under).
 		form(8615, 100);
 		tracker.onPlayerHit(INDEX, 102);
 		tracker.onPlayerHit(INDEX, 107);
-		// Any other message leaves it open.
-		tracker.onGameMessage(INDEX, "Alchemical Hydra", rules(), "The Alchemical Hydra's defences partially absorb your attack!", 108);
+		// Other text, and T-211's game message (never seen in 45 kills), leave it open.
+		tracker.onOverheadText(INDEX, "Alchemical Hydra", rules(), "Hiss!", 108);
+		tracker.onGameMessage(INDEX, "Alchemical Hydra", rules(), "The chemicals neutralise the Alchemical Hydra's defences!", 108);
 		assertTrue(shielded(8615, 108));
-		tracker.onGameMessage(INDEX, "Alchemical Hydra", rules(), WEAKENED, 109);
+		roar(109);
 		assertFalse(shielded(8615, 109));
 		assertTrue(shielded(8615, 108)); // an attack landing before it was still shielded
 		assertTrue(lines.toString(), lines.contains(
-			"SHIELD Alchemical Hydra phase 1: 9 ticks, 2 attacks shielded (the message \"" + WEAKENED + "\")"));
-		// The next phase starts shielded again, and its own message ends it.
-		form(8617, 150);
+			"SHIELD Alchemical Hydra phase 1: 9 ticks, 2 attacks shielded (it said \"" + ROAR + "\")"));
+		// A second roar in the same phase carries nothing over: the transition clears it.
+		roar(120);
+		form(8616, 140);
 		form(8619, 151);
 		assertTrue(shielded(8619, 152));
-		tracker.onGameMessage(INDEX, "Alchemical Hydra", rules(), WEAKENED, 160);
+		roar(160);
 		assertFalse(shielded(8619, 160));
 		assertTrue(lines.toString(), lines.contains(
-			"SHIELD Alchemical Hydra phase 2: 9 ticks, 0 attacks shielded (the message \"" + WEAKENED + "\")"));
+			"SHIELD Alchemical Hydra phase 2: 9 ticks, 0 attacks shielded (it said \"" + ROAR + "\")"));
 		assertEquals(Collections.singletonMap("shield", 18), tracker.shownTicks(INDEX, 200));
 	}
 
 	@Test
-	public void aHitOverTheShieldedMaxEndsItAndThePhaseEndsItAnyway()
+	public void aRoarDuringTheTransitionOrBeforeTheFightMeansThePhaseStartsWeakened()
 	{
+		// Eric's 10 phases with no roar of their own: 7 had it on the transition form before them.
+		form(8615, 100);
+		roar(110);
+		form(8616, 140);
+		roar(145);
+		form(8619, 150);
+		assertFalse(shielded(8619, 151));
+		assertTrue(lines.toString(), lines.contains("SHIELD Alchemical Hydra phase 2: 0 ticks, 0 attacks shielded (it said \""
+			+ ROAR + "\", heard before it opened)"));
+		// Phase 3 without one starts shielded again.
+		form(8617, 200);
+		form(8620, 210);
+		assertTrue(shielded(8620, 211));
+		// Sprayed before the first attack: the roar before the fight counts for the form it starts in.
+		final ModifierTracker fresh = new ModifierTracker(lines::add);
+		fresh.onOverheadText(9, "Alchemical Hydra", rules(), ROAR, 50);
+		fresh.onNpcId(9, "Alchemical Hydra", rules(), 8615, 60);
+		assertFalse(fresh.isOpen(9, "unweakened", 61));
+		// Never in the enraged phase: a roar then opens nothing.
+		form(8618, 300);
+		roar(305);
+		form(8621, 310);
+		assertFalse(tracker.isOpen(INDEX, "unweakened", 311));
+	}
+
+	@Test
+	public void aHitOverTheShieldedMaxWarnsButDoesntEndIt()
+	{
+		// T-215: that close waited for a high roll and read lucky (41 kills, luck median about 83%).
 		form(8615, 100);
 		tracker.onMaxExceeded(INDEX, 43, 25, 118);
-		assertFalse(shielded(8615, 118));
-		assertTrue(lines.toString(), lines.stream().anyMatch(l -> l.startsWith("SHIELD Alchemical Hydra phase 1: 18 ticks")
-			&& l.endsWith("(a hit of 43 over the max of 25)")));
+		assertTrue(shielded(8615, 118));
+		assertEquals(Collections.singleton("the Hydra's weakening was missed in a phase, so her shield's timing isn't known"),
+			tracker.warnings(INDEX));
+		// Once, however many.
+		tracker.onMaxExceeded(INDEX, 50, 25, 123);
+		assertEquals(1, tracker.warnings(INDEX).size());
+		// After her roar, a big hit is no warning.
+		final ModifierTracker other = new ModifierTracker(lines::add);
+		other.onNpcId(9, "Alchemical Hydra", rules(), 8615, 100);
+		other.onOverheadText(9, "Alchemical Hydra", rules(), ROAR, 105);
+		other.onMaxExceeded(9, 43, 25, 110);
+		assertTrue(other.warnings(9).isEmpty());
 		// Never weakened: the transition closes it, and a still-open window counts to now.
+		form(8616, 140);
 		form(8619, 200);
-		assertEquals(Integer.valueOf(18 + 10), tracker.shownTicks(INDEX, 210).get("shield"));
+		assertEquals(Integer.valueOf(40 + 10), tracker.shownTicks(INDEX, 210).get("shield"));
 		form(8617, 230);
-		assertEquals(Integer.valueOf(18 + 30), tracker.shownTicks(INDEX, 400).get("shield"));
-		// A boss the tracker hasn't seen has none.
+		assertEquals(Integer.valueOf(40 + 30), tracker.shownTicks(INDEX, 400).get("shield"));
 		assertTrue(tracker.shownTicks(1, 400).isEmpty());
+		assertTrue(tracker.warnings(1).isEmpty());
+		// The rule itself: no close on a hit over the max, the roar, the early roar counted.
+		final BossRules.StateRule state = rules().states.get(0);
+		assertFalse(state.endOnMaxExceeded);
+		assertEquals(Collections.singletonList("Roaaaaaaaaaaar"), state.endOnOverheadText);
+		assertTrue(state.endHeardBeforeStart);
+	}
+
+	@Test
+	public void theChatLogKeepsWhatCouldTellAndNoNames()
+	{
+		assertTrue(DamageModifiers.worthLogging("The Alchemical Hydra becomes enraged!"));
+		assertTrue(DamageModifiers.worthLogging("The chemicals neutralise the Alchemical Hydra's defences!"));
+		assertTrue(DamageModifiers.worthLogging("The vent sprays you with liquid."));
+		// A broadcast naming a player, a drop, and messages that tell nothing of her.
+		assertFalse(DamageModifiers.worthLogging("Someone received a drop: Hydra leather"));
+		assertFalse(DamageModifiers.worthLogging("Valuable drop: Hydra's claw (1,000,000 coins)"));
+		assertFalse(DamageModifiers.worthLogging("Someone has reached a total level of 2000."));
+		assertFalse(DamageModifiers.worthLogging("Your divine ranging potion is about to expire."));
+		assertFalse(DamageModifiers.worthLogging(null));
+	}
+
+	@Test
+	public void aMessageOfAnyTypeCanEndAState()
+	{
+		// The plugin hands GAMEMESSAGE and SPAM alike (no sender) to the states: a made-up boss ending on a SPAM line.
+		final BossRules.StateRule s = new BossRules.StateRule();
+		s.name = "guarded";
+		s.startOnNpcId = new int[]{2001};
+		s.endOnGameMessage = Collections.singletonList("guard drops");
+		s.endHeardBeforeStart = true;
+		final BossRules.DamageModifierRules r = new BossRules.DamageModifierRules();
+		r.states = Collections.singletonList(s);
+		tracker.onNpcId(5, "Guard", r, 2001, 10);
+		tracker.onGameMessage(5, "Guard", r, "The guard drops its shield.", 12);
+		assertFalse(tracker.isOpen(5, "guarded", 12));
+		// Heard while closed, it counts for the next opening.
+		tracker.onGameMessage(5, "Guard", r, "The guard drops its shield.", 20);
+		tracker.onNpcId(5, "Guard", r, 2000, 21);
+		tracker.onNpcId(5, "Guard", r, 2001, 22);
+		assertFalse(tracker.isOpen(5, "guarded", 23));
 	}
 
 	@Test
