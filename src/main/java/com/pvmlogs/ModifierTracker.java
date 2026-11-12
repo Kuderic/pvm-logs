@@ -269,6 +269,16 @@ final class ModifierTracker
 				open(b, s, tick, signal);
 			}
 		}
+		// T-222: a message that shows a state holding, heard while it's closed: the state's end came too early, or never was.
+		for (BossRules.StateRule s : states(rules))
+		{
+			final Window w = b.windows.get(s.name);
+			if (matches(s.holdsOnGameMessage, message) && (w == null || !w.openAt(tick)))
+			{
+				log.accept(String.format("MOD %s: %s is closed at tick %d, but %s shows it holding", b.name, s.name, tick,
+					signal));
+			}
+		}
 	}
 
 	/**
@@ -369,7 +379,7 @@ final class ModifierTracker
 	{
 		for (BossRules.StateRule s : states(rules))
 		{
-			if (s.startOnGameMessage != null || s.endOnGameMessage != null)
+			if (s.startOnGameMessage != null || s.endOnGameMessage != null || s.holdsOnGameMessage != null)
 			{
 				return true;
 			}

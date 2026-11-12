@@ -249,16 +249,41 @@
             "startOnNpcId": [8615, 8619, 8620],
             "endOnNpcId": [8616, 8617, 8618, 8621, 8622],
             "endOnOverheadText": ["Roaaaaaaaaaaar"],
+            "endOnGameMessage": ["The chemicals neutralise the Alchemical Hydra's defences"],
+            "holdsOnGameMessage": ["defences partially absorb your attack"],
             "endHeardBeforeStart": true,
             "warnOnMaxExceeded": "the Hydra's weakening was missed in a phase, so her shield's timing isn't known",
             "shownAs": "shield",
-            "source": "OSRS Wiki, Alchemical Hydra, read 2026-11-11: at the start of each phase it 'has a 75% damage reduction', which 'can be removed if it is lured over a vent on the floor which spews chemical liquid' ('the vent must be the correct one'); 'Barring the last phase, the damage reduction is reapplied' after each phase change, so phases 1-3 and not the last (8621). The page gives no message for the weakening. Opened by each of the three forms (the fight starts in 8615, which comes with no change of form: read from the boss when the fight starts), closed by the next form. T-215: she shouts \"Roaaaaaaaaaaar!\" (overhead text) as the vent sprays her, which ends it. Eric's two logs of 2026-11-11 (faf4f9e and c320b50, 45 kills, 141 phases): in the 131 phases with a roar, 84 hits landed before it, 93% of them 13 or under (the shielded max of 54) and none over the shield's maxima; the 1377 after it averaged 26.4, 602 of them over 25. The other 10 phases' hits were unshielded from the start: 7 had the roar on the transition form before them (5 on 8616 before 8619, 2 on 8617 before 8620), so a roar heard while it's closed counts for the next opening; 3 were phase 1, sprayed before the first attack by the hits (no roar was logged outside a fight then; this build hears one). No game message marks it (T-211's lead was wrong: none in 45 kills). A hit over the shielded max doesn't close it (that close waits for a high roll and read lucky, T-215): it warns, so the fight's luck is held back."
+            "source": "OSRS Wiki, Alchemical Hydra, read 2026-11-11: at the start of each phase it 'has a 75% damage reduction', which 'can be removed if it is lured over a vent on the floor which spews chemical liquid' ('the vent must be the correct one'); 'Barring the last phase, the damage reduction is reapplied' after each phase change, so phases 1-3 and not the last (8621). The page gives no message for the weakening. Opened by each of the three forms (the fight starts in 8615, which comes with no change of form: read from the boss when the fight starts), closed by the next form. T-215: she shouts \"Roaaaaaaaaaaar!\" (overhead text) as the vent sprays her, which ends it. Eric's two logs of 2026-11-11 (faf4f9e and c320b50, 45 kills, 141 phases): in the 131 phases with a roar, 84 hits landed before it, 93% of them 13 or under (the shielded max of 54) and none over the shield's maxima; the 1377 after it averaged 26.4, 602 of them over 25. The other 10 phases' hits were unshielded from the start: 7 had the roar on the transition form before them (5 on 8616 before 8619, 2 on 8617 before 8620), so a roar heard while it's closed counts for the next opening; 3 were phase 1, sprayed before the first attack by the hits (no roar was logged outside a fight then; this build hears one). No game message marks it (T-211's lead was wrong: none in 45 kills). A hit over the shielded max doesn't close it (that close waits for a high roll and read lucky, T-215): it warns, so the fight's luck is held back. T-222: the game says so too, \"The chemicals neutralise the Alchemical Hydra's defences!\", as SPAM (T-211's build passed only GAMEMESSAGE and never saw it in 45 kills; T-215's passes SPAM too and logged it once a shielded phase): in Eric's three logs on T-215's builds (0a76fa9, 14c2164, 3ba3018; 26 kills) 75 times, each on the tick of a roar. Either ends it; a roar heard before the fight still counts, as no message is heard outside one. \"The Alchemical Hydra's defences partially absorb your attack!\" comes with a shielded hit: 55 times, none while it was closed."
+          },
+          {
+            "name": "changing form",
+            "startOnNpcId": [8616, 8617, 8618],
+            "endOnNpcId": [8619, 8620, 8621, 8622],
+            "source": "T-222: her transitions (8616, 8617, 8618: \"You cannot attack the Alchemical Hydra as it changes form!\") until the next phase's form. No damage modifier rides on it: it is the window for its uptime allowance."
+          },
+          {
+            "name": "lightning",
+            "startOnBossAnim": [9112],
+            "ticks": 10,
+            "source": "T-222: phase 2's special (anim 9112), the lightning she sends after the player. The 10 ticks from it, where idle ticks run above her usual (Eric's logs: 0.79 idle ticks in them on average, 0.46 away from her specials and transitions). The window for its uptime allowance."
+          },
+          {
+            "name": "fire",
+            "startOnBossAnim": [9113],
+            "ticks": 10,
+            "source": "T-222: phase 3's special (anim 9113), the fire. The 10 ticks from it (0.73 idle ticks in them on average, 0.46 away from them). The window for its uptime allowance."
           }
         ],
         "modifiers": [
           {"name": "shield", "state": "unweakened", "multiply": [1, 4], "hiddenLive": true, "source": "The 75% damage reduction, the wiki as above. Rounded down: in Eric's kills of 2026-11-11 a max-hit splat (type 43) of 13 landed under the shield with an ordinary max of 54 (54 / 4 = 13.5; up or to the nearest would show 14), and the ruby bolt's 100 showed as 25. Hidden live: the overlay's gear rate shows her weakened rate, the player's own, never whether she is shielded now."}
         ]
-      }
+      },
+      "uptimeAllowances": [
+        {"state": "changing form", "from": "open", "maxTicks": 4, "afterTicks": 6, "source": "T-222, PROPOSED, for Eric to approve. Her form changes, and re-targeting her once the next phase's form comes. Measured over Eric's Hydra logs since 2026-11-11 (pvm-debug-20261111-013332, -121905, -213502, -231111, -20261112-023313; 91 kills, 274 transitions): idle ticks from the transition to the first throw after the next phase's form, median 2, 75th percentile 4, 90th 6, most 26; the next form to that throw, 90th percentile 6 ticks (the after ticks). The cap is the 75th percentile. The transition itself is already uncounted where she can't be attacked."},
+        {"state": "lightning", "from": "open", "maxTicks": 1, "afterTicks": 0, "source": "T-222, PROPOSED, for Eric to approve. Dodging phase 2's lightning. Over the same logs' 202 lightnings: idle ticks in the 10 from the anim, median 0, 75th percentile 1, 90th 3, most 7 (kill 96's, the most); from the anim to the first throw after, the brief's measure, the 75th percentile is 0. The cap is the 75th percentile of the first."},
+        {"state": "fire", "from": "open", "maxTicks": 1, "afterTicks": 0, "source": "T-222, PROPOSED, for Eric to approve. Moving off phase 3's fire. Over the same logs' 141 fires: idle ticks in the 10 from the anim, median 0, 75th percentile 1, 90th 3, most 8. The cap is the 75th percentile. Phase 1's poison (anim 9111, 226 of them) has none: its 75th percentile is 0 by either measure."}
+      ]
     },
     {
       "name": "Abyssal Sire",

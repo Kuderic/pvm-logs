@@ -91,9 +91,9 @@ public class HydraShieldTest
 		form(8615, 100);
 		tracker.onPlayerHit(INDEX, 102);
 		tracker.onPlayerHit(INDEX, 107);
-		// Other text, and T-211's game message (never seen in 45 kills), leave it open.
+		// Other text, and her other messages, leave it open.
 		tracker.onOverheadText(INDEX, "Alchemical Hydra", rules(), "Hiss!", 108);
-		tracker.onGameMessage(INDEX, "Alchemical Hydra", rules(), "The chemicals neutralise the Alchemical Hydra's defences!", 108);
+		tracker.onGameMessage(INDEX, "Alchemical Hydra", rules(), "The chemicals are absorbed by the Alchemical Hydra, empowering it further!", 108);
 		assertTrue(shielded(8615, 108));
 		roar(109);
 		assertFalse(shielded(8615, 109));
@@ -329,5 +329,116 @@ public class HydraShieldTest
 		assertEquals(42, back.getShownTicks("shield"));
 		// A fight saved before has none.
 		assertEquals(0, new Fight("Cerberus", 5862, 1, 600, 0L, null, 0).getShownTicks("shield"));
+	}
+
+	// T-222: the game's own message for the weakening, as SPAM, on the roar's tick.
+	private static final String NEUTRALISED = "The chemicals neutralise the Alchemical Hydra's defences!";
+	private static final String ABSORBED = "The Alchemical Hydra's defences partially absorb your attack!";
+
+	private void message(String text, int tick)
+	{
+		tracker.onGameMessage(INDEX, "Alchemical Hydra", rules(), text, tick);
+	}
+
+	@Test
+	public void theNeutraliseMessageEndsTheShieldAndTheAbsorbMessageChecksIt()
+	{
+		form(8615, 100);
+		message(ABSORBED, 104);
+		assertFalse(lines.toString(), lines.stream().anyMatch(l -> l.contains("shows it holding")));
+		message(NEUTRALISED, 106);
+		assertFalse(shielded(8615, 106));
+		assertTrue(lines.toString(), lines.contains(
+			"SHIELD Alchemical Hydra phase 1: 6 ticks, 0 attacks shielded (the message \"" + NEUTRALISED + "\")"));
+		// The roar on the same tick changes nothing, and carries nothing into the next phase.
+		roar(106);
+		form(8616, 140);
+		form(8619, 143);
+		assertTrue(shielded(8619, 144));
+		// An absorbed hit while it's closed is logged: the end came too early.
+		message(NEUTRALISED, 150);
+		message(ABSORBED, 152);
+		assertTrue(lines.toString(), lines.stream().anyMatch(l -> l.startsWith(
+			"MOD Alchemical Hydra: unweakened is closed at tick 152, but the message")));
+		// No warning: the message ended each phase.
+		tracker.onMaxExceeded(INDEX, 50, 25, 151);
+		assertTrue(tracker.warnings(INDEX).isEmpty());
+	}
+
+	@Test
+	public void aFightWithNeitherSignalStaysUnsure()
+	{
+		form(8615, 100);
+		tracker.onPlayerHit(INDEX, 103);
+		tracker.onMaxExceeded(INDEX, 44, 25, 110);
+		assertEquals(1, tracker.warnings(INDEX).size());
+		assertTrue(shielded(8615, 111));
+	}
+
+	private MechanicAllowances allowances(List<String> log)
+	{
+		return new MechanicAllowances(log::add);
+	}
+
+	private void observe(MechanicAllowances m, int tick)
+	{
+		m.observe(tick, hydra(8615).uptimeAllowances, state -> tracker.window(INDEX, state, tick));
+	}
+
+	@Test
+	public void herFormChangesAndSpecialsExcuseIdleTicksUpToTheirCaps()
+	{
+		final BossRules.Boss boss = hydra(8615);
+		assertEquals(3, boss.uptimeAllowances.size());
+		final List<String> log = new java.util.ArrayList<>();
+		final MechanicAllowances m = allowances(log);
+		// Each tick: the windows, then the idle tick a booking lag (2) before it, as the plugin judges them.
+		final java.util.Set<Integer> idle = new java.util.HashSet<>(java.util.Arrays.asList(
+			115, 116, 117, 118, 119, 120, 121, 122, // around the first transition: 4 excused, the rest lost
+			151, 152, 153, // after the lightning: 1
+			201, 202)); // after the poison: none
+		final int[] excused = new int[300];
+		form(8615, 100);
+		for (int t = 100; t <= 210; t++)
+		{
+			// Kill 96's first transition: 8616 on 1113, 8619 on 1116 (here 113, 116).
+			if (t == 113)
+			{
+				form(8616, t);
+			}
+			if (t == 116)
+			{
+				form(8619, t);
+			}
+			if (t == 150)
+			{
+				tracker.onBossAnim(INDEX, "Alchemical Hydra", rules(), 9112, t);
+			}
+			if (t == 200)
+			{
+				tracker.onBossAnim(INDEX, "Alchemical Hydra", rules(), 9111, t);
+			}
+			observe(m, t);
+			if (idle.contains(t - 2) && m.excuse(t - 2) != null)
+			{
+				excused[t - 2] = 1;
+			}
+		}
+		// Covered from the transition to 6 ticks after the next form (113-121), 4 at most.
+		assertEquals(4, excused[115] + excused[116] + excused[117] + excused[118] + excused[119] + excused[120]
+			+ excused[121] + excused[122]);
+		assertEquals(0, excused[122]);
+		// The lightning: 1 of the 10 ticks from the anim.
+		assertEquals(1, excused[151] + excused[152] + excused[153]);
+		// The poison: none.
+		assertEquals(0, excused[201] + excused[202]);
+		m.finish();
+		assertTrue(log.toString(), log.stream().anyMatch(l -> l.startsWith("MECHANIC changing form")
+			&& l.contains("4 idle ticks excused of 4 allowed")));
+		// Each is marked for Eric's approval.
+		for (BossRules.UptimeAllowance a : boss.uptimeAllowances)
+		{
+			assertTrue(a.state, a.source.contains("PROPOSED, for Eric to approve"));
+		}
 	}
 }

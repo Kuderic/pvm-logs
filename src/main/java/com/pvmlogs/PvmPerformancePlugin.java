@@ -7351,7 +7351,7 @@ public class PvmPerformancePlugin extends Plugin
 		// only when it could tell of the boss's state, never one naming a player.
 		if (current != null && targetNpc != null && (event.getName() == null || event.getName().isEmpty()))
 		{
-			damageModifiers.onGameMessage(targetNpc, message);
+			damageModifiers.onGameMessage(targetNpc, message, event.getType().name());
 		}
 		final String buff = gearBonuses.onGameMessage(message, client.getTickCount());
 		if (buff != null)
