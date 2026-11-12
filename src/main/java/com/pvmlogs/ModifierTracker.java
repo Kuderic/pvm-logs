@@ -68,6 +68,10 @@ final class ModifierTracker
 		final Map<String, Integer> shownTicks = new HashMap<>();
 		/** T-211: how many windows of each shown state have opened, for the log line's phase. */
 		final Map<String, Integer> shownOpened = new HashMap<>();
+		/** T-215: states whose end signal came while they were closed ({@link BossRules.StateRule#endHeardBeforeStart}). */
+		final Map<String, String> endedEarly = new HashMap<>();
+		/** T-215: the warnings a hit over the max raised while a state held ({@link BossRules.StateRule#warnOnMaxExceeded}). */
+		final java.util.Set<String> warnings = new java.util.LinkedHashSet<>();
 
 		Boss(String name, BossRules.DamageModifierRules rules)
 		{
@@ -250,20 +254,88 @@ final class ModifierTracker
 			return;
 		}
 		final Boss b = boss(npcIndex, name, rules);
+		final String signal = "the message \"" + message + "\"";
 		for (BossRules.StateRule s : states(rules))
 		{
 			if (matches(s.endOnGameMessage, message))
 			{
-				close(b, s, tick, "the message \"" + message + "\"");
+				end(b, s, tick, signal);
 			}
 		}
 		for (BossRules.StateRule s : states(rules))
 		{
 			if (matches(s.startOnGameMessage, message))
 			{
-				open(b, s, tick, "the message \"" + message + "\"");
+				open(b, s, tick, signal);
 			}
 		}
+	}
+
+	/**
+	 * T-215: the boss's overhead text, in a fight or before one: the states it opens and closes. The Alchemical Hydra
+	 * shouts "Roaaaaaaaaaaar!" as the vent sprays her: before it, Eric's hits fit the shield; after it, they don't.
+	 */
+	void onOverheadText(int npcIndex, String name, BossRules.DamageModifierRules rules, String text, int tick)
+	{
+		if (text == null)
+		{
+			return;
+		}
+		final Boss b = boss(npcIndex, name, rules);
+		final String signal = "it said \"" + text + "\"";
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (matches(s.endOnOverheadText, text))
+			{
+				end(b, s, tick, signal);
+			}
+		}
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (matches(s.startOnOverheadText, text))
+			{
+				open(b, s, tick, signal);
+			}
+		}
+	}
+
+	/**
+	 * T-215: an end signal: closes the state if it's open; if not, and its end counts before its start, its next opening
+	 * opens and closes at once.
+	 */
+	private void end(Boss b, BossRules.StateRule s, int tick, String signal)
+	{
+		final Window w = b.windows.get(s.name);
+		if (w != null && w.openAt(tick))
+		{
+			close(b, s, tick, signal);
+		}
+		else if (s.endHeardBeforeStart && !b.endedEarly.containsKey(s.name))
+		{
+			b.endedEarly.put(s.name, signal);
+			log.accept(String.format("MOD %s: %s ended before it opened at tick %d (%s): its next opening ends at once",
+				b.name, s.name, tick, signal));
+		}
+	}
+
+	/** T-215: whether any of the boss's states listens for its overhead text. */
+	static boolean listensForOverheadText(BossRules.DamageModifierRules rules)
+	{
+		for (BossRules.StateRule s : states(rules))
+		{
+			if (s.startOnOverheadText != null || s.endOnOverheadText != null)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** T-215: the stats warnings hits over the max raised while a state held, for the fight's record; empty for none. */
+	java.util.Set<String> warnings(int npcIndex)
+	{
+		final Boss b = bosses.get(npcIndex);
+		return b == null ? Collections.emptySet() : Collections.unmodifiableSet(b.warnings);
 	}
 
 	/** T-211: whether any of the boss's states opens or closes on the npc id it takes, its form at the start included. */
@@ -335,9 +407,17 @@ final class ModifierTracker
 		}
 		for (BossRules.StateRule s : states(b.rules))
 		{
+			final Window w = b.windows.get(s.name);
+			final boolean holds = w != null && w.openAt(tick);
 			if (s.endOnMaxExceeded)
 			{
 				close(b, s, tick, String.format("a hit of %d over the max of %d", hit, max));
+			}
+			else if (holds && s.warnOnMaxExceeded != null && b.warnings.add(s.warnOnMaxExceeded))
+			{
+				// T-215: proof its end was missed; not closed, so no high roll picks the close.
+				log.accept(String.format("MOD %s: a hit of %d over the max of %d while %s holds, so its end was missed: %s",
+					b.name, hit, max, s.name, s.warnOnMaxExceeded));
 			}
 		}
 	}
@@ -512,13 +592,19 @@ final class ModifierTracker
 			if (contains(s.endOnNpcId, npcId))
 			{
 				close(b, s, tick, "npc " + npcId);
+				// T-215: an end heard before this counted for the phase now over.
+				b.endedEarly.remove(s.name);
 			}
 		}
 		for (BossRules.StateRule s : states(rules))
 		{
 			if (contains(s.startOnNpcId, npcId))
 			{
-				open(b, s, tick, "npc " + npcId);
+				final String early = b.endedEarly.remove(s.name);
+				if (open(b, s, tick, "npc " + npcId) != null && early != null)
+				{
+					close(b, s, tick, early + ", heard before it opened");
+				}
 			}
 		}
 		for (BossRules.ModifierRule m : modifiers(rules))

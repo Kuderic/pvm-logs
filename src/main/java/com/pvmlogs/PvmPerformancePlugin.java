@@ -1635,6 +1635,11 @@ public class PvmPerformancePlugin extends Plugin
 	 */
 	private void recordShownStates(Fight fight)
 	{
+		// T-215: a state's end missed (a hit over its max while it held): the fight's luck is held back.
+		for (String warning : damageModifiers.warnings(fight.getTargetIndex()))
+		{
+			fight.addStatsWarning(warning);
+		}
 		final java.util.Map<String, Integer> shown = damageModifiers.shownTicks(fight.getTargetIndex());
 		if (shown.isEmpty())
 		{
@@ -7288,11 +7293,12 @@ public class PvmPerformancePlugin extends Plugin
 		{
 			noteBlowpipeCheck(message);
 			recordKillMessage(message);
-			// T-211: in a fight with a boss whose states listen for one (the Hydra's weakening), logged with the tick.
-			if (current != null && targetNpc != null)
-			{
-				damageModifiers.onGameMessage(targetNpc, message);
-			}
+		}
+		// T-211, T-215: in a fight with a boss whose states listen for one, a GAMEMESSAGE or SPAM with no sender; logged
+		// only when it could tell of the boss's state, never one naming a player.
+		if (current != null && targetNpc != null && (event.getName() == null || event.getName().isEmpty()))
+		{
+			damageModifiers.onGameMessage(targetNpc, message);
 		}
 		final String buff = gearBonuses.onGameMessage(message, client.getTickCount());
 		if (buff != null)
@@ -7385,11 +7391,16 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("VENGEANCE said Taste vengeance!");
 			reflect.vengeanceFired(client.getTickCount());
 		}
-		// T-211: what the fight's boss says, for a boss whose states listen for game messages: logged, nothing more.
+		// T-211: what the fight's boss says, for a boss whose states listen for game messages: logged.
 		if (current != null && targetNpc != null && event.getActor() == targetNpc && damageModifiers.logsMessages(targetNpc))
 		{
 			debug.log("OVERHEAD TEXT tick %d (%s, npc %d): %s", client.getTickCount(), current.getTargetName(),
 				targetNpc.getId(), event.getOverheadText());
+		}
+		// T-215: and handed to its states, in a fight or before one: the Hydra's roar as the vent sprays her ends her shield.
+		if (event.getActor() instanceof NPC)
+		{
+			damageModifiers.onOverheadText((NPC) event.getActor(), event.getOverheadText());
 		}
 	}
 
