@@ -100,6 +100,8 @@ final class SidePanelPartySection
 	/** T-208: your grade and its colour, from your kill card; null without one. */
 	private String yourGrade;
 	private java.awt.Color yourGradeColour;
+	/** T-216: your DPS from your live card; null after the fight. */
+	private String yourDps;
 	private SidePanelPartyChart chart;
 	private MetricSwitch words;
 	private Picture headingPicture;
@@ -159,10 +161,6 @@ final class SidePanelPartySection
 		if (selected != SidePanelParty.YOU_ID && t.row(selected) == null)
 		{
 			setSelected(SidePanelParty.YOU_ID);
-		}
-		if (!t.after)
-		{
-			metric = SidePanelParty.Metric.DMG;
 		}
 		if (!shows(t))
 		{
@@ -280,7 +278,7 @@ final class SidePanelPartySection
 		}
 		if (chart != null)
 		{
-			chart.set(shown, focus());
+			chart.set(shown, focus(), metric);
 		}
 		member(shown, true);
 		onPlacement.run();
@@ -308,6 +306,11 @@ final class SidePanelPartySection
 		if (words != null)
 		{
 			words.set(m);
+		}
+		// T-216: the chart follows the switch too: damage, luck or skill over the fight.
+		if (chart != null && shown != null)
+		{
+			chart.set(shown, focus(), m);
 		}
 	}
 
@@ -413,6 +416,7 @@ final class SidePanelPartySection
 		meter.setToolTipText(SidePanelStyle.tip(SWITCH_HINT));
 		meter.setMetric(metric);
 		meter.setYourGrade(yourGrade, yourGradeColour);
+		meter.setYourDps(yourDps);
 		meter.set(t.rows);
 		meter.setSelected(selected);
 		card.add(meter);
@@ -434,15 +438,13 @@ final class SidePanelPartySection
 		final JPanel box = SidePanelParts.card(5);
 		box.add(SidePanelFightTab.subhead(SidePanelFightTab.TIMELINE, null));
 		chart = new SidePanelPartyChart();
-		chart.set(t, focus());
+		chart.set(t, focus(), metric);
 		box.add(chart);
 		list.add(box);
 		final SidePanelSection section = new SidePanelSection(PARTY, "Party", PanelSnapshot.Text.NONE, list, folds);
-		if (t.after)
-		{
-			words = new MetricSwitch(metric, this::pick);
-			section.setHintComponent(words);
-		}
+		// T-216: live too, its first word "dps" as the column's: the chart and the sort follow it.
+		words = new MetricSwitch(metric, !t.after, this::pick);
+		section.setHintComponent(words);
 		top.add(section);
 	}
 
@@ -709,7 +711,7 @@ final class SidePanelPartySection
 		}
 		if (chart != null)
 		{
-			chart.set(t, focus());
+			chart.set(t, focus(), metric);
 		}
 		member(t, false);
 	}
@@ -722,9 +724,12 @@ final class SidePanelPartySection
 	{
 		yourGrade = card == null || card.live ? null : card.grade;
 		yourGradeColour = card == null ? null : card.gradeColour;
+		// T-216: live, your row's DPS is the card's (T-200).
+		yourDps = card == null || !card.live ? null : card.dps;
 		if (meter != null)
 		{
 			meter.setYourGrade(yourGrade, yourGradeColour);
+			meter.setYourDps(yourDps);
 		}
 	}
 
@@ -741,27 +746,39 @@ final class SidePanelPartySection
 		return t.clock + " · " + t.partyDps;
 	}
 
-	/** The meter's {@code dmg · luck · exec}, as the Damage card's switch: the picked word bright, a click picks. */
+	/**
+	 * The meter's {@code dmg · luck · skill} ({@code dps · luck · skill} live, T-216), as the Damage card's switch: the
+	 * picked word bright, a click picks.
+	 */
 	static final class MetricSwitch extends SidePanelFightTab.Segmented
 	{
 		MetricSwitch(SidePanelParty.Metric picked, java.util.function.Consumer<SidePanelParty.Metric> onPick)
 		{
-			super(labels(), TIPS, picked.ordinal(), i -> onPick.accept(SidePanelParty.Metric.values()[i]));
+			this(picked, false, onPick);
+		}
+
+		MetricSwitch(SidePanelParty.Metric picked, boolean live, java.util.function.Consumer<SidePanelParty.Metric> onPick)
+		{
+			super(labels(live), live ? LIVE_TIPS : TIPS, picked.ordinal(), i -> onPick.accept(
+				SidePanelParty.Metric.values()[i]));
 		}
 
 		/**
 		 * T-207: each choice in plain words, on its own pill's tooltip. T-208: the rows always show all three; the switch
-		 * sorts them. The Timeline charts damage whichever is picked: the party's updates carry no luck or skill over time.
+		 * sorts them. T-216: and the Timeline charts what's picked.
 		 */
-		static final String[] TIPS = {"Sort the rows by damage", "Sort the rows by luck", "Sort the rows by skill"};
+		static final String[] TIPS = {"Sort the rows by damage and chart damage over the fight",
+			"Sort the rows by luck and chart luck over the fight", "Sort the rows by skill and chart Skill over the fight"};
+		static final String[] LIVE_TIPS = {"Sort the rows by DPS and chart damage so far",
+			"Sort the rows by luck and chart luck so far", "Sort the rows by skill and chart Skill so far"};
 
-		private static String[] labels()
+		private static String[] labels(boolean live)
 		{
 			final SidePanelParty.Metric[] all = SidePanelParty.Metric.values();
 			final String[] out = new String[all.length];
 			for (int i = 0; i < all.length; i++)
 			{
-				out[i] = all[i].word();
+				out[i] = all[i].word(live);
 			}
 			return out;
 		}

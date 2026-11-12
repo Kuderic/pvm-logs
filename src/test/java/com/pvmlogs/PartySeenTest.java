@@ -104,16 +104,15 @@ public class PartySeenTest
 		final SidePanelParty.Input in = SidePanelPartyExamples.trioTwoNotSharing();
 		in.inFight = Collections.singleton(MOSS);
 		final PanelSnapshot.PartyTab t = SidePanelParty.party(in);
-		// One member: the group row "1 member" is theirs (T-208); Brindle is set apart, out of it.
+		// One member: the estimate row is theirs, by name (T-216); Brindle is set apart, out of it.
 		final List<String> names = new ArrayList<>();
 		for (PanelSnapshot.PartyRow r : t.rows)
 		{
 			names.add(r.name);
 		}
-		assertTrue(names.toString(), names.contains("1 member"));
+		assertTrue(names.toString(), names.contains("Moss Pike"));
 		assertFalse(names.contains("2 members"));
 		assertFalse(names.contains("Brindle"));
-		assertFalse(names.contains("Moss Pike"));
 		final PanelSnapshot.PartyRow group = t.rows.get(t.rows.size() - 1);
 		assertTrue(group.tip, group.tip.contains("Moss Pike"));
 		assertFalse(group.tip, group.tip.contains("Brindle"));

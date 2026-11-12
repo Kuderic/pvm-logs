@@ -260,14 +260,17 @@ public class SidePanelPartyTest
 	}
 
 	@Test
-	public void theSwitchPicksTheColumnsAfterTheRoomAndGoesBackToDamageLive()
+	public void theSwitchKeepsItsPickIntoTheNextLiveFight()
 	{
 		final PvmPerformancePanel p = panel(SidePanelPartyExamples.toa());
 		final SidePanelPartySection tab = p.partySection();
 		tab.pick(SidePanelParty.Metric.LUCK);
 		assertEquals(SidePanelParty.Metric.LUCK, tab.meter().metric());
+		// T-216: the switch is there live too, so a pick stays: the chart and the sort keep following it.
 		p.apply(new PanelSnapshot(null, null, SidePanelParty.party(SidePanelPartyExamples.tobLive())));
-		assertEquals(SidePanelParty.Metric.DMG, tab.metric());
+		assertEquals(SidePanelParty.Metric.LUCK, tab.metric());
+		assertEquals(SidePanelParty.Metric.LUCK, tab.meter().metric());
+		assertEquals(SidePanelParty.Metric.LUCK, tab.chart().metric());
 	}
 
 	@Test

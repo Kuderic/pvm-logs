@@ -89,6 +89,16 @@ final class SidePanelParty
 			+ "for, and can't be split between them.") + " Players outside the party, and thralls, are in it too.";
 	}
 
+	/**
+	 * T-216: the estimate row's tooltip: both figures, then who and why ({@link #groupTip}), and that it has no luck or
+	 * skill.
+	 */
+	static String estimateTip(List<Unshared> in, int damage, String dps)
+	{
+		return APPROX + LedgerRows.number(damage) + " damage, " + APPROX + dps + " dps.<br>" + groupTip(in)
+			+ "<br>No luck or skill: they don't run Luck vs Skill.";
+	}
+
 	/** T-208: the members not seen in the fight, under the meter, and their names on its hover. */
 	static String away(int n)
 	{
@@ -132,6 +142,12 @@ final class SidePanelParty
 			// T-199: "skill", the plugin's one word for it (the enum's name is code).
 			return this == EXEC ? "skill" : name().toLowerCase(Locale.ENGLISH);
 		}
+
+		/** T-216: the column's word: {@code dps} live for damage, as the rows show DPS while the fight is on. */
+		String word(boolean live)
+		{
+			return this == DMG && live ? "dps" : word();
+		}
 	}
 
 	/** One member's figures for the scope on show, and their damage over it. */
@@ -148,6 +164,14 @@ final class SidePanelParty
 		/** Cumulative damage over ticks, a point at a time; empty for none. */
 		int[] ticks = new int[0];
 		int[] damage = new int[0];
+		/**
+		 * T-216: luck and Skill so far at each of {@link #ticks}' points, 0 to 1, NaN where the update didn't have it; empty
+		 * for none. The chart's luck and skill lines.
+		 */
+		float[] luck = new float[0];
+		float[] skill = new float[0];
+		/** T-216: the ticks of {@link #luck} and {@link #skill}'s points where they aren't {@link #ticks}' (yours); null. */
+		int[] metricTicks;
 		/** T-128: their Discord picture, from RuneLite's party (its Discord plugin sets it); null for none. */
 		java.awt.image.BufferedImage avatar;
 		/** T-128: their Fight tab, built for the member opened only; null otherwise or while it isn't in. */
@@ -232,6 +256,12 @@ final class SidePanelParty
 		Boolean wholeRaid;
 		/** Other players' hits on the scope's targets, as the client saw them (Fight's othersDamage). */
 		int othersDamage;
+		/**
+		 * T-216: {@link #othersDamage} as it grew, on the chart's axis (the scope's ticks, as your own line's): the running
+		 * total at each tick a splat landed. Null where it wasn't recorded (the scope from history, a build before T-216).
+		 */
+		int[] othersTicks;
+		int[] othersTotals;
 		final List<Member> members = new ArrayList<>();
 		/** T-129: the party's size as RuneLite has it, and how many members have shared anything yet. */
 		int partySize;
@@ -321,21 +351,41 @@ final class SidePanelParty
 		final List<Unshared> fighting = atFight(unshared, in.inFight);
 		final List<Unshared> away = new ArrayList<>(unshared);
 		away.removeAll(fighting);
-		if (!fighting.isEmpty())
+		final String othersDps = dps(others, seconds);
+		if (fighting.size() == 1)
 		{
-			// T-208: the members not running Luck vs Skill in the fight have no rows of their own: one group row, "1 member"
-			// or "N members", with the estimated damage and share; who they are, and what it is, on its hover.
-			rows.add(PanelSnapshot.PartyRow.about(PanelSnapshot.PartyRow.OTHERS_ID, members(fighting.size()), null,
-				groupTip(fighting), fill(others, top), aboutDmg, otherSeries(in), OTHERS));
+			// T-216 (Eric: "1 member should show the member's discord picture still when they're the only member in
+			// party"): one member not running Luck vs Skill is drawn as themselves, their picture and name, in a colour of
+			// their own; "~" before the estimated figure, what it is on hover.
+			final Unshared u = fighting.get(0);
+			rows.add(PanelSnapshot.PartyRow.estimate(u.id, u.name, u.avatar, estimateTip(fighting, others, othersDps),
+				fill(others, top), aboutDmg,
+				otherSeries(in), COLOURS[Math.floorMod(freeSlot(in.members), COLOURS.length)]).rate(others / seconds,
+				APPROX + othersDps));
+		}
+		else if (!fighting.isEmpty())
+		{
+			// T-208: two or more members not running Luck vs Skill in the fight: one group row, "N members", with the
+			// estimated damage and share; who they are, and what it is, on its hover.
+			rows.add(PanelSnapshot.PartyRow.estimate(PanelSnapshot.PartyRow.OTHERS_ID, members(fighting.size()), null,
+				estimateTip(fighting, others, othersDps), fill(others, top), aboutDmg, otherSeries(in), OTHERS).rate(
+				others / seconds, APPROX + othersDps));
 		}
 		else if (others > 0)
 		{
-			rows.add(PanelSnapshot.PartyRow.others(fill(others, top), othersDmg, otherSeries(in), OTHERS));
+			rows.add(PanelSnapshot.PartyRow.others(fill(others, top), othersDmg, otherSeries(in), OTHERS).rate(
+				others / seconds, othersDps));
 		}
 		int ticks = 1;
 		for (Member m : in.members)
 		{
 			ticks = Math.max(ticks, m.ticks.length == 0 ? 0 : m.ticks[m.ticks.length - 1]);
+		}
+		for (PanelSnapshot.PartyRow r : rows)
+		{
+			// T-216: live, the first column is DPS on every row.
+			r.live = in.live;
+			ticks = Math.max(ticks, r.seriesTicks.length == 0 ? 0 : r.seriesTicks[r.seriesTicks.length - 1]);
 		}
 		// T-208: the paragraph under the meter is the group row's tooltip now; who wasn't there, set apart under it.
 		return new PanelSnapshot.PartyTab(in.scope, String.format(Locale.ENGLISH,
@@ -344,20 +394,52 @@ final class SidePanelParty
 			: away(away.size()), away.isEmpty() ? null : awayTip(away));
 	}
 
+	/** T-216: the first colour no sharing member has: the lone member not running Luck vs Skill's. */
+	static int freeSlot(List<Member> members)
+	{
+		final java.util.Set<Integer> used = new java.util.HashSet<>();
+		for (Member m : members)
+		{
+			if (!m.you && !m.echo)
+			{
+				used.add(Math.floorMod(m.slot, COLOURS.length));
+			}
+		}
+		for (int i = 0; i < COLOURS.length; i++)
+		{
+			if (!used.contains(i))
+			{
+				return i;
+			}
+		}
+		return used.size();
+	}
+
+	/**
+	 * T-216: a member's DPS: all their damage over their own clock ({@link LuckVsSkillUpdate#ct}), the scope's where their
+	 * update didn't send it. Yours is the card's (T-200), set on the meter.
+	 */
+	static double rate(LuckVsSkillUpdate f, double seconds)
+	{
+		final double own = f.ct > 0 ? f.ct * LedgerRows.SECONDS_PER_TICK : seconds;
+		return own <= 0 ? 0 : f.all() / Math.max(0.6, own);
+	}
+
 	private static PanelSnapshot.PartyRow row(Member m, int rank, int of, int top, int total, double seconds, Input in)
 	{
 		final LuckVsSkillUpdate f = m.figures;
 		final String name = m.you ? YOU_NAME : m.name;
 		// T-134: all their damage: the weapon's and their thrall, recoil and damage over time.
 		final int all = f.all();
-		final String[] dmg = {compact(all), dps(all, seconds), share(all, total)};
+		final double rate = rate(f, seconds);
+		final String[] dmg = {compact(all), String.format(Locale.ENGLISH, "%.1f", rate), share(all, total)};
 		final boolean luckKnown = f.p >= 0;
 		final String[] luck = {luckKnown ? SidePanelModel.luckText(f.p) : "", luckKnown ? seconds(f.ls) : ""};
 		final String[] exec = {f.x >= 0 ? LedgerRows.partPercent(f.x) : "", f.il > 0 ? "-" + f.il + LedgerRows.TICKS_SHORT
 			: ""};
 		// T-194: the roll in its strength of luck's violet, never skill's colours.
 		final Color luckColour = luckKnown ? SidePanelModel.luckInk(f.p) : SidePanelStyle.MUTED;
-		final String place = ordinal(rank) + " of " + of + " · " + share(all, total) + " · " + dps(all, seconds) + " dps";
+		final String place = ordinal(rank) + " of " + of + " · " + share(all, total) + " · " + dmg[1] + " dps";
 		final PanelSnapshot.PartyBreakdown breakdown = new PanelSnapshot.PartyBreakdown(m.you ? "You" : m.name, place,
 			attacks(f, seconds, in.itemNames), summary(f, !in.live));
 		// T-208: luck and skill at a glance: the mini track's percentile, its words, and the Skill share.
@@ -365,7 +447,8 @@ final class SidePanelParty
 			: "";
 		return new PanelSnapshot.PartyRow(m.id, name, m.you, m.left, m.colour(), fill(all, top), dmg, luck, exec,
 			luckColour, m.ticks, m.damage, breakdown).with(m.avatar, m.fight, m.fightLive).echo(m.echo).glance(
-			luckKnown ? f.p : Double.NaN, luckWords, f.x, f.x >= 0 ? LedgerRows.partPercent(f.x) : "", in.live);
+			luckKnown ? f.p : Double.NaN, luckWords, f.x, f.x >= 0 ? LedgerRows.partPercent(f.x) : "", in.live)
+			.rate(rate, dmg[1]).metrics(m.metricTicks == null ? m.ticks : m.metricTicks, m.luck, m.skill);
 	}
 
 	/** The members, biggest damage first; the player first among equals. */
@@ -604,6 +687,32 @@ final class SidePanelParty
 		return new int[][]{ticks, damage};
 	}
 
+	/**
+	 * T-216: the rooms' luck and Skill so far at each point, in {@link #concat}'s order: {luck, skill}, 0 to 1, NaN where
+	 * the update didn't have it. Each room's own running figure: luck and Skill aren't summed across rooms.
+	 */
+	static float[][] metrics(List<List<PartyBoard.Point>> rooms)
+	{
+		int n = 0;
+		for (List<PartyBoard.Point> r : rooms)
+		{
+			n += r.size();
+		}
+		final float[] luck = new float[n];
+		final float[] skill = new float[n];
+		int i = 0;
+		for (List<PartyBoard.Point> r : rooms)
+		{
+			for (PartyBoard.Point p : r)
+			{
+				luck[i] = p.luck >= 0 ? (float) p.luck : Float.NaN;
+				skill[i] = p.skill >= 0 ? (float) p.skill : Float.NaN;
+				i++;
+			}
+		}
+		return new float[][]{luck, skill};
+	}
+
 	/** A series from a member's points. */
 	static int[][] series(List<PartyBoard.Point> points)
 	{
@@ -628,18 +737,88 @@ final class SidePanelParty
 		return new int[][]{ticks, damage};
 	}
 
-	/** Others' line: what's left of the party's damage once the members' is taken out, as it grew; flat for none. */
-	private static int[][] otherSeries(Input in)
+	/**
+	 * Others' line: what's left of the party's damage once the members' is taken out, as it grew. T-216: from the other
+	 * players' splats as they landed, tick by tick ({@link Input#othersTicks}), less the sharing members' damage at each
+	 * tick (their line, scaled to all their damage, as the total takes all of it out); never falling, and ending at the
+	 * total. Without the ticks (a scope from history), a straight rise to the total, as before.
+	 */
+	static int[][] otherSeries(Input in)
 	{
-		// The client has no tick-by-tick record of other players' hits, so others' line is drawn as a straight rise to
-		// its total over the scope: the chart says so in its tooltip.
 		int ticks = 1;
 		for (Member m : in.members)
 		{
 			ticks = Math.max(ticks, m.ticks.length == 0 ? 0 : m.ticks[m.ticks.length - 1]);
 		}
 		final int others = others(in.othersDamage, in.members);
-		return new int[][]{{0, ticks}, {0, others}};
+		if (in.othersTicks == null || in.othersTicks.length == 0)
+		{
+			return new int[][]{{0, ticks}, {0, others}};
+		}
+		final int n = in.othersTicks.length;
+		final int[] xs = new int[n + 2];
+		final int[] ys = new int[n + 2];
+		int k = 1;
+		int running = 0;
+		for (int i = 0; i < n; i++)
+		{
+			final int x = Math.max(0, in.othersTicks[i]);
+			double members = 0;
+			for (Member m : in.members)
+			{
+				if (!m.you && !m.echo)
+				{
+					members += sharedAt(m, x);
+				}
+			}
+			running = Math.max(running, (int) Math.min(others, Math.max(0, Math.round(in.othersTotals[i] - members))));
+			if (x == xs[k - 1] && k > 1)
+			{
+				ys[k - 1] = running;
+				continue;
+			}
+			xs[k] = x;
+			ys[k] = running;
+			k++;
+		}
+		// The last point: the total, at the chart's end.
+		xs[k] = Math.max(ticks, xs[k - 1]);
+		ys[k] = others;
+		k++;
+		return new int[][]{java.util.Arrays.copyOf(xs, k), java.util.Arrays.copyOf(ys, k)};
+	}
+
+	/**
+	 * T-216: a sharing member's damage at tick {@code x}, read off their line between its points, scaled from their
+	 * weapon's damage (the line) to all of it (their thrall's splats reach you as another player's too).
+	 */
+	static double sharedAt(Member m, int x)
+	{
+		if (m.ticks.length == 0)
+		{
+			return 0;
+		}
+		final int last = m.damage[m.damage.length - 1];
+		final double scale = last <= 0 ? 1 : Math.max(1, (double) m.figures.all() / last);
+		double d = 0;
+		for (int i = 0; i < m.ticks.length; i++)
+		{
+			if (m.ticks[i] >= x)
+			{
+				if (i == 0 || m.ticks[i] == x)
+				{
+					d = m.ticks[i] == x ? m.damage[i] : 0;
+				}
+				else
+				{
+					final double t = (double) (x - m.ticks[i - 1]) / (m.ticks[i] - m.ticks[i - 1]);
+					d = m.damage[i - 1] + t * (m.damage[i] - m.damage[i - 1]);
+				}
+				return d * scale;
+			}
+			d = m.damage[i];
+		}
+		return d * scale;
 	}
 
 	// ---- formatting ----
