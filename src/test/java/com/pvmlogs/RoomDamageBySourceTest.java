@@ -126,8 +126,8 @@ public class RoomDamageBySourceTest
 				n++;
 			}
 		}
-		// Araxxor's two (T-131) and the Judge of Yama's fireball on itself (T-137).
-		assertEquals(3, n);
+		// Araxxor's two (T-131), the Judge of Yama's fireball on itself (T-137) and the P3 Warden's skull mechanic (T-219).
+		assertEquals(4, n);
 	}
 
 	// ---- Details ----

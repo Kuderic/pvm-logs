@@ -414,6 +414,9 @@
         "defenceFloor": 120,
         "source": "OSRS Wiki, read 2026-10-28: Tumeken's Warden / Elidinis' Warden: phase 3 -30 (no lower than 120 of 150), and after the enrage, which resets the base to 180, -60, no lower than 120 again. The enrage keeps the same npc id, so its reset is not seen. DPS calc floor 120 agrees."
       },
+      "roomDamage": [
+        {"name": "the skull mechanic", "label": "skull mechanic", "tip": "the skull mechanic cleared in phase 3, hurting the Warden as she comes back", "amounts": [200, 200], "afterBossAnim": 9680, "ticksAfterAnim": [1, 1], "evenWithOthers": true, "source": "T-219. Eric's duo Tombs of 2026-11-11 (pvm-debug-20261111-231111, build 14c2164, read in place): four splats of exactly 200, type 17, on Tumeken's Warden (11762), each the tick after she started 9680 coming back from her untargetable form (11764): [7726], [7792], [7876], [7961]. Four of four, so a strong reading, not a measured fact. OSRS Wiki, read 2026-11-12, Tumeken's Warden: 'Damage dealt to the Warden from successfully clearing the skull mechanic in phase 3', no amount given. The room's even with the partner there: no player's hit is a fixed 200 on that tick."}
+      ],
       "damageModifiers": {
         "states": [
           {

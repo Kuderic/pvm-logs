@@ -267,6 +267,16 @@ class BossRules
 		/** T-131: its row's short name in Details ({@code hit himself}), and the row's tooltip. */
 		String label;
 		String tip;
+		/**
+		 * T-219: a mechanic's damage, the room's even with other players there: a splat the game shows as another's that
+		 * fits this rule is never a player's hit. Without it a rule only names the splat, and whether it's the room's is
+		 * decided by whether another player is there (T-106).
+		 */
+		boolean evenWithOthers;
+		/** T-219: the splat lands {@link #ticksAfterAnim} ticks after the boss started this animation; any time when left out. */
+		Integer afterBossAnim;
+		/** T-219: {lowest, highest} ticks after {@link #afterBossAnim}. */
+		int[] ticksAfterAnim;
 	}
 
 	/**

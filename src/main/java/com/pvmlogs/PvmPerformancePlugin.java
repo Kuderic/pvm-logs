@@ -450,6 +450,9 @@ public class PvmPerformancePlugin extends Plugin
 	private boolean attackIsPunish;
 	private final ArrayDeque<Integer> punishAnimTicks = new ArrayDeque<>();
 	private int lastBossAnim = Integer.MIN_VALUE;
+	// T-219: the tick each animation of the fought boss last started, for a room-damage rule that follows one (the P3
+	// Warden's skull mechanic, the tick after 9680). Cleared at a fight's start.
+	private final Map<Integer, Integer> bossAnimTicks = new HashMap<>();
 	// T-177: the core's damage passed on to a Warden on this tick (its total, the fight and the warden's id), and the tick
 	// of the player's last splat on the core: a passed-on with no core splat beside it is a core hit the client never showed.
 	private int passedOnTick = Integer.MIN_VALUE;
@@ -1970,8 +1973,16 @@ public class PvmPerformancePlugin extends Plugin
 		final int tick = client.getTickCount();
 		// T-106: another's splat with no other player there is the room's (Araxxor's Ruptura explosions, his own cleave).
 		final int others = hitsplat.isOthers() ? otherPlayersNear() : 0;
-		final HitsplatKind kind = RoomDamage.kindOf(HitsplatKind.of(false, hitsplat.isOthers(), type), others);
 		final int leftBefore = health.remaining(index, tick);
+		// T-219: a mechanic's damage is the room's even with other players there (the P3 Warden's skull, a 200 the tick after
+		// her 9680): a boss rule says so.
+		final BossRules.RoomDamageRule mechanic = hitsplat.isOthers() && others > 0 ? mechanicRuleFor(npc, amount, leftBefore,
+			tick) : null;
+		final HitsplatKind kind = mechanic != null ? HitsplatKind.ROOM
+			: RoomDamage.kindOf(HitsplatKind.of(false, hitsplat.isOthers(), type), others);
+		// T-219: another player's core damage, passed on to the Warden five times over while her core is out: in others' at
+		// a fifth, the units the player's own core hits count in.
+		final boolean othersCore = kind == HitsplatKind.OTHER_PLAYER && coreDamagePassedOn(npc.getId(), amount);
 		switch (kind)
 		{
 			case DAMAGE_OVER_TIME:
@@ -1995,12 +2006,21 @@ public class PvmPerformancePlugin extends Plugin
 				damageByIndex.compute(index, (i, v) -> Math.max(0, (v == null ? 0 : v) - Math.max(0, amount)));
 				break;
 			case OTHER_PLAYER:
+				if (othersCore)
+				{
+					fight.recordOthersCore(amount, tick);
+					break;
+				}
 				// T-216: with its tick, for the party chart's line of the members not running Luck vs Skill.
 				fight.recordOthersDamage(amount, tick);
 				break;
 			case ROOM:
 				// T-131: under the rule that names it, for Details' rows.
-				fight.recordRoomDamage(amount, roomSourceName(npc, amount, leftBefore));
+				fight.recordRoomDamage(amount, mechanic != null ? mechanic.name : roomSourceName(npc, amount, leftBefore));
+				if (mechanic != null)
+				{
+					debug.log("ROOM DAMAGE %s: %d (%s)", fight.getTargetName(), amount, mechanic.name);
+				}
 				break;
 			case UNCLASSIFIED:
 				fight.recordUnclassifiedDamage(amount);
@@ -2029,7 +2049,9 @@ public class PvmPerformancePlugin extends Plugin
 			debug.log("splat %d %s (type %d, others') on %s (npc %d, index %d): %s%s, %d other players here, target has %d "
 					+ "left (%s)%s",
 				amount, kind == HitsplatKind.ROOM ? "room's" : "another player's", type, fight.getTargetName(), npc.getId(),
-				index, kind, source == null ? "" : ", " + source, others, health.remaining(index, tick),
+				index, kind, mechanic != null ? ", " + mechanic.name + ", a mechanic's even with others here"
+					: othersCore ? String.format(", the core's damage passed on, five times over: %d on the core (wiki, Core)",
+					amount / 5) : source == null ? "" : ", " + source, others, health.remaining(index, tick),
 				health.source(index, tick), booked);
 			return;
 		}
@@ -2095,6 +2117,19 @@ public class PvmPerformancePlugin extends Plugin
 		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
 		final BossRules.Boss boss = rules == null ? null : rules.forNpc(fight.getTargetId());
 		return RoomDamage.reconcileSplit(fight.getRoomDamageBySource(), boss == null ? null : boss.roomDamage);
+	}
+
+	/** T-219: the boss rule that makes another's splat on this npc the room's even with others there, or null. */
+	private BossRules.RoomDamageRule mechanicRuleFor(NPC npc, int amount, int leftBefore, int tick)
+	{
+		final BossRules rules = monsterStats == null ? null : monsterStats.rules();
+		final BossRules.Boss boss = rules == null ? null : rules.forNpc(npc.getId());
+		return boss == null ? null : RoomDamage.mechanicFor(boss.roomDamage, amount, leftBefore,
+			state -> damageModifiers.isOpen(npc, state), anim ->
+			{
+				final Integer at = bossAnimTicks.get(anim);
+				return at == null ? -1 : tick - at;
+			});
 	}
 
 	/** T-131: the name of the roomDamage rule a room splat on this npc fits, as RoomDamage.ruleFor picks it; null for none. */
@@ -5344,6 +5379,7 @@ public class PvmPerformancePlugin extends Plugin
 		debug.log("BOSS ANIM %s (npc %d, index %d): %d at tick %d (was %s)", current.getTargetName(), npc.getId(),
 			npc.getIndex(), anim, tick, lastBossAnim == Integer.MIN_VALUE ? "not seen" : String.valueOf(lastBossAnim));
 		lastBossAnim = anim;
+		bossAnimTicks.put(anim, tick);
 		// T-177: the P2 warden's collapse before her core comes out: our thrall's projectile at her lands as a 0 when she
 		// turns.
 		if (wardenCollapses(npc.getId(), anim))
@@ -7911,6 +7947,7 @@ public class PvmPerformancePlugin extends Plugin
 		stallFight = null;
 		punishAnimTicks.clear();
 		lastBossAnim = Integer.MIN_VALUE;
+		bossAnimTicks.clear();
 		current = new Fight(Text.removeTags(npc.getName()), npc.getId(), npc.getIndex(),
 			maxHp, now,
 			raidType, raidCounter);
@@ -8870,8 +8907,10 @@ public class PvmPerformancePlugin extends Plugin
 		final int unseen = health.unseenDamage(index);
 		debug.log("RECONCILE %s (npc %d)%s: weapon %d (of it not hitpoints %d) + thrall %d + cannon %d + reflect %d + dot %d "
 				+ "+ room %s "
-				+ "+ others %d + unclassified %d" + (unseen > 0 ? " + seen only on its bar " + unseen : "")
+				+ "+ others %d" + (current.getOthersOnTheCore() > 0 ? " (of it on the core " + current.getOthersOnTheCore() + ")"
+				: "") + " + unclassified %d" + (unseen > 0 ? " + seen only on its bar " + unseen : "")
 				+ (current.getPassedOn() > 0 ? " + the core's passed on " + current.getPassedOn() : "")
+				+ (current.getOthersPassedOn() > 0 ? " + others' core passed on " + current.getOthersPassedOn() : "")
 				+ ", healed %d%s%s; on the target %d - %d = %d against %d full hp (%s)%s; bar last "
 				+ "read %d, now %d left (%s)",
 			current.getTargetName(), current.getTargetId(), died ? " KILL" : "",
