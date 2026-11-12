@@ -645,6 +645,8 @@ public class PvmPerformancePlugin extends Plugin
 	// Whether the goal prayer was up during each recent tick. A history rather than a slot, because the tick an attack
 	// goes out on is not the tick it is booked on, and the gap differs by style.
 	private final Map<Integer, Boolean> prayerUpByTick = new HashMap<>();
+	// T-221: the style and the offensive prayers up on each tick ("stab/aggressive (Lunge), prayer Chivalry").
+	private final Map<Integer, String> styleByTick = new HashMap<>();
 	// Whether the gear worn on each recent tick was the best available, kept as a history for the same reason the prayer
 	// is.
 	private final Map<Integer, CombatCalc.SwitchCheck> switchedByTick = new HashMap<>();
@@ -3568,11 +3570,14 @@ public class PvmPerformancePlugin extends Plugin
 				// T-159: avg is as scored, capped at the hp left; dps is the gear's rate, uncapped, as the overlay shows it.
 				// T-203: golembane and the target's flat armour, where they apply, after the dps.
 				// T-212: the attack's own max, then each proc that sets the top: "max 64 (ruby proc 100 at 6.6%)".
-				debug.log("expected vs %s (npc %d%s): %s, acc %.3f, avg %.2f (capped at the hp left), gear's dps %.2f%s%s%s",
+				// T-221: the style and the prayer the figures were worked out with.
+				debug.log("expected vs %s (npc %d%s): %s, prayer %s, %s, acc %.3f, avg %.2f (capped at the hp left), gear's dps "
+						+ "%.2f%s%s%s",
 					shown.getTargetName(), expectedForNpcId,
 					judgedBy == null ? "" : String.format(", '%s' def %d, %d hp left (%s)", version, defence,
 						health.remaining(shown.getTargetIndex(), client.getTickCount()),
 						health.source(shown.getTargetIndex(), client.getTickCount())),
+					combatCalc.styleLabel(), combatCalc.offensivePrayerLabel(),
 					CombatCalc.maxHitLabel(expectedOwnMaxHit, expectedProcs), expectedAccuracy, expectedAverageHit,
 					expectedDps, combatCalc.targetEffectsNote(expectedForNpcId), expectedAccuracy < 0 ? "  <- NO MONSTER STATS FOR THIS ID" : "",
 					// A guardian reads zero for everything unless a pickaxe is in hand, which is the mechanic and not a fault.
@@ -6685,11 +6690,14 @@ public class PvmPerformancePlugin extends Plugin
 			// average of -1 is the tell that the target has no stats and that this attack was scored against nothing.
 			debug.log("ATTACK on %s (npc %d) thrown tick %d, booked +%d, speed %d, next due %d, "
 					+ "prayed=%b potted=%b boost %.2f (cost %.2f) switched=%b (cost %.2f) projectile=%b, scored=%b, "
-					+ "expected avg %.2f, ideal %.2f, boss modifiers %s",
+					+ "expected avg %.2f, ideal %.2f, boss modifiers %s, style %s",
 				attacker.getTargetName(), targetId, attackTick, attackObservedLag, speed, attackDueTick,
 				prayed, potted, boostShare, boostCost, switched, switchCost, attackObservedFromProjectile,
 				attacker.isScored(), actualSetup, idealSetup, modifiersByTick.getOrDefault(scoringTick(),
-					combatCalc.describeBossModifiers(targetLiveId >= 0 ? targetLiveId : targetId)));
+					combatCalc.describeBossModifiers(targetLiveId >= 0 ? targetLiveId : targetId)),
+				// T-221: the throw's style and prayers, as its figures had them.
+				styleByTick.getOrDefault(attackTick, combatCalc.styleLabel() + ", prayer "
+					+ combatCalc.offensivePrayerLabel()));
 			// T-120: where the player stood against the Royal Titans when a ranged attack went out, and the boost it took.
 			final String meleeLine = damageModifiers.meleeDistanceLine(attacker.getTargetIndex(), scoringTick());
 			if (meleeLine != null)
@@ -7615,9 +7623,12 @@ public class PvmPerformancePlugin extends Plugin
 		// answer, and written afterwards there was none. hasOffensivePrayer reads the server's copy.
 		final boolean upThisTick = combatCalc.hasOffensivePrayer();
 		prayerUpByTick.put(client.getTickCount(), upThisTick);
+		// T-221: and the style and prayers themselves, for the ATTACK line of a throw this tick.
+		styleByTick.put(client.getTickCount(), combatCalc.styleLabel() + ", prayer " + combatCalc.offensivePrayerLabel());
 		if (client.getTickCount() % 5 == 0)
 		{
 			prayerUpByTick.keySet().removeIf(t -> client.getTickCount() - t > PRAYER_HISTORY_TICKS);
+			styleByTick.keySet().removeIf(t -> client.getTickCount() - t > PRAYER_HISTORY_TICKS);
 		}
 		trackAttackCooldown();
 		// After the tick's splats and eats: the replay's hitpoints, and the hits whose evidence is in (T-041).
