@@ -257,6 +257,11 @@ final class SidePanelParty
 		/** Other players' hits on the scope's targets, as the client saw them (Fight's othersDamage). */
 		int othersDamage;
 		/**
+		 * T-218: the members' own Fight panels, built with the snapshot on the panel's thread before the board; null for
+		 * none.
+		 */
+		Runnable panels;
+		/**
 		 * T-216: {@link #othersDamage} as it grew, on the chart's axis (the scope's ticks, as your own line's): the running
 		 * total at each tick a splat landed. Null where it wasn't recorded (the scope from history, a build before T-216).
 		 */

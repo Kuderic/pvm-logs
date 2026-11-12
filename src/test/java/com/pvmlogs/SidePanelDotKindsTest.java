@@ -94,14 +94,20 @@ public class SidePanelDotKindsTest
 		more.scoredDotByKind = SidePanelExamples.kinds("venom", 34);
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(more)));
 		assertEquals(builds, tab.builds());
-		// A burn too: one rebuild for the new row.
+		// A burn too: T-218, a row added in place in Damage, never a rebuild of the section or the tab.
+		final int slots = tab.slotBuilds();
+		final int rowsBefore = SidePanelModel.fight(more).damage.rows.size();
 		final SidePanelModel.Input burn = SidePanelExamples.live();
 		burn.scoredDot = 40;
 		burn.scoredDotByKind = SidePanelExamples.kinds("burn", 6, "venom", 34);
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(burn)));
-		assertEquals(builds + 1, tab.builds());
+		assertEquals(builds, tab.builds());
+		assertEquals(slots, tab.slotBuilds());
+		assertEquals(rowsBefore + 1, SidePanelModel.fight(burn).damage.rows.size());
+		assertEquals(rowsBefore + 1, sourceRows(tab));
 		panel.apply(new PanelSnapshot(SidePanelModel.fight(burn)));
-		assertEquals(builds + 1, tab.builds());
+		assertEquals(builds, tab.builds());
+		assertEquals(slots, tab.slotBuilds());
 	}
 
 	@Test
@@ -120,5 +126,16 @@ public class SidePanelDotKindsTest
 		assertEquals(34, in.scoredDot);
 		assertEquals(SidePanelExamples.kinds("venom", 30, "burn", 4), in.scoredDotByKind);
 		assertEquals("34 DoT", SidePanelModel.dotTile(in.scoredDotByKind, in.scoredDot));
+	}
+
+	private static int sourceRows(java.awt.Container c)
+	{
+		int n = 0;
+		for (java.awt.Component k : c.getComponents())
+		{
+			n += k instanceof SidePanelParts.SourceRowView ? 1 : k instanceof java.awt.Container ? sourceRows(
+				(java.awt.Container) k) : 0;
+		}
+		return n;
 	}
 }

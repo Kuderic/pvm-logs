@@ -1429,6 +1429,21 @@ final class PanelSnapshot
 		 */
 		String structure()
 		{
+			final StringBuilder s = new StringBuilder(frame());
+			for (String k : new String[]{damageKey(), executionKey(), takenKey(), targetsKey(), roomsKey(), defenceKey()})
+			{
+				s.append(k.isEmpty() ? "" : "|" + k);
+			}
+			return s.toString();
+		}
+
+		/**
+		 * T-218: what decides the tab's frame: its state and which sections there are, without the rows inside the
+		 * sections that rebuild on their own ({@link #damageKey} and the rest). A row more in a fight (a new weapon, the
+		 * first hit taken, a missed switch) rebuilds that section in place, never the tab.
+		 */
+		String frame()
+		{
 			final StringBuilder s = new StringBuilder(state.name());
 			s.append(wholeRaid == null ? "" : wholeRaid ? "|raid" : "|room");
 			s.append(header == null ? "" : "|h");
@@ -1441,8 +1456,6 @@ final class PanelSnapshot
 			s.append(header == null || header.defence.isEmpty() ? "" : "d");
 			s.append(banner == null ? "" : "|w");
 			s.append(unscoredNote == null ? "" : "|u");
-			s.append(targets == null ? "" : "|t" + targets.rows.size());
-			s.append(rooms == null ? "" : "|r" + rooms.rows.size());
 			if (budget != null)
 			{
 				s.append("|b").append(budget.rows.size()).append('.').append(budget.average.size())
@@ -1451,15 +1464,9 @@ final class PanelSnapshot
 			s.append(tiles == null ? "" : "|T");
 			s.append(curve == null ? "" : "|c");
 			s.append(noCurve == null ? "" : "|nc");
-			s.append(execution == null ? "" : "|e" + execution.parts.size());
 			// T-099: the switch, and which view it shows: a click on it is a structure change, nothing else is.
 			s.append(byTarget == null ? "" : "|sw" + target);
-			s.append(damage == null ? "" : "|d" + damage.rows.size());
 			s.append(later == null ? "" : "|lt");
-			s.append(chart == null ? "" : chart.expectedShown ? "|ch" : "|chx");
-			s.append(chart != null && chart.rangeShown ? "r" : "");
-			s.append(taken == null ? "" : "|k" + taken.rows.size());
-			s.append(defence == null ? "" : "|df" + defence.structure());
 			if (loadout != null)
 			{
 				s.append("|l").append(loadout.rows.size()).append('.').append(loadout.specName == null ? 0
@@ -1468,6 +1475,45 @@ final class PanelSnapshot
 			s.append(lastFight == null ? "" : "|L");
 			s.append(empty == null ? "" : "|E");
 			return s.toString();
+		}
+
+		/**
+		 * T-218: the Damage section's parts and its Timeline; rebuilt in its slot when they change. Its rows aren't in
+		 * it: a source more is a row added in place.
+		 */
+		String damageKey()
+		{
+			return (damage == null ? "" : "d") + (byTarget == null ? "" : "s"
+				+ (byTarget.get(target).empty == null ? "" : "e")) + (chart == null ? "" : chart.expectedShown ? "ch" : "chx")
+				+ (chart != null && chart.rangeShown ? "r" : "");
+		}
+
+		/** T-218: Skill and its rhythm; a part more is a bar added in place. */
+		String executionKey()
+		{
+			return (execution == null ? "" : "e") + (chart == null ? "" : "s");
+		}
+
+		/** T-218: Damage taken, from the first hit; a row more is added in place. */
+		String takenKey()
+		{
+			return taken == null ? "" : "k";
+		}
+
+		String targetsKey()
+		{
+			return targets == null ? "" : "t" + targets.rows.size();
+		}
+
+		String roomsKey()
+		{
+			return rooms == null ? "" : "r" + rooms.rows.size();
+		}
+
+		/** T-218: the Defence (or Drains) card, from the first drain that lands. */
+		String defenceKey()
+		{
+			return defence == null ? "" : "df" + defence.structure();
 		}
 	}
 
