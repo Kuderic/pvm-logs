@@ -440,6 +440,11 @@ class BossRules
 		 * For a state whose modifier shrinks the max, such a hit can't happen while it holds: proof it's over.
 		 */
 		boolean endOnMaxExceeded;
+		/**
+		 * T-222: a game message containing one of these texts (case ignored) shows it holding: the Hydra's "defences
+		 * partially absorb your attack!" with a shielded hit. A check: heard while it's closed, it's logged.
+		 */
+		List<String> holdsOnGameMessage;
 		/** T-215: the boss's overhead text containing one of these texts (case ignored) opens it. */
 		List<String> startOnOverheadText;
 		/**

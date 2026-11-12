@@ -232,6 +232,12 @@ class DamageModifiers
 	 */
 	void onGameMessage(NPC target, String message)
 	{
+		onGameMessage(target, message, null);
+	}
+
+	/** T-222: the same, with the chat type it came as ({@code SPAM}, {@code GAMEMESSAGE}) for the log line. */
+	void onGameMessage(NPC target, String message, String type)
+	{
 		final BossRules.Boss boss = target == null ? null : bossFor(target.getId());
 		if (boss == null || message == null)
 		{
@@ -244,8 +250,8 @@ class DamageModifiers
 		}
 		if (worthLogging(message))
 		{
-			log.accept(String.format("GAME MESSAGE tick %d (%s, npc %d): %s", client.getTickCount(), boss.name,
-				target.getId(), message));
+			log.accept(String.format("GAME MESSAGE tick %d (%s, npc %d%s): %s", client.getTickCount(), boss.name,
+				target.getId(), type == null ? "" : ", " + type, message));
 		}
 		if (listens)
 		{
