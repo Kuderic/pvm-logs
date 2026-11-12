@@ -103,6 +103,29 @@ final class SidePanelHistory
 		return room.hasAttempts();
 	}
 
+	/**
+	 * T-220: a raid room whose every fought fight is a raid's weak monster outside its groups ({@link
+	 * EncounterGroup#isRaidTrash}): the "Scarab" rooms of the Scabaras puzzle saved before T-220. Kept in history.json, left
+	 * off History's boss list.
+	 */
+	static boolean isRaidTrash(Encounter room)
+	{
+		boolean any = false;
+		for (Fight f : room.getFights())
+		{
+			if (f.getAttempts() <= 0)
+			{
+				continue;
+			}
+			if (!EncounterGroup.isRaidTrash(f.getRaidName() != null, f.getTargetId(), f.getMaxHp()))
+			{
+				return false;
+			}
+			any = true;
+		}
+		return any;
+	}
+
 	/** A boss for "Bosses only": the room's name is on the hiscores' boss list, or one of its targets' is (T-027). */
 	static boolean isBoss(Encounter room)
 	{
@@ -307,7 +330,8 @@ final class SidePanelHistory
 		final Map<String, Set<String>> addRooms = new LinkedHashMap<>();
 		for (Encounter room : allRooms(history))
 		{
-			if (fought(room))
+			// T-220: a raid's trash (the Scabaras scarabs saved before T-220) is no boss to list.
+			if (fought(room) && !isRaidTrash(room))
 			{
 				byName.computeIfAbsent(room.getName(), k -> new ArrayList<>()).add(room);
 			}
