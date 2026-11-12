@@ -102,7 +102,7 @@ final class SidePanelCopy
 	}
 
 	/**
-	 * Every figure of a scope, read once. {@code SidePanelCopyTest} checks it answers every method of {@link
+	 * Every figure of a scope, read once. {@code SidePanelPanelWorkTest} checks it answers every method of {@link
 	 * LedgerRows.Scope}, so a figure added there can't fall back to a default here unnoticed.
 	 */
 	static final class Frozen implements LedgerRows.Scope
