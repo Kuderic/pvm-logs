@@ -7,12 +7,12 @@ It works out what each of your attacks should have done, from your gear, levels,
 ## What it shows
 
 ### The kill card
-The side panel's Fight tab opens on a card with three numbers: your **Time**, your **Skill** and your **Luck**, with your DPS against expected under them (`DPS 7.5 · exp 7.6`). Damage is open below it; the rest folds, one click away, each with its number on its folded line.
+The side panel's Fight tab opens on a card with three numbers: your **Time**, your **Luck** and your **Skill**, with your DPS against expected under them (`DPS 7.5 · exp 7.6`). Damage is open below it; the rest folds, one click away, each section one card with its number on its folded line.
 
 <table>
 <tr>
-<td><img src="docs/images/panel-fight.png" alt="The side panel's Fight tab after a General Graardor kill: the kill card with time 0:34, grade A at 98%, and luck rolled 46" width="242"></td>
-<td><img src="docs/images/panel-fight-live.png" alt="The side panel's Fight tab during the same kill: the clock, the share of the fight spent attacking with its idle strip, and luck so far" width="242"></td>
+<td><img src="docs/images/panel-fight.png" alt="The side panel's Fight tab after a General Graardor kill: the kill card with time 0:34, average luck, and grade A at 98%" width="242"></td>
+<td><img src="docs/images/panel-fight-live.png" alt="The side panel's Fight tab during the same kill: the clock, luck so far on its track, Skill so far with the last ten attacks" width="242"></td>
 </tr>
 <tr><td>After the kill</td><td>During the fight</td></tr>
 </table>
@@ -21,36 +21,36 @@ The side panel's Fight tab opens on a card with three numbers: your **Time**, yo
 - **Skill:** how close you came to a perfect fight (always attacking, with your best gear on hand, the right prayer and your boosts), and the seconds the rest cost you. The letter is your **grade**:
   - it's against your own last 50 kills at this boss, scored the same way: **S** is your top 5%, **A** the next 25%, **B** the middle 60%, **C** your bottom 10%. Until you have 10 kills it uses fixed bands (S from 99.5%, A from 97.5%, B from 90%);
   - it comes from skill only, never from luck. Hover it to see what the next grade would have taken.
-- **Luck:** "rolled 46 of 100": where your damage falls among all the ways the same attacks could have rolled, from 1 (the unluckiest) to 100, and the seconds it saved or cost. It's coloured in three strengths of violet, never in Skill's colours: luck isn't skill.
+- **Luck:** where your damage falls among all the ways the same attacks could have rolled: **top N%** when the dice were kind, **bottom N%** when they weren't, **average** for the middle half; a marker on the track shows where; and the seconds it saved or cost. It's coloured in three strengths of violet, never in Skill's colours: luck isn't skill.
 - **Badges** show on the card when a kill earns one:
   - **100th kill** (and every hundredth, by the game's kill count);
   - **Flawless:** no avoidable damage taken (only at bosses with attack rules, so far Vardorvis);
   - **Clean run:** not one idle tick, and your prayer, gear and boosts as good as they could be;
   - **3 A's in a row** (and longer streaks): grade A or better on your last three kills here.
 
-During the fight the card shows the clock, your uptime (the share of the fight you've spent attacking) with a strip of your idle moments so far, your luck so far as a word and a marker on the 1–100 track (the roll itself is the kill's), and your DPS against expected. Every number explains itself in its tooltip, and the sign is the same everywhere: + is time gained, − time lost.
+During the fight the card updates as your hits land: the clock, your luck so far as a word and a marker on its track, your Skill so far with your **last ten attacks** as cells under it (each on time, or how late it went out after your weapon was ready), and your DPS against expected, counted over the time your attacks took. No grade, usual time or PB until the kill. Every number explains itself in its tooltip, and the sign is the same everywhere: + is time gained, − time lost.
 
-**Celebrations** (on by default) is the card and its kill-end moment, when the roll lands and the grade shows. Turn it off under the plugin's Side panel settings for the plain Fight tab: the boss's title and four tiles, every section as you left it.
+**Celebrations** (on by default) is the kill-end moment: the die roll and the flash on the card as a kill ends. Turn it off under the plugin's Side panel settings and the card shows settled; the Fight tab is otherwise the same.
 
 ### Below the card
-- **Damage:** your damage against expected in its header (`234 · exp 240`); each weapon, spell and special with its DPS against expected (`6.8 dps · exp 7.2`), to judge which weapon does best against a boss or its adds; your thrall, burn and the rest apart; at a boss with adds, the boss, its adds or both. A timeline of your damage against average rolls.
-- **Luck, Where the time went, Skill:** the luck curve; the kill's time split into best play, what skill lost and what luck saved or cost (`skill −0.7 s · luck −1 s`); uptime, prayer, gear and stat boost.
+- **Damage:** your damage against expected in its header (`234 · exp 240`); each weapon, spell and special with its DPS against expected (`6.8 dps · exp 7.2`), to judge which weapon does best against a boss or its adds; your thrall, cannon, burn and the rest apart; at a boss with adds, the boss, its adds or both. A timeline of your damage against average rolls.
+- **Luck, Where the time went, Skill:** the luck curve; one time bar splitting the kill's time into best play, what skill lost and what luck saved or cost (`skill −0.7 s · luck −1 s`), with the time a boss's shield held you back (the Alchemical Hydra's) shown apart; uptime, prayer, gear and stat boost, and your attack rhythm.
 - **Defence:** when your special attacks (or your party's) lower the boss's Defence, the Defence left, each special against its chance, and what the drain was worth. A missed special counts as bad luck.
 - **Damage taken,** after the fight by kind. At a boss with attack rules (Vardorvis so far), the food you ate because of damage you could have avoided counts against your skill, and damage taken says how much was avoidable.
-- **Your party:** in a RuneLite party, the members' damage, DPS and share at the top of the Fight tab, and after a room their Luck and Skill, from members who run Luck vs Skill too; click one to see their Fight tab. Members who don't run it are listed by name and picture; with just one of them, their damage is shown as about what the boss took that you didn't deal. Discord pictures show when RuneLite's Discord plugin provides them.
+- **Your party:** in a RuneLite party, a Party section at the top of the Fight tab, open by default: a row for each member who was in the fight, with their DPS while it runs, then their damage, Luck and Skill once it's over, from members who run Luck vs Skill too; the party's timeline, charted by the figure you pick; click a member to see their Fight tab. Members who don't run it are listed by name and picture, and the damage nobody shared is split only among those who were in the fight. Discord pictures show when RuneLite's Discord plugin provides them.
 
 ### History and Trip
-**History** shows your progress at each boss: your personal bests (fastest, fastest with luck taken out, best play), how your grades spread, your streaks and badges, and your kill time against your time with luck taken out, kill by kill. Then every saved kill with its time, roll and grade, your bosses and your monster runs, and Tools (CSV export, a new trip, saving a debug log). **Trip** sums the session's kills.
+**History** shows your progress at each boss: your personal bests (fastest kill, fastest with average luck, best Skill), how your grades spread, your streaks and badges, and your kill time against your time with average luck, kill by kill. Then every saved kill with its time, luck and grade, your bosses and your monster runs, and Tools (CSV export, a new trip, saving a debug log). **Trip** sums the session's kills.
 
 <table>
 <tr>
-<td><img src="docs/images/panel-history.png" alt="The side panel's History tab at Vardorvis: personal bests, grades against the last 50, a Flawless badge counted twice, and the kills with their rolls and grades" width="242"></td>
+<td><img src="docs/images/panel-history.png" alt="The side panel's History tab at Vardorvis: personal bests, grades against the last 50, a Flawless badge counted twice, and the kills with their luck and grades" width="242"></td>
 <td><img src="docs/images/panel-trip.png" alt="The side panel's Trip tab" width="242"></td>
 </tr>
 <tr><td>History</td><td>Trip</td></tr>
 </table>
 
-The Fight tab through a kill, updating every 5 ticks, then the card once the boss dies (the same simulated General Graardor kill, at 7.5× speed):
+The Fight tab through a kill, then the card once the boss dies (the same simulated General Graardor kill, at 7.5× speed):
 
 <img src="docs/images/panel-fight-live.gif" alt="The Fight tab updating through a General Graardor kill, then the kill card" width="242">
 
@@ -81,9 +81,10 @@ Your current weapon's DPS, max hit and accuracy against the monster it names, an
 Nothing about the boss's attacks or when to do anything, and no comparison with your own average while you fight: only your own output, as Jagex's rules for third-party clients require. Your usual time, your grade and anything judged from the boss's behaviour (Cerberus's stall, for one) come once the fight is over.
 
 ### Also
-- Counts your thrall's hits apart from your own, and burn, poison, venom, bleed, recoil, vengeance and the boss healing apart from your weapon.
-- Bosses with parts, phases or adds are one kill each; weak adds are swatted in passing without opening a fight. A run of monsters of one kind is one room, with a lighter view.
-- Downtime the boss forces on you (a stun, a dive, a burrow) and strategies the guides teach (holding Cerberus above 400) aren't held against your uptime.
+- Counts your thrall's and your cannon's hits apart from your own, and burn, poison, venom, bleed, recoil, vengeance and the boss healing apart from your weapon.
+- Knows the bonuses and defences the DPS calculator does, golembane weapons against golems and flat armour included, and bosses' own damage changes, such as the Alchemical Hydra's shield until it's vented.
+- Bosses with parts, phases or adds are one kill each; weak adds, and a raid's weak monsters outside its rooms, are swatted in passing without opening a fight. A run of monsters of one kind is one room, with a lighter view.
+- Downtime the boss forces on you (a stun, a dive, a burrow, the Hydra's form changes, dodging her lightning and fire) and strategies the guides teach (holding Cerberus above 400) aren't held against your uptime, up to a measured allowance. An attack that went out late (your XP drop shows when) counts its late ticks as lost.
 - Scales bosses for party size and raid level in the Chambers of Xeric and the Tombs of Amascut.
 - Exports fights to CSV.
 
@@ -93,7 +94,7 @@ All the pictures here are drawn by the plugin's own code (see Developing) from m
 One download, your own numbers to your RuneLite party if you're in one, and nothing uploaded anywhere else.
 - **Monster stats:** when the plugin starts and its copy is missing or more than 7 days old, it downloads `monsters.json`, the monster data of the [OSRS Wiki's DPS calculator](https://github.com/weirdgloop/osrs-dps-calc), from GitHub (`raw.githubusercontent.com`). It uses RuneLite's own web client and identifies itself only as `RuneLite plugin luck-vs-skill`. Like any download, GitHub sees your IP address; nothing about your account goes with it. The copy is kept in your data folder; if the download fails, the plugin uses the copy it has.
 - **Your RuneLite party** (on by default): only while you're in a party, and only through RuneLite's own party service to that party's members. Turn off **Share with my RuneLite party** (Side panel settings) and nothing is sent; others' numbers still show.
-  - **During a boss fight,** at most every 5 ticks, and once as the room ends: the room's name and start, the raid's name if you're in one; your weapon damage and its expected damage, other damage of yours (thrall, burn and the like), attacks, combat ticks and the clock; Luck (the roll and its seconds), Skill, uptime and idle ticks, what your stat boost, gear and prayer cost; the damage and hits you took; and up to 8 attack rows, each a weapon or spell by its game id with its attacks, landings, damage and expected damage.
+  - **During a boss fight,** at most every 5 ticks, and once as the room ends: the room's name and start, the raid's name if you're in one; your weapon damage and its expected damage, other damage of yours (thrall, burn and the like), attacks, combat ticks and the clock; Luck (its percentile and seconds), Skill, uptime and idle ticks, what your stat boost, gear and prayer cost; the damage and hits you took; and up to 8 attack rows, each a weapon or spell by its game id with its attacks, landings, damage and expected damage.
   - **As a room ends,** your Fight tab for it, so members can click into your fight: the same figures as the card and sections show them, the damage by source and the timeline.
   - Never your name (members see it from RuneLite's party, as in any party plugin), your armour, location, stats, account or history.
 - **Everything else stays on your computer,** in `~/.runelite/plugin-data/luck-vs-skill/`:
@@ -118,6 +119,7 @@ One download, your own numbers to your RuneLite party if you're in one, and noth
 - **Thralls:** a zombie thrall's timing hasn't been confirmed in a log, and in a group where teammates summon at the same moment, a teammate's thrall could be taken for yours.
 - **Rules about the boss's attacks** (for avoidable damage, avoidable eating and Flawless) exist for Vardorvis only.
 - **Grades** need a few kills at a boss to mean much: the first 10 use fixed bands.
+- **The Alchemical Hydra's allowances** (her form changes, lightning and fire) were measured from one player's 91 kills.
 
 ## Where it came from
 Luck vs Skill began as a fork of Arodab's [PvM Performance Tracker](https://github.com/Arodab/pvm-performance-tracker), and builds on his combat model. It fixed the build against current RuneLite and counts thrall hits apart from your own ([Arodab's issue #1](https://github.com/Arodab/pvm-performance-tracker/issues/1)).
