@@ -83,6 +83,11 @@ final class PerfProbe
 	{
 		APPLY("panel apply"),
 		PAINT_AFTER_APPLY("panel repaint after apply"),
+		// T-223: "repaint after apply" split at the tab's own paint (its software render and copy, timed below): the wait
+		// before it (the layout, work queued ahead), and after it (Swing's copy of the window's buffer to the screen, and
+		// work queued behind).
+		PAINT_BEFORE_VIEW("of which before the tab's paint"),
+		PAINT_AFTER_VIEW("of which after the tab's paint"),
 		PAINT_FULL("panel full paint (paintChildren)"),
 		// T-046: a tab's paint split into its software render and the one copy to the screen; layout passes; the chart's
 		// and the strip's cached images brought up to date.

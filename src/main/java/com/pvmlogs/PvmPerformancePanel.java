@@ -104,7 +104,8 @@ class PvmPerformancePanel extends PluginPanel
 	/**
 	 * T-046: while a fight runs, a snapshot is built and applied at most once
 	 * every this many ticks (3 s). The fight ending, opening the panel, a tab
-	 * switch and a fold update at once.
+	 * switch and a fold update at once. T-223: and on the tick an attack of the
+	 * player's is booked, at most every {@link SidePanelCadence#BOOKING_GAP_TICKS}.
 	 */
 	static final int UPDATE_TICKS = 5;
 	/**
@@ -200,7 +201,8 @@ class PvmPerformancePanel extends PluginPanel
 	private volatile int visibleTab = FIGHT_TAB;
 	// Client thread only: ticks seen, and the tick the last snapshot was built on.
 	private long ticks;
-	private long builtAt = Long.MIN_VALUE / 2;
+	/** T-223: when the panel builds in a fight: on the player's bookings, else every {@link #UPDATE_TICKS} ticks. */
+	private final SidePanelCadence cadence = new SidePanelCadence();
 
 	// The trip's saved rooms, kept until the history or the trip changes (client thread).
 	private List<SidePanelHistory.KillRow> tripSaved = java.util.Collections.emptyList();
@@ -515,9 +517,11 @@ class PvmPerformancePanel extends PluginPanel
 	/**
 	 * The end of {@code onGameTick}, on the client thread (spec 5.1 step 1). Does
 	 * nothing while the panel is closed or on the History tab, or when nothing on
-	 * show changed; while a fight runs, builds at most every {@link #UPDATE_TICKS}
-	 * ticks (T-046), and with "Update during fights" off not until its end. Only
-	 * the visible tab's part of the snapshot is built.
+	 * show changed; while a fight runs, builds on the tick an attack of the
+	 * player's is booked, at most every 3 ticks, and otherwise every
+	 * {@link #UPDATE_TICKS} ticks (T-046, T-223: {@link SidePanelCadence}), and
+	 * with "Update during fights" off not until its end. Only the visible tab's
+	 * part of the snapshot is built.
 	 */
 	void onTick()
 	{
@@ -557,7 +561,11 @@ class PvmPerformancePanel extends PluginPanel
 			onFight ? partyState() : null);
 		final boolean force = dirty;
 		final boolean sameShape = shape.equals(lastShape);
-		if (!due(force, fighting, sameShape, config == null || config.panelLive(), ticks - builtAt))
+		// T-223: the trip's expected samples, one int a tick: bumped at the splat (resolvePendingSample), when the hit's
+		// damage and expected damage are in. Attacks made is bumped at the throw for a projectile or a cast, a tick or two
+		// early.
+		if (!cadence.due(ticks, trip.getExpectedSamples(), force, fighting, sameShape,
+			config == null || config.panelLive()))
 		{
 			return;
 		}
@@ -570,7 +578,7 @@ class PvmPerformancePanel extends PluginPanel
 		dirty = false;
 		lastKey = key;
 		lastShape = shape;
-		builtAt = ticks;
+		cadence.built(ticks);
 
 		final long building = PerfProbe.start(perf);
 		if (tab == TRIP_TAB)
@@ -660,15 +668,12 @@ class PvmPerformancePanel extends PluginPanel
 	/**
 	 * Whether this tick builds a snapshot, before its key is compared (T-046). Out of a fight, on a change of what's on
 	 * show (a fight starting or ending, a tab), or when forced (opening, a fold): yes. The same fight still running: with
-	 * "Update during fights" off, not until it ends; on, every {@link #UPDATE_TICKS} ticks.
+	 * "Update during fights" off, not until it ends; on, every {@link #UPDATE_TICKS} ticks with no booking. T-223's rule
+	 * with bookings is {@link SidePanelCadence}'s.
 	 */
 	static boolean due(boolean force, boolean fighting, boolean sameShape, boolean live, long ticksSinceBuild)
 	{
-		if (force || !fighting || !sameShape)
-		{
-			return true;
-		}
-		return live && ticksSinceBuild >= UPDATE_TICKS;
+		return SidePanelCadence.due(force, fighting, sameShape, live, ticksSinceBuild, false, ticksSinceBuild, 0);
 	}
 
 	/** Whether the switch reads Whole raid: the player's last choice, else whether the overlay covers the whole raid. */
@@ -1699,8 +1704,39 @@ class PvmPerformancePanel extends PluginPanel
 			// runs after it. A repaint from a section paints from that section, never through this panel's paintChildren.
 			// The wait can include other plugins' Swing work queued in between: an upper bound.
 			final long queued = System.nanoTime();
-			SwingUtilities.invokeLater(() -> perf.stopSwing(PerfProbe.SwingSlot.PAINT_AFTER_APPLY, queued));
+			SwingUtilities.invokeLater(() -> markRepainted(queued));
 		}
+	}
+
+	/**
+	 * The marker queued behind an apply's repaint (T-045): the wait since apply ended, as "repaint after apply". T-223:
+	 * split at the tab's own buffered paint, when one ran since: before it, and after it to here (the copy of the window's
+	 * buffer to the screen, which none of our timers sees, and anything queued behind). Swing's thread.
+	 */
+	private void markRepainted(long queued)
+	{
+		final long now = System.nanoTime();
+		perf.stopSwing(PerfProbe.SwingSlot.PAINT_AFTER_APPLY, queued);
+		final long[] split = repaintSplit(queued, SidePanelBuffer.lastStarted(), SidePanelBuffer.lastEnded(), now);
+		if (split != null)
+		{
+			// stopSwing times to now: started that long ago.
+			perf.stopSwing(PerfProbe.SwingSlot.PAINT_BEFORE_VIEW, now - split[0]);
+			perf.stopSwing(PerfProbe.SwingSlot.PAINT_AFTER_VIEW, now - split[1]);
+		}
+	}
+
+	/**
+	 * T-223: the wait from an apply's end ({@code queued}) to the marker ({@code now}), split at the tab's last buffered
+	 * paint ({@code started} to {@code ended}): {before it, after it} in ns; null when no buffered paint ran in between.
+	 */
+	static long[] repaintSplit(long queued, long started, long ended, long now)
+	{
+		if (started - queued < 0 || ended - started < 0 || now - ended < 0)
+		{
+			return null;
+		}
+		return new long[]{started - queued, now - ended};
 	}
 
 	/** A full paint of the panel (T-045): opening it, resizing, a tab switch. Per-tick repaints are timed in {@link #apply}. */

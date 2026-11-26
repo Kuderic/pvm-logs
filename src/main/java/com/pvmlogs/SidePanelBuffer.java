@@ -37,6 +37,22 @@ final class SidePanelBuffer
 	private PerfProbe perf;
 	/** T-133: buffered paints so far, each its own copy to the window; for tests and the repro. */
 	private int paints;
+	/**
+	 * T-223: when the last buffered paint of any tab began and ended ({@link System#nanoTime}), for the panel's split of
+	 * "repaint after apply". Swing's thread.
+	 */
+	private static long lastStarted;
+	private static long lastEnded;
+
+	static long lastStarted()
+	{
+		return lastStarted;
+	}
+
+	static long lastEnded()
+	{
+		return lastEnded;
+	}
 
 	int paints()
 	{
@@ -103,6 +119,7 @@ final class SidePanelBuffer
 		}
 
 		paints++;
+		lastStarted = System.nanoTime();
 		final long rendering = PerfProbe.start(perf);
 		final Graphics2D ig = image.createGraphics();
 		try
@@ -144,5 +161,6 @@ final class SidePanelBuffer
 		{
 			perf.stopSwing(PerfProbe.SwingSlot.VIEW_BLIT, copying);
 		}
+		lastEnded = System.nanoTime();
 	}
 }
