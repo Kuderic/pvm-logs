@@ -8,9 +8,11 @@ package com.pvmlogs;
  * keep moving through gaps, eating and mechanics; but not while the player's next attack is due, by the rhythm of their
  * last two (a 6- or 7-tick weapon's), so it doesn't build a tick before the booking and then make the booking wait.
  *
- * <p>The booking is read from one counter a tick, the trip's attacks made ({@link SessionTotals#getAttacksMade}); a
- * change in it is a booking. Out of a fight, on a change of what's on show, or when forced: at once, as before. Client
- * thread.
+ * <p>The booking is read from one counter a tick, the trip's expected samples ({@link SessionTotals#getExpectedSamples}),
+ * bumped when the hit's splat lands and its expected damage is booked with it (the plugin's
+ * {@code resolvePendingSample}); a change in it is a booking. Not attacks made: that's bumped when the attack is seen,
+ * which for a projectile or a cast is a tick or two before the splat. Out of a fight, on a change of what's on show, or
+ * when forced: at once, as before. Client thread.
  */
 final class SidePanelCadence
 {

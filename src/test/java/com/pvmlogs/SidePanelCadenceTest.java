@@ -8,9 +8,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * T-223: the panel builds on the tick the player's attack is booked, at most once every 3 ticks, and every 5 ticks
- * otherwise ({@link SidePanelCadence}). The replays at the end print what each weapon's rhythm gives, before (every 5
- * ticks, T-046) and after: builds a minute and the ticks from a booking to the build that shows it.
+ * T-223: the panel builds on the tick the player's hit is booked at its splat, at most once every 3 ticks, and every 5
+ * ticks otherwise ({@link SidePanelCadence}). The replays at the end print what each weapon gives, before (every 5 ticks,
+ * T-046), counted at the throw (#249's first version) and counted at the splat: builds a minute and the ticks from each
+ * splat to the build that shows it.
  */
 public class SidePanelCadenceTest
 {
@@ -135,25 +136,55 @@ public class SidePanelCadenceTest
 	}
 
 	@Test
+	public void aProjectilesBuildComesWithItsSplatNotItsThrow()
+	{
+		// A 5-tick crossbow, each bolt's splat 2 ticks after the throw. Counted at the throw (#249's first version), the
+		// build came 2 ticks before the splat and the hit waited for the next one; counted at the splat, it comes with it.
+		final List<Long> throwsAt = every(5, 0, 600);
+		final List<Long> splats = after(throwsAt, 2, 2);
+		assertEquals(0, Replay.run(splats, splats, 600, false).maxDelay(2));
+		assertEquals(3, Replay.run(throwsAt, splats, 600, false).maxDelay(2));
+	}
+
+	@Test
 	public void theReplays()
 	{
-		// Rhythms as fights go: an eat or a mechanic every so often pushes the next attack back.
+		// Rhythms as fights go: an eat or a mechanic every so often pushes the next attack back. Each hit's delay is from
+		// its splat (when its damage and expected damage are in) to the build that shows it.
 		final int ticks = 100 * 10;
-		final String[] names = {"Brutus- or Hydra-like (5-tick crossbow, eats and phases)", "4-tick weapon",
-			"blowpipe (2-tick)", "6-tick weapon (godsword)"};
-		final int[] speeds = {5, 4, 2, 6};
+		final String[] names = {"5-tick crossbow (Brutus- or Hydra-like; splat 1-2 ticks after the throw)",
+			"4-tick melee (splat on the throw)", "blowpipe (2-tick; splat 1-2 after)", "4-tick powered staff (splat 2 after)",
+			"6-tick godsword (melee)"};
+		final int[] speeds = {5, 4, 2, 4, 6};
+		final int[][] flight = {{1, 2}, {0, 0}, {1, 2}, {2, 2}, {0, 0}};
 		for (int i = 0; i < names.length; i++)
 		{
-			final List<Long> bookings = fight(speeds[i], ticks);
-			final Replay before = Replay.run(bookings, ticks, true);
-			final Replay after = Replay.run(bookings, ticks, false);
-			System.out.println(String.format("T-223 %s: before %.1f builds/min, booking to build avg %.2f max %d ticks;"
-					+ " after %.1f builds/min, avg %.2f max %d ticks", names[i], before.perMinute(ticks), before.avgDelay(),
-				before.maxDelay(), after.perMinute(ticks), after.avgDelay(), after.maxDelay()));
-			assertTrue(after.avgDelay() < before.avgDelay());
+			final List<Long> throwsAt = fight(speeds[i], ticks);
+			final List<Long> splats = after(throwsAt, flight[i][0], flight[i][1]);
+			final Replay before = Replay.run(splats, splats, ticks, true);
+			final Replay atThrow = Replay.run(throwsAt, splats, ticks, false);
+			final Replay atSplat = Replay.run(splats, splats, ticks, false);
+			System.out.println(String.format("T-223 %s: every 5 ticks %.1f builds/min, splat to build avg %.2f max %d;"
+					+ " counted at the throw %.1f, avg %.2f max %d; counted at the splat %.1f, avg %.2f max %d", names[i],
+				before.perMinute(ticks), before.avgDelay(), before.maxDelay(), atThrow.perMinute(ticks), atThrow.avgDelay(),
+				atThrow.maxDelay(), atSplat.perMinute(ticks), atSplat.avgDelay(), atSplat.maxDelay()));
+			assertTrue(atSplat.avgDelay() < before.avgDelay());
+			// Shown inside the cap: a hit a tick after a build waits two at most.
+			assertTrue(atSplat.maxDelay() <= SidePanelCadence.BOOKING_GAP_TICKS - 1);
 			// The cap: never more than one build every 3 ticks.
-			assertTrue(after.perMinute(ticks) <= 100 / 3.0 + 1);
+			assertTrue(atSplat.perMinute(ticks) <= 100 / 3.0 + 1);
 		}
+	}
+
+	/** Each throw's splat, {@code min} ticks after it for ten attacks, then {@code max} for ten (the player moving). */
+	static List<Long> after(List<Long> throwsAt, int min, int max)
+	{
+		final List<Long> s = new ArrayList<>();
+		for (int i = 0; i < throwsAt.size(); i++)
+		{
+			s.add(throwsAt.get(i) + (i / 10 % 2 == 0 ? min : max));
+		}
+		return s;
 	}
 
 	/** Bookings every {@code speed} ticks from {@code from}, before {@code to}. */
@@ -185,7 +216,10 @@ public class SidePanelCadenceTest
 		return b;
 	}
 
-	/** A fight's ticks through the cadence (or every 5 ticks for before): the builds and the delays. */
+	/**
+	 * A fight's ticks through the cadence (or every 5 ticks for before): the builds, and each splat's delay to the first
+	 * build on or after it. {@code counter}: the ticks the counter the cadence reads changes on.
+	 */
 	static final class Replay
 	{
 		final List<Long> builds = new ArrayList<>();
@@ -195,17 +229,27 @@ public class SidePanelCadenceTest
 
 		static Replay run(List<Long> bookings, long ticks, boolean before)
 		{
+			return run(bookings, bookings, ticks, before);
+		}
+
+		static Replay run(List<Long> counter, List<Long> bookings, long ticks, boolean before)
+		{
 			final Replay r = new Replay();
 			final SidePanelCadence c = new SidePanelCadence();
 			int count = 0;
+			int counted = 0;
 			int next = 0;
 			long lastBuild = Long.MIN_VALUE / 2;
 			final List<Long> waiting = new ArrayList<>();
 			for (long t = 0; t < ticks; t++)
 			{
-				while (next < bookings.size() && bookings.get(next) == t)
+				while (counted < counter.size() && counter.get(counted) == t)
 				{
 					count++;
+					counted++;
+				}
+				while (next < bookings.size() && bookings.get(next) == t)
+				{
 					next++;
 					waiting.add(t);
 				}

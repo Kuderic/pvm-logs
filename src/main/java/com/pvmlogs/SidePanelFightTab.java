@@ -242,8 +242,6 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 	/** Shows the snapshot: new components only when its structure differs from the last one's. */
 	void apply(FightTab snapshot)
 	{
-		final int buildsBefore = builds + slotBuilds;
-		final int layoutsBefore = SidePanelParts.relayouts;
 		last = snapshot;
 		// T-099: the Damage card and chart of the view the switch is on; the switch's choice is in the structure.
 		final FightTab tab = snapshot.showing(target);
@@ -276,32 +274,8 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		}
 		// One paint pass for the whole update (T-046 follow-up): Swing paints each dirty component with no dirty ancestor
 		// in a pass of its own, each ending in its own copy to the window, about 17 an update. With the tab dirty, every
-		// child's repaint joins its pass. T-223: when only values changed, the tab asks for one pixel, its corner: each
-		// value that changed asked for its own area, and Swing paints the tab once over all of them, not the whole tab.
-		// After a rebuild or a layout, the whole tab, as before.
-		if (builds + slotBuilds != buildsBefore || SidePanelParts.relayouts != layoutsBefore)
-		{
-			repaint();
-		}
-		else
-		{
-			joinRepaints();
-		}
-	}
-
-	/** T-223: the tab dirty by one pixel, so the values' own repaints are painted in one pass through it. */
-	private void joinRepaints()
-	{
-		joins++;
-		repaint(0, 0, 1, 1);
-	}
-
-	/** T-223: updates that repainted only what changed, for tests. */
-	private int joins;
-
-	int joins()
-	{
-		return joins;
+		// child's repaint joins its pass.
+		repaint();
 	}
 
 	private static void reserveDigits(java.awt.Container c)

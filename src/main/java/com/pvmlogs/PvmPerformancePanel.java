@@ -561,8 +561,11 @@ class PvmPerformancePanel extends PluginPanel
 			onFight ? partyState() : null);
 		final boolean force = dirty;
 		final boolean sameShape = shape.equals(lastShape);
-		// T-223: the trip's attacks made, one int a tick: a change is a booking, its damage and expected damage with it.
-		if (!cadence.due(ticks, trip.getAttacksMade(), force, fighting, sameShape, config == null || config.panelLive()))
+		// T-223: the trip's expected samples, one int a tick: bumped at the splat (resolvePendingSample), when the hit's
+		// damage and expected damage are in. Attacks made is bumped at the throw for a projectile or a cast, a tick or two
+		// early.
+		if (!cadence.due(ticks, trip.getExpectedSamples(), force, fighting, sameShape,
+			config == null || config.panelLive()))
 		{
 			return;
 		}
