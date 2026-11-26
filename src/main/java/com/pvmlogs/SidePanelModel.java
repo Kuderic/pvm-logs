@@ -2304,8 +2304,11 @@ final class SidePanelModel
 		final LedgerRows.Scope s = in.scope;
 		if (b.taken != null)
 		{
-			out.put("taken", Text.small(s.damageTaken() > 0 ? LedgerRows.number(s.damageTaken()) + DOT + "max "
-				+ LedgerRows.number(s.biggestHitTaken()) : "0", SidePanelStyle.BODY));
+			// T-224 (Foundation's F-1): the largest hit after the fight only, as the card's own body has it (T-068); live,
+			// the total alone.
+			final String total = s.damageTaken() > 0 ? LedgerRows.number(s.damageTaken()) : "0";
+			out.put("taken", Text.small(in.ended && s.damageTaken() > 0 ? total + DOT + "max "
+				+ LedgerRows.number(s.biggestHitTaken()) : total, SidePanelStyle.BODY));
 		}
 		return out;
 	}
