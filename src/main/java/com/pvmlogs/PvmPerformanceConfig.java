@@ -290,7 +290,7 @@ public interface PvmPerformanceConfig extends Config
 		name = "Share with my RuneLite party",
 		description = "While you're in a RuneLite party, send your own damage, expected damage, Luck, Skill and attacks "
 			+ "to the party, so members with this plugin can compare. Only through RuneLite's party, never anywhere else, "
-			+ "and never your name, gear, location or history. Off: nothing is sent; others' numbers are still shown",
+			+ "and never your name, armour, location or history. Off: nothing is sent; others' numbers are still shown",
 		position = 6,
 		section = SIDE_PANEL_SECTION
 	)

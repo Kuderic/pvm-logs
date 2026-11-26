@@ -38,6 +38,23 @@ public class SidePanelTakenAfterFightTest
 	}
 
 	@Test
+	public void theFoldedLineShowsTheTotalOnlyMidFightAndTheLargestHitAfter()
+	{
+		// T-224 (Foundation's F-1): the folded line waits as the card's body does.
+		final SidePanelModel.Input mid = SidePanelExamples.takenMidFight();
+		assertEquals("263", SidePanelModel.fight(mid).summaries.get("taken").text);
+		// No damage taken yet: no card, or a 0, never a "max".
+		((LedgerExamples.FakeScope) mid.scope).damageTaken = 0;
+		final PanelSnapshot.Text none = SidePanelModel.fight(mid).summaries.get("taken");
+		assertTrue(none == null || "0".equals(none.text));
+		final SidePanelModel.Input after = SidePanelExamples.ruledKill(true);
+		final String line = SidePanelModel.fight(after).summaries.get("taken").text;
+		assertTrue(line, after.scope.biggestHitTaken() > 0);
+		assertEquals(LedgerRows.number(after.scope.damageTaken()) + " · max "
+			+ LedgerRows.number(after.scope.biggestHitTaken()), line);
+	}
+
+	@Test
 	public void afterTheFightTheRows()
 	{
 		final List<String> rows = labels(SidePanelModel.fight(SidePanelExamples.ruledKill(true)).taken);
