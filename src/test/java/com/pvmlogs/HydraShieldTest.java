@@ -435,10 +435,12 @@ public class HydraShieldTest
 		m.finish();
 		assertTrue(log.toString(), log.stream().anyMatch(l -> l.startsWith("MECHANIC changing form")
 			&& l.contains("4 idle ticks excused of 4 allowed")));
-		// Each is marked for Eric's approval.
+		// Each is marked as Eric's approval.
 		for (BossRules.UptimeAllowance a : boss.uptimeAllowances)
 		{
-			assertTrue(a.state, a.source.contains("PROPOSED, for Eric to approve"));
+			// Approved by Eric 2026-11-26 (T-222's amendment): the caps unchanged.
+			assertTrue(a.state, a.source.startsWith("T-222, approved by Eric 2026-11-26."));
+			assertFalse(a.state, a.source.contains("PROPOSED"));
 		}
 	}
 }
