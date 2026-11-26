@@ -54,7 +54,11 @@ public class ForbiddenApiTest
 			"\\bjava\\.awt\\.Desktop\\b|\\bDesktop\\.getDesktop\\b|\\bLinkBrowser\\.open\\b");
 		rule("Client.menuAction (one collection-log exception, needs review)", "\\.menuAction\\s*\\(");
 		rule("java.lang.Runtime", "\\bRuntime\\b");
+		// Added to the wiki 2026-11-23 (runelite.wiki 91f1189, 2b6baaf), read for T-197.
+		rule("java.lang.management", "\\bjava\\.lang\\.management\\b|\\bManagementFactory\\b|\\b\\w+MXBean\\b");
 		rule("java.awt.KeyboardFocusManager", "\\bKeyboardFocusManager\\b");
+		// Added to the wiki 2026-11-10 (runelite.wiki 1bf1491), read for T-197.
+		rule("java.awt.Robot", "\\bjava\\.awt\\.Robot\\b|\\bnew\\s+Robot\\s*\\(");
 		rule("a network client other than OkHttp",
 			"\\bHttpURLConnection\\b|\\bURLConnection\\b|\\bjava\\.net\\.http\\b|\\bHttpClient\\b"
 				+ "|\\.openConnection\\s*\\(|\\.openStream\\s*\\(");
@@ -119,6 +123,9 @@ public class ForbiddenApiTest
 			"client.menuAction(-1, 0, null, 1, -1, \"x\", null);",
 			"Runtime.getRuntime().exec(cmd);",
 			"KeyboardFocusManager.getCurrentKeyboardFocusManager()",
+			"java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()",
+			"for (GarbageCollectorMXBean b : beans)",
+			"new java.awt.Robot()",
 			"(HttpURLConnection) url.openConnection()",
 			"java.net.http.HttpClient.newHttpClient()",
 			"new Gson()",
@@ -150,6 +157,8 @@ public class ForbiddenApiTest
 			"// Thread.sleep would block the client thread, and new File(...) is forbidden",
 			"log.warn(\"could not write java.io.File {}\", name);",
 			"/* Runtime.getRuntime() is out */ int x = 1;",
+			"// java.lang.management is forbidden since 2026-11-23",
+			"final Robot robot = this.robotFor(x); // a field named Robot, no java.awt",
 			"executor.execute(this::flush);",
 			"final ItemStats stats = itemManager.getItemStats(dart.getItemId());",
 			"char quote = '\"'; String s = \"Desktop.getDesktop()\";",
