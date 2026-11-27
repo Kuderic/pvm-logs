@@ -32,10 +32,11 @@ Since T-060 the plugin is its own Plugin Hub entry. Once released, users' settin
 - Data folder: `~/.runelite/plugin-data/<PvmPerformanceConfig.INTERNAL_NAME>/` (`luck-vs-skill`), from RuneLite's `getPluginDirectory()`. Since T-009 all file access goes through `net.runelite.client.util.Filepath`, never `java.io.File` or `java.nio.file.Files` (Plugin Hub rule). Never write a folder name as a literal.
 - Settings group: `PvmPerformanceConfig.GROUP` = `luckvsskill`.
 - No `legacyDataDirectory`, and none of Arodab's names (`pvmperformance`, `pvm-performance-tracker`): with them the plugin would share his plugin's settings, or move his users' history into its own folder.
+- client.log lines start `Luck vs Skill:`, a saved debug log opens `=== Luck vs Skill, the last N lines` (`DebugLog.headerStart()`; logs saved before T-067 open `=== PvM Logs, ...`, and the replay readers skip both), and the monster-data request's User-Agent is `RuneLite plugin luck-vs-skill` (`MonsterStatsProvider.USER_AGENT`).
 
 `NamesTest` pins these. The package `com.pvmlogs`, the class names and the file names inside the folder (`pvm-debug-*.log`, `pvm-<label>-<stamp>.csv`, `history.json`) aren't user-visible and stay as they are.
 
-`ForbiddenApiTest` fails the build on anything the Plugin Hub forbids (the wiki's list, plus the `Filepath`-only rule above).
+`ForbiddenApiTest` fails the build on anything the Plugin Hub forbids (the wiki's list, the packager's `disallowed-apis.txt`, plus the `Filepath`-only rule above). `HubSubmissionTest` checks what the hub's packager checks (`runelite/plugin-hub-tooling`): the properties' keys, the plugin class and internal name, the icon, `LICENSE`, Java 11 classes. `FreshInstallTest` pins every setting's default for a new install.
 
 ## Layout
 - `src/main/java/com/pvmlogs/`: one package. Most logic is in two ~3k-line files:
