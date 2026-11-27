@@ -199,7 +199,7 @@ public class SidePanelPartyMemberViewTest
 		assertTrue(hers.chart.youLegend, hers.chart.youLegend.startsWith("Brindle "));
 		final PanelSnapshot.FightTab mine = SidePanelPartyExamples.toaYouAndBrindle().members.get(0).fight;
 		assertTrue(mine.damage.hint.text, mine.damage.hint.text.matches("[\\d,]+ · exp [\\d,]+"));
-		assertTrue(mine.chart.youLegend, mine.chart.youLegend.startsWith("you "));
+		assertTrue(mine.chart.youLegend, mine.chart.youLegend.startsWith("actual "));
 		assertEquals("Jess'", SidePanelModel.possessive("Jess"));
 		assertEquals("Brindle's", SidePanelModel.possessive("Brindle"));
 		// Mid-fight too: the Damage card of Quillon's live panels.

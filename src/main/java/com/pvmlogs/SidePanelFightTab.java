@@ -1191,15 +1191,19 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 		});
 	}
 
+	/** T-225: the legend with the expected line off (the stats warning). */
+	static final String EXPECTED_HIDDEN = "expected hidden";
+
 	/** T-199 (Eric: "Too many different terms: Skill, execution, Your play"): one word, {@link SidePanelModel#SKILL}. */
 	static final String ATTACK_RHYTHM = "Rhythm";
 	/** T-199: Where the time went's hover: what skill's and luck's numbers are, and the sign rule. */
 	static final String BUDGET_TIP = SidePanelStyle.wrapTip("Skill: the time lost against a perfect fight (idle, gear, prayers, boosts). Luck:"
-		+ " the time your rolls gained or lost against average rolls. " + SidePanelModel.SIGN_RULE);
+		+ " the time your damage gained or lost against expected. " + SidePanelModel.SIGN_RULE);
 
 	/**
-	 * The chart, its ends and its legend in {@code card}. T-196: under the card, the expected line is "average rolls"
-	 * (your hits against average rolls is luck's gap) and the range is left unnamed.
+	 * The chart, its ends and its legend in {@code card}. T-225: the legend reads {@code actual 152 · expected 140} (a
+	 * member's name for theirs); where the line's expected differs from the figure above, the chart and the legend say
+	 * why on hover. The range is left unnamed.
 	 */
 	private Piece chartPiece(FightTab tab, JPanel card)
 	{
@@ -1241,14 +1245,22 @@ final class SidePanelFightTab extends JPanel implements Scrollable
 			items.add(new SidePanelParts.Legend.Item(t.chart.actual, false, t.chart.youLegend, SidePanelStyle.SECONDARY));
 			if (t.chart.expectedShown)
 			{
-				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.SECONDARY, false,
-					t.chart.expectedLegend.replaceFirst("^expected", "average rolls"), SidePanelStyle.SECONDARY));
+				items.add(new SidePanelParts.Legend.Item(SidePanelStyle.SECONDARY, false, t.chart.expectedLegend,
+					SidePanelStyle.SECONDARY));
 			}
 			else
 			{
-				items.add(new SidePanelParts.Legend.Item(null, false, "average rolls hidden", SidePanelStyle.MUTED));
+				items.add(new SidePanelParts.Legend.Item(null, false, EXPECTED_HIDDEN, SidePanelStyle.MUTED));
 			}
 			legend.set(items);
+			// T-225: why the line's expected isn't the figure above, where it isn't; set only when it changes.
+			final String note = t.chart.expectedShown && t.chart.expectedNote != null
+				? SidePanelStyle.tip(t.chart.expectedNote) : null;
+			if (!java.util.Objects.equals(note, chart.getToolTipText()))
+			{
+				chart.setToolTipText(note);
+				legend.setToolTipText(note);
+			}
 			chart.update();
 		});
 	}

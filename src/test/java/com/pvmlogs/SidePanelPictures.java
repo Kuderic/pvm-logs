@@ -47,6 +47,11 @@ public final class SidePanelPictures
 			textModes(out);
 			return;
 		}
+		if (args.length > 1 && "legend".equals(args[1]))
+		{
+			chartLegend(out);
+			return;
+		}
 		if (args.length > 1 && "dps".equals(args[1]))
 		{
 			dpsCards(out);
@@ -2882,6 +2887,46 @@ public final class SidePanelPictures
 		}
 		tab.chart().setHover(hover);
 		return draw(panel.tabs(), panel.fightTab(), scale);
+	}
+
+	/**
+	 * T-225: the Damage card with its chart's legend, {@code actual N · expected N}: yours (Araxxor KC 555), a member's
+	 * (Brindle, in the ToA duo), the line off ({@code expected hidden}), and the Sire kill whose line's expected isn't
+	 * the figure above, with the chart's hover under it. Normal and Larger, 1× and 2×, a folder each.
+	 */
+	private static void chartLegend(Path out) throws IOException
+	{
+		final String[] modes = {"normal", "larger"};
+		for (int m = 0; m < modes.length; m++)
+		{
+			smooth = false;
+			larger = m == 1;
+			final Path dir = out.resolve(modes[m]);
+			Files.createDirectories(dir);
+			final SidePanelModel.Input hidden = SidePanelExamples.dead();
+			hidden.warning = "Boss data unsure";
+			for (double scale : new double[]{1, 2})
+			{
+				write(dir, "a-yours", scale, damageCard(SidePanelModel.fight(SidePanelKillCardExamples.araxxorKill()),
+					scale));
+				write(dir, "b-member", scale, damageCard(SidePanelPartyExamples.toaYouAndBrindle().members.get(2).fight,
+					scale));
+				write(dir, "c-line-off", scale, damageCard(SidePanelModel.fight(hidden), scale));
+				write(dir, "d-differs-hover", scale, withTooltip(damageCard(SidePanelModel.fight(
+					SidePanelExamples.sireEmberlight()), scale), SidePanelStyle.tip(SidePanelModel.EXPECTED_NOTE), scale));
+			}
+		}
+		larger = false;
+		SidePanelStyle.setText(false, false);
+	}
+
+	/** The Damage section of this tab, cut out of its render. */
+	private static BufferedImage damageCard(PanelSnapshot.FightTab tab, double scale)
+	{
+		final PvmPerformancePanel panel = new PvmPerformancePanel(null, null, null, null);
+		panel.apply(new PanelSnapshot(tab));
+		styled(panel);
+		return card(panel, sectionOf(panel.fightTab(), "damage"), scale);
 	}
 
 	/** One section of the Fight tab, cut out of its render: its header and card. */

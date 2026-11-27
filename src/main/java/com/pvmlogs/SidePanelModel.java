@@ -1411,7 +1411,7 @@ final class SidePanelModel
 		final String damage = LedgerRows.number(n.damage);
 		final String expected = LedgerRows.number(Math.round(n.expected));
 		final String other = otherDamage(in);
-		final String tip = tipLines("Your weapons dealt " + damage + "; average rolls of the same attacks: " + expected
+		final String tip = tipLines("Your weapons dealt " + damage + "; expected from the same attacks: " + expected
 			+ ".", other.isEmpty() ? null : "Not in either: " + other.substring(1) + ".", d.hint.text.isEmpty() ? null
 			: "All your damage: " + d.hint.text.split(" ")[0] + ".");
 		return new PanelSnapshot.Sources(Text.small(damage + DOT + "exp " + expected, SidePanelStyle.SECONDARY), d.rows,
@@ -1754,8 +1754,7 @@ final class SidePanelModel
 		final String parts = dpsTooltip(n, in);
 		c.dpsTip = tipLines(c.dps == null ? "No DPS yet: it starts when your first attack lands." : null,
 			parts == null ? null : parts.replace("<html>", "").replace("</html>", ""),
-			c.expDps == null ? null : "Exp " + c.expDps + ": the DPS of average rolls with the same attacks (luck taken"
-				+ " out).", c.dps == null ? null : whatItDividesBy(n, r, warning),
+			c.expDps == null ? null : "Exp " + c.expDps + ": the expected DPS of the same attacks (luck taken out).", c.dps == null ? null : whatItDividesBy(n, r, warning),
 			warning ? "Boss data unsure: expected is hidden." : null);
 	}
 
@@ -2071,8 +2070,8 @@ final class SidePanelModel
 		{
 			c.luckTime = luckTime(n.luck);
 			final long pct = Math.round(100 * (n.damage / n.expected - 1));
-			tip.add((pct == 0 ? "Your hits did as much damage as average rolls: "
-				: "Your hits did " + Math.abs(pct) + "% " + (pct > 0 ? "more" : "less") + " damage than average rolls: ")
+			tip.add((pct == 0 ? "Your hits did as much damage as expected: "
+				: "Your hits did " + Math.abs(pct) + "% " + (pct > 0 ? "more" : "less") + " damage than expected: ")
 				+ LedgerRows.fasterOrSlower(n.luck) + ".");
 		}
 		if (!Double.isNaN(n.expectedDuration))
@@ -2211,7 +2210,7 @@ final class SidePanelModel
 		// T-199: the track live, marked where luck so far sits; no number on it.
 		c.luckAt = Double.isNaN(n.percentile) ? 0 : roll(n.percentile);
 		c.luckP = n.percentile;
-		c.luckTip = (n.expected > 0 ? "You've dealt " + LedgerRows.number(n.damage) + ". Average rolls: "
+		c.luckTip = (n.expected > 0 ? "You've dealt " + LedgerRows.number(n.damage) + ". Expected: "
 			+ LedgerRows.number(Math.round(n.expected)) + ".<br>" : "") + "Luck rolls with every hit; its number comes when"
 			+ " the fight ends.";
 	}
@@ -4348,23 +4347,35 @@ final class SidePanelModel
 			luckColour == LedgerRows.Colour.NEUTRAL || warning || (in.run && in.kind == Kind.ROOM) ? SidePanelStyle.VALUE
 				: SidePanelStyle.of(luckColour),
 			!warning, !warning && rangeKnown, LedgerRows.clock(ticks),
-			(in.whose == null ? "you" : in.whose) + " " + LedgerRows.number(Math.round(last)),
-			expectedLegend(lastExpected, s), lost, eating, mechanics,
+			(in.whose == null ? ACTUAL : in.whose) + " " + LedgerRows.number(Math.round(last)),
+			expectedLegend(lastExpected), expectedNote(s), lost, eating, mechanics,
 			styleColour(FightTimeline.Style.values()[main], false));
 	}
 
 	/**
-	 * T-076: the chart's expected line is each attack as thrown, the only expectation a single attack has; the tile's is
-	 * T-050's, averaged over how the draining specials could have landed. Where they differ by a point or more the
-	 * legend says which it is, and the Defence card's specials row is the difference.
+	 * T-225 (Eric, 2026-11-27: "just make it something along the lines of expected damage vs actual"): the chart's
+	 * legend, {@code actual 152 · expected 140}; a member's chart names them for the first.
 	 */
-	static String expectedLegend(double lastExpected, LedgerRows.Scope s)
+	static final String ACTUAL = "actual";
+
+	static String expectedLegend(double lastExpected)
 	{
-		final String figure = "expected " + LedgerRows.number(Math.round(lastExpected));
-		return Math.abs(asThrownShift(s)) >= 0.5 ? figure + AS_THROWN : figure;
+		return "expected " + LedgerRows.number(Math.round(lastExpected));
 	}
 
-	static final String AS_THROWN = " as thrown";
+	/**
+	 * T-076: the chart's expected line is each attack as thrown, the only expectation a single attack has; the figure
+	 * above it is T-050's, averaged over how the draining specials could have landed. T-225: where they differ by a
+	 * point or more, the chart's hover says why, in place of the legend's old "as thrown"; the Defence card's specials
+	 * row is the difference.
+	 */
+	static String expectedNote(LedgerRows.Scope s)
+	{
+		return Math.abs(asThrownShift(s)) >= 0.5 ? EXPECTED_NOTE : null;
+	}
+
+	static final String EXPECTED_NOTE = "The line's expected takes each draining special as it landed; the expected above"
+		+ " averages how it could have landed.";
 
 	// ---- T-112: Details and Damage taken in groups ----
 
