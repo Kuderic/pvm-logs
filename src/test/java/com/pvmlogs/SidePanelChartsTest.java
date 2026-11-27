@@ -261,7 +261,7 @@ public class SidePanelChartsTest
 		assertEquals(7, c.eating);
 		assertEquals(kill.fight.getTicksLost(), c.lost + c.eating);
 		assertEquals(SidePanelStyle.COST, c.actual);
-		assertEquals("you 688", c.youLegend);
+		assertEquals("actual 688", c.youLegend);
 		assertEquals("expected 778", c.expectedLegend);
 		assertEquals(SidePanelStyle.MELEE, c.attackColour);
 		// The two specials' ticks carry the special state, every attack tick its style.

@@ -1000,7 +1000,7 @@ final class SidePanelHistory
 			// The gold star, no words: the PB luck can't give you.
 			bests.add(new Row(Text.body(FASTEST_AVERAGE_LUCK, SidePanelStyle.SECONDARY), Text.small(" " + STAR,
 				SidePanelStyle.GOLD), Text.title(SidePanelStyle.roundedDuration(v.luckRemoved.value), SidePanelStyle.VALUE),
-				SidePanelModel.tipLines("Your fastest kill with average rolls: "
+				SidePanelModel.tipLines("Your fastest kill at expected damage: "
 					+ SidePanelStyle.roundedDuration(v.luckRemoved.value) + when(v.luckRemoved, now, zone) + ".",
 					"The PB luck can't give you: only skill moves it, so it carries the gold star.")));
 		}
@@ -1037,7 +1037,7 @@ final class SidePanelHistory
 			// T-201: "to", not an arrow, which the RuneScape fonts don't have.
 			medians = Text.body(SidePanelStyle.roundedDuration(older) + " to " + SidePanelStyle.roundedDuration(newer),
 				SidePanelStyle.VALUE);
-			trendTip = "Your kill times with average rolls, medians: the newest " + half + " kills "
+			trendTip = "Your kill times at expected damage, medians: the newest " + half + " kills "
 				+ SidePanelStyle.roundedDuration(newer) + " against the " + half + " before "
 				+ SidePanelStyle.roundedDuration(older) + ". Lower is faster.";
 		}

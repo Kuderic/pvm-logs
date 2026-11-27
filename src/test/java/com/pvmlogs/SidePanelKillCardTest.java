@@ -123,12 +123,12 @@ public class SidePanelKillCardTest
 		// T-201: the band, explained once.
 		assertEquals(0.81, c.luckP, 0.005);
 		assertTrue(c.luckTip, c.luckTip.startsWith("Top 19%: of 100 fights with these attacks, 81 dealt less damage."));
-		assertTrue(c.luckTip, c.luckTip.contains("Your hits did 12% more damage than average rolls: 10 s faster."));
+		assertTrue(c.luckTip, c.luckTip.contains("Your hits did 12% more damage than expected: 10 s faster."));
 		assertTrue(c.luckTip, c.luckTip.contains("With average luck: 1:36."));
 		final PanelSnapshot.KillCard v = SidePanelModel.fight(SidePanelKillCardExamples.vardorvisKill()).card;
 		assertEquals(20, v.rolled);
 		assertEquals("-14 s", v.luckTime);
-		assertTrue(v.luckTip, v.luckTip.contains("12% less damage than average rolls: 14 s slower."));
+		assertTrue(v.luckTip, v.luckTip.contains("12% less damage than expected: 14 s slower."));
 	}
 
 	@Test
@@ -279,10 +279,10 @@ public class SidePanelKillCardTest
 		assertEquals(1, late);
 		assertTrue(c.skillTip, c.skillTip.contains("Uptime 97%, idle 1.2 s of 42 s"));
 		assertTrue(c.skillTip, c.skillTip.contains("Late so far: 1 of 17 attacks."));
-		// Luck so far: one word, its strength; the damage against average rolls on hover.
+		// Luck so far: one word, its strength; the damage against expected on hover (T-225).
 		assertEquals("average", c.luckWord.text);
 		assertEquals(SidePanelStyle.LUCK, c.luckWord.colour);
-		assertTrue(c.luckTip, c.luckTip.contains("You've dealt 428. Average rolls: 403."));
+		assertTrue(c.luckTip, c.luckTip.contains("You've dealt 428. Expected: 403."));
 		// Never a grade, a roll number or a PB live.
 		assertNull(c.grade);
 		assertEquals(-1, c.rolled);

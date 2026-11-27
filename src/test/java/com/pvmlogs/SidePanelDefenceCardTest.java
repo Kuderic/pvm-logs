@@ -155,11 +155,13 @@ public class SidePanelDefenceCardTest
 	// ---- one expectation ----
 
 	@Test
-	public void theChartSaysItsExpectationIsAsThrownAndTheDifferenceIsTheSpecialsLuck()
+	public void theChartSaysWhyItsExpectationDiffersAndTheDifferenceIsTheSpecialsLuck()
 	{
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.sireEmberlight());
 		assertEquals("446 · exp 576", tab.damage.hint.text);
-		assertEquals("expected 588 as thrown", tab.chart.expectedLegend);
+		// T-225: the legend reads "expected 588", no "as thrown"; the chart's hover says why it isn't 576.
+		assertEquals("expected 588", tab.chart.expectedLegend);
+		assertEquals(SidePanelModel.EXPECTED_NOTE, tab.chart.expectedNote);
 		// The Damage rows' expectations add up to the chart's (T-085: in each row's details).
 		int held = 0;
 		for (PanelSnapshot.Source s : tab.damage.rows)
@@ -179,6 +181,7 @@ public class SidePanelDefenceCardTest
 		final PanelSnapshot.FightTab tab = SidePanelModel.fight(SidePanelExamples.dead());
 		final String hint = tab.damage.hint.text;
 		assertEquals("expected " + hint.substring(hint.indexOf("exp ") + 4), tab.chart.expectedLegend);
+		assertNull(tab.chart.expectedNote);
 	}
 
 	// ---- hits that did damage ----

@@ -1162,8 +1162,15 @@ final class PanelSnapshot
 		final boolean rangeShown;
 		/** {@code 0:00} and the clock, under the chart. */
 		final String end;
+		/** T-225: {@code actual 152}, or a member's name for theirs ({@code Brindle 152}). */
 		final String youLegend;
+		/** T-225: {@code expected 140}. */
 		final String expectedLegend;
+		/**
+		 * T-225: the chart's hover where its expected differs from the figure above it by a point or more (T-076: the line
+		 * takes each draining special as it landed, the figure averages how it could have landed); null where they agree.
+		 */
+		final String expectedNote;
 		/** The strip's legend counts; -1 for no entry (T-095: a run's idle ticks aren't lost or eating). */
 		final int lost;
 		final int eating;
@@ -1177,12 +1184,12 @@ final class PanelSnapshot
 			int lost, int eating, Color attackColour)
 		{
 			this(from, length, damage, expected, variance, states, styles, actual, expectedShown, rangeShown, end, youLegend,
-				expectedLegend, lost, eating, 0, attackColour);
+				expectedLegend, null, lost, eating, 0, attackColour);
 		}
 
 		Chart(int from, int length, float[] damage, float[] expected, float[] variance, byte[] states, byte[] styles,
 			Color actual, boolean expectedShown, boolean rangeShown, String end, String youLegend, String expectedLegend,
-			int lost, int eating, int mechanics, Color attackColour)
+			String expectedNote, int lost, int eating, int mechanics, Color attackColour)
 		{
 			this.from = from;
 			this.length = length;
@@ -1197,6 +1204,7 @@ final class PanelSnapshot
 			this.end = end;
 			this.youLegend = youLegend;
 			this.expectedLegend = expectedLegend;
+			this.expectedNote = expectedNote;
 			this.lost = lost;
 			this.eating = eating;
 			this.mechanics = mechanics;
